@@ -1971,8 +1971,17 @@ async function loginOneDrive(){
     render();
     return true;
   }catch(e){
-    registrarErroOneDrive(e);
     statusConexaoOneDrive = 'desconectado';
+    // Login interrompido pelo próprio usuário (fechou a janela de login sem concluir, ou cancelou) — não é
+    // uma falha real do OneDrive, então a aplicação só volta ao estado inicial (botão "Conectar ao
+    // OneDrive" habilitado, sem banner de erro nem "Tentar Novamente"), sem registrar oneDriveIndisponivelMsg.
+    const cancelado = e && (e.errorCode==='user_cancelled' || e.errorCode==='user_cancelled_flow' || /cancel/i.test(e.errorCode||'') || /cancel/i.test(e.errorMessage||e.message||''));
+    if(cancelado){
+      console.warn('OneDrive: login cancelado pelo usuário', e);
+      render();
+      return false;
+    }
+    registrarErroOneDrive(e);
     // Popup bloqueado pelo navegador (ex.: Safari sem gesto direto do usuário) — oferece uma alternativa
     // clara em vez de só falhar silenciosamente (item 2 do requisito).
     const bloqueado = e && (e.errorCode==='popup_window_error' || e.errorCode==='empty_window_error' || /popup/i.test(e.errorCode||''));
