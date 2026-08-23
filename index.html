@@ -527,6 +527,18 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
   .mini-card .mini-card-icon{font-size:18px;flex-shrink:0;}
   .mini-card .mini-card-title{flex:1 1 auto;min-width:80px;font-size:13px;}
   .mini-card .type-badge{margin-top:0;flex-shrink:0;order:98;}
+  /* Card de Conta (rodada seguinte): tem mais elementos que Meios/Responsáveis (logo da instituição, ícone
+     do tipo, bandeira do cartão, selo de importação), então em vez da única linha genérica acima, usa duas
+     linhas fixas — 1) logo/ícone/bandeira + nome à esquerda, selo de importação à direita; 2) etiqueta do
+     tipo à esquerda, ações à direita. Só a classe .mini-card-conta muda; Meios/Responsáveis continuam
+     exatamente como antes (regras genéricas acima). */
+  .mini-card-conta{align-items:center;}
+  .mini-card-conta .mini-card-icone-cluster{order:1;flex:0 0 auto;}
+  .mini-card-conta .mini-card-title{order:2;flex:1 1 auto;}
+  .mini-card-conta .import-badge{order:3;flex-shrink:0;margin-left:auto;}
+  .mini-card-conta .mini-card-quebra{order:4;flex:0 0 100%;height:0;}
+  .mini-card-conta .mini-card-tipo-wrap{order:5;flex:1 1 auto;}
+  .mini-card-conta .mini-card-actions{order:6;flex-shrink:0;margin-left:auto;}
 }
 .icone-genero-picker{display:flex;gap:12px;}
 .icone-genero-opcao{
@@ -735,9 +747,15 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
   .tabela-fluxo td.tabela-fluxo-acoes .icon-btn{min-width:var(--touch-min);min-height:var(--touch-min);font-size:16px;}
   .tabela-fluxo .linha-saldo-atual-label{display:block;padding:5px 0;font-weight:700;}
   /* Item 8 do requisito: a primeira linha do card (coluna "Dia") fica inteira em negrito — rótulo e valor —
-     não só o valor da data, mantendo o resto da hierarquia visual do card como já era. */
-  .tabela-fluxo td:first-child{font-weight:700;}
+     não só o valor da data — e com um background de destaque, sangrando até as bordas do card (a mesma
+     margin negativa do padding do card, ver .tabela-fluxo tr acima) para ler como um "cabeçalho" da linha,
+     sem alterar a hierarquia visual do restante do card. */
+  .tabela-fluxo td:first-child{
+    font-weight:700;background:var(--navy-50);margin:-8px -12px 5px;padding:8px 12px;
+    border-radius:var(--radius-md) var(--radius-md) 0 0;border-bottom:1px solid var(--line);
+  }
   .tabela-fluxo td:first-child::before{font-weight:700;}
+  .tabela-fluxo tr.linha-saldo-atual td:first-child{background:var(--gold-light,#fbf0d9);}
 }
 thead th{
   text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.3px;text-transform:uppercase;
@@ -3845,7 +3863,6 @@ const CAMADAS_MODAL = [
   'moverCategoriaModal',               // Configurações → Categorias
   'moverSubcategoriaModal',            // Configurações → Categorias
   'posicaoModal',                      // Configurações → Categorias
-  'regCardDetalheModal',               // Registros (mobile) — detalhe completo de um .reg-card ao tocar nele
   'editarSaldoInicialContaModal',      // painel Contas — editar saldo inicial de uma conta
   'editarSaldoInicialFluxoCaixaModal', // Fluxo de Caixa — editar saldos iniciais das contas
   'faturaEditModal',                   // painel Cartões — ajustar fechamento/vencimento de uma fatura
@@ -3863,6 +3880,10 @@ const CAMADAS_MODAL = [
   'editingTx',                         // ovTx — Editar/Novo Lançamento
   'edicaoLoteModal',                   // ovEdicaoLote — Edição em Lote (aberto de dentro de Ver Fatura/Ver
                                         // Próximas Faturas/Ver Extrato/Ver Lançamentos futuros)
+  'regCardDetalheModal',               // detalhe completo de um .reg-card (mobile) ao tocar nele — pode ser
+                                        // aberto tanto direto da aba Registros quanto de dentro de qualquer
+                                        // modal de Nível 1 (Ver Extrato/Lançamentos futuros/Ver Fatura/Ver
+                                        // Próximas Faturas), por isso fica no Nível 2, acima deles todos
   'duplicarMesesModal',                // ovDuplicarMeses — Duplicar por vários meses consecutivos
   'confirmDelParcela',                 // ovConfirmDelParcela — confirmar exclusão de parcela
   'backupModal',                       // ovBackup — Backup e Restauração
@@ -6640,7 +6661,6 @@ function renderExtratoContaModal(){
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Extrato')?'agrupado':''} ${UI.filtrosMobileAberto==='Extrato'?'aberto-mobile':''}" data-prefixo-filtros="Extrato">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileExtrato" title="Fechar">✕</button></div>
             ${renderBarraFiltrosPadrao(f, 'Extrato', camposFiltroExtrato)}
-            ${filtrosAtivos ? `<button class="btn btn-ghost btn-sm" id="btnLimparFiltrosExtrato">↺ Restaurar filtros padrão</button>` : ''}
             <div class="filtros-barra-acoes-mobile"><button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileExtrato">Aplicar</button></div>
           </div>
           ${UI.filtrosMobileAberto==='Extrato' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropExtrato"></div>` : ''}
@@ -6649,7 +6669,7 @@ function renderExtratoContaModal(){
             <button type="button" class="btn-buscar-icone" id="btnBuscarExtrato" title="Buscar (ou pressione Enter)" aria-label="Buscar (ou pressione Enter)">🔍</button>
           </div>
         </div>
-        ${renderChipsFiltrosAtivos(f, 'Extrato', camposFiltroExtrato)}
+        ${renderChipsFiltrosAtivos(f, 'Extrato', camposFiltroExtrato, 'btnLimparFiltrosExtrato')}
         ${itensFiltrados.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Extrato', UI.extratoContaModal.selecionados, itensPagina.filter(t=>!ehSaldoAnterior(t)).map(t=>t.id), itensFiltrados.filter(t=>!ehSaldoAnterior(t)).map(t=>t.id))}</div>
         <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:14px;"><table>
@@ -6763,7 +6783,6 @@ function renderFuturosContaModal(){
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Futuros')?'agrupado':''} ${UI.filtrosMobileAberto==='Futuros'?'aberto-mobile':''}" data-prefixo-filtros="Futuros">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileFuturos" title="Fechar">✕</button></div>
             ${renderBarraFiltrosPadrao(f, 'Futuros', camposFiltroFuturos)}
-            ${filtrosAtivos ? `<button class="btn btn-ghost btn-sm" id="btnLimparFiltrosFuturos">↺ Restaurar filtros padrão</button>` : ''}
             <div class="filtros-barra-acoes-mobile"><button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileFuturos">Aplicar</button></div>
           </div>
           ${UI.filtrosMobileAberto==='Futuros' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropFuturos"></div>` : ''}
@@ -6772,7 +6791,7 @@ function renderFuturosContaModal(){
             <button type="button" class="btn-buscar-icone" id="btnBuscarFuturos" title="Buscar (ou pressione Enter)" aria-label="Buscar (ou pressione Enter)">🔍</button>
           </div>
         </div>
-        ${renderChipsFiltrosAtivos(f, 'Futuros', camposFiltroFuturos)}
+        ${renderChipsFiltrosAtivos(f, 'Futuros', camposFiltroFuturos, 'btnLimparFiltrosFuturos')}
         ${futurosFiltrados.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Futuros', UI.futurosContaModal.selecionados, futurosPagina.map(t=>t.id), futurosFiltrados.map(t=>t.id))}</div>
         <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:14px;"><table>
@@ -8278,7 +8297,6 @@ function renderMapaCalorDiaModal(){
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('MapaCalor')?'agrupado':''} ${UI.filtrosMobileAberto==='MapaCalor'?'aberto-mobile':''}" data-prefixo-filtros="MapaCalor">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileMapaCalor" title="Fechar">✕</button></div>
             ${camposFiltroMapaCalor.map(c=>renderFiltroMultiSelect(f, 'MapaCalor', c.campo, c.label, c.options)).join('')}
-            ${filtrosAtivos ? `<button class="btn btn-ghost btn-sm" id="btnLimparFiltrosMapaCalor">↺ Restaurar filtros padrão</button>` : ''}
             <div class="filtros-barra-acoes-mobile"><button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileMapaCalor">Aplicar</button></div>
           </div>
           ${UI.filtrosMobileAberto==='MapaCalor' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropMapaCalor"></div>` : ''}
@@ -8287,7 +8305,7 @@ function renderMapaCalorDiaModal(){
             <button type="button" class="btn-buscar-icone" id="btnBuscarMapaCalor" title="Buscar (ou pressione Enter)" aria-label="Buscar (ou pressione Enter)">🔍</button>
           </div>
         </div>
-        ${renderChipsFiltrosAtivos(f, 'MapaCalor', camposFiltroMapaCalor)}
+        ${renderChipsFiltrosAtivos(f, 'MapaCalor', camposFiltroMapaCalor, 'btnLimparFiltrosMapaCalor')}
         ${itensFiltrados.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('MapaCalor', UI.mapaCalorDiaModal.selecionados, idsPagina, idsFiltrados)}</div>
         <div class="table-wrap table-wrap-registros reg-tabela-principal" style="margin-top:14px;"><table>
@@ -8995,7 +9013,12 @@ function renderBarraFiltrosPadrao(f, prefixo, campos){
    filtros e a tabela — um chip por filtro ativo (Data + cada campo de seleção múltipla com opção
    marcada), cada um removível individualmente sem precisar abrir o painel do filtro correspondente.
    Função genérica reutilizada pelos 6 pontos da aplicação com este motor de filtros. */
-function renderChipsFiltrosAtivos(f, prefixo, campos){
+/* idBotaoRestaurar (opcional): quando informado e há pelo menos um filtro ativo, o botão "Restaurar filtros
+   padrão" (mesmo id já usado por cada tela — nenhum bind novo é necessário) sai de dentro de .filtros-barra
+   (que fica oculta no mobile enquanto a folha de filtros está fechada) e passa a morar aqui, ao lado dos
+   chips — sempre visível, com a MESMA lógica/condição em desktop e mobile (item do requisito: o botão
+   "deve seguir a mesma lógica do modo desktop também no modo mobile"). */
+function renderChipsFiltrosAtivos(f, prefixo, campos, idBotaoRestaurar){
   const chips = [];
   if(f.dataInicio || f.dataFim) chips.push({ texto: dataRangeLabel(f), attr: `data-chip-limpar-data="${prefixo}"` });
   campos.forEach(c=>{
@@ -9005,7 +9028,7 @@ function renderChipsFiltrosAtivos(f, prefixo, campos){
     chips.push({ texto, attr: `data-chip-limpar-campo="${prefixo}|${c.campo}"` });
   });
   if(!chips.length) return '';
-  return `<div class="chips-filtros-ativos no-print">${chips.map(ch=>`<span class="chip-filtro-ativo">${escapeHtml(ch.texto)}<button type="button" class="chip-filtro-remover" ${ch.attr} title="Remover este filtro" aria-label="Remover filtro ${escapeHtml(ch.texto)}">✕</button></span>`).join('')}</div>`;
+  return `<div class="chips-filtros-ativos no-print">${chips.map(ch=>`<span class="chip-filtro-ativo">${escapeHtml(ch.texto)}<button type="button" class="chip-filtro-remover" ${ch.attr} title="Remover este filtro" aria-label="Remover filtro ${escapeHtml(ch.texto)}">✕</button></span>`).join('')}${idBotaoRestaurar ? `<button type="button" class="btn btn-ghost btn-sm chips-filtros-restaurar" id="${idBotaoRestaurar}">↺ Restaurar filtros padrão</button>` : ''}</div>`;
 }
 function bindChipsFiltrosAtivos(f, prefixo, onChange){
   document.querySelectorAll(`[data-chip-limpar-data="${prefixo}"]`).forEach(b=> b.addEventListener('click', ()=>{
@@ -9353,7 +9376,7 @@ function renderCardsLancamentosModal(itens, opts){
     }
     const semAcaoItem = semAcao ? semAcao(t) : false;
     corpo += `
-    <div class="reg-card${semAcaoItem?' reg-card-sem-acao':''}">
+    <div class="reg-card${semAcaoItem?' reg-card-sem-acao':''}" data-reg-card-detalhe="${escapeHtml(t.id)}">
       ${(prefixo && selecionados && !semAcaoItem) ? `<label class="reg-card-check"><input type="checkbox" class="chkLote${prefixo}" value="${escapeHtml(t.id)}" ${selecionados.has(t.id)?'checked':''} aria-label="Selecionar lançamento"></label>` : ''}
       <div class="reg-card-principal">
         <div class="reg-card-linha1">
@@ -9481,14 +9504,13 @@ function renderRegistros(){
       <div class="filtros-barra ${filtrosEstaoAgrupados('Reg')?'agrupado':''} ${UI.filtrosMobileAberto==='Reg'?'aberto-mobile':''}" data-prefixo-filtros="Reg">
         <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileReg" title="Fechar">✕</button></div>
         ${renderBarraFiltrosPadrao(f, 'Reg', camposFiltroReg)}
-        ${qtdAtivos>0 ? `<button class="btn btn-ghost btn-sm" id="btnLimparFiltrosReg">↺ Restaurar filtros padrão</button>` : ''}
         <div class="filtros-barra-acoes-mobile">
           <button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileReg">Aplicar</button>
         </div>
       </div>
     </div>
     ${UI.filtrosMobileAberto==='Reg' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropReg"></div>` : ''}
-    ${renderChipsFiltrosAtivos(f, 'Reg', camposFiltroReg)}
+    ${renderChipsFiltrosAtivos(f, 'Reg', camposFiltroReg, 'btnLimparFiltrosReg')}
     <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Reg', UI.regSelecionados, pageList.map(t=>t.id), list.map(t=>t.id))}</div>
     ${list.length===0 ? `<div class="empty-state"><div class="big">🗒️</div>Nenhum lançamento encontrado com esses filtros.</div>
     <div class="registros-rodape registros-rodape-vazio">${rodapePaginacao}</div>` : `
@@ -9973,7 +9995,6 @@ function renderFaturaAtualModal(){
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Fatura')?'agrupado':''} ${UI.filtrosMobileAberto==='Fatura'?'aberto-mobile':''}" data-prefixo-filtros="Fatura">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileFatura" title="Fechar">✕</button></div>
             ${renderBarraFiltrosPadrao(f, 'Fatura', camposFiltroFatura)}
-            ${filtrosAtivos ? `<button class="btn btn-ghost btn-sm" id="btnLimparFiltrosFatura">↺ Restaurar filtros padrão</button>` : ''}
             <div class="filtros-barra-acoes-mobile"><button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileFatura">Aplicar</button></div>
           </div>
           ${UI.filtrosMobileAberto==='Fatura' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropFatura"></div>` : ''}
@@ -9982,7 +10003,7 @@ function renderFaturaAtualModal(){
             <button type="button" class="btn-buscar-icone" id="btnBuscarFatura" title="Buscar (ou pressione Enter)" aria-label="Buscar (ou pressione Enter)">🔍</button>
           </div>
         </div>
-        ${renderChipsFiltrosAtivos(f, 'Fatura', camposFiltroFatura)}
+        ${renderChipsFiltrosAtivos(f, 'Fatura', camposFiltroFatura, 'btnLimparFiltrosFatura')}
         ${itensFiltrados.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Fatura', UI.faturaAtualModal.selecionados, itensPagina.map(t=>t.id), itensFiltrados.map(t=>t.id))}</div>
         <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:14px;"><table>
@@ -10097,7 +10118,6 @@ function renderProjecaoFaturaModal(){
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Projecao')?'agrupado':''} ${UI.filtrosMobileAberto==='Projecao'?'aberto-mobile':''}" data-prefixo-filtros="Projecao">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileProjecao" title="Fechar">✕</button></div>
             ${renderBarraFiltrosPadrao(f, 'Projecao', camposFiltroProjecao)}
-            ${filtrosAtivos ? `<button class="btn btn-ghost btn-sm" id="btnLimparFiltrosProjecao">↺ Restaurar filtros padrão</button>` : ''}
             <div class="filtros-barra-acoes-mobile"><button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileProjecao">Aplicar</button></div>
           </div>
           ${UI.filtrosMobileAberto==='Projecao' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropProjecao"></div>` : ''}
@@ -10106,7 +10126,7 @@ function renderProjecaoFaturaModal(){
             <button type="button" class="btn-buscar-icone" id="btnBuscarProjecao" title="Buscar (ou pressione Enter)" aria-label="Buscar (ou pressione Enter)">🔍</button>
           </div>
         </div>
-        ${renderChipsFiltrosAtivos(f, 'Projecao', camposFiltroProjecao)}
+        ${renderChipsFiltrosAtivos(f, 'Projecao', camposFiltroProjecao, 'btnLimparFiltrosProjecao')}
         ${itens.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Projecao', UI.projecaoFaturaModal.selecionados, itensPagina.map(t=>t.id), itens.map(t=>t.id))}</div>
         <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:12px;"><table>
@@ -10441,12 +10461,11 @@ function renderInteligencia(){
         ${renderFiltroMultiSelect(f,'Intel','grupo','Grupo',gruposOpcoes)}
         ${renderFiltroMultiSelect(f,'Intel','categoria','Categoria',categoriasOpcoes)}
         ${renderFiltroMultiSelect(f,'Intel','tipo','Tipo',tipoOpcoes)}
-        ${filtrosAtivosIntel ? `<button class="btn btn-ghost btn-sm" id="btnRestaurarFiltrosIntel">↺ Restaurar filtros padrão</button>` : ''}
         <div class="filtros-barra-acoes-mobile"><button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileIntel">Aplicar</button></div>
       </div>
       ${UI.filtrosMobileAberto==='Intel' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropIntel"></div>` : ''}
     </div>
-    ${renderChipsFiltrosAtivos(f, 'Intel', camposFiltroIntel)}
+    ${renderChipsFiltrosAtivos(f, 'Intel', camposFiltroIntel, 'btnRestaurarFiltrosIntel')}
   </div>
 
   ${dadosInsuficientes ? `
@@ -11243,19 +11262,20 @@ function renderCategorias(){
           const tipo = STATE.contaTipos[c] || '';
           const info = infoTipoConta(tipo);
           const temImportacao = STATE.transactions.some(t=>t.conta===c && t.origemImportacao && txNaCompetenciaMeta(t, chaveMes(UI.ano,UI.mes)));
-          return `<div class="mini-card">
+          return `<div class="mini-card mini-card-conta">
             ${temImportacao ? `<span class="import-badge" title="Esta conta possui lançamentos importados para o período selecionado.">📥</span>` : ''}
             <div class="mini-card-actions">
               <button type="button" class="icon-btn" data-edit-conta="${escapeHtml(c)}" title="Editar conta">✏️</button>
               <button type="button" class="icon-btn" data-del-conta="${escapeHtml(c)}" title="Excluir conta" style="color:var(--despesa);">🗑️</button>
             </div>
-            <div style="display:flex;align-items:flex-end;gap:6px;">
+            <div class="mini-card-icone-cluster" style="display:flex;align-items:flex-end;gap:6px;">
               ${iconeInstituicaoHtml(c)}
              <div class="mini-card-icon">${info.icone}</div>
              <div>${tipo==='Cartão de Crédito' ? bandeiraCartaoHtml(c) : ''}</div>
             </div>
             <div class="mini-card-title">${escapeHtml(c)}</div>
-            <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            <div class="mini-card-quebra" aria-hidden="true"></div>
+            <div class="mini-card-tipo-wrap" style="display:flex;gap:5px;flex-wrap:wrap;">
               ${tipo ? `<span class="type-badge" style="background:${info.cor}1a;color:${info.cor};">${escapeHtml(tipo)}</span>` : ''}
             </div>
           </div>`;
