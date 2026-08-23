@@ -7811,7 +7811,7 @@ function textoHintConexaoOneDrive(){
   if(!conexaoTentada) return 'Conecte-se ao ${ONEDRIVE_ICON_SVG} OneDrive para acessar aos dados.';
   const st = statusConexaoOneDriveInfo();
   const usuario = msalConta ? (msalConta.username||msalConta.name||'') : '';
-  return `${st.emoji} ${st.texto} aos dados em ${ONEDRIVE_ICON_SVG} <b>OneDrive/${escapeHtml(ONEDRIVE_CONFIG.pastaApp)}</b>${usuario?` como <b class="ti-email-conectado">${escapeHtml(usuario)}</b>`:''}`;
+  return `${st.emoji} ${st.texto} aos dados em  ${ONEDRIVE_ICON_SVG} <b>OneDrive/${escapeHtml(ONEDRIVE_CONFIG.pastaApp)}</b>${usuario?` como <b class="ti-email-conectado">${escapeHtml(usuario)}</b>`:''}`;
 }
 function renderTelaInicial(){
   /* 'carregado-manualmente' (item 7 do requisito de responsividade) conta como pronto para iniciar a
