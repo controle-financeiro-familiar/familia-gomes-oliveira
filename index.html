@@ -7927,7 +7927,7 @@ function statusConexaoOneDriveInfo(){
    textoDescOpcaoOneDrive()), que é quem efetivamente segue o padrão completo com ícone. */
 function textoHintConexaoOneDrive(){
   const conexaoTentada = !!msalConta || statusConexaoOneDrive!=='desconectado' || !!oneDriveIndisponivelMsg;
-  if(!conexaoTentada) return 'Conecte-se com sua conta Microsoft para acessar os arquivos deste app na pasta do OneDrive.';
+  if(!conexaoTentada) return 'Conecte-se com sua conta Microsoft para acessar os arquivos da pasta do OneDrive.';
   const st = statusConexaoOneDriveInfo();
   const usuario = msalConta ? (msalConta.username||msalConta.name||'') : '';
   return `${st.emoji} ${st.texto} aos dados em <b>OneDrive/${escapeHtml(ONEDRIVE_CONFIG.pastaApp)}</b>${usuario?` como <b class="ti-email-conectado">${escapeHtml(usuario)}</b>`:''}`;
@@ -7953,7 +7953,7 @@ function textoDescOpcaoOneDrive(){
       : '🟡 Conectando ao OneDrive...';
   }
   if(oneDriveIndisponivelMsg) return 'Não foi possível conectar. Tente novamente.';
-  return 'Conecte-se com sua conta Microsoft para acessar os arquivos deste app na pasta do OneDrive.';
+  return 'Conecte-se com sua conta Microsoft para acessar os arquivos da pasta do OneDrive.';
 }
 function renderTelaInicial(){
   /* 'carregado-manualmente' (item 7 do requisito de responsividade) conta como pronto para iniciar a
