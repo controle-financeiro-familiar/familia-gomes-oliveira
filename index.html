@@ -7808,10 +7808,10 @@ function statusConexaoOneDriveInfo(){
    (h1) nunca é alterado por este texto — ver item 7, que exige o nome do card permanecer fixo. */
 function textoHintConexaoOneDrive(){
   const conexaoTentada = !!msalConta || statusConexaoOneDrive!=='desconectado' || !!oneDriveIndisponivelMsg;
-  if(!conexaoTentada) return 'Conecte-se ao ${ONEDRIVE_ICON_SVG} OneDrive para acessar aos dados.';
+  if(!conexaoTentada) return `Conecte-se ao ${ONEDRIVE_ICON_SVG} OneDrive para acessar seus dados.`;
   const st = statusConexaoOneDriveInfo();
   const usuario = msalConta ? (msalConta.username||msalConta.name||'') : '';
-  return `${st.emoji} ${st.texto} aos dados em  ${ONEDRIVE_ICON_SVG} <b>OneDrive/${escapeHtml(ONEDRIVE_CONFIG.pastaApp)}</b>${usuario?` como <b class="ti-email-conectado">${escapeHtml(usuario)}</b>`:''}`;
+  return `${st.emoji} ${st.texto} aos dados em ${ONEDRIVE_ICON_SVG} <b>OneDrive/${escapeHtml(ONEDRIVE_CONFIG.pastaApp)}</b>${usuario?` como <b class="ti-email-conectado">${escapeHtml(usuario)}</b>`:''}`;
 }
 function renderTelaInicial(){
   /* 'carregado-manualmente' (item 7 do requisito de responsividade) conta como pronto para iniciar a
@@ -7842,7 +7842,7 @@ function renderTelaInicial(){
         </div>
       </div>
       ${!hasFSAccess ? `<div class="banner" style="text-align:left;margin-bottom:20px;">⚠️ Integração com o OneDrive ainda não configurada neste app. Defina <code>ONEDRIVE_CONFIG.clientId</code> no início do index.html com o ID do aplicativo do seu App Registration no Microsoft Entra ID (ver instruções no comentário do código-fonte).</div>` : ''}
-      ${(hasFSAccess && comErro) ? `<div class="banner" style="text-align:left;margin-bottom:20px;">⚠️ ${escapeHtml(oneDriveIndisponivelMsg||'Não foi possível acessar os arquivos no ${ONEDRIVE_ICON_SVG} OneDrive.')}</div>` : ''}
+      ${(hasFSAccess && comErro) ? `<div class="banner" style="text-align:left;margin-bottom:20px;">⚠️ ${escapeHtml(oneDriveIndisponivelMsg||'Não foi possível acessar os arquivos no OneDrive.')}</div>` : ''}
       ${(alteracoesLocaisPendentes && arquivosProntos) ? `<div class="banner" style="text-align:left;margin-bottom:20px;">💾 Encontramos <b>alterações não sincronizadas</b> de uma sessão anterior (feitas offline ou antes de uma falha de sincronização) neste dispositivo. <button type="button" class="btn btn-primary btn-sm" id="tiRecuperarSnapshot" style="margin-left:8px;">Recuperar e sincronizar</button> <button type="button" class="btn btn-ghost btn-sm" id="tiDescartarSnapshot">Descartar</button></div>` : ''}
       <div class="ti-opcoes">
         <div class="ti-opcao">
@@ -11665,8 +11665,24 @@ function renderProgressoExclusaoBackup(excluindo){
     <div class="backup-progresso-exclusao-trilho"><div class="backup-progresso-exclusao-fill" style="width:${pct}%;"></div></div>
   </div>`;
 }
+/* Lista de backups após o filtro "Tipo" ativo — função única compartilhada entre renderBackupModal() e o
+   bind de "Selecionar todos" (ver bindEvents), para que os dois nunca divirjam sobre quais backups estão
+   "visíveis" no momento. */
+function backupsFiltradosAtuais(m){
+  return m.backups ? m.backups.filter(b=> passaFiltroMultiSel((m.filtros||{tipo:new Set()}).tipo, b.tipo)) : [];
+}
 function renderBackupModal(){
   const m = UI.backupModal;
+  // Seleção em lote é sempre contextual à listagem filtrada atual (requisito da rodada seguinte): qualquer
+  // backup que tenha ficado fora do resultado filtrado (ex.: o usuário selecionou com um filtro, depois
+  // trocou o filtro) é removido de m.selecionados aqui — nunca existe seleção "invisível" de um backup que
+  // não aparece na tabela agora. Como render() roda a cada mudança de estado (inclusive troca de filtro),
+  // isso mantém o contador, o checkbox "Selecionar todos" e a exclusão em lote sempre consistentes com o
+  // que está na tela, sem precisar duplicar essa poda em cada handler que altera o filtro.
+  if(m.aba==='historico' && m.selecionados && m.backups){
+    const visiveisAgora = new Set(backupsFiltradosAtuais(m).map(b=>b.nome));
+    for(const nome of Array.from(m.selecionados)){ if(!visiveisAgora.has(nome)) m.selecionados.delete(nome); }
+  }
   return `
   <div class="overlay" id="ovBackup" ${attrZIndexModal('backupModal')}>
     <div class="modal modal-backup" style="width:1280px;">
@@ -11692,7 +11708,7 @@ function renderBackupModal(){
           const tiposUsados = (m.backups||[]).length ? Array.from(new Set(m.backups.map(b=>b.tipo))).sort((a,b)=> (BACKUP_TIPO_INFO[a]?.label||a).localeCompare(BACKUP_TIPO_INFO[b]?.label||b,'pt-BR')) : [];
           const camposFiltroBackup = [{campo:'tipo', label:'Tipo', options: tiposUsados.map(t=>({value:t, label:`${BACKUP_TIPO_INFO[t]?.icone?BACKUP_TIPO_INFO[t].icone+' ':''}${BACKUP_TIPO_INFO[t]?.label||t}`}))}];
           const qtdAtivosBackup = contarFiltrosPadraoAtivos(f, camposFiltroBackup);
-          const backupsFiltrados = m.backups ? m.backups.filter(b=> passaFiltroMultiSel(f.tipo, b.tipo)) : null;
+          const backupsFiltrados = backupsFiltradosAtuais(m);
           return `
         <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0;">
           ${nivelAcessoPasta!=='leitura' ? `<button type="button" class="btn btn-primary btn-sm" id="btnCriarBackupAgoraModal" ${bloqueado?'disabled':''}>🗄️ Criar backup agora</button>` : `<span></span>`}
@@ -14467,8 +14483,10 @@ function bindEvents(){
       await atualizarListaBackupModal();
     }));
     if(!bm.selecionados) bm.selecionados = new Set();
+    // "Selecionar todos" nunca deve alcançar backups ocultos pelo filtro "Tipo" ativo — usa a MESMA função
+    // de filtragem usada para desenhar a tabela (backupsFiltradosAtuais), nunca a lista completa bm.backups.
     const alternarTodos = e=>{
-      const nomes = (bm.backups||[]).map(x=>x.nome);
+      const nomes = backupsFiltradosAtuais(bm).map(x=>x.nome);
       if(e.target.checked) nomes.forEach(n=> bm.selecionados.add(n));
       else nomes.forEach(n=> bm.selecionados.delete(n));
       render();
