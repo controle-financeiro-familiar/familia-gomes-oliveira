@@ -11665,8 +11665,24 @@ function renderProgressoExclusaoBackup(excluindo){
     <div class="backup-progresso-exclusao-trilho"><div class="backup-progresso-exclusao-fill" style="width:${pct}%;"></div></div>
   </div>`;
 }
+/* Lista de backups após o filtro "Tipo" ativo — função única compartilhada entre renderBackupModal() e o
+   bind de "Selecionar todos" (ver bindEvents), para que os dois nunca divirjam sobre quais backups estão
+   "visíveis" no momento. */
+function backupsFiltradosAtuais(m){
+  return m.backups ? m.backups.filter(b=> passaFiltroMultiSel((m.filtros||{tipo:new Set()}).tipo, b.tipo)) : [];
+}
 function renderBackupModal(){
   const m = UI.backupModal;
+  // Seleção em lote é sempre contextual à listagem filtrada atual (requisito da rodada seguinte): qualquer
+  // backup que tenha ficado fora do resultado filtrado (ex.: o usuário selecionou com um filtro, depois
+  // trocou o filtro) é removido de m.selecionados aqui — nunca existe seleção "invisível" de um backup que
+  // não aparece na tabela agora. Como render() roda a cada mudança de estado (inclusive troca de filtro),
+  // isso mantém o contador, o checkbox "Selecionar todos" e a exclusão em lote sempre consistentes com o
+  // que está na tela, sem precisar duplicar essa poda em cada handler que altera o filtro.
+  if(m.aba==='historico' && m.selecionados && m.backups){
+    const visiveisAgora = new Set(backupsFiltradosAtuais(m).map(b=>b.nome));
+    for(const nome of Array.from(m.selecionados)){ if(!visiveisAgora.has(nome)) m.selecionados.delete(nome); }
+  }
   return `
   <div class="overlay" id="ovBackup" ${attrZIndexModal('backupModal')}>
     <div class="modal modal-backup" style="width:1280px;">
@@ -11692,7 +11708,7 @@ function renderBackupModal(){
           const tiposUsados = (m.backups||[]).length ? Array.from(new Set(m.backups.map(b=>b.tipo))).sort((a,b)=> (BACKUP_TIPO_INFO[a]?.label||a).localeCompare(BACKUP_TIPO_INFO[b]?.label||b,'pt-BR')) : [];
           const camposFiltroBackup = [{campo:'tipo', label:'Tipo', options: tiposUsados.map(t=>({value:t, label:`${BACKUP_TIPO_INFO[t]?.icone?BACKUP_TIPO_INFO[t].icone+' ':''}${BACKUP_TIPO_INFO[t]?.label||t}`}))}];
           const qtdAtivosBackup = contarFiltrosPadraoAtivos(f, camposFiltroBackup);
-          const backupsFiltrados = m.backups ? m.backups.filter(b=> passaFiltroMultiSel(f.tipo, b.tipo)) : null;
+          const backupsFiltrados = backupsFiltradosAtuais(m);
           return `
         <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0;">
           ${nivelAcessoPasta!=='leitura' ? `<button type="button" class="btn btn-primary btn-sm" id="btnCriarBackupAgoraModal" ${bloqueado?'disabled':''}>🗄️ Criar backup agora</button>` : `<span></span>`}
@@ -14467,8 +14483,10 @@ function bindEvents(){
       await atualizarListaBackupModal();
     }));
     if(!bm.selecionados) bm.selecionados = new Set();
+    // "Selecionar todos" nunca deve alcançar backups ocultos pelo filtro "Tipo" ativo — usa a MESMA função
+    // de filtragem usada para desenhar a tabela (backupsFiltradosAtuais), nunca a lista completa bm.backups.
     const alternarTodos = e=>{
-      const nomes = (bm.backups||[]).map(x=>x.nome);
+      const nomes = backupsFiltradosAtuais(bm).map(x=>x.nome);
       if(e.target.checked) nomes.forEach(n=> bm.selecionados.add(n));
       else nomes.forEach(n=> bm.selecionados.delete(n));
       render();
