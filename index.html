@@ -870,6 +870,16 @@ tbody tr:hover{background:var(--navy-50);}
    cabeçalho (<thead>) da própria tabela, então este rótulo fica oculto para não duplicar a ação. */
 .backup-select-all-mobile{display:none;}
 @media(max-width:700px){ .backup-select-all-mobile{display:flex;} }
+/* Item 3 do requisito: barra de progresso real da exclusão de backups (1 ou vários) — .fill tem sua
+   largura calculada em % a partir de processados/total a cada render(), nunca uma animação CSS
+   indeterminada. No mobile o nome do backup em processamento (só existe no desktop) já não é renderizado
+   por renderProgressoExclusaoBackup só quando cabe; aqui só cuidamos do empilhamento/tamanho do texto. */
+.backup-progresso-exclusao{margin:10px 0;padding:10px 12px;background:var(--navy-50);border:1px solid var(--line);border-radius:var(--radius-md);}
+.backup-progresso-exclusao-topo{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;font-size:13px;margin-bottom:6px;}
+.backup-progresso-exclusao-num{font-family:var(--mono);font-weight:700;color:var(--navy-900);white-space:nowrap;}
+.backup-progresso-exclusao-trilho{height:8px;border-radius:var(--radius-full);background:var(--navy-100);overflow:hidden;}
+.backup-progresso-exclusao-fill{height:100%;border-radius:var(--radius-full);background:var(--navy-900);transition:width .2s ease;}
+@media(max-width:700px){ .backup-progresso-exclusao-topo .hint{display:none;} }
 .reg-card-principal{flex:1;min-width:0;}
 .reg-card-linha1{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
 .reg-card-descricao{font-size:14px;font-weight:600;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -1075,22 +1085,23 @@ tbody tr:hover{background:var(--navy-50);}
    linha: mesma técnica de flex-basis:0 usada em Registros (itens 10/11) para os 3 caberem sem quebrar. */
 @media(max-width:700px){
   .toolbar-modal-padrao{ flex-wrap:wrap; gap:8px; }
-  /* Botão "Filtros" (item do requisito: mesmo comportamento de Registros — um botão que abre a folha
-     inferior com os campos) ocupa sua própria linha, acima de Verificar duplicidade/Busca — flex-basis:100%
-     força a quebra de linha (mesma técnica já usada nesta sessão), então nunca fica espremido junto dos
-     outros dois botões daquela linha. Quando a folha está fechada, .toolbar-modal-padrao-filtros vira
-     display:none (ver .filtros-barra) e não ocupa espaço nenhum. */
-  .filtros-mobile-toggle{ order:1; flex:1 1 100%; text-align:left; }
-  .toolbar-modal-padrao-filtros{ order:1; flex:1 1 100%; }
+  /* Item 4 do requisito (rodada seguinte): "Verificar duplicidade" + Busca ficam na 1ª linha (order:1) e o
+     botão "Filtros" + a folha de filtros ficam na 2ª linha, abaixo (order:2) — mesma ordem visual pedida
+     para os 4 modais de lançamento (Extrato/Futuros/Fatura/Próximas Faturas). flex-basis:100% em cada
+     grupo força a quebra de linha (mesma técnica já usada nesta sessão), então nunca ficam espremidos
+     juntos. Quando a folha de filtros está fechada, .toolbar-modal-padrao-filtros vira display:none (ver
+     .filtros-barra) e não ocupa espaço nenhum — só o botão "Filtros" (order:2) aparece. */
+  .filtros-mobile-toggle{ order:2; flex:1 1 100%; text-align:left; }
+  .toolbar-modal-padrao-filtros{ order:2; flex:1 1 100%; }
   /* Item 19 do requisito (rodada de ajustes globais): "Verificar duplicidade" (único botão que sobra aqui,
      já que "+ Novo Lançamento" virou FAB) tomava uma largura travada (~42%/180px) pensada para dividir a
      linha com o campo de busca — texto mais longo que "Filtros" acabava cortado com reticências mesmo
      quando cabia. Agora usa a largura do próprio conteúdo (flex:0 1 auto, sem ellipsis); se não sobrar
      espaço ao lado do campo de busca, a própria toolbar (.toolbar-modal-padrao já tem flex-wrap:wrap)
      empurra a busca para a linha seguinte — nunca corta o texto do botão. */
-  .acoes-lancamento-modal{ order:2; flex:0 1 auto; min-width:0; margin:0; }
+  .acoes-lancamento-modal{ order:1; flex:0 1 auto; min-width:0; margin:0; }
   .acoes-lancamento-modal button{ width:auto; white-space:nowrap; padding-left:8px; padding-right:8px; }
-  .toolbar-modal-padrao-busca{ order:2; flex:1 1 120px; min-width:0; margin-left:0; flex-wrap:nowrap; }
+  .toolbar-modal-padrao-busca{ order:1; flex:1 1 120px; min-width:0; margin-left:0; flex-wrap:nowrap; }
   .toolbar-modal-padrao-busca input[type="search"]{ flex:1; min-width:50px; }
   .toolbar-modal-padrao-busca button{ flex-shrink:0; white-space:nowrap; }
 }
@@ -3764,7 +3775,7 @@ let UI = {
   syncPainelAberto: false, // popover do indicador ☁ OneDrive (item 17 do requisito de sincronização)
   atualizacaoDisponivel: false, // true quando um novo Service Worker está instalado e aguardando confirmação (PWA — item 12)
   instalarPromptEvento: null, // BeforeInstallPromptEvent guardado para o botão "Instalar aplicativo" (PWA — item 11)
-  backupModal: null, // { aba:'historico'|'config', backups:[...]|null, carregando:bool } — tela "Backup e Restauração" (null = fechada)
+  backupModal: null, // { aba:'historico'|'config', backups:[...]|null, carregando:bool, selecionados:Set, filtros:{tipo:Set,aberto}, excluindo:{processados,total,nome}|null } — tela "Backup e Restauração" (null = fechada)
   cartoesSecaoAtiva: 'contas', // 'contas' | 'cartoes' — qual painel do acordeão da aba Contas e Cartões está expandido
   appIniciado: false, // só true depois do clique explícito em "<svg width="13" height="13" viewBox="-0.016 0 0.39 0.39" xmlns="http://www.w3.org/2000/svg"><path d="M.36.21v.001a.2.2 0 0 1-.015.07V.28C.317.345.253.39.179.39S.042.345.015.281V.28A.2.2 0 0 1 0 .211V.21C0 .152.028.1.072.067A.03.03 0 0 1 .095.061a.03.03 0 0 1 .019.012.03.03 0 0 1 .006.022.03.03 0 0 1-.012.02.12.12 0 0 0-.048.096.12.12 0 1 0 .192-.096.03.03 0 0 1-.012-.02.03.03 0 0 1 .006-.022.03.03 0 0 1 .02-.012.03.03 0 0 1 .022.006A.18.18 0 0 1 .36.21M.21.03v.151a.03.03 0 0 1-.06 0V.03q0-.013.009-.021T.18 0c.013-.001.016.003.021.009A.03.03 0 0 1 .21.03"/></svg>️ Iniciar App" — a tela inicial nunca dá lugar ao app sozinha, mesmo com os dois arquivos já prontos
   importTotaisEmprestimo: null, // { [descricao]: {totalParcelas, parcelamentoId} } — totais confirmados nesta importação (novos + detectados)
@@ -3880,7 +3891,7 @@ const CAMADAS_MODAL = [
   'editingTx',                         // ovTx — Editar/Novo Lançamento
   'edicaoLoteModal',                   // ovEdicaoLote — Edição em Lote (aberto de dentro de Ver Fatura/Ver
                                         // Próximas Faturas/Ver Extrato/Ver Lançamentos futuros)
-  'regCardDetalheModal',               // detalhe completo de um .reg-card (mobile) ao tocar nele — pode ser
+  'regCardDetalheId',                  // detalhe completo de um .reg-card (mobile) ao tocar nele — pode ser
                                         // aberto tanto direto da aba Registros quanto de dentro de qualquer
                                         // modal de Nível 1 (Ver Extrato/Lançamentos futuros/Ver Fatura/Ver
                                         // Próximas Faturas), por isso fica no Nível 2, acima deles todos
@@ -7784,7 +7795,23 @@ const ONEDRIVE_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 
 function statusConexaoOneDriveInfo(){
   if(statusConexaoOneDrive==='conectado') return { emoji:'🟢', texto:'Conectado' };
   if(statusConexaoOneDrive==='conectando') return { emoji:'🟡', texto:'Conectando…' };
+  if(fileStatusCfg==='token-expirado' || fileStatusReg==='token-expirado') return { emoji:'🔴', texto:'Sessão expirada' };
+  if(oneDriveIndisponivelMsg) return { emoji:'🔴', texto:'Erro de conexão' };
   return { emoji:'🔴', texto:'Desconectado' };
+}
+/* Itens 5-7 do requisito (rodada seguinte): único lugar onde o estado da conexão com o OneDrive é
+   mostrado na tela inicial — substitui tanto o hint estático de antes quanto o "status acima do botão"
+   (ver .ti-status-conexao, removido de renderTelaInicial). Só passa a mostrar o padrão dinâmico
+   "[emoji] [status] aos dados em ☁️ OneDrive/[pasta] como [usuário]" depois que a aplicação já tentou
+   obter/usar uma conexão (clique em Conectar, sessão anterior, etc.) — antes disso mantém a mensagem
+   convidativa original, já que ainda não há nenhum estado real de conexão para reportar. O título do card
+   (h1) nunca é alterado por este texto — ver item 7, que exige o nome do card permanecer fixo. */
+function textoHintConexaoOneDrive(){
+  const conexaoTentada = !!msalConta || statusConexaoOneDrive!=='desconectado' || !!oneDriveIndisponivelMsg;
+  if(!conexaoTentada) return 'Conecte-se ao OneDrive para acessar seus dados.';
+  const st = statusConexaoOneDriveInfo();
+  const usuario = msalConta ? (msalConta.username||msalConta.name||'') : '';
+  return `${st.emoji} ${st.texto} aos dados em ☁️ <b>OneDrive/${escapeHtml(ONEDRIVE_CONFIG.pastaApp)}</b>${usuario?` como <b class="ti-email-conectado">${escapeHtml(usuario)}</b>`:''}`;
 }
 function renderTelaInicial(){
   /* 'carregado-manualmente' (item 7 do requisito de responsividade) conta como pronto para iniciar a
@@ -7810,7 +7837,7 @@ function renderTelaInicial(){
           <div class="ti-cabecalho-titulos">
             <h1>Controle Financeiro Familiar</h1>
             <p class="subtitulo">Família Gomes Oliveira</p>
-          	<p class="hint">${msalConta ? `Conectado como <b class="ti-email-conectado">${escapeHtml(msalConta.username||msalConta.name||'')}</b><br>dados em <b>OneDrive/${ONEDRIVE_CONFIG.pastaApp}</b>.` : 'Conecte-se ao OneDrive para acessar seus dados.'}</p>
+          	<p class="hint">${textoHintConexaoOneDrive()}</p>
 		  </div>
         </div>
       </div>
@@ -7822,7 +7849,6 @@ function renderTelaInicial(){
           <div class="ti-opcao-icone">${ONEDRIVE_ICON_SVG}</div>
           <div class="ti-opcao-titulo">${statusConexaoOneDrive==='conectado' ? 'Conectado ao OneDrive' : 'Conectar ao OneDrive'}</div>
           <div class="ti-opcao-desc">${statusConexaoOneDrive==='conectado' ? 'Sua conta já está conectada. Os arquivos são lidos e gravados diretamente no seu OneDrive.' : (msalConta ? 'Não foi possível acessar os arquivos no OneDrive agora — tente novamente.' : 'Conecta com sua conta Microsoft para acessar os arquivos deste app no seu OneDrive.')}</div>
-          <div class="ti-status-conexao ti-status-${statusConexaoOneDrive}">${statusConexaoOneDriveInfo().emoji} ${statusConexaoOneDriveInfo().texto}</div>
           ${statusConexaoOneDrive==='conectado'
             ? `<button class="btn btn-ghost" id="tiSairMicrosoft"><span class="icone-onedrive-discreto">${ONEDRIVE_ICON_SVG}</span> Desconectar do OneDrive</button>`
             : `<button class="btn btn-gold" id="tiEntrarMicrosoft" ${(!hasFSAccess || statusConexaoOneDrive==='conectando')?'disabled':''}>${ONEDRIVE_ICON_SVG} ${statusConexaoOneDrive==='conectando' ? 'Conectando...' : ((msalConta||oneDriveIndisponivelMsg) ? 'Tentar Novamente' : 'Conectar ao OneDrive')}</button>`}
@@ -8374,6 +8400,7 @@ function renderDashboard(){
       <p><b>🎯 Metas de Gastos</b>: aparece somente quando existem metas cadastradas para o mês; clique no card para abrir a aba Metas de Gastos com o detalhe de cada uma.</p>
       <p><b>👪 Renda Familiar</b>: distribui a receita do mês por fonte (subcategoria) e por responsável, sempre a partir dos lançamentos — nunca de um valor fixo.</p>
       <p><b>🏦 Investimentos</b> e <b>💳 Fatura atual por cartão</b>: usam os mesmos cálculos das abas Contas e Cartões e Fluxo de Caixa, então ficam sempre consistentes entre si.</p>
+      <p><b>🔥 Mapa de Calor de Despesas</b>: uma célula por dia (7 meses — 3 antes e 3 depois do mês selecionado no cabeçalho, sempre no centro), com a cor mais forte quanto maior o total de despesas naquele dia. Clique num dia com despesas para abrir a lista de lançamentos daquele dia, com filtros e seleção em lote própria — sem precisar trocar de aba.</p>
       <p style="margin-bottom:0;"><b>📊 Visão Geral</b>: mostra como a despesa do mês se distribui entre os grupos (gráfico de barras), a proporção entre despesas e saldo positivo dentro da receita (donut) e a evolução de receitas e despesas nos últimos 6 meses — para comparar o mês atual com o comportamento recente sem precisar trocar de aba. Para uma análise mais aprofundada (tendência, sazonalidade, projeções), use a aba <b>🧠 Inteligência Financeira</b>.</p>
     </div>
   </details>
@@ -9311,7 +9338,7 @@ function renderRegCardDetalheModal(){
   const campo = (label, valor)=> (valor===null || valor===undefined || valor==='') ? '' :
     `<div class="reg-detalhe-campo"><span class="reg-detalhe-label">${escapeHtml(label)}</span><span class="reg-detalhe-valor">${valor}</span></div>`;
   return `
-  <div class="overlay" id="ovRegCardDetalhe" ${attrZIndexModal('regCardDetalheModal')}>
+  <div class="overlay" id="ovRegCardDetalhe" ${attrZIndexModal('regCardDetalheId')}>
     <div class="modal" style="width:480px;">
       <div class="modal-head"><h3>🧾 Detalhe do lançamento</h3><button class="close-x" id="closeRegCardDetalhe">✕</button></div>
       <div class="modal-body">
@@ -11604,7 +11631,7 @@ function renderTextModal(){
 
 /* ===================== MODAL: BACKUP E RESTAURAÇÃO ===================== */
 async function abrirBackupModal(){
-  UI.backupModal = { aba:'historico', backups:null, carregando:true, selecionados:new Set() };
+  UI.backupModal = { aba:'historico', backups:null, carregando:true, selecionados:new Set(), filtros:{ tipo:new Set(), aberto:null }, excluindo:null };
   render();
   const backups = await carregarHistoricoBackups();
   if(UI.backupModal){ UI.backupModal.backups = backups; UI.backupModal.carregando = false; render(); }
@@ -11621,6 +11648,23 @@ const BACKUP_TIPO_INFO = {
   'pre-restore': { label:'Pré-restauração', icone:'🔒' },
   desconhecido: { label:'—', icone:'' },
 };
+/* Item 3 do requisito: barra de progresso REAL (não indeterminada) durante a exclusão de backups —
+   `excluindo` é { processados, total, nome } atualizado a cada item processado (ver
+   btnExcluirBackupsSelecionados), então o percentual reflete exatamente quantos já foram tentados, não
+   uma estimativa. Mostra o nome do backup em processamento quando há espaço (desktop); no mobile o CSS
+   compacta para caber só o essencial (contagem + percentual). */
+function renderProgressoExclusaoBackup(excluindo){
+  const { processados, total, nome } = excluindo;
+  const pct = total>0 ? Math.round((processados/total)*100) : 0;
+  return `
+  <div class="backup-progresso-exclusao no-print" role="progressbar" aria-valuenow="${processados}" aria-valuemin="0" aria-valuemax="${total}">
+    <div class="backup-progresso-exclusao-topo">
+      <span><b>Excluindo backups...</b>${nome ? ` <span class="hint">${escapeHtml(nome)}</span>` : ''}</span>
+      <span class="backup-progresso-exclusao-num">${processados} de ${total} &nbsp;·&nbsp; ${pct}%</span>
+    </div>
+    <div class="backup-progresso-exclusao-trilho"><div class="backup-progresso-exclusao-fill" style="width:${pct}%;"></div></div>
+  </div>`;
+}
 function renderBackupModal(){
   const m = UI.backupModal;
   return `
@@ -11637,37 +11681,61 @@ function renderBackupModal(){
           <span>Pasta de Backup (OneDrive): <b>${escapeHtml(ONEDRIVE_CONFIG.pastaApp)}/${escapeHtml(ONEDRIVE_CONFIG.pastaBackups)}</b></span>
         </div>
 
-        ${m.aba==='historico' ? `
+        ${m.aba==='historico' ? (()=>{
+          if(!m.filtros) m.filtros = { tipo:new Set(), aberto:null };
+          const f = m.filtros;
+          const bloqueado = !!m.excluindo;
+          // Item 2 do requisito: filtro "Tipo" na aba Histórico do Backup, mesmo motor genérico dos demais
+          // filtros do app (renderFiltroMultiSelect/bindFiltroMultiSelect/renderChipsFiltrosAtivos) — as
+          // opções refletem os tipos realmente presentes nos backups carregados (manual/automático/
+          // pré-restauração/desconhecido — ver BACKUP_TIPO_INFO), nunca uma lista fixa.
+          const tiposUsados = (m.backups||[]).length ? Array.from(new Set(m.backups.map(b=>b.tipo))).sort((a,b)=> (BACKUP_TIPO_INFO[a]?.label||a).localeCompare(BACKUP_TIPO_INFO[b]?.label||b,'pt-BR')) : [];
+          const camposFiltroBackup = [{campo:'tipo', label:'Tipo', options: tiposUsados.map(t=>({value:t, label:`${BACKUP_TIPO_INFO[t]?.icone?BACKUP_TIPO_INFO[t].icone+' ':''}${BACKUP_TIPO_INFO[t]?.label||t}`}))}];
+          const qtdAtivosBackup = contarFiltrosPadraoAtivos(f, camposFiltroBackup);
+          const backupsFiltrados = m.backups ? m.backups.filter(b=> passaFiltroMultiSel(f.tipo, b.tipo)) : null;
+          return `
         <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0;">
-          ${nivelAcessoPasta!=='leitura' ? `<button type="button" class="btn btn-primary btn-sm" id="btnCriarBackupAgoraModal">🗄️ Criar backup agora</button>` : `<span></span>`}
-          <button type="button" class="btn btn-ghost btn-sm" id="btnAtualizarListaBackup">↻ Atualizar lista</button>
+          ${nivelAcessoPasta!=='leitura' ? `<button type="button" class="btn btn-primary btn-sm" id="btnCriarBackupAgoraModal" ${bloqueado?'disabled':''}>🗄️ Criar backup agora</button>` : `<span></span>`}
+          <button type="button" class="btn btn-ghost btn-sm" id="btnAtualizarListaBackup" ${bloqueado?'disabled':''}>↻ Atualizar lista</button>
         </div>
         ${m.carregando ? `<div class="empty-state"><div class="big">⏳</div>Lendo backups...</div>` :
           !msalConta ? `<div class="empty-state"><div class="big">☁️</div>Conecte-se ao OneDrive para ver o histórico de versões.</div>` :
-          !m.backups || m.backups.length===0 ? `<div class="empty-state"><div class="big">🗄️</div>Nenhum backup encontrado nesta pasta ainda.</div>` : (()=>{
+          !m.backups || m.backups.length===0 ? `<div class="empty-state"><div class="big">🗄️</div>Nenhum backup encontrado nesta pasta ainda.</div>` : `
+        <div class="toolbar filtros-mobile-toolbar ${filtrosEstaoAgrupados('Backup')?'agrupado':''}" style="justify-content:flex-start;">
+          <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Backup')?'agrupado':''}" id="btnFiltrosMobileBackup" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosBackup>0?` <span class="filtros-mobile-badge">${qtdAtivosBackup}</span>`:''}</button>
+          <div class="filtros-barra ${filtrosEstaoAgrupados('Backup')?'agrupado':''} ${UI.filtrosMobileAberto==='Backup'?'aberto-mobile':''}" data-prefixo-filtros="Backup">
+            <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileBackup" title="Fechar">✕</button></div>
+            ${renderFiltroMultiSelect(f,'Backup','tipo','Tipo',camposFiltroBackup[0].options)}
+            <div class="filtros-barra-acoes-mobile"><button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileBackup">Aplicar</button></div>
+          </div>
+          ${UI.filtrosMobileAberto==='Backup' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropBackup"></div>` : ''}
+        </div>
+        ${renderChipsFiltrosAtivos(f, 'Backup', camposFiltroBackup, 'btnLimparFiltrosBackup')}
+        ${m.excluindo ? renderProgressoExclusaoBackup(m.excluindo) : ''}
+        ${backupsFiltrados.length===0 ? `<div class="empty-state" style="margin-top:14px;"><div class="big">🗄️</div>Nenhum backup encontrado com esses filtros.</div>` : (()=>{
           const podeExcluir = nivelAcessoPasta!=='leitura';
           const sel = m.selecionados || (m.selecionados = new Set());
-          const nomesVisiveis = m.backups.map(b=>b.nome);
+          const nomesVisiveis = backupsFiltrados.map(b=>b.nome);
           const qtdSel = sel.size;
           return `
         ${podeExcluir && qtdSel>0 ? `
         <div class="barra-acoes-lote" style="display:flex;align-items:center;gap:10px;margin:10px 0;padding:8px 12px;background:#eef2ff;border-radius:8px;">
           <span><b>${qtdSel}</b> backup${qtdSel===1?'':'s'} selecionado${qtdSel===1?'':'s'}</span>
-          <button type="button" class="btn btn-danger btn-sm" id="btnExcluirBackupsSelecionados">🗑️ Excluir selecionados</button>
-          <button type="button" class="btn btn-ghost btn-sm" id="btnLimparSelecaoBackup">✕ Limpar seleção</button>
+          <button type="button" class="btn btn-danger btn-sm" id="btnExcluirBackupsSelecionados" ${bloqueado?'disabled':''}>🗑️ Excluir selecionados</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="btnLimparSelecaoBackup" ${bloqueado?'disabled':''}>✕ Limpar seleção</button>
         </div>` : ''}
         ${podeExcluir ? `
         <label class="reg-select-all-mobile backup-select-all-mobile no-print">
-          <input type="checkbox" id="chkSelecionarTodosBackupMobile" ${nomesVisiveis.length>0 && nomesVisiveis.every(n=>sel.has(n))?'checked':''} data-indet-lote="${sel.size>0 && !nomesVisiveis.every(n=>sel.has(n))}">
+          <input type="checkbox" id="chkSelecionarTodosBackupMobile" ${nomesVisiveis.length>0 && nomesVisiveis.every(n=>sel.has(n))?'checked':''} data-indet-lote="${sel.size>0 && !nomesVisiveis.every(n=>sel.has(n))}" ${bloqueado?'disabled':''}>
           Selecionar todos (${nomesVisiveis.length})
         </label>` : ''}
         <div class="table-wrap"><table class="tabela-cards-mobile">
           <thead><tr>
-            ${podeExcluir ? `<th style="width:1%;"><input type="checkbox" id="chkSelecionarTodosBackup" ${nomesVisiveis.length>0 && nomesVisiveis.every(n=>sel.has(n))?'checked':''}></th>` : ''}
+            ${podeExcluir ? `<th style="width:1%;"><input type="checkbox" id="chkSelecionarTodosBackup" ${nomesVisiveis.length>0 && nomesVisiveis.every(n=>sel.has(n))?'checked':''} ${bloqueado?'disabled':''}></th>` : ''}
             <th>Data/Hora</th><th>Tipo</th><th>Arquivo</th><th style="text-align:right;">Tamanho</th><th style="text-align:right;">Registros</th><th style="text-align:center;">Integridade</th><th class="col-acoes">Ações</th></tr></thead>
           <tbody>
-            ${m.backups.map(b=>`<tr>
-              ${podeExcluir ? `<td data-label="" class="backup-linha-checkbox"><input type="checkbox" class="chk-selecionar-backup" data-backup-nome="${escapeHtml(b.nome)}" ${sel.has(b.nome)?'checked':''}></td>` : ''}
+            ${backupsFiltrados.map(b=>`<tr>
+              ${podeExcluir ? `<td data-label="" class="backup-linha-checkbox"><input type="checkbox" class="chk-selecionar-backup" data-backup-nome="${escapeHtml(b.nome)}" ${sel.has(b.nome)?'checked':''} ${bloqueado?'disabled':''}></td>` : ''}
               <td data-label="Data/Hora" style="white-space:nowrap;">${formatarDataHoraCurta(b.criadoEm)}</td>
               <td data-label="Tipo">${BACKUP_TIPO_INFO[b.tipo]?.icone||''} ${BACKUP_TIPO_INFO[b.tipo]?.label||b.tipo}</td>
               <td data-label="Arquivo" style="word-break:break-all;">${escapeHtml(b.nome)}</td>
@@ -11676,15 +11744,16 @@ function renderBackupModal(){
               <td data-label="Integridade" style="text-align:center;" title="${escapeHtml(b.motivoInvalido||'')}">${b.integro ? (b.semMetadados?'⚠ Sem checksum':'✓ Válido') : '✕ Inválido'}</td>
               <td data-label="" class="backup-linha-acoes" style="white-space:nowrap;text-align:right;">
                 ${nivelAcessoPasta!=='leitura' ? `
-                <button type="button" class="btn btn-primary btn-sm" data-restaurar-backup="${escapeHtml(b.nome)}" ${!b.integro?'disabled title="Backup inválido — restauração bloqueada"':''}>Restaurar</button>
-                <button type="button" class="icon-btn" data-excluir-backup="${escapeHtml(b.nome)}" title="Excluir">🗑️</button>
+                <button type="button" class="btn btn-primary btn-sm" data-restaurar-backup="${escapeHtml(b.nome)}" ${(!b.integro||bloqueado)?'disabled':''} ${!b.integro?'title="Backup inválido — restauração bloqueada"':''}>Restaurar</button>
+                <button type="button" class="icon-btn" data-excluir-backup="${escapeHtml(b.nome)}" title="Excluir" ${bloqueado?'disabled':''}>🗑️</button>
                 ` : ''}
               </td>
             </tr>`).join('')}
           </tbody>
         </table></div>`;
-        })()}
-        ` : `
+        })()}`}
+        `;
+        })() : `
         <div class="tx-form" style="margin-top:10px;">
           <div class="field"><label>Periodicidade do backup automático</label>
             <select id="cfgBackupPeriodicidade">
@@ -14356,6 +14425,14 @@ function bindEvents(){
   if(UI.backupModal){
     const bm = UI.backupModal;
     document.querySelectorAll('[data-backup-aba]').forEach(b=> b.addEventListener('click', ()=>{ bm.aba = b.dataset.backupAba; render(); }));
+    // Item 2 do requisito: filtro "Tipo" da aba Histórico — mesmo motor genérico dos demais filtros do app.
+    if(bm.aba==='historico' && bm.filtros){
+      const tiposUsadosBind = Array.from(new Set((bm.backups||[]).map(b=>b.tipo)));
+      bindFiltroMultiSelect(bm.filtros, 'Backup', 'tipo', tiposUsadosBind.map(t=>({value:t})), ()=> render());
+      bindChipsFiltrosAtivos(bm.filtros, 'Backup', ()=> render());
+      bindFiltrosMobileToggle('Backup');
+      document.getElementById('btnLimparFiltrosBackup')?.addEventListener('click', ()=>{ bm.filtros = { tipo:new Set(), aberto:null }; render(); });
+    }
     document.getElementById('btnCriarBackupAgoraModal')?.addEventListener('click', async ()=>{
       await criarBackupManual();
       await atualizarListaBackupModal();
@@ -14374,11 +14451,20 @@ function bindEvents(){
       }
     }));
     document.querySelectorAll('[data-excluir-backup]').forEach(b=> b.addEventListener('click', async ()=>{
+      if(bm.excluindo) return; // impede clique conflitante enquanto uma exclusão já está em andamento
       const nome = b.dataset.excluirBackup;
       const item = (bm.backups||[]).find(x=>x.nome===nome);
       if(!item) return;
-      const removeu = await excluirBackupDoHistorico(item, bm.backups||[]);
-      if(removeu) await atualizarListaBackupModal();
+      if(nivelAcessoPasta==='leitura'){ alert('Sua conta tem apenas permissão de leitura na pasta compartilhada e não pode excluir backups.'); return; }
+      const validosRestantes = (bm.backups||[]).filter(x=>x.integro && x.nome!==nome);
+      if(item.integro && validosRestantes.length===0){ alert('Este é o único backup válido disponível — não é permitido excluí-lo.'); return; }
+      const avisoExtra = (item.tipo==='manual'||item.tipo==='pre-restore') ? '\n\nEste é um backup MANUAL ou de PRÉ-RESTAURAÇÃO — normalmente preservado pela política de retenção.' : '';
+      if(!confirm(`Excluir permanentemente o backup "${nome}"?${avisoExtra}\n\nEsta ação não pode ser desfeita.`)) return;
+      bm.excluindo = { processados:0, total:1, nome }; render();
+      const r = await excluirBackupSemConfirmar(item, bm.backups||[]);
+      bm.excluindo = null;
+      if(!r.ok){ alert(`Não foi possível excluir o backup.\n\nMotivo: ${r.motivo}`); render(); return; }
+      await atualizarListaBackupModal();
     }));
     if(!bm.selecionados) bm.selecionados = new Set();
     const alternarTodos = e=>{
@@ -14400,15 +14486,22 @@ function bindEvents(){
     // selecionados mesmo que algum falhe no meio do caminho, e ao final relata exatamente quais backups
     // foram excluídos, quais não puderam ser e o motivo específico de cada falha.
     document.getElementById('btnExcluirBackupsSelecionados')?.addEventListener('click', async ()=>{
+      if(bm.excluindo) return; // já em andamento — evita clique duplo/disparo conflitante
       const nomes = Array.from(bm.selecionados);
       if(nomes.length===0) return;
       if(!confirm(`Excluir permanentemente ${nomes.length} backup${nomes.length===1?'':'s'} selecionado${nomes.length===1?'':'s'}?\n\nEsta ação não pode ser desfeita.`)) return;
+      // Item 3 do requisito: barra de progresso REAL — bm.excluindo é atualizado a cada item processado
+      // (sucesso ou falha) e o render() a cada passo faz a % avançar de fato, nunca uma animação
+      // indeterminada. Continua processando o lote inteiro mesmo se algum item falhar (nunca aborta no
+      // meio), e relata ao final exatamente quais foram excluídos e quais falharam, com o motivo de cada um.
+      bm.excluindo = { processados:0, total:nomes.length, nome:'' };
       let restantes = (bm.backups||[]).slice();
       const excluidos = [];
       const falhados = [];
       for(const nome of nomes){
+        bm.excluindo.nome = nome; render();
         const item = restantes.find(x=>x.nome===nome);
-        if(!item){ falhados.push({ nome, motivo:'não encontrado na lista atual.' }); continue; }
+        if(!item){ falhados.push({ nome, motivo:'não encontrado na lista atual.' }); bm.excluindo.processados++; continue; }
         const r = await excluirBackupSemConfirmar(item, restantes);
         if(r.ok){
           excluidos.push(nome);
@@ -14417,7 +14510,9 @@ function bindEvents(){
         } else {
           falhados.push({ nome, motivo:r.motivo });
         }
+        bm.excluindo.processados++; render();
       }
+      bm.excluindo = null;
       let relatorio = '';
       if(excluidos.length) relatorio += `✓ ${excluidos.length} backup${excluidos.length===1?'':'s'} excluído${excluidos.length===1?'':'s'}:\n${excluidos.map(n=>`  • ${n}`).join('\n')}`;
       if(falhados.length) relatorio += `${relatorio?'\n\n':''}✕ ${falhados.length} backup${falhados.length===1?'':'s'} NÃO excluído${falhados.length===1?'':'s'}:\n${falhados.map(f=>`  • ${f.nome}: ${f.motivo}`).join('\n')}`;
