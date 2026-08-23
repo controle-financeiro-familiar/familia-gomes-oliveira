@@ -79,7 +79,7 @@ input,select{font-family:var(--sans);}
 .app{display:flex;flex-direction:column;min-height:100vh;}
 
 .sticky-top{position:sticky;top:0;z-index:200;box-shadow:0 4px 14px rgba(11,42,94,.18);}
-.tela-inicial{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(180deg,var(--navy-50,#f4f7fc),#fff);}
+.tela-inicial{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:74px 24px 24px;background:linear-gradient(180deg,var(--navy-50,#f4f7fc),#fff);}
 .tela-inicial-card{max-width:1000px;width:100%;background:#fff;border:1px solid var(--line);border-radius:20px;padding:36px 40px;box-shadow:0 20px 60px rgba(16,64,141,.14);}
 .tela-inicial-card button:disabled{opacity:.5;cursor:not-allowed;}
 .ti-cabecalho{display:flex;align-items:center;gap:24px;margin-bottom:28px;text-align:center;}
@@ -1003,7 +1003,7 @@ tbody tr:hover{background:var(--navy-50);}
      direita, com ícone E texto, nunca só o ícone). Só CSS (order + um "quebra-linha" invisível) — o markup
      e a ordem no desktop continuam exatamente os mesmos de antes. */
   .reg-toolbar-acoes{align-items:stretch;gap:6px;}
-  .reg-toolbar-acoes #btnVerificarDuplicidade{order:1;flex:0 0 auto;white-space:nowrap;font-size:12px;padding-left:8px;padding-right:8px;}
+  .reg-toolbar-acoes #btnVerificarDuplicidade{order:1;flex:0 0 auto;white-space:nowrap;font-size:12px;padding:8px;}
   /* flex-basis:0 (em vez de auto): faz o item calcular o tamanho a partir do espaço disponível, não do
      conteúdo — com flex-basis:auto, o navegador contava a largura "natural" do campo de busca ao decidir
      se cabia ao lado de "Verificar duplicidade" e, mesmo com min-width:0, mandava a dupla inteira para uma
@@ -1024,7 +1024,7 @@ tbody tr:hover{background:var(--navy-50);}
      telas estreitas. */
   #btnNovoLancamento,#btnNovaProjecao,#btnNovaMeta{display:none;}
 }
-.toolbar input[type=text], .toolbar input[type=search]{border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:13px;min-width:200px;}
+.toolbar input[type=text], .toolbar input[type=search]{border:1px solid var(--line);border-radius:7px;padding:13px 10px;font-size:13px;min-width:200px;}
 /* ---- Componente padronizado dos modais "Ver Extrato" e "Lançamentos futuros" (qualquer conta) ----
    Largura fixa generosa o bastante para caber todos os filtros numa única linha em desktop/telas largas
    (evita quebra de linha entre contas com mais ou menos filtros/grupos). Em telas estreitas, os filtros
@@ -11713,8 +11713,8 @@ function renderBackupModal(){
         `}
       </div>
       <div class="modal-foot">
-        ${m.aba==='config' ? `<button type="button" class="btn btn-primary btn-sm" id="btnSalvarConfigBackup">💾 Salvar configuração</button>` : ''}
         <button type="button" class="btn btn-ghost" id="closeBackupModal2">Cancelar</button>
+		${m.aba==='config' ? `<button type="button" class="btn btn-primary btn-sm" id="btnSalvarConfigBackup">💾 Salvar configuração</button>` : ''}
       </div>
     </div>
   </div>`;
