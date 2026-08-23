@@ -229,7 +229,7 @@ input,select{font-family:var(--sans);}
 .app-title{display:flex;align-items:center;gap:18px;font-family:var(--mono);min-width:0;flex:1 1 auto;}
 .app-title-wrap{min-width:0;padding-left:18px;border-left:1px solid rgba(255,255,255,.18);}
 .app-title .mark{
-  height:88px;width:auto;object-fit:contain;display:block;flex-shrink:0;
+  height:96px;width:auto;object-fit:contain;display:block;flex-shrink:0;
   filter:drop-shadow(0 2px 6px rgba(0,0,0,.25));
 }
 .app-title h1{font-size:28px;margin:0;font-weight:700;letter-spacing:.3px;}
@@ -543,14 +543,14 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 .cenario-inputs-linha{display:flex;gap:12px;align-items:center;flex-wrap:nowrap;}
 .cenario-input-grupo{display:flex;align-items:center;gap:6px;font-size:11px;color:#5b6b85;white-space:nowrap;}
 /* Largura só para 3 dígitos + sinal (ex.: "-100"), com espaço para a unidade % ficar legível ao lado. */
-.cenario-input-3d{width:64px;text-align:right;padding:4px 6px;flex:none;}
+.cenario-input-3d{width:60px;text-align:right;padding:2px 3px;flex:none;}
 @media(max-width:480px){
   .cenario-inputs-linha{flex-wrap:wrap;}
   /* Item 10 do requisito de responsividade: controles fáceis de tocar — os campos de variação percentual
      ganham altura mínima de toque (--touch-min) só no mobile, sem alterar o desktop. Item 9 (rodada de
      ajustes globais): fonte do input exatamente 2pt menor que a do próprio label (.cenario-input-grupo,
      font-size:11px) — calc() garante que os dois nunca se descolem se um dia o tamanho do label mudar. */
-  .cenario-input-3d{min-height:var(--touch-min);font-size:calc(11px - 2pt);}
+  .cenario-input-3d{min-height:var(--touch-min);min-width:var(--touch-min);font-size:calc(11px - 2pt);padding:1px 2px;}
 }
 @media(max-width:900px){.grid-cards{grid-template-columns:repeat(2,1fr);}}
 .kpi{border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;background:var(--paper);position:relative;overflow:hidden;}
@@ -722,7 +722,7 @@ tbody tr:hover{background:var(--navy-50);}
    .table-wrap genérico (overflow:auto + max-height) só para esta tabela; o cabeçalho sticky também é
    desligado aqui porque, sem overflow próprio, ele passaria a grudar no topo da janela inteira ao rolar
    a página, e não apenas dentro da tabela. */
-.table-wrap-registros{overflow:visible;max-height:none;border-radius:8px 8px 0 0;border-bottom:none;}
+.table-wrap-registros{overflow:visible;max-height:none;border-radius:8px 8px 0 0;border-bottom:none;margin-top:10px;}
 .table-wrap-registros thead th{position:static;top:auto;}
 .tabela-registros{width:100%;table-layout:fixed;}
 .tabela-registros td, .tabela-registros th{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -1086,7 +1086,7 @@ tbody tr:hover{background:var(--navy-50);}
 .barra-acoes-lote{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .barra-acoes-lote.vazia{ display:none; }
 .barra-acoes-lote-contagem{ font-weight:600; color:var(--navy-900); margin-right:4px; }
-.barra-acoes-lote:not(.vazia){ background:var(--navy-50,#eef2f9); border:1px solid var(--line); border-radius:8px; padding:8px 12px; margin-top:10px; margin-bottom:10px; }
+.barra-acoes-lote:not(.vazia){ background:var(--navy-50,#eef2f9); border:1px solid var(--line); border-radius:8px; padding:8px 12px; margin-top:10px;}
 /* Modal de Edição em Lote */
 .lote-campo{ border-top:1px solid var(--line); padding:10px 0; }
 .lote-campo:first-of-type{ border-top:none; }
@@ -8205,7 +8205,7 @@ function renderMapaCalorDiaModal(){
     <div class="modal modal-mapa-calor" style="width:1280px;">
       <div class="modal-head"><h3>🔥 Despesas de ${pad2(dia)}/${pad2(mes)}/${ano}</h3><button class="close-x" id="closeMapaCalorDia">✕</button></div>
       <div class="modal-body">
-        <div class="cartoes-resumo-grid" style="margin-bottom:14px;">
+        <div class="cartoes-resumo-grid" style="margin-bottom:10px;">
           <div class="cartoes-resumo-item"><span class="ico">🧾</span><div><div class="val">${itensFiltrados.length}</div><div class="lbl">lançamento${itensFiltrados.length===1?'':'s'}</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">💸</span><div><div class="val">${fmtBRL(totalFiltrado)}</div><div class="lbl">total de despesas no dia</div></div></div>
         </div>
@@ -11055,7 +11055,7 @@ function renderCategorias(){
     </div>
     <div class="toolbar cat-toolbar" style="margin-bottom:16px;">
       <div class="cat-toolbar-busca">
-        <input type="text" id="buscaCategoriasInput" class="cat-busca-input" placeholder="Buscar por palavra" value="${escapeHtml(UI.buscaCategorias)}">
+        <input type="text" id="buscaCategoriasInput" class="cat-busca-input" placeholder="Buscar" value="${escapeHtml(UI.buscaCategorias)}">
         <button type="button" class="btn-buscar-icone" id="btnBuscarCategorias" title="Buscar" aria-label="Buscar">🔍</button>
         ${UI.buscaCategorias ? `<button class="btn btn-ghost btn-sm" id="btnLimparBuscaCategorias">✕ Limpar</button><span class="badge-count">${totalResultados} resultado(s)</span>` : ''}
       </div>
@@ -11113,7 +11113,7 @@ function renderCategorias(){
   </div>
   <div class="contas-cols">
     <div class="panel" style="display:flex;flex-direction:column;">
-      <h2><span>Contas <span class="badge-count">${contasOrdenadas().length} conta${contasOrdenadas().length===1?'':'s'}</span></span><button class="btn btn-primary btn-sm" id="btnNovaConta">+ Nova Conta</button></h2>
+      <h2><span>Contas <span class="badge-count">${contasOrdenadas().length}</span></span><button class="btn btn-primary btn-sm" id="btnNovaConta">+ Nova Conta</button></h2>
       <p class="panel-desc">Gerencie as contas financeiras utilizadas nos lançamentos e importações.</p>
       <div class="mini-card-grid" style="flex:1;align-content:flex-start;">
         ${contasOrdenadas().length ? contasOrdenadas().map(c=>{
@@ -11141,8 +11141,8 @@ function renderCategorias(){
     </div>
     <div class="col-direita">
       <div class="panel" style="flex:1;display:flex;flex-direction:column;margin-bottom:0;">
-        <h2><span>Meios de Pagamento / Recebimento <span class="badge-count">${meiosOrdenados().length} meio${meiosOrdenados().length===1?'':'s'}</span></span><button class="btn btn-primary btn-sm" id="btnNovoMeioPgto">+ Novo Meio</button></h2>
-        <p class="panel-desc">Defina os meios de pagamento e recebimento disponíveis no sistema.</p>
+        <h2><span>Meios de Transações <span class="badge-count">${meiosOrdenados().length}</span></span><button class="btn btn-primary btn-sm" id="btnNovoMeioPgto">+ Novo Meio</button></h2>
+        <p class="panel-desc">Defina os meios de transações disponíveis no sistema.</p>
         <div class="mini-card-grid" style="flex:1;align-content:flex-start;">
           ${meiosOrdenados().length ? meiosOrdenados().map(m=>`<div class="mini-card">
             <div class="mini-card-actions">
@@ -11155,8 +11155,8 @@ function renderCategorias(){
         </div>
       </div>
       <div class="panel" style="margin-bottom:0;">
-        <h2><span>Responsáveis (Renda Familiar) <span class="badge-count">${STATE.responsaveis.length} responsáve${STATE.responsaveis.length===1?'l':'is'}</span></span><button class="btn btn-primary btn-sm" id="btnNovoResponsavel">+ Novo Responsável</button></h2>
-        <p class="panel-desc">Pessoas utilizadas para identificar o responsável pelas receitas do grupo Renda Familiar.</p>
+        <h2><span>Responsáveis <span class="badge-count">${STATE.responsaveis.length}</span></span><button class="btn btn-primary btn-sm" id="btnNovoResponsavel">+ Novo Responsável</button></h2>
+        <p class="panel-desc">Utilizado para identificar o responsável pela Renda Familiar.</p>
         <div class="mini-card-grid">
           ${STATE.responsaveis.length ? [...STATE.responsaveis].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(p=>`<div class="mini-card">
             <div class="mini-card-actions">
