@@ -507,14 +507,26 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
      hover, então os botões ✏️/🗑️ ficavam com opacity:0 e efetivamente inacessíveis (não dava para
      descobri-los nem tocar neles). No mobile, as ações passam a ficar sempre visíveis, em fluxo normal
      (não mais posição absoluta), com tamanho de toque adequado. */
-  .mini-card .import-badge{position:static;display:inline-block;margin-bottom:4px;}
+  .mini-card .import-badge{position:static;display:inline-block;margin-bottom:4px;order:99;}
   /* Especificidade igual à regra base (.mini-card .mini-card-actions), senão perde por ordem de
      declaração e as ações continuam com opacity:0 mesmo dentro deste media query. */
   .mini-card .mini-card-actions{
     position:static;opacity:1;transform:none;background:transparent;
-    display:flex;justify-content:flex-end;margin-bottom:6px;
+    display:flex;justify-content:flex-end;margin-bottom:0;order:99;flex-shrink:0;
   }
   .mini-card-actions .icon-btn{min-width:var(--touch-min);min-height:var(--touch-min);}
+  /* Item 12 do requisito (rodada seguinte): Contas / Meios de Transações / Responsáveis viram linhas
+     horizontais compactas no mobile, em vez de uma grade de cards — cada item numa única linha, nome em
+     destaque, ícone à esquerda, ações sempre à direita (via order, sem depender da ordem no markup, que
+     é a mesma para as três áreas — nenhuma duplicação de CSS/JS por área). */
+  .mini-card-grid{grid-template-columns:1fr;gap:8px;}
+  .mini-card{
+    flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px 10px;
+    min-height:0;padding:10px 12px;
+  }
+  .mini-card .mini-card-icon{font-size:18px;flex-shrink:0;}
+  .mini-card .mini-card-title{flex:1 1 auto;min-width:80px;font-size:13px;}
+  .mini-card .type-badge{margin-top:0;flex-shrink:0;order:98;}
 }
 .icone-genero-picker{display:flex;gap:12px;}
 .icone-genero-opcao{
@@ -527,7 +539,7 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 .icone-genero-opcao:hover{border-color:var(--navy-100);}
 .icone-genero-opcao.selecionada{border-color:var(--navy-900);background:var(--navy-50);}
 .icone-genero-opcao.selecionada span{color:var(--navy-900);}
-@media(max-width:480px){.mini-card-grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));}}
+@media(max-width:480px){.mini-card-grid{grid-template-columns:1fr;}}
 .dash-row-2col{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;align-items:start;margin-bottom:16px;}
 @media(max-width:900px){.dash-row-2col{grid-template-columns:1fr;}}
 /* Variante com os dois painéis sempre na mesma altura (Comportamento Sazonal/Alertas Analíticos e Previsão
@@ -538,6 +550,19 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 /* Cabeçalho de cada cenário (Simulação de Cenários): título à esquerda, campos de variação (só em
    Conservador/Otimista) à direita, na mesma linha — só quebra para duas linhas em telas muito estreitas,
    quando não há espaço para os dois lados convivendo. */
+/* Painel "Simulação de Cenários" (item 5 do requisito): no mobile, ordem vertical fixa — título, hint,
+   botão "Restaurar percentuais padrão", cards — com o MESMO espaçamento (10px) entre cada um desses 4
+   blocos, nunca elementos "colados". No desktop, título e botão voltam a dividir a mesma linha (como
+   antes), com o hint e os cards ocupando a largura toda logo abaixo — via CSS grid, sem duplicar markup. */
+.intel-cenarios-col{display:flex;flex-direction:column;gap:10px;}
+.intel-cenarios-lista{display:flex;flex-direction:column;gap:10px;}
+@media(min-width:701px){
+  .intel-cenarios-col{display:grid;grid-template-columns:1fr auto;column-gap:14px;row-gap:10px;align-items:baseline;}
+  .intel-cenarios-titulo{grid-column:1;grid-row:1;}
+  .intel-cenarios-restaurar{grid-column:2;grid-row:1;justify-self:end;}
+  .intel-cenarios-col>.hint{grid-column:1/-1;grid-row:2;}
+  .intel-cenarios-lista{grid-column:1/-1;grid-row:3;}
+}
 .cenario-cabecalho{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px 14px;margin-bottom:8px;}
 .cenario-titulo{font-weight:700;white-space:nowrap;}
 .cenario-inputs-linha{display:flex;gap:12px;align-items:center;flex-wrap:nowrap;}
@@ -546,11 +571,11 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 .cenario-input-3d{width:60px;text-align:right;padding:2px 3px;flex:none;}
 @media(max-width:480px){
   .cenario-inputs-linha{flex-wrap:wrap;}
-  /* Item 10 do requisito de responsividade: controles fáceis de tocar — os campos de variação percentual
-     ganham altura mínima de toque (--touch-min) só no mobile, sem alterar o desktop. Item 9 (rodada de
-     ajustes globais): fonte do input exatamente 2pt menor que a do próprio label (.cenario-input-grupo,
-     font-size:11px) — calc() garante que os dois nunca se descolem se um dia o tamanho do label mudar. */
-  .cenario-input-3d{min-height:var(--touch-min);min-width:var(--touch-min);font-size:calc(11px - 2pt);padding:1px 2px;}
+  /* Correção numa rodada seguinte (item 5 do requisito): os inputs ficavam desproporcionalmente altos e
+     largos no mobile (min-height:44px = --touch-min, mas com fonte de 9px dentro — nem confortável nem
+     compacto). Ajustados para uma altura/largura proporcionais ao conteúdo (até 4 caracteres, "-100"),
+     mantendo uma área de toque confortável sem ocupar espaço desnecessário. */
+  .cenario-input-3d{min-height:36px;width:52px;font-size:13px;padding:4px 4px;}
 }
 @media(max-width:900px){.grid-cards{grid-template-columns:repeat(2,1fr);}}
 .kpi{border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;background:var(--paper);position:relative;overflow:hidden;}
@@ -709,6 +734,10 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
   .tabela-fluxo td.tabela-fluxo-acoes{justify-content:flex-end;gap:14px;}
   .tabela-fluxo td.tabela-fluxo-acoes .icon-btn{min-width:var(--touch-min);min-height:var(--touch-min);font-size:16px;}
   .tabela-fluxo .linha-saldo-atual-label{display:block;padding:5px 0;font-weight:700;}
+  /* Item 8 do requisito: a primeira linha do card (coluna "Dia") fica inteira em negrito — rótulo e valor —
+     não só o valor da data, mantendo o resto da hierarquia visual do card como já era. */
+  .tabela-fluxo td:first-child{font-weight:700;}
+  .tabela-fluxo td:first-child::before{font-weight:700;}
 }
 thead th{
   text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.3px;text-transform:uppercase;
@@ -806,6 +835,10 @@ tbody tr:hover{background:var(--navy-50);}
   display:flex;align-items:flex-start;gap:8px;background:var(--paper);border:1px solid var(--line);
   border-radius:var(--radius-md);padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-2);position:relative;
 }
+/* Item 13 do requisito: no mobile, tocar em qualquer parte do card (fora da caixa de seleção e do menu ⋮)
+   abre um modal com o detalhe completo do lançamento — só os cards com data-reg-card-detalhe (lista de
+   Registros) ganham esse comportamento. */
+.reg-card[data-reg-card-detalhe]{cursor:pointer;}
 /* Seleção em lote na lista mobile (item 18 do requisito de responsividade) — caixa de seleção do card,
    mesma altura mínima de toque das demais ações da lista. */
 .reg-card-check{display:flex;align-items:center;justify-content:center;flex-shrink:0;min-width:var(--touch-min);min-height:var(--touch-min);margin:calc(-1*var(--sp-3)) 0;}
@@ -844,6 +877,16 @@ tbody tr:hover{background:var(--navy-50);}
    ver renderCardsLancamentosModal. .reg-card-extra é uma linha secundária opcional (ex.: saldo acumulado);
    .reg-card-sem-acao remove o menu ⋮ do item técnico "Saldo Anterior" do extrato, que não é editável. */
 .reg-card-extra{font-size:11.5px;color:#8393ac;margin-top:4px;}
+/* Item 13 do requisito: modal de detalhe completo do .reg-card — lista de campos "rótulo: valor", com
+   quebra de linha livre (nunca corta/trunca), diferente do card compacto que o originou. */
+.reg-detalhe-lista{display:flex;flex-direction:column;gap:2px;}
+.reg-detalhe-campo{
+  display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;
+  padding:9px 0;border-bottom:1px solid var(--navy-50);
+}
+.reg-detalhe-campo:last-child{border-bottom:none;}
+.reg-detalhe-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#8393ac;flex-shrink:0;}
+.reg-detalhe-valor{font-size:13.5px;color:var(--ink);text-align:right;overflow-wrap:break-word;word-break:break-word;min-width:0;flex:1;}
 .reg-card-sem-acao{opacity:.72;}
 .val-cell.neg{color:var(--despesa);}
 .val-cell.pos{color:var(--receita);}
@@ -928,7 +971,7 @@ tbody tr:hover{background:var(--navy-50);}
   .cat-toolbar-acoes .btn{flex:1 1 auto;white-space:nowrap;}
 }
 @media(max-width:700px){
-  .reg-busca-wrap{width:100%;margin-left:0!important;}
+  .reg-busca-wrap{margin-left:0!important;}
   /* !important necessário: ".toolbar input[type=search]{min-width:200px}" (regra global mais abaixo no
      arquivo) tem a mesma especificidade e vence por ordem de declaração, o que impedia o campo de encolher
      e empurrava o botão "Buscar" para fora da tela (overflow horizontal). */
@@ -937,27 +980,27 @@ tbody tr:hover{background:var(--navy-50);}
      texto quebrava no meio ("Bus/car") — item 18 do requisito de responsividade: nenhum botão pode quebrar
      texto. O botão nunca encolhe; só o input (com min-width:0 acima) cede espaço. */
   .reg-busca-wrap button{flex-shrink:0;white-space:nowrap;}
-  /* Itens 10/11/19 do requisito: Filtros / Verificar duplicidade / Importar arquivo do banco no mobile.
-     "Verificar duplicidade" é bem mais longo que "Filtros" — dividir a largura igualmente entre os dois
-     (flex-basis:0) forçava o texto mais longo a truncar com reticências mesmo quando o rótulo curto sobrava
-     espaço. Cada botão agora usa a largura do próprio conteúdo (flex:0 1 auto, sem ellipsis) — nenhum texto
-     é cortado; se os dois não couberem lado a lado com o ícone de Importar, a própria toolbar (.toolbar já
-     tem flex-wrap:wrap) empurra o que não coube para uma segunda linha, nunca corta o texto do botão. */
+  /* Item 10 do requisito (rodada seguinte): duas linhas fixas no mobile — 1) Verificar duplicidade (à
+     esquerda) + Busca (preenche o resto da linha); 2) Filtros (à esquerda) + Importar arquivo do banco (à
+     direita, com ícone E texto, nunca só o ícone). Só CSS (order + um "quebra-linha" invisível) — o markup
+     e a ordem no desktop continuam exatamente os mesmos de antes. */
   .reg-toolbar-acoes{align-items:stretch;gap:6px;}
-  .reg-toolbar-acoes #btnFiltrosMobileReg,
-  .reg-toolbar-acoes #btnVerificarDuplicidade{
-    flex:0 1 auto;min-width:0;padding-left:8px;padding-right:8px;
-    white-space:nowrap;font-size:12px;
-  }
+  .reg-toolbar-acoes #btnVerificarDuplicidade{order:1;flex:0 0 auto;white-space:nowrap;font-size:12px;padding-left:8px;padding-right:8px;}
+  /* flex-basis:0 (em vez de auto): faz o item calcular o tamanho a partir do espaço disponível, não do
+     conteúdo — com flex-basis:auto, o navegador contava a largura "natural" do campo de busca ao decidir
+     se cabia ao lado de "Verificar duplicidade" e, mesmo com min-width:0, mandava a dupla inteira para uma
+     quebra de linha própria (cada uma ocupando 100% sozinha) em vez de dividir a MESMA linha. */
+  .reg-toolbar-acoes .reg-busca-wrap{order:2;flex:1 1 0%;min-width:0;width:auto;}
+  .reg-toolbar-acoes .reg-toolbar-quebra{order:3;flex:0 0 100%;height:0;}
+  .reg-toolbar-acoes #btnFiltrosMobileReg{order:4;flex:0 0 auto;white-space:nowrap;font-size:12px;padding-left:8px;padding-right:8px;}
+  /* Mesma lógica de flex-basis:0 para "Importar arquivo do banco" dividir a 2ª linha com "Filtros" — o
+     rótulo pode quebrar em duas linhas dentro do próprio botão (nunca é cortado/reduzido a só o ícone),
+     mas o botão continua na MESMA linha de "Filtros", só ficando um pouco mais alto quando necessário. */
+  .reg-toolbar-acoes #btnImportar{order:5;flex:1 1 0%;min-height:var(--touch-min);white-space:normal;text-align:center;line-height:1.25;}
   .reg-toolbar-acoes #btnFiltrosMobileReg .reg-toolbar-label,
   .reg-toolbar-acoes #btnVerificarDuplicidade .reg-toolbar-label{
     white-space:nowrap;
   }
-  /* Item 15 do requisito: no mobile, "Importar arquivo do banco" mostra somente o ícone — libera espaço
-     para Filtros/Verificar duplicidade manterem o rótulo de texto legível. */
-  .reg-toolbar-acoes #btnImportar{ flex:0 0 auto; min-width:var(--touch-min); min-height:var(--touch-min); padding:6px 10px; }
-  .reg-toolbar-acoes #btnImportar .reg-toolbar-label{ display:none; }
-  .reg-toolbar-acoes .reg-busca-wrap{order:99;}
   /* No mobile o botão flutuante (FAB) já cobre "+ Novo lançamento"/"+ Novo lançamento previsto"/"+ Nova meta"
      (itens 7 e 14 do requisito) — evita duplicar a ação e a sobreposição do FAB fixo com esses botões em
      telas estreitas. */
@@ -1108,6 +1151,14 @@ tbody tr:hover{background:var(--navy-50);}
 .field label{display:block;font-size:11px;font-weight:700;color:#5b6b85;margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px;}
 .field input, .field select{width:100%;border:1px solid var(--line);border-radius:7px;padding:8px 9px;font-size:13px;background:#fff;}
 .field input:focus,.field select:focus{outline:2px solid var(--navy-900);outline-offset:1px;}
+/* Item 6 do requisito: no mobile (especialmente iOS Safari), um input/select focado com font-size menor
+   que 16px dispara zoom automático da página — inclusive em modais que dão foco automático ao abrir (ex.:
+   Saldo Inicial da Conta), o que deixava o modal "aberto com zoom" de forma inconsistente. 16px é o piso
+   documentado do WebKit para nunca disparar esse zoom; aplicado só no mobile para não alterar a densidade
+   visual do desktop. */
+@media(max-width:700px){
+  .field input, .field select{font-size:16px;}
+}
 .hint{font-size:11px;color:#8393ac;margin-top:10px;}
 .tipo-toggle{display:flex;gap:8px;grid-column:span 4;}
 .tipo-toggle button{
@@ -1229,6 +1280,11 @@ tbody tr:hover{background:var(--navy-50);}
 .modal-head-acoes .btn:hover{background:rgba(255,255,255,.12);}
 .modal-body{padding:14px 20px;}
 .modal-foot{padding:11px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px;position:sticky;bottom:0;background:#fff;}
+/* Item 2 do requisito: no mobile, os botões do rodapé de TODOS os modais ficam alinhados à esquerda — regra
+   única e global (nunca por modal individual). Precisa vir DEPOIS da regra base acima (mesma especificidade
+   0,1,0): senão a base — que não está em media query e por isso "sempre" se aplica — venceria por ordem de
+   declaração mesmo dentro do breakpoint mobile. */
+@media(max-width:700px){ .modal-foot{justify-content:flex-start;} }
 /* Sub-abas dentro de um modal (ex.: Backup e Restauração — Histórico/Configuração). */
 .tabs-secundarias{display:flex;gap:6px;border-bottom:1px solid var(--line);}
 .tab-sec{border:none;background:transparent;padding:8px 14px;font-size:12.5px;font-weight:600;color:#5b6b85;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
@@ -3669,6 +3725,7 @@ let UI = {
   regPagina: 1,        // página atual (1-based) da tabela de Registros
   regSelecionados: new Set(),
   regCardMenuAberto: null, // id do lançamento com o menu de ações (✏️/📄/🗑️) aberto na lista mobile de Registros
+  regCardDetalheId: null, // id do lançamento com o modal de detalhes (item 13 do requisito) aberto — null = fechado
   filtrosMobileAberto: null, // prefixo ('Reg', ...) da barra de filtros aberta como painel/bottom sheet no mobile
   importStep: 0, // 0=fechado · 1=período+conta (pré-importação) · 2=escolher arquivo · 3=confirmar/mapear · 4=revisar e classificar
   importCatModal: null, // { index, tipo, grupo, categoria, subcategoria } — modal de classificação (Grupo → Categoria → Subcategoria) de uma linha da importação
@@ -3788,6 +3845,7 @@ const CAMADAS_MODAL = [
   'moverCategoriaModal',               // Configurações → Categorias
   'moverSubcategoriaModal',            // Configurações → Categorias
   'posicaoModal',                      // Configurações → Categorias
+  'regCardDetalheModal',               // Registros (mobile) — detalhe completo de um .reg-card ao tocar nele
   'editarSaldoInicialContaModal',      // painel Contas — editar saldo inicial de uma conta
   'editarSaldoInicialFluxoCaixaModal', // Fluxo de Caixa — editar saldos iniciais das contas
   'faturaEditModal',                   // painel Cartões — ajustar fechamento/vencimento de uma fatura
@@ -6624,7 +6682,7 @@ function renderExtratoContaModal(){
         })}
         <div class="registros-rodape no-print">${rodapePaginacaoExtrato}</div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhum lançamento encontrado com esses filtros.</div>`}` : `${renderBotoesAcoesLancamentoModal(conta, false)}<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhum lançamento nesta conta na competência selecionada.</div>`}
       </div>
-      <div class="modal-foot no-print" style="justify-content:flex-end;">
+      <div class="modal-foot no-print">
         <button class="btn btn-primary" id="closeExtratoConta2">Fechar</button>
       </div>
     </div>
@@ -6745,7 +6803,7 @@ function renderFuturosContaModal(){
         })}
         <div class="registros-rodape no-print">${rodapePaginacaoFuturos}</div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">📅</div>Nenhum lançamento encontrado com esses filtros.</div>`}` : `${renderBotoesAcoesLancamentoModal(conta, false)}<div class="empty-state" style="margin-top:14px;"><div class="big">📅</div>Nenhum lançamento futuro cadastrado para esta conta.</div>`}
       </div>
-      <div class="modal-foot no-print" style="justify-content:flex-end;">
+      <div class="modal-foot no-print">
         <button class="btn btn-primary" id="closeFuturosConta2">Fechar</button>
       </div>
     </div>
@@ -6808,7 +6866,7 @@ function renderModalAportes(){
         <p class="hint" style="margin:8px 0 0;">Linhas destacadas fazem parte do mês selecionado no topo da página (${MESES[mes-1]}/${ano}).</p>
         ` : `<div class="empty-state" style="margin-top:14px;"><div class="big">🏦</div>Nenhum aporte registrado em ${ano}.</div>`}
       </div>
-      <div class="modal-foot" style="justify-content:flex-end;">
+      <div class="modal-foot">
         <button class="btn btn-primary" id="closeAportes2">Fechar</button>
       </div>
     </div>
@@ -7525,7 +7583,11 @@ function render(){
   const trocouAba = ultimaAbaRenderizada!==null && ultimaAbaRenderizada!==UI.tab;
   const scrollY = trocouAba ? 0 : window.scrollY;
   ultimaAbaRenderizada = UI.tab;
-  const wraps = Array.from(document.querySelectorAll('.table-wrap, .modal, .filtro-multisel-lista'));
+  // Item 7 do requisito: no mobile, quem realmente rola dentro de um modal é .modal-body (flex:1;
+  // overflow-y:auto — ver @media(max-width:700px)), não .modal em si (que só rola no desktop). Sem
+  // .modal-body aqui, abrir/fechar o menu ⋮ de um card (que dispara um render() normal) perdia a posição de
+  // rolagem do conteúdo do modal, "voltando ao topo" — mesmo o resto da tela permanecendo no lugar.
+  const wraps = Array.from(document.querySelectorAll('.table-wrap, .modal, .modal-body, .filtro-multisel-lista'));
   const wrapScrolls = trocouAba ? [] : wraps.map(w=>w.scrollTop);
   root.innerHTML = `
     <div class="app">
@@ -7562,6 +7624,7 @@ function render(){
     ${UI.projecaoFaturaModal!==null ? renderProjecaoFaturaModal() : ""}
     ${UI.faturaAtualModal!==null ? renderFaturaAtualModal() : ""}
     ${UI.modalDuplicidade!==null ? renderModalDuplicidade() : ""}
+    ${UI.regCardDetalheId!==null ? renderRegCardDetalheModal() : ""}
     ${UI.aportesModal ? renderModalAportes() : ""}
     ${UI.mapaCalorDiaModal ? renderMapaCalorDiaModal() : ""}
     ${UI.duplicarMesesModal!==null ? renderDuplicarMesesModal() : ""}
@@ -7585,7 +7648,7 @@ function render(){
     }));
   }
   window.scrollTo(0, scrollY);
-  const novosWraps = document.querySelectorAll('.table-wrap, .modal, .filtro-multisel-lista');
+  const novosWraps = document.querySelectorAll('.table-wrap, .modal, .modal-body, .filtro-multisel-lista');
   novosWraps.forEach((w,i)=>{ if(wrapScrolls[i]!==undefined) w.scrollTop = wrapScrolls[i]; });
   requestAnimationFrame(ajustarNavResponsiva);
   requestAnimationFrame(ajustarAgrupamentoFiltros);
@@ -9188,7 +9251,7 @@ function renderListaMobileRegistros(pageList){
     <div class="reg-grupo-data">
       <div class="reg-grupo-data-titulo">${escapeHtml(g.rotulo)}</div>
       ${g.itens.map(t=>`
-      <div class="reg-card">
+      <div class="reg-card" data-reg-card-detalhe="${escapeHtml(t.id)}">
         <label class="reg-card-check"><input type="checkbox" class="chkLoteReg" value="${escapeHtml(t.id)}" ${UI.regSelecionados.has(t.id)?'checked':''} aria-label="Selecionar lançamento"></label>
         <div class="reg-card-principal">
           <div class="reg-card-linha1">
@@ -9212,6 +9275,47 @@ function renderListaMobileRegistros(pageList){
         </div>
       </div>`).join('')}
     </div>`).join('')}
+  </div>`;
+}
+/* Item 13 do requisito: modal de detalhe completo de um lançamento, aberto ao tocar num .reg-card (mobile)
+   fora da caixa de seleção/menu ⋮ — mostra todos os campos existentes, sem cortar/truncar nada (ao
+   contrário do card, que precisa ser compacto). Rodapé só com "Fechar" (alinhado à esquerda no mobile via
+   a regra global de .modal-foot — item 2 do requisito); as ações (editar/duplicar/excluir) continuam
+   exclusivas do menu ⋮ do card, não duplicadas aqui. */
+function renderRegCardDetalheModal(){
+  const t = STATE.transactions.find(tx=>tx.id===UI.regCardDetalheId);
+  if(!t){ return ''; }
+  const campo = (label, valor)=> (valor===null || valor===undefined || valor==='') ? '' :
+    `<div class="reg-detalhe-campo"><span class="reg-detalhe-label">${escapeHtml(label)}</span><span class="reg-detalhe-valor">${valor}</span></div>`;
+  return `
+  <div class="overlay" id="ovRegCardDetalhe" ${attrZIndexModal('regCardDetalheModal')}>
+    <div class="modal" style="width:480px;">
+      <div class="modal-head"><h3>🧾 Detalhe do lançamento</h3><button class="close-x" id="closeRegCardDetalhe">✕</button></div>
+      <div class="modal-body">
+        <div class="reg-detalhe-lista">
+          ${campo('Descrição', escapeHtml(t.descricao))}
+          ${campo('Valor', `<b class="val-cell ${t.tipo==='Despesa'?'neg':'pos'}">${t.tipo==='Despesa'?'-':''}${fmtBRL(t.valor)}</b>`)}
+          ${campo('Data', fmtData(t.data))}
+          ${campo('Tipo', `<span class="tag ${t.tipo}">${escapeHtml(t.tipo)}</span>`)}
+          ${campo('Natureza', t.natureza ? `<span class="tag ${t.natureza==='Fixo'?'Fixo':'Variavel'}">${escapeHtml(t.natureza)}</span>` : '')}
+          ${campo('Grupo', t.grupo ? `${iconeGrupo(t.grupo)} ${escapeHtml(t.grupo)}` : 'Sem Grupo')}
+          ${campo('Categoria', escapeHtml(t.subgrupo||''))}
+          ${campo('Subcategoria', escapeHtml(t.categoria||''))}
+          ${campo('Conta', escapeHtml(t.conta||''))}
+          ${campo('Meio de pagamento', escapeHtml(t.pgto||''))}
+          ${campo('Fatura/Competência', t.competencia ? competenciaLabel(t.competencia) : '')}
+          ${campo('Parcela', t.totalParcelas ? `${t.parcelaAtual}/${t.totalParcelas}` : '')}
+          ${campo('Parcela futura', (t.parcelaFutura && t.competencia && t.competencia>chaveMes(UI.ano,UI.mes)) ? '⌛ Ainda não é a fatura do mês visualizado' : '')}
+          ${campo('Responsável', t.responsavel ? `🧑 ${escapeHtml(t.responsavel)}` : '')}
+          ${campo('Transferência interna', t.entreFamilia ? '🔁 Movimentação patrimonial entre contas — não conta como receita/despesa' : '')}
+          ${campo('Compra internacional', t.internacional ? `💱 Taxa de conversão: ${t.taxaConversao||'—'}` : '')}
+          ${campo('Origem', t.origemImportacao ? '📥 Lançamento importado' : '')}
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-primary" id="closeRegCardDetalhe2">Fechar</button>
+      </div>
+    </div>
   </div>`;
 }
 /* ---------- Lista mobile de lançamentos para os modais Ver Extrato/Lançamentos futuros/Ver Fatura/Ver
@@ -9371,13 +9475,14 @@ function renderRegistros(){
         <input type="search" id="regBusca" placeholder="Buscar na descrição..." value="${escapeHtml(UI.regFiltro)}">
         <button type="button" class="btn-buscar-icone" id="btnBuscarRegistros" title="Buscar (ou pressione Enter)" aria-label="Buscar (ou pressione Enter)">🔍</button>
       </div>
+      <div class="reg-toolbar-quebra no-print" aria-hidden="true"></div>
     </div>
     <div class="toolbar filtros-mobile-toolbar ${filtrosEstaoAgrupados('Reg')?'agrupado':''}" style="justify-content:flex-start;">
       <div class="filtros-barra ${filtrosEstaoAgrupados('Reg')?'agrupado':''} ${UI.filtrosMobileAberto==='Reg'?'aberto-mobile':''}" data-prefixo-filtros="Reg">
         <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileReg" title="Fechar">✕</button></div>
         ${renderBarraFiltrosPadrao(f, 'Reg', camposFiltroReg)}
+        ${qtdAtivos>0 ? `<button class="btn btn-ghost btn-sm" id="btnLimparFiltrosReg">↺ Restaurar filtros padrão</button>` : ''}
         <div class="filtros-barra-acoes-mobile">
-          ${qtdAtivos>0 ? `<button class="btn btn-ghost btn-sm" id="btnLimparFiltrosReg">↺ Restaurar filtros padrão</button>` : ''}
           <button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileReg">Aplicar</button>
         </div>
       </div>
@@ -9893,7 +9998,7 @@ function renderFaturaAtualModal(){
         })}
         <div class="registros-rodape no-print">${rodapePaginacaoFatura}</div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhum lançamento encontrado com esses filtros.</div>`}` : `${renderBotoesAcoesLancamentoModal(conta, false)}<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhum lançamento nesta fatura ainda.</div>`}
       </div>
-      <div class="modal-foot no-print" style="justify-content:flex-end;">
+      <div class="modal-foot no-print">
         <button class="btn btn-primary" id="closeFaturaAtual2">Fechar</button>
       </div>
     </div>
@@ -10272,6 +10377,17 @@ function renderInteligencia(){
   const categoriasOpcoes = [...new Set(CATEGORIAS.map(c=>c[0]))].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(c=>({value:c,label:c}));
   const tipoOpcoes = [{value:'Receita',label:'Receita'},{value:'Despesa',label:'Despesa'}];
   const CONF_COR = { Alta:'#1e8e5a', Média:'#c98a00', Baixa:'#c0392b' };
+  // Item 4 do requisito: mesmo padrão de filtros global (agrupamento mobile, botão "Restaurar filtros
+  // padrão" só quando há algo selecionado, chips abaixo da barra) usado em Registros e nos 4 modais de
+  // lançamento — período/horizonte (selects) não entram na contagem por não serem filtros "limpáveis".
+  const camposFiltroIntel = [
+    {campo:'conta', label:'Conta', options:contasOpcoes},
+    {campo:'grupo', label:'Grupo', options:gruposOpcoes},
+    {campo:'categoria', label:'Categoria', options:categoriasOpcoes},
+    {campo:'tipo', label:'Tipo', options:tipoOpcoes},
+  ];
+  const qtdAtivosIntel = contarFiltrosPadraoAtivos(f, camposFiltroIntel);
+  const filtrosAtivosIntel = filtrosPadraoAtivos(f, camposFiltroIntel);
 
   const cardResumo = (icone, label, valorAtual, valorMedio, valorProjetado, formato)=>{
     const fmt = formato || fmtBRL;
@@ -10311,19 +10427,26 @@ function renderInteligencia(){
         <p style="margin-bottom:0;"><b>💬 Leitura Financeira</b>: a síntese final, em tópicos independentes — cada um já com um ícone indicando se é uma situação positiva, um ponto de atenção, uma oportunidade ou uma tendência. É o resumo para levar para a decisão, sem precisar reler todos os painéis acima.</p>
       </div>
     </details>
-    <div class="filtros-barra" style="margin-top:14px;">
-      <select id="intelPeriodoMeses" class="mini">
-        ${[6,12,18,24].map(n=>`<option value="${n}" ${f.periodoMeses===n?'selected':''}>Histórico: últimos ${n} meses</option>`).join('')}
-      </select>
-      <select id="intelHorizonte" class="mini">
-        ${[3,6,12].map(n=>`<option value="${n}" ${f.horizonte===n?'selected':''}>Projeção: ${n} meses</option>`).join('')}
-      </select>
-      ${renderFiltroMultiSelect(f,'Intel','conta','Conta',contasOpcoes)}
-      ${renderFiltroMultiSelect(f,'Intel','grupo','Grupo',gruposOpcoes)}
-      ${renderFiltroMultiSelect(f,'Intel','categoria','Categoria',categoriasOpcoes)}
-      ${renderFiltroMultiSelect(f,'Intel','tipo','Tipo',tipoOpcoes)}
-      <button class="btn btn-ghost btn-sm" id="btnRestaurarFiltrosIntel">↺ Restaurar filtros padrão</button>
+    <div class="toolbar filtros-mobile-toolbar ${filtrosEstaoAgrupados('Intel')?'agrupado':''}" style="margin-top:14px;justify-content:flex-start;">
+      <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Intel')?'agrupado':''}" id="btnFiltrosMobileIntel" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosIntel>0?` <span class="filtros-mobile-badge">${qtdAtivosIntel}</span>`:''}</button>
+      <div class="filtros-barra ${filtrosEstaoAgrupados('Intel')?'agrupado':''} ${UI.filtrosMobileAberto==='Intel'?'aberto-mobile':''}" data-prefixo-filtros="Intel">
+        <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileIntel" title="Fechar">✕</button></div>
+        <select id="intelPeriodoMeses" class="mini">
+          ${[6,12,18,24].map(n=>`<option value="${n}" ${f.periodoMeses===n?'selected':''}>Histórico: últimos ${n} meses</option>`).join('')}
+        </select>
+        <select id="intelHorizonte" class="mini">
+          ${[3,6,12].map(n=>`<option value="${n}" ${f.horizonte===n?'selected':''}>Projeção: ${n} meses</option>`).join('')}
+        </select>
+        ${renderFiltroMultiSelect(f,'Intel','conta','Conta',contasOpcoes)}
+        ${renderFiltroMultiSelect(f,'Intel','grupo','Grupo',gruposOpcoes)}
+        ${renderFiltroMultiSelect(f,'Intel','categoria','Categoria',categoriasOpcoes)}
+        ${renderFiltroMultiSelect(f,'Intel','tipo','Tipo',tipoOpcoes)}
+        ${filtrosAtivosIntel ? `<button class="btn btn-ghost btn-sm" id="btnRestaurarFiltrosIntel">↺ Restaurar filtros padrão</button>` : ''}
+        <div class="filtros-barra-acoes-mobile"><button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileIntel">Aplicar</button></div>
+      </div>
+      ${UI.filtrosMobileAberto==='Intel' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropIntel"></div>` : ''}
     </div>
+    ${renderChipsFiltrosAtivos(f, 'Intel', camposFiltroIntel)}
   </div>
 
   ${dadosInsuficientes ? `
@@ -10407,12 +10530,11 @@ function renderInteligencia(){
       </table></div>
     </div>
     <div class="panel" style="margin-bottom:0;">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px 10px;">
-	  <h2 style="margin-top:0;">Simulação de Cenários</h2>
-      <button type="button" class="btn btn-ghost btn-sm" id="btnResetarCenarios">↺ Restaurar percentuais padrão</button>
-	  </div>
-      <p class="hint" style="margin-top:0;">Ajuste os percentuais de Conservador/Otimista para ver o impacto na hora - Provável é sempre a projeção principal.</p>
-      <div style="display:flex;flex-direction:column;gap:10px;">
+      <div class="intel-cenarios-col">
+        <h2 class="intel-cenarios-titulo" style="margin:0;">Simulação de Cenários</h2>
+        <p class="hint" style="margin:0;">Ajuste os percentuais de Conservador/Otimista para ver o impacto na hora - Provável é sempre a projeção principal.</p>
+        <button type="button" class="btn btn-ghost btn-sm intel-cenarios-restaurar" id="btnResetarCenarios">↺ Restaurar percentuais padrão</button>
+        <div class="intel-cenarios-lista">
         ${Object.entries(ctx.cenarios).map(([chave,c])=>`
         <div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;">
           <div class="cenario-cabecalho">
@@ -10429,6 +10551,7 @@ function renderInteligencia(){
             <div><span class="hint">Patrimônio Projetado</span><br><b>${fmtBRL(c.patrimonioProjetado)}</b></div>
           </div>
         </div>`).join('')}
+        </div>
       </div>
     </div>
   </div>
@@ -11571,7 +11694,7 @@ function renderBackupModal(){
       </div>
       <div class="modal-foot">
         ${m.aba==='config' ? `<button type="button" class="btn btn-primary btn-sm" id="btnSalvarConfigBackup">💾 Salvar configuração</button>` : ''}
-        <button type="button" class="btn btn-ghost" id="closeBackupModal2">Fechar</button>
+        <button type="button" class="btn btn-ghost" id="closeBackupModal2">Cancelar</button>
       </div>
     </div>
   </div>`;
@@ -12888,6 +13011,10 @@ function bindEvents(){
   document.getElementById('tiVerHistoricoBackups')?.addEventListener('click', ()=>abrirBackupModal());
   document.getElementById('tiIniciarApp')?.addEventListener('click', ()=>{
     UI.appIniciado = true;
+    // A aplicação sempre inicia no Painel Financeiro, com a página no topo — nunca preserva aba nem
+    // posição de rolagem de uma sessão anterior (item 1 do requisito de responsividade/UX).
+    UI.tab = 'dashboard';
+    window.scrollTo(0, 0);
     backupAutomaticoSeAplicavel('ao-iniciar');
     // Item 4 do requisito: dispara a sincronização imediatamente ao iniciar, sem exigir um clique extra em
     // "Sincronizar agora". Reaproveita EXATAMENTE a mesma função usada por aquele botão (salvarArquivos) —
@@ -12960,6 +13087,8 @@ function bindEvents(){
     document.getElementById('intelPeriodoMeses')?.addEventListener('change', e=>{ f.periodoMeses = Number(e.target.value); render(); });
     document.getElementById('intelHorizonte')?.addEventListener('change', e=>{ f.horizonte = Number(e.target.value); render(); });
     document.getElementById('btnRestaurarFiltrosIntel')?.addEventListener('click', ()=>{ UI.intelFiltros = intelFiltrosPadrao(); render(); });
+    bindFiltrosMobileToggle('Intel');
+    bindChipsFiltrosAtivos(f, 'Intel', ()=>render());
     document.querySelectorAll('[data-sort-intel]').forEach(th=> th.addEventListener('click', ()=>{
       const campo = th.dataset.sortIntel;
       if(UI.intelOrdenacao.campo===campo) UI.intelOrdenacao.dir = UI.intelOrdenacao.dir==='asc'?'desc':'asc';
@@ -13663,6 +13792,15 @@ function bindEvents(){
   if(UI.regCardMenuAberto){
     document.addEventListener('click', ()=>{ UI.regCardMenuAberto = null; render(); }, { once:true });
   }
+  // Item 13 do requisito: tocar em qualquer parte do card (fora da caixa de seleção e do menu ⋮ — inclusive
+  // os itens Editar/Duplicar/Excluir dentro dele, que não chamam stopPropagation) abre o modal de detalhe.
+  document.querySelectorAll('.reg-card[data-reg-card-detalhe]').forEach(card=> card.addEventListener('click', e=>{
+    if(e.target.closest('.reg-card-check, .reg-card-menu')) return;
+    UI.regCardDetalheId = card.dataset.regCardDetalhe;
+    render();
+  }));
+  document.getElementById('closeRegCardDetalhe')?.addEventListener('click', ()=>{ UI.regCardDetalheId=null; render(); });
+  document.getElementById('closeRegCardDetalhe2')?.addEventListener('click', ()=>{ UI.regCardDetalheId=null; render(); });
 
   document.querySelectorAll('#btnNovaProjecao, #fabNovaProjecao').forEach(b=> b.addEventListener('click', ()=>{
     UI.novaProjecaoModal = { ano: UI.ano, mes: UI.mes, dia:1, descricao:'', tipo:'Despesa', valor:0, cartao:'', editId:null };
