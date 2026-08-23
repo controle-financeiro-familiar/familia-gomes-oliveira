@@ -2037,38 +2037,102 @@ function atributosPopupLogin(){
   const top = Math.max(0, Math.round((window.screen.height - altura) / 2 + (window.screenTop||0)));
   return { popupSize: { width: largura, height: altura }, popupPosition: { top, left } };
 }
+/* =====================================================================================
+   Watchdog independente de popup para login/logout da Microsoft (rodada seguinte)
+   =====================================================================================
+   O MSAL.js já tenta detectar o fechamento manual do popup por conta própria (monitorando window.closed
+   internamente), e isso é refletido na Promise de loginPopup/logoutPopup rejeitando com 'user_cancelled' —
+   só que essa detecção interna pode falhar silenciosamente em alguns ambientes (ex.: políticas de
+   Cross-Origin-Opener-Policy mais estritas entre a origem do app e login.microsoftonline.com fazem
+   `window.closed` parar de refletir a realidade, ou até lançar exceção, dependendo do navegador). Quando
+   isso acontece, a Promise nunca resolve nem rejeita depois que o usuário fecha a janela manualmente, e o
+   app fica preso em "Conectando"/"Desconectando" para sempre — exatamente o bug relatado.
+   Este watchdog NUNCA depende só do callback/Promise do MSAL (não temos acesso à referência real do popup,
+   que o MSAL abre e gerencia internamente — por isso o monitoramento é indireto): ele observa quando a
+   janela PRINCIPAL volta a ter foco/visibilidade, o que acontece tanto quando o popup se fecha sozinho ao
+   concluir quanto quando o usuário o fecha manualmente. Depois de um pequeno intervalo de folga (dá tempo
+   do resultado real do MSAL chegar primeiro, no caminho feliz — o popup costuma fechar um pouco ANTES da
+   Promise terminar de processar o token), se a operação ainda não tiver sido finalizada por ninguém, o
+   watchdog a finaliza como cancelada. Um temporizador de segurança bem mais longo cobre o caso do foco
+   nunca voltar por algum motivo (última rede de proteção).
+   Cada tentativa de login/logout ganha um número de geração (oneDriveOpGen); finalizarOperacaoOneDrive é a
+   ÚNICA rotina de limpeza (item 3 do requisito: nunca vários pontos de limpeza com comportamentos
+   divergentes) e é idempotente por geração — só a primeira chamada para uma dada geração tem efeito, então
+   não importa se o callback real do MSAL e o watchdog tentam finalizar quase ao mesmo tempo (nenhum efeito
+   duplicado), nem se um resultado tardio do MSAL chega depois do watchdog já ter cancelado (ignorado). */
+let oneDriveOpGen = 0;          // geração da tentativa de login/logout mais recente
+let oneDriveOpGenFinalizada = 0; // última geração já finalizada — qualquer chamada para uma geração <= esta é ignorada
+let oneDriveWatchdogCleanup = null; // remove os listeners/timers do watchdog atualmente armado, se houver
+function finalizarOperacaoOneDrive(gen, tipo, resultado){
+  if(gen!==oneDriveOpGen || gen<=oneDriveOpGenFinalizada) return; // já finalizada, ou uma tentativa mais nova já assumiu
+  oneDriveOpGenFinalizada = gen;
+  if(oneDriveWatchdogCleanup){ oneDriveWatchdogCleanup(); oneDriveWatchdogCleanup = null; }
+  if(tipo==='login') statusConexaoOneDrive = resultado==='sucesso' ? 'conectado' : 'desconectado';
+  else desconectandoOneDrive = false;
+  render();
+}
+function armarWatchdogOneDrive(gen, tipo){
+  const inicio = Date.now();
+  let timerFolga = null;
+  // Ignora o próprio ato de abrir o popup (que pode gerar um blur/focus espúrio na janela principal nos
+  // primeiros instantes) — só passa a reagir a foco/visibilidade depois de uma folga inicial mínima.
+  const FOLGA_ABERTURA_MS = 1000;
+  const FOLGA_RETORNO_FOCO_MS = 4000; // tempo de sobra para o resultado real do MSAL chegar primeiro
+  const TIMEOUT_MAXIMO_MS = 2*60000;  // última rede de proteção, caso o foco nunca volte
+  const aoQualificar = ()=>{
+    if(Date.now()-inicio < FOLGA_ABERTURA_MS) return;
+    clearTimeout(timerFolga);
+    timerFolga = setTimeout(()=> finalizarOperacaoOneDrive(gen, tipo, 'cancelado'), FOLGA_RETORNO_FOCO_MS);
+  };
+  const onFocus = ()=> aoQualificar();
+  const onVisibility = ()=>{ if(document.visibilityState==='visible') aoQualificar(); };
+  window.addEventListener('focus', onFocus);
+  document.addEventListener('visibilitychange', onVisibility);
+  const timeoutMaximo = setTimeout(()=> finalizarOperacaoOneDrive(gen, tipo, 'cancelado'), TIMEOUT_MAXIMO_MS);
+  oneDriveWatchdogCleanup = ()=>{
+    window.removeEventListener('focus', onFocus);
+    document.removeEventListener('visibilitychange', onVisibility);
+    clearTimeout(timerFolga);
+    clearTimeout(timeoutMaximo);
+  };
+}
 async function loginOneDrive(){
   await initMsal();
   if(!msalConfigurado()){
     alert('⚠️ Integração com o OneDrive ainda não configurada.\n\nDefina ONEDRIVE_CONFIG.clientId no início do index.html com o "ID do aplicativo (cliente)" do seu App Registration no Microsoft Entra ID (ver instruções no comentário do código).');
     return false;
   }
-  // Item 1 da rodada seguinte: limpa qualquer erro de uma tentativa ANTERIOR antes de começar esta nova
-  // tentativa — sem isso, um oneDriveIndisponivelMsg antigo (de um erro real já passado) faria
-  // textoDescOpcaoOneDrive() mostrar "Não foi possível conectar" mesmo que esta nova tentativa termine em
-  // cancelamento (nunca em erro de verdade).
+  // Limpa qualquer erro de uma tentativa ANTERIOR antes de começar esta nova tentativa — sem isso, um
+  // oneDriveIndisponivelMsg antigo (de um erro real já passado) faria textoDescOpcaoOneDrive() mostrar "Não
+  // foi possível conectar" mesmo que esta nova tentativa termine em cancelamento (nunca em erro de verdade).
   oneDriveIndisponivelMsg = null;
+  const gen = ++oneDriveOpGen;
   statusConexaoOneDrive = 'conectando';
+  armarWatchdogOneDrive(gen, 'login');
   render();
   try{
     const r = await msalApp.loginPopup({ scopes: ONEDRIVE_CONFIG.scopes, prompt: 'select_account', popupWindowAttributes: atributosPopupLogin() });
+    // Se o watchdog (ou uma tentativa mais nova) já finalizou esta geração antes deste retorno tardio do
+    // MSAL chegar, ignora — nunca reabre um estado que o usuário já deixou para trás.
+    if(gen<=oneDriveOpGenFinalizada) return false;
     if(r && r.account) msalConta = r.account;
     render(); // já mostra "Conectado como" assim que a conta é conhecida, mesmo antes dos arquivos carregarem
     // Sem redirect (popup fecha sozinho, a página nunca recarrega), então o carregamento dos arquivos que
     // antes acontecia em initPersistence() após o retorno do redirect precisa ser disparado aqui.
     await carregarArquivosDoOneDrive();
-    statusConexaoOneDrive = (fileStatusCfg==='erro' || fileStatusReg==='erro') ? 'desconectado' : 'conectado';
-    render();
-    return true;
+    if(gen<=oneDriveOpGenFinalizada) return false;
+    const sucesso = !(fileStatusCfg==='erro' || fileStatusReg==='erro');
+    finalizarOperacaoOneDrive(gen, 'login', sucesso ? 'sucesso' : 'erro');
+    return sucesso;
   }catch(e){
-    statusConexaoOneDrive = 'desconectado';
+    if(gen<=oneDriveOpGenFinalizada) return false; // watchdog já assumiu esta tentativa como cancelada
     // Login interrompido pelo próprio usuário (fechou a janela de login sem concluir, ou cancelou) — não é
     // uma falha real do OneDrive, então a aplicação só volta ao estado inicial (botão "Conectar ao
     // OneDrive" habilitado, sem banner de erro nem "Tentar Novamente"), sem registrar oneDriveIndisponivelMsg.
     const cancelado = e && (e.errorCode==='user_cancelled' || e.errorCode==='user_cancelled_flow' || /cancel/i.test(e.errorCode||'') || /cancel/i.test(e.errorMessage||e.message||''));
     if(cancelado){
       console.warn('OneDrive: login cancelado pelo usuário', e);
-      render();
+      finalizarOperacaoOneDrive(gen, 'login', 'cancelado');
       return false;
     }
     registrarErroOneDrive(e);
@@ -2078,21 +2142,19 @@ async function loginOneDrive(){
     if(bloqueado){
       alert('⚠️ O navegador bloqueou a janela de login.\n\nPermita pop-ups para este site e tente novamente, ou use "Conectar ao OneDrive" mais uma vez — alguns navegadores liberam o popup na segunda tentativa.');
     }
-    render();
+    finalizarOperacaoOneDrive(gen, 'login', 'erro');
     return false;
   }
 }
 /* true enquanto a janela (popup) de logout da Microsoft está aberta — usada só para impedir um segundo
-   clique em "Desconectar" simultâneo (item 3 da rodada seguinte: nunca deixar o app preso num estado
-   equivalente a "operação em andamento"; este flag é sempre limpo no finally, aconteça o que acontecer —
-   sucesso, cancelamento ou erro). */
+   clique em "Desconectar" simultâneo. Sempre limpa via finalizarOperacaoOneDrive (mesma rotina central do
+   login), nunca um ponto de limpeza separado. */
 let desconectandoOneDrive = false;
 /* Antes usava msalApp.logoutRedirect(), que navega a aba inteira para fora do app (não há "janela" para
    fechar/cancelar — a única forma de "cancelar" seria interromper o carregamento da página, perdendo
    qualquer estado). Trocado por logoutPopup() (mesmo padrão de loginPopup(), ver acima): abre uma janela
-   separada para o logout, a aba principal do app nunca é recarregada, e fechar essa janela sem concluir é
-   detectado pelo próprio MSAL como cancelamento (mesma família de erros 'user_cancelled' do login) — nunca
-   deixa o app travado.
+   separada para o logout, a aba principal do app nunca é recarregada, e o mesmo watchdog independente
+   (armarWatchdogOneDrive) cobre o fechamento manual dessa janela, exatamente como no login.
    `conta` é capturada pelo chamador (desconectarArquivos) ANTES de limpar msalConta, porque a desconexão
    dos arquivos locais já acontece de forma síncrona e imediata (sempre bem-sucedida) independente do
    resultado desta chamada — o logout na Microsoft aqui é só um "melhor esforço" adicional para encerrar
@@ -2100,8 +2162,11 @@ let desconectandoOneDrive = false;
 async function logoutOneDrive(conta){
   if(!msalApp || !conta || desconectandoOneDrive) return;
   desconectandoOneDrive = true;
+  const gen = ++oneDriveOpGen;
+  armarWatchdogOneDrive(gen, 'logout');
   try{
     await msalApp.logoutPopup({ account: conta, popupWindowAttributes: atributosPopupLogin() });
+    finalizarOperacaoOneDrive(gen, 'logout', 'sucesso');
   }catch(e){
     const cancelado = e && (e.errorCode==='user_cancelled' || e.errorCode==='user_cancelled_flow' || /cancel/i.test(e.errorCode||'') || /cancel/i.test(e.errorMessage||e.message||''));
     if(cancelado) console.warn('OneDrive: logout cancelado pelo usuário', e);
@@ -2112,8 +2177,7 @@ async function logoutOneDrive(conta){
       // conectar" por engano na próxima vez que o usuário tentar se conectar.
       console.error('OneDrive: falha ao encerrar sessão na Microsoft', e);
     }
-  } finally {
-    desconectandoOneDrive = false;
+    finalizarOperacaoOneDrive(gen, 'logout', cancelado ? 'cancelado' : 'erro');
   }
 }
 /* Token de acesso ao Graph — tenta renovar silenciosamente (sem interromper o usuário) primeiro; só cai
@@ -4820,7 +4884,12 @@ async function desconectarArquivos(){
     statusConexaoOneDrive = 'desconectado';
     resetarEstadoParaSessaoZerada();
     render();
-    await logoutOneDrive(contaParaLogout);
+    // Disparado sem await de propósito: se a Promise de logoutPopup travar (ver watchdog independente em
+    // logoutOneDrive/armarWatchdogOneDrive), esperar por ela aqui manteria desconectarArquivosEmAndamento
+    // travado em true para sempre, bloqueando silenciosamente qualquer tentativa seguinte de desconectar. A
+    // limpeza do lado da Microsoft já é inteiramente autocontida (seu próprio guard desconectandoOneDrive +
+    // watchdog), então não precisa ser aguardada aqui.
+    logoutOneDrive(contaParaLogout);
   } finally {
     desconectarArquivosEmAndamento = false;
   }
