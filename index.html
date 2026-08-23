@@ -2043,6 +2043,11 @@ async function loginOneDrive(){
     alert('⚠️ Integração com o OneDrive ainda não configurada.\n\nDefina ONEDRIVE_CONFIG.clientId no início do index.html com o "ID do aplicativo (cliente)" do seu App Registration no Microsoft Entra ID (ver instruções no comentário do código).');
     return false;
   }
+  // Item 1 da rodada seguinte: limpa qualquer erro de uma tentativa ANTERIOR antes de começar esta nova
+  // tentativa — sem isso, um oneDriveIndisponivelMsg antigo (de um erro real já passado) faria
+  // textoDescOpcaoOneDrive() mostrar "Não foi possível conectar" mesmo que esta nova tentativa termine em
+  // cancelamento (nunca em erro de verdade).
+  oneDriveIndisponivelMsg = null;
   statusConexaoOneDrive = 'conectando';
   render();
   try{
@@ -2077,10 +2082,39 @@ async function loginOneDrive(){
     return false;
   }
 }
-async function logoutOneDrive(){
-  if(!msalApp || !msalConta) return;
-  try{ await msalApp.logoutRedirect({ account: msalConta }); }
-  catch(e){ registrarErroOneDrive(e); }
+/* true enquanto a janela (popup) de logout da Microsoft está aberta — usada só para impedir um segundo
+   clique em "Desconectar" simultâneo (item 3 da rodada seguinte: nunca deixar o app preso num estado
+   equivalente a "operação em andamento"; este flag é sempre limpo no finally, aconteça o que acontecer —
+   sucesso, cancelamento ou erro). */
+let desconectandoOneDrive = false;
+/* Antes usava msalApp.logoutRedirect(), que navega a aba inteira para fora do app (não há "janela" para
+   fechar/cancelar — a única forma de "cancelar" seria interromper o carregamento da página, perdendo
+   qualquer estado). Trocado por logoutPopup() (mesmo padrão de loginPopup(), ver acima): abre uma janela
+   separada para o logout, a aba principal do app nunca é recarregada, e fechar essa janela sem concluir é
+   detectado pelo próprio MSAL como cancelamento (mesma família de erros 'user_cancelled' do login) — nunca
+   deixa o app travado.
+   `conta` é capturada pelo chamador (desconectarArquivos) ANTES de limpar msalConta, porque a desconexão
+   dos arquivos locais já acontece de forma síncrona e imediata (sempre bem-sucedida) independente do
+   resultado desta chamada — o logout na Microsoft aqui é só um "melhor esforço" adicional para encerrar
+   também a sessão do lado deles; cancelar ou falhar aqui não deve reverter a desconexão local já feita. */
+async function logoutOneDrive(conta){
+  if(!msalApp || !conta || desconectandoOneDrive) return;
+  desconectandoOneDrive = true;
+  try{
+    await msalApp.logoutPopup({ account: conta, popupWindowAttributes: atributosPopupLogin() });
+  }catch(e){
+    const cancelado = e && (e.errorCode==='user_cancelled' || e.errorCode==='user_cancelled_flow' || /cancel/i.test(e.errorCode||'') || /cancel/i.test(e.errorMessage||e.message||''));
+    if(cancelado) console.warn('OneDrive: logout cancelado pelo usuário', e);
+    else{
+      // Falha ao encerrar a sessão do LADO da Microsoft não é um erro de CONEXÃO (os arquivos locais já
+      // foram desconectados por quem chamou esta função) — por isso não usa registrarErroOneDrive() aqui,
+      // que alimentaria oneDriveIndisponivelMsg e faria a tela de conexão mostrar "Não foi possível
+      // conectar" por engano na próxima vez que o usuário tentar se conectar.
+      console.error('OneDrive: falha ao encerrar sessão na Microsoft', e);
+    }
+  } finally {
+    desconectandoOneDrive = false;
+  }
 }
 /* Token de acesso ao Graph — tenta renovar silenciosamente (sem interromper o usuário) primeiro; só cai
    para um redirect interativo se a renovação silenciosa falhar de verdade (ex.: sessão realmente expirada
@@ -4766,17 +4800,30 @@ async function fecharAppVoltarTelaInicial(){
 }
 /* "Desconectar" agora significa sair da conta Microsoft conectada (logoutRedirect) — verifica alterações
    não salvas primeiro, do mesmo jeito que antes, para nunca perder dados ainda não gravados no OneDrive. */
+let desconectarArquivosEmAndamento = false; // item 3 da rodada seguinte: evita reentrância enquanto aguarda confirmarFecharComAlteracoes()
 async function desconectarArquivos(){
-  if(STATE.dirty){
-    const decisao = await confirmarFecharComAlteracoes();
-    if(decisao==='cancelar') return;
-    if(decisao==='salvar'){ const ok = await salvarArquivos(); if(!ok) return; }
+  if(desconectarArquivosEmAndamento) return;
+  desconectarArquivosEmAndamento = true;
+  try{
+    if(STATE.dirty){
+      const decisao = await confirmarFecharComAlteracoes();
+      if(decisao==='cancelar') return;
+      if(decisao==='salvar'){ const ok = await salvarArquivos(); if(!ok) return; }
+    }
+    // A desconexão LOCAL (arquivos + STATE) é sempre imediata e síncrona a partir daqui — nunca depende do
+    // resultado do logout na Microsoft (ver logoutOneDrive), que agora usa uma janela separada (popup) que
+    // pode ser cancelada sem afetar este estado já aplicado.
+    const contaParaLogout = msalConta;
+    fileHandleReg = null; fileHandleCfg = null; dirHandleBackup = null;
+    fileStatusReg = 'desconectado'; fileStatusCfg = 'desconectado';
+    msalConta = null;
+    statusConexaoOneDrive = 'desconectado';
+    resetarEstadoParaSessaoZerada();
+    render();
+    await logoutOneDrive(contaParaLogout);
+  } finally {
+    desconectarArquivosEmAndamento = false;
   }
-  fileHandleReg = null; fileHandleCfg = null; dirHandleBackup = null;
-  fileStatusReg = 'desconectado'; fileStatusCfg = 'desconectado';
-  resetarEstadoParaSessaoZerada();
-  render();
-  await logoutOneDrive(); // recarrega a página via redirect
 }
 /* Restaura STATE para o estado "zerado" inicial (sem lançamentos nem configurações carregadas) — usado ao
    desconectar arquivos ou depois de "Fechar sessão sem salvar", para a aplicação voltar a se comportar
@@ -7800,18 +7847,44 @@ function statusConexaoOneDriveInfo(){
   return { emoji:'🔴', texto:'Desconectado' };
 }
 /* Itens 5-7 do requisito (rodada seguinte): único lugar onde o estado da conexão com o OneDrive é
-   mostrado na tela inicial — substitui tanto o hint estático de antes quanto o "status acima do botão"
-   (ver .ti-status-conexao, removido de renderTelaInicial). Só passa a mostrar o padrão dinâmico
-   "[emoji] [status] aos dados em ☁️ OneDrive/[pasta] como [usuário]" depois que a aplicação já tentou
-   obter/usar uma conexão (clique em Conectar, sessão anterior, etc.) — antes disso mantém a mensagem
+   mostrado no cabeçalho (ti-cabecalho) da tela inicial — substitui tanto o hint estático de antes quanto o
+   "status acima do botão" (ver .ti-status-conexao, removido de renderTelaInicial). Só passa a mostrar o
+   padrão dinâmico "[emoji] [status] aos dados em OneDrive/[pasta] como [usuário]" depois que a aplicação já
+   tentou obter/usar uma conexão (clique em Conectar, sessão anterior, etc.) — antes disso mantém a mensagem
    convidativa original, já que ainda não há nenhum estado real de conexão para reportar. O título do card
-   (h1) nunca é alterado por este texto — ver item 7, que exige o nome do card permanecer fixo. */
+   (h1) nunca é alterado por este texto — ver item 7, que exige o nome do card permanecer fixo.
+   Item 6 da rodada seguinte: este hint do CABEÇALHO não leva mais o ícone do OneDrive (só o texto) — o
+   ícone continua existindo no hint de conexão da própria opção "Conectar ao OneDrive" logo abaixo (ver
+   textoDescOpcaoOneDrive()), que é quem efetivamente segue o padrão completo com ícone. */
 function textoHintConexaoOneDrive(){
   const conexaoTentada = !!msalConta || statusConexaoOneDrive!=='desconectado' || !!oneDriveIndisponivelMsg;
-  if(!conexaoTentada) return `Conecte-se ao ${ONEDRIVE_ICON_SVG} OneDrive para acessar seus dados.`;
+  if(!conexaoTentada) return 'Conecte-se ao OneDrive para acessar seus dados.';
   const st = statusConexaoOneDriveInfo();
   const usuario = msalConta ? (msalConta.username||msalConta.name||'') : '';
-  return `${st.emoji} ${st.texto} aos dados em ${ONEDRIVE_ICON_SVG} <b>OneDrive/${escapeHtml(ONEDRIVE_CONFIG.pastaApp)}</b>${usuario?` como <b class="ti-email-conectado">${escapeHtml(usuario)}</b>`:''}`;
+  return `${st.emoji} ${st.texto} aos dados em <b>OneDrive/${escapeHtml(ONEDRIVE_CONFIG.pastaApp)}</b>${usuario?` como <b class="ti-email-conectado">${escapeHtml(usuario)}</b>`:''}`;
+}
+/* Item 1 da rodada seguinte: descrição da opção "Conectar ao OneDrive" (ti-opcao-desc), com um branch
+   dedicado para CADA estado real de statusConexaoOneDrive — o bug anterior só distinguia "conectado" de
+   "todo o resto" (usando msalConta como proxy de erro), então mostrava a mensagem de erro "Não foi possível
+   acessar os arquivos no OneDrive agora — tente novamente." mesmo durante o estado "conectando" (sempre que
+   já havia uma conta conhecida, ex.: reconectar/renovar sessão). Agora:
+   - conectado: mensagem de sucesso;
+   - conectando: mensagem dinâmica com pasta/usuário quando já conhecidos, ou um texto genérico enquanto não
+     (ex.: MSAL ainda não retornou a conta), nunca uma mensagem de erro;
+   - desconectado COM erro real registrado (oneDriveIndisponivelMsg, sempre limpo no início de cada nova
+     tentativa — ver loginOneDrive): mensagem de erro:
+   - desconectado SEM erro (nunca tentou, ou a última tentativa foi cancelada pelo usuário — cancelamento
+     nunca seta oneDriveIndisponivelMsg): mensagem convidativa original, nunca confundida com erro. */
+function textoDescOpcaoOneDrive(){
+  if(statusConexaoOneDrive==='conectado') return 'Sua conta já está conectada. Os arquivos são lidos e gravados diretamente na pasta do OneDrive.';
+  if(statusConexaoOneDrive==='conectando'){
+    const usuario = msalConta ? (msalConta.username||msalConta.name||'') : '';
+    return usuario
+      ? `🟡 Conectando aos dados em ${ONEDRIVE_ICON_SVG} <b>OneDrive/${escapeHtml(ONEDRIVE_CONFIG.pastaApp)}</b> como <b>${escapeHtml(usuario)}</b>`
+      : '🟡 Conectando ao OneDrive...';
+  }
+  if(oneDriveIndisponivelMsg) return 'Não foi possível conectar. Tente novamente.';
+  return 'Conecte-se com sua conta Microsoft para acessar os arquivos deste app na pasta do OneDrive.';
 }
 function renderTelaInicial(){
   /* 'carregado-manualmente' (item 7 do requisito de responsividade) conta como pronto para iniciar a
@@ -7847,8 +7920,8 @@ function renderTelaInicial(){
       <div class="ti-opcoes">
         <div class="ti-opcao">
           <div class="ti-opcao-icone">${ONEDRIVE_ICON_SVG}</div>
-          <div class="ti-opcao-titulo">${statusConexaoOneDrive==='conectado' ? 'Conectar ao OneDrive' : 'Conectar ao OneDrive'}</div>
-          <div class="ti-opcao-desc">${statusConexaoOneDrive==='conectado' ? 'Sua conta já está conectada. Os arquivos são lidos e gravados diretamente na pasta do OneDrive.' : (msalConta ? 'Não foi possível acessar os arquivos no OneDrive agora — tente novamente.' : 'Conecte-se com sua conta Microsoft para acessar os arquivos deste app na pasta do OneDrive.')}</div>
+          <div class="ti-opcao-titulo">Conectar ao OneDrive</div>
+          <div class="ti-opcao-desc">${textoDescOpcaoOneDrive()}</div>
           ${statusConexaoOneDrive==='conectado'
             ? `<button class="btn btn-ghost" id="tiSairMicrosoft"><span class="icone-onedrive-discreto">${ONEDRIVE_ICON_SVG}</span> Desconectar</button>`
             : `<button class="btn btn-gold" id="tiEntrarMicrosoft" ${(!hasFSAccess || statusConexaoOneDrive==='conectando')?'disabled':''}>${ONEDRIVE_ICON_SVG} ${statusConexaoOneDrive==='conectando' ? 'Conectando...' : ((msalConta||oneDriveIndisponivelMsg) ? 'Tentar Novamente' : 'Conectar')}</button>`}
