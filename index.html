@@ -7808,10 +7808,10 @@ function statusConexaoOneDriveInfo(){
    (h1) nunca é alterado por este texto — ver item 7, que exige o nome do card permanecer fixo. */
 function textoHintConexaoOneDrive(){
   const conexaoTentada = !!msalConta || statusConexaoOneDrive!=='desconectado' || !!oneDriveIndisponivelMsg;
-  if(!conexaoTentada) return 'Conecte-se ao ${ONEDRIVE_ICON_SVG} OneDrive para acessar aos dados.';
+  if(!conexaoTentada) return `Conecte-se ao ${ONEDRIVE_ICON_SVG} OneDrive para acessar seus dados.`;
   const st = statusConexaoOneDriveInfo();
   const usuario = msalConta ? (msalConta.username||msalConta.name||'') : '';
-  return `${st.emoji} ${st.texto} aos dados em  ${ONEDRIVE_ICON_SVG} <b>OneDrive/${escapeHtml(ONEDRIVE_CONFIG.pastaApp)}</b>${usuario?` como <b class="ti-email-conectado">${escapeHtml(usuario)}</b>`:''}`;
+  return `${st.emoji} ${st.texto} aos dados em ${ONEDRIVE_ICON_SVG} <b>OneDrive/${escapeHtml(ONEDRIVE_CONFIG.pastaApp)}</b>${usuario?` como <b class="ti-email-conectado">${escapeHtml(usuario)}</b>`:''}`;
 }
 function renderTelaInicial(){
   /* 'carregado-manualmente' (item 7 do requisito de responsividade) conta como pronto para iniciar a
@@ -7842,7 +7842,7 @@ function renderTelaInicial(){
         </div>
       </div>
       ${!hasFSAccess ? `<div class="banner" style="text-align:left;margin-bottom:20px;">⚠️ Integração com o OneDrive ainda não configurada neste app. Defina <code>ONEDRIVE_CONFIG.clientId</code> no início do index.html com o ID do aplicativo do seu App Registration no Microsoft Entra ID (ver instruções no comentário do código-fonte).</div>` : ''}
-      ${(hasFSAccess && comErro) ? `<div class="banner" style="text-align:left;margin-bottom:20px;">⚠️ ${escapeHtml(oneDriveIndisponivelMsg||'Não foi possível acessar os arquivos no ${ONEDRIVE_ICON_SVG} OneDrive.')}</div>` : ''}
+      ${(hasFSAccess && comErro) ? `<div class="banner" style="text-align:left;margin-bottom:20px;">⚠️ ${escapeHtml(oneDriveIndisponivelMsg||'Não foi possível acessar os arquivos no OneDrive.')}</div>` : ''}
       ${(alteracoesLocaisPendentes && arquivosProntos) ? `<div class="banner" style="text-align:left;margin-bottom:20px;">💾 Encontramos <b>alterações não sincronizadas</b> de uma sessão anterior (feitas offline ou antes de uma falha de sincronização) neste dispositivo. <button type="button" class="btn btn-primary btn-sm" id="tiRecuperarSnapshot" style="margin-left:8px;">Recuperar e sincronizar</button> <button type="button" class="btn btn-ghost btn-sm" id="tiDescartarSnapshot">Descartar</button></div>` : ''}
       <div class="ti-opcoes">
         <div class="ti-opcao">
