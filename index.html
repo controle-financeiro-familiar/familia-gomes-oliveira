@@ -90,7 +90,18 @@ input,select{font-family:var(--sans);}
 .ti-cabecalho-textos{display:flex;align-items:center;justify-content:flex-start;gap:24px;flex:1;min-width:0;flex-wrap:wrap;}
 .ti-cabecalho-titulos{min-width:0;flex:0 1 auto;}
 .ti-cabecalho h1{font-size:42px;margin:0;color:var(--navy-950);}
-.ti-cabecalho .subtitulo{margin:4px 0 0;font-size:30px;font-weight:600;color:var(--gold-dark);}
+.ti-cabecalho .subtitulo{margin:0;font-size:30px;font-weight:600;color:var(--gold-dark);}
+/* Indicador de Status da Conexão: mesma linha do subtítulo, alinhado à direita — como .ti-subtitulo-linha é
+   um filho de largura 100% dentro de .ti-cabecalho-titulos (que encolhe para o conteúdo mais largo, quase
+   sempre o <h1>), a borda direita desta linha cai naturalmente na mesma largura final do <h1>, sem precisar
+   medir nada via JS. */
+.ti-subtitulo-linha{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap;width:100%;margin:4px 0 0;}
+.ti-status-indicador{font-size:14px;font-weight:700;white-space:nowrap;flex-shrink:0;}
+.ti-status-indicador-conectado{color:var(--receita);}
+.ti-status-indicador-conectando{color:var(--gold-dark);}
+.ti-status-indicador-sessaoExpirada{color:#c2650c;}
+.ti-status-indicador-erro{color:var(--despesa);}
+.ti-status-indicador-desconectado{color:#6a7a97;}
 /* Item do requisito: espaçamento vertical explícito entre o subtítulo e o hint — antes .hint tinha margin:0,
    então ficava colado embaixo do subtítulo (0px de vão) sempre que o subtítulo quebrava em mais de uma
    linha. Só afeta essa margem — não mexe no espaçamento h1→subtítulo nem no alinhamento geral do cabeçalho. */
@@ -135,6 +146,10 @@ input,select{font-family:var(--sans);}
   .ti-cabecalho .mark{height:110px;}
   .ti-cabecalho-textos{flex-direction:column;text-align:center;gap:10px;}
   .ti-cabecalho .hint{width:100%;}
+  /* Mobile: cabeçalho inteiro fica centralizado (ver .ti-cabecalho acima) — a linha do subtítulo empilha em
+     vez de ficar lado a lado, senão o indicador de status ficaria espremido ao lado de um subtítulo já
+     centralizado numa coluna estreita. */
+  .ti-subtitulo-linha{flex-direction:column;align-items:center;justify-content:center;gap:4px;}
   .ti-opcao{flex-basis:100%;max-width:100%;}
   .ti-rodape{flex-direction:column;align-items:stretch;}
   .ti-cta{width:100%;}
@@ -7996,29 +8011,32 @@ window.addEventListener('resize', ()=>{
    que precise dele (ex.: card e botão "Conectar ao OneDrive" da tela inicial), para nunca ter dois ícones
    visualmente diferentes representando o OneDrive. */
 const ONEDRIVE_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 57.6 57.6" width="24" height="24" baseProfile="basic"><path fill="#0d47a1" d="M15.935 14.374C7.133 14.374.552 21.58.058 29.606c.307 1.729 1.314 5.144 2.893 4.969 1.973-.22 6.942 0 11.18-7.673 3.095-5.604 9.463-12.529 1.804-12.529"/><path fill="#1e88e5" d="M13.9 17.37c-2.959 4.685-6.942 11.398-8.286 13.51-1.599 2.511-5.83 1.444-5.48-2.156a16 16 0 0 0-.079.883c-.578 9.364 6.846 17.141 16.085 17.141 10.182 0 34.466-12.686 32.008-25.398-2.591-7.471-9.87-12.832-18.121-12.832s-13.54 4.753-16.127 8.851"/><path fill="#4fc3f7" d="M15.99 46.752s24.312.048 28.436.048c7.484 0 13.174-6.109 13.174-13.24s-5.804-13.202-13.174-13.202-11.614 5.513-14.802 11.532c-3.734 7.051-8.5 14.778-13.634 14.862"/></svg>';
-/* Item 10 da rodada seguinte: só existem 4 estados possíveis de conexão, com um texto FIXO exato para cada
-   um (cabeçalho e card) — nunca uma variação dinâmica que possa deslizar de um estado para outro. ERRO só é
-   usado quando há uma falha REAL (oneDriveIndisponivelMsg setado por um erro de verdade, nunca por um
-   cancelamento — ver ehCancelamentoOneDrive) ou sessão expirada; um cancelamento sempre volta para
-   CONECTADO ou DESCONECTADO (o estado anterior real), nunca para ERRO. */
+/* Item da rodada seguinte: 5 estados possíveis de conexão (Conectado/Conectando/Sessão Expirada/Erro de
+   conexão/Desconectado), cada um com emoji + texto FIXO próprio — "Sessão Expirada" (🟠) agora é distinta de
+   um "Erro de conexão" (🔴) genérico, em vez das duas caírem no mesmo vermelho. `chave` é usada para
+   escolher a classe CSS do indicador visual (ver .ti-status-indicador-* e renderTelaInicial). */
 function statusConexaoOneDriveInfo(){
-  if(statusConexaoOneDrive==='conectado') return { emoji:'🟢', texto:'Conectado' };
-  if(statusConexaoOneDrive==='conectando') return { emoji:'🟡', texto:'Conectando' };
-  if(fileStatusCfg==='token-expirado' || fileStatusReg==='token-expirado') return { emoji:'🔴', texto:'Sessão expirada' };
-  if(oneDriveIndisponivelMsg) return { emoji:'🔴', texto:'Erro de conexão' };
-  return { emoji:'⚪', texto:'Desconectado' };
+  if(statusConexaoOneDrive==='conectado') return { emoji:'🟢', texto:'Conectado', chave:'conectado' };
+  if(statusConexaoOneDrive==='conectando') return { emoji:'🟡', texto:'Conectando...', chave:'conectando' };
+  if(fileStatusCfg==='token-expirado' || fileStatusReg==='token-expirado') return { emoji:'🟠', texto:'Sessão Expirada', chave:'sessaoExpirada' };
+  if(oneDriveIndisponivelMsg) return { emoji:'🔴', texto:'Erro de conexão', chave:'erro' };
+  return { emoji:'⚪', texto:'Desconectado', chave:'desconectado' };
 }
-/* Texto do cabeçalho (ti-cabecalho) — um por estado, exatamente como definido no requisito. O título do
-   card (h1) nunca é alterado por este texto — ver item 7, que exige o nome do card permanecer fixo. */
+/* Texto do hint do cabeçalho (ti-cabecalho) — um por estado, exatamente como definido no requisito. O
+   indicador visual "[emoji] [status]" (ver .ti-status-indicador, na mesma linha do subtítulo) usa
+   statusConexaoOneDriveInfo() diretamente; este texto é a frase mais longa, explicativa, que continua
+   abaixo do subtítulo. O título do card (h1) nunca é alterado por este texto — ver item 7 de uma rodada
+   anterior, que exige o nome do card permanecer fixo. */
 function textoHintConexaoOneDrive(){
-  const comErroReal = !!oneDriveIndisponivelMsg || fileStatusCfg==='token-expirado' || fileStatusReg==='token-expirado';
-  if(statusConexaoOneDrive==='conectado'){
+  const st = statusConexaoOneDriveInfo();
+  if(st.chave==='conectado'){
     const usuario = msalConta ? (msalConta.username||msalConta.name||'') : '';
-    return `🟢 Conectado${usuario ? ` como <b class="ti-email-conectado">${escapeHtml(usuario)}</b>` : ''}.`;
+    return `<b>A conta ${usuario ? `<span class="ti-email-conectado">${escapeHtml(usuario)}</span>` : ''} já está conectada.</b> Os arquivos são lidos e gravados diretamente na pasta compartilhada do OneDrive.`;
   }
-  if(statusConexaoOneDrive==='conectando') return '🟡 Conectando ao OneDrive.';
-  if(comErroReal) return '🔴 Erro de conexão. Tente novamente.';
-  return 'Conecte-se com sua conta Microsoft ou carregue uma cópia dos arquivos para iniciar em modo offline.';
+  if(st.chave==='conectando') return '<b>Conectando à sua conta Microsoft.</b> Aguarde enquanto estabelecemos a conexão com o OneDrive.';
+  if(st.chave==='sessaoExpirada') return '<b>Sua sessão com a conta Microsoft expirou.</b> Efetue login novamente ou carregue uma cópia dos arquivos para continuar em modo offline.';
+  if(st.chave==='erro') return '<b>Não foi possível conectar ao OneDrive.</b> Tente novamente ou carregue uma cópia dos arquivos para continuar em modo offline.';
+  return '<b>Conecte-se</b> com sua conta Microsoft ou <b>carregue</b> uma cópia dos arquivos para iniciar em modo offline.';
 }
 /* Texto da opção "Conectar ao OneDrive" (ti-opcao-desc) — mesmos 4 estados, textos exatos do requisito. */
 function textoDescOpcaoOneDrive(){
@@ -8051,7 +8069,10 @@ function renderTelaInicial(){
         <div class="ti-cabecalho-textos">
           <div class="ti-cabecalho-titulos">
             <h1>Controle Financeiro Familiar</h1>
-            <p class="subtitulo">Família Gomes Oliveira</p>
+            <div class="ti-subtitulo-linha">
+              <p class="subtitulo">Família Gomes Oliveira</p>
+              <span class="ti-status-indicador ti-status-indicador-${statusConexaoOneDriveInfo().chave}">${statusConexaoOneDriveInfo().emoji} ${statusConexaoOneDriveInfo().texto}</span>
+            </div>
           	<p class="hint">${textoHintConexaoOneDrive()}</p>
 		  </div>
         </div>
