@@ -2282,6 +2282,21 @@ async function logoutOneDrive(conta){
     finalizarOperacaoOneDrive(gen, 'logout', cancelado ? 'cancelado' : 'erro');
   }
 }
+/* Faz `promise` "correr contra o relógio": se ela não se resolver nem rejeitar dentro de `ms`, a promise
+   retornada rejeita com ErroOneDrive('timeout', ...) — sem isso, uma chamada do MSAL que trava
+   silenciosamente (ex.: acquireTokenPopup() quando o navegador bloqueia o popup sem lançar nenhum erro,
+   caso real observado logo após um login recém-concluído, dentro de uma cadeia assíncrona já sem o "gesto
+   do usuário" que os bloqueadores de popup exigem) deixaria a cadeia inteira (obterTokenGraph →
+   graphFetch → carregarUmArquivoDoOneDrive → carregarArquivosDoOneDrive) presa em "Conectando..." para
+   sempre, exigindo um clique manual em "Tentar novamente" para desbloquear. */
+function comTimeoutOneDrive(promise, ms, mensagem){
+  return new Promise((resolve, reject)=>{
+    const timer = setTimeout(()=> reject(new ErroOneDrive('timeout', mensagem)), ms);
+    promise.then(v=>{ clearTimeout(timer); resolve(v); }, e=>{ clearTimeout(timer); reject(e); });
+  });
+}
+const TIMEOUT_TOKEN_SILENT_MS = 15000;
+const TIMEOUT_TOKEN_POPUP_MS = 60000;
 /* Token de acesso ao Graph — tenta renovar silenciosamente (sem interromper o usuário) primeiro; só cai
    para um redirect interativo se a renovação silenciosa falhar de verdade (ex.: sessão realmente expirada
    ou revogada), nunca a cada chamada — é isso que evita o usuário ter que logar de novo o tempo todo
@@ -2290,7 +2305,11 @@ async function obterTokenGraph(){
   await initMsal();
   if(!msalConta) throw new ErroOneDrive('nao-autenticado', 'Sua sessão não está conectada à conta Microsoft. Conecte-se novamente para sincronizar os dados.');
   try{
-    const r = await msalApp.acquireTokenSilent({ scopes: ONEDRIVE_CONFIG.scopes, account: msalConta });
+    const r = await comTimeoutOneDrive(
+      msalApp.acquireTokenSilent({ scopes: ONEDRIVE_CONFIG.scopes, account: msalConta }),
+      TIMEOUT_TOKEN_SILENT_MS,
+      'A renovação da sessão Microsoft demorou demais para responder.'
+    );
     return r.accessToken;
   }catch(e){
     if(e instanceof msal.InteractionRequiredAuthError){
@@ -2298,13 +2317,19 @@ async function obterTokenGraph(){
       // popup (não redirect) para nunca substituir/recarregar a página principal em uso (item 2 do
       // requisito de responsividade).
       try{
-        const r = await msalApp.acquireTokenPopup({ scopes: ONEDRIVE_CONFIG.scopes, account: msalConta, popupWindowAttributes: atributosPopupLogin() });
+        const r = await comTimeoutOneDrive(
+          msalApp.acquireTokenPopup({ scopes: ONEDRIVE_CONFIG.scopes, account: msalConta, popupWindowAttributes: atributosPopupLogin() }),
+          TIMEOUT_TOKEN_POPUP_MS,
+          'A janela de autenticação da Microsoft demorou demais para responder.'
+        );
         return r.accessToken;
       }catch(e2){
         registrarErroOneDrive(e2);
         throw new ErroOneDrive('token-expirado', 'Sua sessão com a Microsoft expirou. Faça login novamente para continuar.');
       }
     }
+    // acquireTokenSilent travado (timeout acima) sem nunca lançar InteractionRequiredAuthError: trata como
+    // falha de autenticação normal, nunca deixa a cadeia presa esperando por ele.
     throw new ErroOneDrive('auth', 'Não foi possível confirmar sua autenticação com a Microsoft.');
   }
 }
@@ -4888,9 +4913,15 @@ async function carregarArquivosDoOneDrive(){
     fileStatusCfg = 'erro'; fileStatusReg = 'erro';
   }
 }
+const TIMEOUT_CARREGAR_ARQUIVO_MS = 45000;
 async function carregarUmArquivoDoOneDrive(tipo){
-  try{ await loadFromHandle(tipo); dadosDesatualizadosExternos = false; return 'conectado'; }
-  catch(e){ registrarErroOneDrive(e); return 'erro'; }
+  try{
+    // Timeout próprio por arquivo (item 12 do requisito): garante que este arquivo nunca fique "Conectando..."
+    // indefinidamente, mesmo que algo abaixo (ex.: renovação de token) trave sem lançar nenhum erro.
+    await comTimeoutOneDrive(loadFromHandle(tipo), TIMEOUT_CARREGAR_ARQUIVO_MS, `O carregamento de ${tipo==='cfg'?'configuracoes.cfg':'registros.log'} demorou demais para responder.`);
+    dadosDesatualizadosExternos = false;
+    return 'conectado';
+  }catch(e){ registrarErroOneDrive(e); return 'erro'; }
 }
 /* Cria (na pasta compartilhada do OneDrive) qualquer um dos dois arquivos que ainda não exista — usada
    tanto pelo botão da tela inicial quanto pelo menu — sem nenhum diálogo de escolha de local: o caminho é
