@@ -8297,7 +8297,7 @@ function fileLabel(tipo){
   if(status==='sem-suporte') return 'OneDrive não configurado';
   if(status==='erro') return '⚠️ falha ao acessar no OneDrive';
   if(status==='leitura-suspeita') return '⚠️ leitura suspeita — verifique o arquivo';
-  return msalConta ? 'conectando…' : 'aguardando carregamento: ainda não carregado.';
+  return msalConta ? 'conectando…' : 'aguardando carregamento';
 }
 function renderFileBanner(){
   const partes = [];
