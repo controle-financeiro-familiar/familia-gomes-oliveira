@@ -94,7 +94,7 @@ input,select{font-family:var(--sans);}
 /* Item do requisito: espaçamento vertical explícito entre o subtítulo e o hint — antes .hint tinha margin:0,
    então ficava colado embaixo do subtítulo (0px de vão) sempre que o subtítulo quebrava em mais de uma
    linha. Só afeta essa margem — não mexe no espaçamento h1→subtítulo nem no alinhamento geral do cabeçalho. */
-.ti-cabecalho .hint{color:#5b6b85;margin:10px 0 0;flex:1 1 auto;min-width:0;font-size:14px;text-align:center;}
+.ti-cabecalho .hint{color:#5b6b85;margin:10px 0 0;flex:1 1 auto;min-width:0;font-size:14px;font-style:italic;text-align:center;}
 .ti-opcoes{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-bottom:28px;}
 .ti-opcao{flex:1 1 280px;max-width:320px;border:1px solid var(--line);border-radius:14px;padding:18px 16px;background:var(--navy-50,#f4f7fc);text-align:center;display:flex;flex-direction:column;align-items:center;transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease;}
 .ti-opcao:hover{border-color:var(--navy-300,#a9bbdd);box-shadow:0 8px 22px rgba(16,64,141,.1);transform:translateY(-2px);}
@@ -8018,7 +8018,7 @@ function textoHintConexaoOneDrive(){
   }
   if(statusConexaoOneDrive==='conectando') return '🟡 Conectando ao OneDrive.';
   if(comErroReal) return '🔴 Erro de conexão. Tente novamente.';
-  return '⚪ Desconectado. Conecte-se com sua conta Microsoft ou carregue uma cópia dos arquivos para iniciar em modo offline.';
+  return 'Conecte-se com sua conta Microsoft ou carregue uma cópia dos arquivos para iniciar em modo offline.';
 }
 /* Texto da opção "Conectar ao OneDrive" (ti-opcao-desc) — mesmos 4 estados, textos exatos do requisito. */
 function textoDescOpcaoOneDrive(){
@@ -8106,7 +8106,7 @@ function renderTelaInicial(){
         </div>
         <div class="ti-cta">
           <button class="btn btn-primary btn-iniciar-app" id="tiIniciarApp" ${!arquivosProntos?'disabled':''}><svg width="13" height="13" viewBox="0 0 0.39 0.39" fill="none" xmlns="http://www.w3.org/2000/svg"><path stroke="#0b2a5e" stroke-width=".024" d="M.374.195a.18.18 0 0 1-.179.179.18.18 0 0 1-.179-.179.179.179 0 0 1 .358 0z"/><path d="M.146.276V.114l.13.081z" stroke="#0b2a5e" stroke-width=".024" stroke-linecap="round" stroke-linejoin="round"/></svg> Iniciar App</button>
-          <span class="ti-cta-hint">${arquivosProntos ? 'Tudo pronto — clique para carregar os dados.' : 'Disponível quando os arquivos estiverem carregados.'}</span>
+          <span class="ti-cta-hint">${arquivosProntos ? 'Tudo pronto — clique para carregar os dados.' : 'Disponível quando os arquivos estiverem prontos.'}</span>
         </div>
       </div>
     </div>
@@ -8297,7 +8297,7 @@ function fileLabel(tipo){
   if(status==='sem-suporte') return 'OneDrive não configurado';
   if(status==='erro') return '⚠️ falha ao acessar no OneDrive';
   if(status==='leitura-suspeita') return '⚠️ leitura suspeita — verifique o arquivo';
-  return msalConta ? 'conectando…' : 'aguardando carregamento: arquivo ainda não carregado.';
+  return msalConta ? 'conectando…' : 'aguardando carregamento: ainda não carregado.';
 }
 function renderFileBanner(){
   const partes = [];
