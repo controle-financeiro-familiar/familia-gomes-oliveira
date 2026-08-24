@@ -88,14 +88,27 @@ input,select{font-family:var(--sans);}
    .ti-cabecalho-titulos (empilhado depois de h1/.subtitulo, não ao lado) — h1/subtítulo/hint sempre formam
    uma coluna de texto simples, em qualquer largura. */
 .ti-cabecalho-textos{display:flex;align-items:center;justify-content:flex-start;gap:24px;flex:1;min-width:0;flex-wrap:wrap;}
-.ti-cabecalho-titulos{min-width:0;flex:0 1 auto;}
-.ti-cabecalho h1{font-size:42px;margin:0;color:var(--navy-950);}
-.ti-cabecalho .subtitulo{margin:0;font-size:30px;font-weight:600;color:var(--gold-dark);}
-/* Indicador de Status da Conexão: mesma linha do subtítulo, alinhado à direita — como .ti-subtitulo-linha é
-   um filho de largura 100% dentro de .ti-cabecalho-titulos (que encolhe para o conteúdo mais largo, quase
-   sempre o <h1>), a borda direita desta linha cai naturalmente na mesma largura final do <h1>, sem precisar
-   medir nada via JS. */
-.ti-subtitulo-linha{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap;width:100%;margin:4px 0 0;}
+/* .ti-cabecalho-titulos agora cresce para ocupar o espaço disponível (flex:1 1 auto) — é isso que dá ao
+   .hint (uma frase normalmente bem mais longa que o título) espaço de sobra para quebrar linha livremente,
+   SEM influenciar a largura do bloco do título logo acima (ver .ti-titulo-bloco). Antes .hint era irmão
+   direto de h1/.ti-subtitulo-linha dentro de um único container de largura "encolhe-para-conteúdo": como o
+   texto do hint (sem quebra) costuma ser mais largo que o próprio <h1>, ele fazia esse container inteiro se
+   esticar até preencher toda a largura disponível — daí o indicador de status (alinhado a 100% desse
+   container) acabava alinhado à largura total do cabeçalho, não à largura real do <h1>. */
+.ti-cabecalho-titulos{min-width:0;flex:1 1 auto;display:flex;flex-direction:column;}
+/* .ti-titulo-bloco isola h1 + .ti-subtitulo-linha do .hint: sua largura (width:fit-content) é determinada
+   só pelo conteúdo desses dois, então .ti-subtitulo-linha (100% deste bloco) sempre alinha o indicador à
+   largura real do <h1> — nunca à largura de .hint nem à do cabeçalho inteiro. */
+.ti-titulo-bloco{width:fit-content;max-width:100%;}
+.ti-cabecalho h1{width:fit-content;max-width:100%;font-size:42px;margin:0;color:var(--navy-950);}
+/* Indicador de Status da Conexão: mesma linha do subtítulo, alinhado à direita em relação à largura real do
+   <h1> — ver comentário de .ti-titulo-bloco acima. flex-wrap:nowrap (em vez de wrap) evita uma faixa estreita
+   de larguras (ex.: tablets em retrato, ~760px) onde subtítulo+indicador não cabem lado a lado: com wrap, o
+   indicador "sobrava" sozinho numa segunda linha e perdia o alinhamento à direita (space-between não tem
+   efeito com um único item por linha); com nowrap, é o subtítulo (não crítico) que encolhe/trunca — o
+   indicador nunca perde sua posição encostada na borda direita do <h1>. */
+.ti-subtitulo-linha{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:nowrap;width:100%;min-width:0;margin:4px 0 0;}
+.ti-cabecalho .subtitulo{margin:0;font-size:30px;font-weight:600;color:var(--gold-dark);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .ti-status-indicador{font-size:14px;font-weight:700;white-space:nowrap;flex-shrink:0;}
 .ti-status-indicador-conectado{color:var(--receita);}
 .ti-status-indicador-conectando{color:var(--gold-dark);}
@@ -145,6 +158,9 @@ input,select{font-family:var(--sans);}
   .ti-cabecalho{flex-direction:column;text-align:center;gap:14px;}
   .ti-cabecalho .mark{height:110px;}
   .ti-cabecalho-textos{flex-direction:column;text-align:center;gap:10px;}
+  /* .ti-titulo-bloco continua "encolhe-para-conteúdo" (ver desktop) — só centralizado dentro da coluna
+     .ti-cabecalho-titulos, já que align-items:stretch (padrão) o alinharia à esquerda por não esticar. */
+  .ti-cabecalho-titulos{align-items:center;}
   .ti-cabecalho .hint{width:100%;}
   /* Mobile: cabeçalho inteiro fica centralizado (ver .ti-cabecalho acima) — a linha do subtítulo empilha em
      vez de ficar lado a lado, senão o indicador de status ficaria espremido ao lado de um subtítulo já
@@ -8099,10 +8115,12 @@ function renderTelaInicial(){
         <img class="mark" src="${LOGO_APP}" alt="Logo">
         <div class="ti-cabecalho-textos">
           <div class="ti-cabecalho-titulos">
-            <h1>Controle Financeiro Familiar</h1>
-            <div class="ti-subtitulo-linha">
-              <p class="subtitulo">Família Gomes Oliveira</p>
-              <span class="ti-status-indicador ti-status-indicador-${statusConexaoOneDriveInfo().chave}">${statusConexaoOneDriveInfo().emoji} ${statusConexaoOneDriveInfo().texto}</span>
+            <div class="ti-titulo-bloco">
+              <h1>Controle Financeiro Familiar</h1>
+              <div class="ti-subtitulo-linha">
+                <p class="subtitulo">Família Gomes Oliveira</p>
+                <span class="ti-status-indicador ti-status-indicador-${statusConexaoOneDriveInfo().chave}">${statusConexaoOneDriveInfo().emoji} ${statusConexaoOneDriveInfo().texto}</span>
+              </div>
             </div>
           	<p class="hint">${textoHintConexaoOneDrive()}</p>
 		  </div>
