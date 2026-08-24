@@ -94,7 +94,7 @@ input,select{font-family:var(--sans);}
 /* Item do requisito: espaçamento vertical explícito entre o subtítulo e o hint — antes .hint tinha margin:0,
    então ficava colado embaixo do subtítulo (0px de vão) sempre que o subtítulo quebrava em mais de uma
    linha. Só afeta essa margem — não mexe no espaçamento h1→subtítulo nem no alinhamento geral do cabeçalho. */
-.ti-cabecalho .hint{color:#5b6b85;margin:10px 0 0;flex:1 1 auto;min-width:0;font-size:18px;font-style:italic;text-align:center;}
+.ti-cabecalho .hint{color:#5b6b85;margin:10px 0 0;flex:1 1 auto;min-width:0;font-size:14px;text-align:center;}
 .ti-opcoes{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-bottom:28px;}
 .ti-opcao{flex:1 1 280px;max-width:320px;border:1px solid var(--line);border-radius:14px;padding:18px 16px;background:var(--navy-50,#f4f7fc);text-align:center;display:flex;flex-direction:column;align-items:center;transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease;}
 .ti-opcao:hover{border-color:var(--navy-300,#a9bbdd);box-shadow:0 8px 22px rgba(16,64,141,.1);transform:translateY(-2px);}
@@ -8018,7 +8018,7 @@ function textoHintConexaoOneDrive(){
   }
   if(statusConexaoOneDrive==='conectando') return '🟡 Conectando ao OneDrive.';
   if(comErroReal) return '🔴 Erro de conexão. Tente novamente.';
-  return '⚪ Desconectado. Conecte-se com sua conta Microsoft.';
+  return '⚪ Desconectado. Conecte-se com sua conta Microsoft ou carregue uma cópia dos arquivos para iniciar em modo offline.';
 }
 /* Texto da opção "Conectar ao OneDrive" (ti-opcao-desc) — mesmos 4 estados, textos exatos do requisito. */
 function textoDescOpcaoOneDrive(){
@@ -8026,7 +8026,7 @@ function textoDescOpcaoOneDrive(){
   if(statusConexaoOneDrive==='conectado') return 'Sua conta já está conectada. Os arquivos são lidos e gravados diretamente na pasta do OneDrive.';
   if(statusConexaoOneDrive==='conectando') return 'Conectando à sua conta Microsoft. Aguarde enquanto estabelecemos a conexão com o OneDrive.';
   if(comErroReal) return 'Não foi possível conectar ao OneDrive. Tente novamente.';
-  return 'Conecte-se com sua conta Microsoft para acessar os arquivos da pasta do OneDrive.';
+  return 'Conecte-se com sua conta Microsoft para carregar os arquivos da pasta do OneDrive.';
 }
 function renderTelaInicial(){
   /* 'carregado-manualmente' (item 7 do requisito de responsividade) conta como pronto para iniciar a
@@ -8072,19 +8072,19 @@ function renderTelaInicial(){
         <div class="ti-opcao">
           <div class="ti-opcao-icone">➕</div>
           <div class="ti-opcao-titulo">Criar arquivos no OneDrive</div>
-          <div class="ti-opcao-desc">Os arquivos <b>configuracoes.cfg</b> e/ou <b>registros.log</b> ainda não existem em ${ONEDRIVE_ICON_SVG} <b>OneDrive/${ONEDRIVE_CONFIG.pastaApp}</b>. Crie-os (vazios) para começar um controle financeiro novo.</div>
+          <div class="ti-opcao-desc">Os arquivos <b>configuracoes.cfg</b> e/ou <b>registros.log</b> ainda não existem em <b>OneDrive/${ONEDRIVE_CONFIG.pastaApp}</b>. Crie-os (vazios) para começar um controle financeiro novo.</div>
           <button class="btn btn-primary" id="tiCriarArquivos">➕ Criar arquivos no ${ONEDRIVE_ICON_SVG} OneDrive</button>
         </div>` : ''}
         ${msalConta && faltamCriar && nivelAcessoPasta==='leitura' ? `
         <div class="ti-opcao">
           <div class="ti-opcao-icone">👁️</div>
           <div class="ti-opcao-titulo">Somente leitura</div>
-          <div class="ti-opcao-desc">Os arquivos ainda não existem em ${ONEDRIVE_ICON_SVG} <b>OneDrive/${ONEDRIVE_CONFIG.pastaApp}</b> e sua conta tem apenas permissão de leitura nesta pasta — você não pode criá-los. Peça ao proprietário para criá-los, ou para conceder permissão de edição à sua conta.</div>
+          <div class="ti-opcao-desc">Os arquivos ainda não existem em <b>OneDrive/${ONEDRIVE_CONFIG.pastaApp}</b> e sua conta tem apenas permissão de leitura nesta pasta — você não pode criá-los. Peça ao proprietário para criá-los, ou para conceder permissão de edição à sua conta.</div>
         </div>` : ''}
         <div class="ti-opcao">
           <div class="ti-opcao-icone">🛡️</div>
           <div class="ti-opcao-titulo">Tenho um backup</div>
-          <div class="ti-opcao-desc">Restaure um backup <b>.bkp</b> salvo no OneDrive, ou importe um arquivo <b>.bkp</b> de fora do OneDrive.</div>
+          <div class="ti-opcao-desc">Restaure um backup (.bkp) dos arquivos salvo anteriormente.</div>
           <div class="ti-backup-acoes">
             ${nivelAcessoPasta!=='leitura' ? `<button class="btn btn-backup-restaurar" id="tiRestaurarBackup" ${!hasFSAccess?'disabled':''}><svg width="13" height="13" viewBox="0 0 0.26 0.26" xmlns="http://www.w3.org/2000/svg"><path fill="#fff" fill-rule="evenodd" d="M.228.146a.016.016 0 0 1 .016.016v.049a.033.033 0 0 1-.033.033H.049A.033.033 0 0 1 .016.211V.162a.016.016 0 0 1 .033 0v.049h.163V.162A.016.016 0 0 1 .228.146M.13.016a.016.016 0 0 1 .016.016v.075L.167.086A.016.016 0 1 1 .19.109l-.06.06-.06-.06A.016.016 0 0 1 .093.086l.021.021V.033A.016.016 0 0 1 .13.017"/></svg> Importar backup (.bkp)</button>` : ''}
             ${(hasFSAccess && msalConta) ? `<button type="button" class="btn btn-backup-historico" id="tiVerHistoricoBackups"><svg width="11" height="11" viewBox="0 0 0.206 0.206" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M.035.17.04.166zm.014.015v.007h.007V.185zm.048.014V.192L.096.206zM.103.103H.096l.002.005zm.09 0a.09.09 0 0 1-.09.09v.014A.1.1 0 0 0 .206.103zM.103.014a.09.09 0 0 1 .09.09h.014A.1.1 0 0 0 .103 0zm0-.014A.1.1 0 0 0 0 .103h.014A.09.09 0 0 1 .103.014zM.039.166A.1.1 0 0 1 .014.103H0a.1.1 0 0 0 .03.072zm-.01.009L.042.19l.01-.009L.039.166zm.074.018H.096v.013h.008zm0 0H.096v.013h.007zM.096.041v.062H.11V.041zm.002.067.041.041.01-.01L.108.098zM0 .193h.048V.179H0zM.055.186V.138H.041v.048z" fill="#000"/></svg> Ver histórico de backups (OneDrive)</button>` : ''}
@@ -8094,7 +8094,7 @@ function renderTelaInicial(){
         <div class="ti-opcao">
           <div class="ti-opcao-icone">💻</div>
           <div class="ti-opcao-titulo">Carregar arquivos localmente</div>
-          <div class="ti-opcao-desc">Sem conexão disponível para o OneDrive agora? Carregue uma cópia dos arquivos <b>configuracoes.cfg</b> e/ou <b>registros.log</b> salva neste dispositivo (ex.: baixada anteriormente pelo ☰ Menu) para iniciar a aplicação mesmo em modo offline. Ao reconectar ao OneDrive, use <b>Salvar</b> para gravar as alterações.</div>
+          <div class="ti-opcao-desc">Carregue uma cópia dos arquivos para iniciar em modo offline.</div>
           <button type="button" class="btn btn-ghost" id="tiCarregarLocal">📂 Abrir arquivos do dispositivo</button>
           <input type="file" id="inputImportPacoteInicial" accept=".cfg,.log" multiple style="display:none;">
         </div>` : ''}
@@ -8106,7 +8106,7 @@ function renderTelaInicial(){
         </div>
         <div class="ti-cta">
           <button class="btn btn-primary btn-iniciar-app" id="tiIniciarApp" ${!arquivosProntos?'disabled':''}><svg width="13" height="13" viewBox="0 0 0.39 0.39" fill="none" xmlns="http://www.w3.org/2000/svg"><path stroke="#0b2a5e" stroke-width=".024" d="M.374.195a.18.18 0 0 1-.179.179.18.18 0 0 1-.179-.179.179.179 0 0 1 .358 0z"/><path d="M.146.276V.114l.13.081z" stroke="#0b2a5e" stroke-width=".024" stroke-linecap="round" stroke-linejoin="round"/></svg> Iniciar App</button>
-          <span class="ti-cta-hint">${arquivosProntos ? 'Tudo pronto — clique para carregar os dados.' : 'Disponível quando os arquivos estiverem prontos no OneDrive.'}</span>
+          <span class="ti-cta-hint">${arquivosProntos ? 'Tudo pronto — clique para carregar os dados.' : 'Disponível quando os arquivos estiverem carregados.'}</span>
         </div>
       </div>
     </div>
@@ -8297,7 +8297,7 @@ function fileLabel(tipo){
   if(status==='sem-suporte') return 'OneDrive não configurado';
   if(status==='erro') return '⚠️ falha ao acessar no OneDrive';
   if(status==='leitura-suspeita') return '⚠️ leitura suspeita — verifique o arquivo';
-  return msalConta ? 'conectando…' : 'aguardando login com a Microsoft';
+  return msalConta ? 'conectando…' : 'aguardando carregamento: arquivo ainda não carregado.';
 }
 function renderFileBanner(){
   const partes = [];
