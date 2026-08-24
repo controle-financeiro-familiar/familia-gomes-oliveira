@@ -388,15 +388,41 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
    aproximada do rodapé (~64px: padding 11px×2 + botão ~34px + borda) ao deslocamento vertical do FAB, para
    ele sempre flutuar ACIMA do rodapé, nunca em cima dele. */
 .fab-novo-lancamento-modal{bottom:calc(var(--safe-bottom) + 18px + 64px);z-index:20;}
+/* FAB da aba Configurações (mobile) — expande um pequeno menu vertical com as 4 ações "+ Nova
+   Subcategoria"/"+ Nova Conta"/"+ Novo Meio"/"+ Novo Responsável" em vez de abrir uma única delas
+   diretamente (ver renderFabConfiguracoes). O próprio botão (.fab-config-btn, reaproveita .fab-novo-lancamento
+   para herdar posição/tamanho/cor) vira "✕" e fica navy quando aberto — mesma convenção de "FAB expandido"
+   usada aqui (não havia um padrão de FAB expandido pré-existente no app para reaproveitar). O menu e o FAB
+   sobem para z-index 221 (acima do .menu-mobile-backdrop, que fica em 215 — mesma relação já usada pela
+   folha de filtros mobile: o backdrop cobre a tela para fechar ao toque fora, mas nunca cobre o próprio
+   conteúdo interativo por cima dele). */
+.fab-config-menu{
+  display:none;position:fixed;right:calc(18px + var(--safe-right));z-index:221;
+  bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 18px + var(--fab-size) + 14px);
+  flex-direction:column;align-items:flex-end;gap:10px;max-width:calc(100vw - 36px - var(--safe-right));
+}
+.fab-config-item{
+  display:flex;align-items:center;gap:8px;min-height:var(--touch-min);white-space:nowrap;
+  background:#fff;border:1px solid var(--line);border-radius:var(--radius-full);
+  padding:10px 18px 10px 14px;box-shadow:0 8px 20px rgba(11,42,94,.22);
+  font-family:var(--sans);font-size:13.5px;font-weight:600;color:var(--ink);cursor:pointer;
+}
+.fab-config-item:hover{background:var(--navy-50);}
+.fab-config-item-icone{font-size:16px;flex-shrink:0;}
+.fab-config-btn.aberto{background:var(--navy-900);color:#fff;z-index:221;}
 @media(max-width:700px){
   .tabbar{display:none;}
   .bottom-nav{display:flex;}
   .fab-novo-lancamento,.fab-novo-lancamento-modal{display:flex;align-items:center;justify-content:center;}
+  .fab-config-menu{display:flex;}
   main.app-main,.app>main{padding-bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 16px);}
   /* Especificidade precisa igualar ".btn{display:inline-flex}" (0,1,0), que vem depois no arquivo (fora de
      media query) e venceria por ordem de declaração se o seletor abaixo tivesse só uma classe — mesma
      armadilha de especificidade já corrigida antes nesta sessão (.mini-card-actions). */
   .acoes-lancamento-modal .btn-novo-lanc-modal{display:none;}
+  /* Item 6 do requisito (FAB de Configurações): os 4 botões de desktop equivalentes já viram o FAB — evita
+     duplicar a ação (mesmo padrão já usado para #btnNovoLancamento/#btnNovaProjecao/#btnNovaMeta acima). */
+  #btnNovaSubcategoria,#btnNovaConta,#btnNovoMeioPgto,#btnNovoResponsavel{display:none;}
 }
 
 /* ---- Responsividade do cabeçalho e do menu de abas ---- */
@@ -2063,10 +2089,43 @@ function atributosPopupLogin(){
 let oneDriveOpGen = 0;          // geração da tentativa de login/logout mais recente
 let oneDriveOpGenFinalizada = 0; // última geração já finalizada — qualquer chamada para uma geração <= esta é ignorada
 let oneDriveWatchdogCleanup = null; // remove os listeners/timers do watchdog atualmente armado, se houver
+/* Reconhece um cancelamento (fechar a janela manualmente, clicar em "Cancelar"/"Voltar" na própria página
+   da Microsoft, ou qualquer variação disso) — nunca deve virar "Erro de conexão". Além dos códigos já
+   tratados antes, inclui explicitamente:
+   - 'access_denied'/'consent_required': a Microsoft devolve isso quando o USUÁRIO recusa/cancela na própria
+     tela de login/consentimento (não fechou a janela, mas é a mesma intenção: desistiu desta tentativa);
+   - 'interaction_in_progress': não é uma tentativa NOVA falhando — é o MSAL recusando abrir uma segunda
+     interação porque ainda acha (por engano, um resquício da tentativa anterior cancelada) que a primeira
+     continua em andamento. loginOneDrive/logoutOneDrive já tentam evitar isso limpando o resquício antes de
+     cada tentativa (ver limparInteracaoTravadaMsal) e reabrindo a janela automaticamente uma vez se mesmo
+     assim acontecer — mas se acontecer de novo, o usuário nunca deve ver isso como "erro real";
+   - 'monitor_window_timeout'/AbortError: variações de "o MSAL desistiu de esperar a janela responder",
+     tipicamente porque ela foi fechada. */
+function ehCancelamentoOneDrive(e){
+  if(!e) return false;
+  if(e.name==='AbortError') return true;
+  const codigo = e.errorCode || e.error || '';
+  const msg = e.errorMessage || e.message || '';
+  if(/^(user_cancelled|user_cancelled_flow|access_denied|consent_required|interaction_in_progress|monitor_window_timeout)$/i.test(codigo)) return true;
+  return /cancel|denied|abort/i.test(codigo) || /cancel|denied|abort/i.test(msg);
+}
+/* Resquício conhecido do MSAL.js: ao fechar o popup manualmente, a limpeza interna do MSAL (que deveria
+   liberar a flag "há uma interação em andamento", guardada no sessionStorage) nem sempre roda a tempo —
+   deixando essa flag presa e fazendo a PRÓXIMA chamada a loginPopup/logoutPopup rejeitar imediatamente com
+   'interaction_in_progress' (sem sequer abrir uma nova janela), o que a UI então mostrava como "Erro de
+   conexão. Tente novamente." — exatamente o bug relatado. Remove essa flag diretamente (mesmo workaround
+   documentado pela comunidade para esse bug conhecido do MSAL.js), independente da versão exata da
+   biblioteca/nome exato da chave. */
+function limparInteracaoTravadaMsal(){
+  try{
+    Object.keys(sessionStorage).forEach(k=>{ if(/\.interaction\.status$/i.test(k)) sessionStorage.removeItem(k); });
+  }catch(e){ /* sessionStorage indisponível (modo privado etc.) — nada a limpar */ }
+}
 function finalizarOperacaoOneDrive(gen, tipo, resultado){
   if(gen!==oneDriveOpGen || gen<=oneDriveOpGenFinalizada) return; // já finalizada, ou uma tentativa mais nova já assumiu
   oneDriveOpGenFinalizada = gen;
   if(oneDriveWatchdogCleanup){ oneDriveWatchdogCleanup(); oneDriveWatchdogCleanup = null; }
+  if(resultado==='cancelado') limparInteracaoTravadaMsal(); // nunca deixa resquício para a PRÓXIMA tentativa
   if(tipo==='login') statusConexaoOneDrive = resultado==='sucesso' ? 'conectado' : 'desconectado';
   else desconectandoOneDrive = false;
   render();
@@ -2106,12 +2165,27 @@ async function loginOneDrive(){
   // oneDriveIndisponivelMsg antigo (de um erro real já passado) faria textoDescOpcaoOneDrive() mostrar "Não
   // foi possível conectar" mesmo que esta nova tentativa termine em cancelamento (nunca em erro de verdade).
   oneDriveIndisponivelMsg = null;
+  limparInteracaoTravadaMsal(); // nunca deixa um resquício da tentativa anterior bloquear esta
   const gen = ++oneDriveOpGen;
   statusConexaoOneDrive = 'conectando';
   armarWatchdogOneDrive(gen, 'login');
   render();
+  const opts = { scopes: ONEDRIVE_CONFIG.scopes, prompt: 'select_account', popupWindowAttributes: atributosPopupLogin() };
   try{
-    const r = await msalApp.loginPopup({ scopes: ONEDRIVE_CONFIG.scopes, prompt: 'select_account', popupWindowAttributes: atributosPopupLogin() });
+    let r;
+    try{
+      r = await msalApp.loginPopup(opts);
+    }catch(e1){
+      // Ver limparInteracaoTravadaMsal(): se mesmo assim o MSAL ainda achar que há uma interação presa,
+      // limpa de novo e tenta abrir a janela mais uma vez, de forma totalmente transparente — o usuário só
+      // vê uma nova janela abrir normalmente, nunca um erro por causa de um resquício interno.
+      if(e1 && e1.errorCode==='interaction_in_progress'){
+        limparInteracaoTravadaMsal();
+        r = await msalApp.loginPopup(opts);
+      } else {
+        throw e1;
+      }
+    }
     // Se o watchdog (ou uma tentativa mais nova) já finalizou esta geração antes deste retorno tardio do
     // MSAL chegar, ignora — nunca reabre um estado que o usuário já deixou para trás.
     if(gen<=oneDriveOpGenFinalizada) return false;
@@ -2126,11 +2200,11 @@ async function loginOneDrive(){
     return sucesso;
   }catch(e){
     if(gen<=oneDriveOpGenFinalizada) return false; // watchdog já assumiu esta tentativa como cancelada
-    // Login interrompido pelo próprio usuário (fechou a janela de login sem concluir, ou cancelou) — não é
-    // uma falha real do OneDrive, então a aplicação só volta ao estado inicial (botão "Conectar ao
-    // OneDrive" habilitado, sem banner de erro nem "Tentar Novamente"), sem registrar oneDriveIndisponivelMsg.
-    const cancelado = e && (e.errorCode==='user_cancelled' || e.errorCode==='user_cancelled_flow' || /cancel/i.test(e.errorCode||'') || /cancel/i.test(e.errorMessage||e.message||''));
-    if(cancelado){
+    // Login interrompido pelo próprio usuário (fechou a janela sem concluir, cancelou/negou na própria tela
+    // da Microsoft, ou um resquício de 'interaction_in_progress' que nem a nova tentativa automática acima
+    // resolveu) — nunca é uma falha real do OneDrive, então a aplicação só volta ao estado ANTERIOR (nunca
+    // "Erro de conexão"), sem registrar oneDriveIndisponivelMsg.
+    if(ehCancelamentoOneDrive(e)){
       console.warn('OneDrive: login cancelado pelo usuário', e);
       finalizarOperacaoOneDrive(gen, 'login', 'cancelado');
       return false;
@@ -2162,13 +2236,26 @@ let desconectandoOneDrive = false;
 async function logoutOneDrive(conta){
   if(!msalApp || !conta || desconectandoOneDrive) return;
   desconectandoOneDrive = true;
+  limparInteracaoTravadaMsal(); // nunca deixa um resquício da tentativa anterior bloquear esta
   const gen = ++oneDriveOpGen;
   armarWatchdogOneDrive(gen, 'logout');
+  const opts = { account: conta, popupWindowAttributes: atributosPopupLogin() };
   try{
-    await msalApp.logoutPopup({ account: conta, popupWindowAttributes: atributosPopupLogin() });
+    try{
+      await msalApp.logoutPopup(opts);
+    }catch(e1){
+      // Mesmo workaround do login (ver limparInteracaoTravadaMsal): tenta reabrir a janela de logout mais
+      // uma vez, de forma transparente, antes de considerar isto uma falha real.
+      if(e1 && e1.errorCode==='interaction_in_progress'){
+        limparInteracaoTravadaMsal();
+        await msalApp.logoutPopup(opts);
+      } else {
+        throw e1;
+      }
+    }
     finalizarOperacaoOneDrive(gen, 'logout', 'sucesso');
   }catch(e){
-    const cancelado = e && (e.errorCode==='user_cancelled' || e.errorCode==='user_cancelled_flow' || /cancel/i.test(e.errorCode||'') || /cancel/i.test(e.errorMessage||e.message||''));
+    const cancelado = ehCancelamentoOneDrive(e);
     if(cancelado) console.warn('OneDrive: logout cancelado pelo usuário', e);
     else{
       // Falha ao encerrar a sessão do LADO da Microsoft não é um erro de CONEXÃO (os arquivos locais já
@@ -3900,6 +3987,7 @@ let UI = {
   ajudaRegistrosAberta: false,
   ajudaConfiguracoesAberta: false,
   menuMobileAberto: false,
+  fabConfigAberto: false, // true = menu de ações do FAB da aba Configurações (mobile) expandido
   categoriasAbertas: new Set(),
   buscaCategorias: '',
   textModal: null, // { tipo, nome, original, grupo } — modal genérico de nome único (conta, cartão, meio, grupo, categoria)
@@ -7755,6 +7843,7 @@ function render(){
         if(UI.tab==='registros') return `<button type="button" class="fab-novo-lancamento" id="fabNovoLancamento" aria-label="Novo lançamento" title="Novo lançamento">＋</button>`;
         if(UI.tab==='resumo') return `<button type="button" class="fab-novo-lancamento" id="fabNovaProjecao" aria-label="Novo lançamento previsto" title="Novo lançamento previsto">＋</button>`;
         if(UI.tab==='metas') return `<button type="button" class="fab-novo-lancamento" id="fabNovaMeta" aria-label="Nova meta" title="Nova meta">＋</button>`;
+        if(UI.tab==='categorias') return renderFabConfiguracoes();
         return '';
       })()}
       <div class="footnote">Controle Financeiro Familiar · Família Gomes Oliveira · dados salvos em configuracoes.cfg e registros.log</div>
@@ -7907,52 +7996,36 @@ window.addEventListener('resize', ()=>{
    que precise dele (ex.: card e botão "Conectar ao OneDrive" da tela inicial), para nunca ter dois ícones
    visualmente diferentes representando o OneDrive. */
 const ONEDRIVE_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 57.6 57.6" width="24" height="24" baseProfile="basic"><path fill="#0d47a1" d="M15.935 14.374C7.133 14.374.552 21.58.058 29.606c.307 1.729 1.314 5.144 2.893 4.969 1.973-.22 6.942 0 11.18-7.673 3.095-5.604 9.463-12.529 1.804-12.529"/><path fill="#1e88e5" d="M13.9 17.37c-2.959 4.685-6.942 11.398-8.286 13.51-1.599 2.511-5.83 1.444-5.48-2.156a16 16 0 0 0-.079.883c-.578 9.364 6.846 17.141 16.085 17.141 10.182 0 34.466-12.686 32.008-25.398-2.591-7.471-9.87-12.832-18.121-12.832s-13.54 4.753-16.127 8.851"/><path fill="#4fc3f7" d="M15.99 46.752s24.312.048 28.436.048c7.484 0 13.174-6.109 13.174-13.24s-5.804-13.202-13.174-13.202-11.614 5.513-14.802 11.532c-3.734 7.051-8.5 14.778-13.634 14.862"/></svg>';
-/* Status de conexão (🟢/🟡/🔴 — item 2 do requisito de responsividade), a partir de statusConexaoOneDrive. */
+/* Item 10 da rodada seguinte: só existem 4 estados possíveis de conexão, com um texto FIXO exato para cada
+   um (cabeçalho e card) — nunca uma variação dinâmica que possa deslizar de um estado para outro. ERRO só é
+   usado quando há uma falha REAL (oneDriveIndisponivelMsg setado por um erro de verdade, nunca por um
+   cancelamento — ver ehCancelamentoOneDrive) ou sessão expirada; um cancelamento sempre volta para
+   CONECTADO ou DESCONECTADO (o estado anterior real), nunca para ERRO. */
 function statusConexaoOneDriveInfo(){
   if(statusConexaoOneDrive==='conectado') return { emoji:'🟢', texto:'Conectado' };
-  if(statusConexaoOneDrive==='conectando') return { emoji:'🟡', texto:'Conectando…' };
+  if(statusConexaoOneDrive==='conectando') return { emoji:'🟡', texto:'Conectando' };
   if(fileStatusCfg==='token-expirado' || fileStatusReg==='token-expirado') return { emoji:'🔴', texto:'Sessão expirada' };
   if(oneDriveIndisponivelMsg) return { emoji:'🔴', texto:'Erro de conexão' };
-  return { emoji:'🔴', texto:'Desconectado' };
+  return { emoji:'⚪', texto:'Desconectado' };
 }
-/* Itens 5-7 do requisito (rodada seguinte): único lugar onde o estado da conexão com o OneDrive é
-   mostrado no cabeçalho (ti-cabecalho) da tela inicial — substitui tanto o hint estático de antes quanto o
-   "status acima do botão" (ver .ti-status-conexao, removido de renderTelaInicial). Só passa a mostrar o
-   padrão dinâmico "[emoji] [status] aos dados em OneDrive/[pasta] como [usuário]" depois que a aplicação já
-   tentou obter/usar uma conexão (clique em Conectar, sessão anterior, etc.) — antes disso mantém a mensagem
-   convidativa original, já que ainda não há nenhum estado real de conexão para reportar. O título do card
-   (h1) nunca é alterado por este texto — ver item 7, que exige o nome do card permanecer fixo.
-   Item 6 da rodada seguinte: este hint do CABEÇALHO não leva mais o ícone do OneDrive (só o texto) — o
-   ícone continua existindo no hint de conexão da própria opção "Conectar ao OneDrive" logo abaixo (ver
-   textoDescOpcaoOneDrive()), que é quem efetivamente segue o padrão completo com ícone. */
+/* Texto do cabeçalho (ti-cabecalho) — um por estado, exatamente como definido no requisito. O título do
+   card (h1) nunca é alterado por este texto — ver item 7, que exige o nome do card permanecer fixo. */
 function textoHintConexaoOneDrive(){
-  const conexaoTentada = !!msalConta || statusConexaoOneDrive!=='desconectado' || !!oneDriveIndisponivelMsg;
-  if(!conexaoTentada) return 'Conecte-se com sua conta Microsoft para acessar os arquivos da pasta do OneDrive.';
-  const st = statusConexaoOneDriveInfo();
-  const usuario = msalConta ? (msalConta.username||msalConta.name||'') : '';
-  return `${st.emoji} ${st.texto} aos dados em <b>OneDrive/${escapeHtml(ONEDRIVE_CONFIG.pastaApp)}</b>${usuario?` como <b class="ti-email-conectado">${escapeHtml(usuario)}</b>`:''}`;
-}
-/* Item 1 da rodada seguinte: descrição da opção "Conectar ao OneDrive" (ti-opcao-desc), com um branch
-   dedicado para CADA estado real de statusConexaoOneDrive — o bug anterior só distinguia "conectado" de
-   "todo o resto" (usando msalConta como proxy de erro), então mostrava a mensagem de erro "Não foi possível
-   acessar os arquivos no OneDrive agora — tente novamente." mesmo durante o estado "conectando" (sempre que
-   já havia uma conta conhecida, ex.: reconectar/renovar sessão). Agora:
-   - conectado: mensagem de sucesso;
-   - conectando: mensagem dinâmica com pasta/usuário quando já conhecidos, ou um texto genérico enquanto não
-     (ex.: MSAL ainda não retornou a conta), nunca uma mensagem de erro;
-   - desconectado COM erro real registrado (oneDriveIndisponivelMsg, sempre limpo no início de cada nova
-     tentativa — ver loginOneDrive): mensagem de erro:
-   - desconectado SEM erro (nunca tentou, ou a última tentativa foi cancelada pelo usuário — cancelamento
-     nunca seta oneDriveIndisponivelMsg): mensagem convidativa original, nunca confundida com erro. */
-function textoDescOpcaoOneDrive(){
-  if(statusConexaoOneDrive==='conectado') return 'Sua conta já está conectada. Os arquivos são lidos e gravados diretamente na pasta do OneDrive.';
-  if(statusConexaoOneDrive==='conectando'){
+  const comErroReal = !!oneDriveIndisponivelMsg || fileStatusCfg==='token-expirado' || fileStatusReg==='token-expirado';
+  if(statusConexaoOneDrive==='conectado'){
     const usuario = msalConta ? (msalConta.username||msalConta.name||'') : '';
-    return usuario
-      ? `🟡 Conectando aos dados em <b>OneDrive/${escapeHtml(ONEDRIVE_CONFIG.pastaApp)}</b> como <b>${escapeHtml(usuario)}</b>`
-      : '🟡 Conectando ao OneDrive...';
+    return `🟢 Conectado${usuario ? ` como <b class="ti-email-conectado">${escapeHtml(usuario)}</b>` : ''}.`;
   }
-  if(oneDriveIndisponivelMsg) return 'Não foi possível conectar. Tente novamente.';
+  if(statusConexaoOneDrive==='conectando') return '🟡 Conectando ao OneDrive.';
+  if(comErroReal) return '🔴 Erro de conexão. Tente novamente.';
+  return '⚪ Desconectado. Conecte-se com sua conta Microsoft.';
+}
+/* Texto da opção "Conectar ao OneDrive" (ti-opcao-desc) — mesmos 4 estados, textos exatos do requisito. */
+function textoDescOpcaoOneDrive(){
+  const comErroReal = !!oneDriveIndisponivelMsg || fileStatusCfg==='token-expirado' || fileStatusReg==='token-expirado';
+  if(statusConexaoOneDrive==='conectado') return 'Sua conta já está conectada. Os arquivos são lidos e gravados diretamente na pasta do OneDrive.';
+  if(statusConexaoOneDrive==='conectando') return 'Conectando à sua conta Microsoft. Aguarde enquanto estabelecemos a conexão com o OneDrive.';
+  if(comErroReal) return 'Não foi possível conectar ao OneDrive. Tente novamente.';
   return 'Conecte-se com sua conta Microsoft para acessar os arquivos da pasta do OneDrive.';
 }
 function renderTelaInicial(){
@@ -11331,6 +11404,31 @@ function renderMetaModal(){
   </div>`;
 }
 
+/* FAB da aba Configurações (mobile): em vez de abrir uma única ação, expande um pequeno menu com as
+   4 ações "+ Nova Subcategoria"/"+ Nova Conta"/"+ Novo Meio"/"+ Novo Responsável" — cada item do menu só
+   dispara o MESMO handler já existente do botão de desktop correspondente (ver bindFabConfiguracoes), sem
+   nenhuma lógica de criação/validação/salvamento nova. Mesmo padrão visual de botão com ícone+texto usado
+   no restante do app (.reg-card-menu-lista), aqui numa lista vertical ancorada acima do próprio FAB. O
+   botão vira "✕" quando aberto (mesmo FAB, alterna abrir/fechar), e o backdrop compartilhado
+   (.menu-mobile-backdrop) fecha ao tocar fora, sem disparar nenhuma ação. */
+function renderFabConfiguracoes(){
+  const aberto = UI.fabConfigAberto;
+  const itens = [
+    { id:'subcategoria', icone:'🏷️', label:'Nova Subcategoria' },
+    { id:'conta', icone:'🏦', label:'Nova Conta' },
+    { id:'meio', icone:'💳', label:'Novo Meio' },
+    { id:'responsavel', icone:'👤', label:'Novo Responsável' },
+  ];
+  return `
+  ${aberto ? `<div class="menu-mobile-backdrop aberto" id="fabConfigBackdrop"></div>` : ''}
+  <div class="fab-config-wrap">
+    ${aberto ? `
+    <div class="fab-config-menu" id="fabConfigMenu">
+      ${itens.map(it=>`<button type="button" class="fab-config-item" data-fab-config-acao="${it.id}"><span class="fab-config-item-icone">${it.icone}</span><span class="fab-config-item-label">+ ${it.label}</span></button>`).join('')}
+    </div>` : ''}
+    <button type="button" class="fab-novo-lancamento fab-config-btn ${aberto?'aberto':''}" id="fabConfiguracoes" aria-label="${aberto?'Fechar menu de ações':'Novas ações'}" aria-expanded="${aberto?'true':'false'}" title="${aberto?'Fechar':'Novas ações'}">${aberto?'✕':'＋'}</button>
+  </div>`;
+}
 /* ---------- CATEGORIAS ---------- */
 function renderCategorias(){
   const termo = normalizarTexto(UI.buscaCategorias);
@@ -13177,7 +13275,7 @@ function bindEvents(){
   document.getElementById('btnMesSeguinte')?.addEventListener('click', ()=>{
     UI.mes += 1; if(UI.mes>12){ UI.mes=1; UI.ano+=1; } render();
   });
-  document.querySelectorAll('.tab-btn, .bn-item[data-tab], .mais-sheet-item[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.tab = b.dataset.tab; UI.menuMobileAberto = false; render(); }));
+  document.querySelectorAll('.tab-btn, .bn-item[data-tab], .mais-sheet-item[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.tab = b.dataset.tab; UI.menuMobileAberto = false; UI.fabConfigAberto = false; render(); }));
   document.getElementById('btnMenuMobile')?.addEventListener('click', ()=>{ UI.menuMobileAberto = !UI.menuMobileAberto; render(); });
   document.getElementById('btnFecharMaisSheet')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
   document.getElementById('menuMobileBackdrop')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
@@ -13465,6 +13563,16 @@ function bindEvents(){
   };
   document.getElementById('btnNovoLancamento')?.addEventListener('click', ()=> abrirNovoLancamento(null));
   document.getElementById('fabNovoLancamento')?.addEventListener('click', ()=> abrirNovoLancamento(null));
+  // FAB da aba Configurações (mobile): abre/fecha o menu de ações — cada item só dispara o clique do botão
+  // de desktop equivalente (já vinculado abaixo: btnNovaSubcategoria/btnNovaConta/btnNovoMeioPgto/
+  // btnNovoResponsavel), reaproveitando 100% da lógica de criação já existente, sem duplicá-la aqui.
+  document.getElementById('fabConfiguracoes')?.addEventListener('click', ()=>{ UI.fabConfigAberto = !UI.fabConfigAberto; render(); });
+  document.getElementById('fabConfigBackdrop')?.addEventListener('click', ()=>{ UI.fabConfigAberto = false; render(); });
+  document.querySelectorAll('[data-fab-config-acao]').forEach(b=> b.addEventListener('click', ()=>{
+    const idBotao = { subcategoria:'btnNovaSubcategoria', conta:'btnNovaConta', meio:'btnNovoMeioPgto', responsavel:'btnNovoResponsavel' }[b.dataset.fabConfigAcao];
+    UI.fabConfigAberto = false;
+    document.getElementById(idBotao)?.click();
+  }));
   // "+ Novo Lançamento" adicionado aos modais de Contas e Cartões — mesmo formulário, já com a conta/cartão
   // de origem pré-selecionada (ver data-modal-novo-lanc, escrito por renderBotoesAcoesLancamentoModal).
   document.querySelectorAll('[data-modal-novo-lanc]').forEach(b=> b.addEventListener('click', ()=>{
