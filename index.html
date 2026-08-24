@@ -388,15 +388,41 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
    aproximada do rodapé (~64px: padding 11px×2 + botão ~34px + borda) ao deslocamento vertical do FAB, para
    ele sempre flutuar ACIMA do rodapé, nunca em cima dele. */
 .fab-novo-lancamento-modal{bottom:calc(var(--safe-bottom) + 18px + 64px);z-index:20;}
+/* FAB da aba Configurações (mobile) — expande um pequeno menu vertical com as 4 ações "+ Nova
+   Subcategoria"/"+ Nova Conta"/"+ Novo Meio"/"+ Novo Responsável" em vez de abrir uma única delas
+   diretamente (ver renderFabConfiguracoes). O próprio botão (.fab-config-btn, reaproveita .fab-novo-lancamento
+   para herdar posição/tamanho/cor) vira "✕" e fica navy quando aberto — mesma convenção de "FAB expandido"
+   usada aqui (não havia um padrão de FAB expandido pré-existente no app para reaproveitar). O menu e o FAB
+   sobem para z-index 221 (acima do .menu-mobile-backdrop, que fica em 215 — mesma relação já usada pela
+   folha de filtros mobile: o backdrop cobre a tela para fechar ao toque fora, mas nunca cobre o próprio
+   conteúdo interativo por cima dele). */
+.fab-config-menu{
+  display:none;position:fixed;right:calc(18px + var(--safe-right));z-index:221;
+  bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 18px + var(--fab-size) + 14px);
+  flex-direction:column;align-items:flex-end;gap:10px;max-width:calc(100vw - 36px - var(--safe-right));
+}
+.fab-config-item{
+  display:flex;align-items:center;gap:8px;min-height:var(--touch-min);white-space:nowrap;
+  background:#fff;border:1px solid var(--line);border-radius:var(--radius-full);
+  padding:10px 18px 10px 14px;box-shadow:0 8px 20px rgba(11,42,94,.22);
+  font-family:var(--sans);font-size:13.5px;font-weight:600;color:var(--ink);cursor:pointer;
+}
+.fab-config-item:hover{background:var(--navy-50);}
+.fab-config-item-icone{font-size:16px;flex-shrink:0;}
+.fab-config-btn.aberto{background:var(--navy-900);color:#fff;z-index:221;}
 @media(max-width:700px){
   .tabbar{display:none;}
   .bottom-nav{display:flex;}
   .fab-novo-lancamento,.fab-novo-lancamento-modal{display:flex;align-items:center;justify-content:center;}
+  .fab-config-menu{display:flex;}
   main.app-main,.app>main{padding-bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 16px);}
   /* Especificidade precisa igualar ".btn{display:inline-flex}" (0,1,0), que vem depois no arquivo (fora de
      media query) e venceria por ordem de declaração se o seletor abaixo tivesse só uma classe — mesma
      armadilha de especificidade já corrigida antes nesta sessão (.mini-card-actions). */
   .acoes-lancamento-modal .btn-novo-lanc-modal{display:none;}
+  /* Item 6 do requisito (FAB de Configurações): os 4 botões de desktop equivalentes já viram o FAB — evita
+     duplicar a ação (mesmo padrão já usado para #btnNovoLancamento/#btnNovaProjecao/#btnNovaMeta acima). */
+  #btnNovaSubcategoria,#btnNovaConta,#btnNovoMeioPgto,#btnNovoResponsavel{display:none;}
 }
 
 /* ---- Responsividade do cabeçalho e do menu de abas ---- */
@@ -3961,6 +3987,7 @@ let UI = {
   ajudaRegistrosAberta: false,
   ajudaConfiguracoesAberta: false,
   menuMobileAberto: false,
+  fabConfigAberto: false, // true = menu de ações do FAB da aba Configurações (mobile) expandido
   categoriasAbertas: new Set(),
   buscaCategorias: '',
   textModal: null, // { tipo, nome, original, grupo } — modal genérico de nome único (conta, cartão, meio, grupo, categoria)
@@ -7816,6 +7843,7 @@ function render(){
         if(UI.tab==='registros') return `<button type="button" class="fab-novo-lancamento" id="fabNovoLancamento" aria-label="Novo lançamento" title="Novo lançamento">＋</button>`;
         if(UI.tab==='resumo') return `<button type="button" class="fab-novo-lancamento" id="fabNovaProjecao" aria-label="Novo lançamento previsto" title="Novo lançamento previsto">＋</button>`;
         if(UI.tab==='metas') return `<button type="button" class="fab-novo-lancamento" id="fabNovaMeta" aria-label="Nova meta" title="Nova meta">＋</button>`;
+        if(UI.tab==='categorias') return renderFabConfiguracoes();
         return '';
       })()}
       <div class="footnote">Controle Financeiro Familiar · Família Gomes Oliveira · dados salvos em configuracoes.cfg e registros.log</div>
@@ -11376,6 +11404,31 @@ function renderMetaModal(){
   </div>`;
 }
 
+/* FAB da aba Configurações (mobile): em vez de abrir uma única ação, expande um pequeno menu com as
+   4 ações "+ Nova Subcategoria"/"+ Nova Conta"/"+ Novo Meio"/"+ Novo Responsável" — cada item do menu só
+   dispara o MESMO handler já existente do botão de desktop correspondente (ver bindFabConfiguracoes), sem
+   nenhuma lógica de criação/validação/salvamento nova. Mesmo padrão visual de botão com ícone+texto usado
+   no restante do app (.reg-card-menu-lista), aqui numa lista vertical ancorada acima do próprio FAB. O
+   botão vira "✕" quando aberto (mesmo FAB, alterna abrir/fechar), e o backdrop compartilhado
+   (.menu-mobile-backdrop) fecha ao tocar fora, sem disparar nenhuma ação. */
+function renderFabConfiguracoes(){
+  const aberto = UI.fabConfigAberto;
+  const itens = [
+    { id:'subcategoria', icone:'🏷️', label:'Nova Subcategoria' },
+    { id:'conta', icone:'🏦', label:'Nova Conta' },
+    { id:'meio', icone:'💳', label:'Novo Meio' },
+    { id:'responsavel', icone:'👤', label:'Novo Responsável' },
+  ];
+  return `
+  ${aberto ? `<div class="menu-mobile-backdrop aberto" id="fabConfigBackdrop"></div>` : ''}
+  <div class="fab-config-wrap">
+    ${aberto ? `
+    <div class="fab-config-menu" id="fabConfigMenu">
+      ${itens.map(it=>`<button type="button" class="fab-config-item" data-fab-config-acao="${it.id}"><span class="fab-config-item-icone">${it.icone}</span><span class="fab-config-item-label">+ ${it.label}</span></button>`).join('')}
+    </div>` : ''}
+    <button type="button" class="fab-novo-lancamento fab-config-btn ${aberto?'aberto':''}" id="fabConfiguracoes" aria-label="${aberto?'Fechar menu de ações':'Novas ações'}" aria-expanded="${aberto?'true':'false'}" title="${aberto?'Fechar':'Novas ações'}">${aberto?'✕':'＋'}</button>
+  </div>`;
+}
 /* ---------- CATEGORIAS ---------- */
 function renderCategorias(){
   const termo = normalizarTexto(UI.buscaCategorias);
@@ -13222,7 +13275,7 @@ function bindEvents(){
   document.getElementById('btnMesSeguinte')?.addEventListener('click', ()=>{
     UI.mes += 1; if(UI.mes>12){ UI.mes=1; UI.ano+=1; } render();
   });
-  document.querySelectorAll('.tab-btn, .bn-item[data-tab], .mais-sheet-item[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.tab = b.dataset.tab; UI.menuMobileAberto = false; render(); }));
+  document.querySelectorAll('.tab-btn, .bn-item[data-tab], .mais-sheet-item[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.tab = b.dataset.tab; UI.menuMobileAberto = false; UI.fabConfigAberto = false; render(); }));
   document.getElementById('btnMenuMobile')?.addEventListener('click', ()=>{ UI.menuMobileAberto = !UI.menuMobileAberto; render(); });
   document.getElementById('btnFecharMaisSheet')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
   document.getElementById('menuMobileBackdrop')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
@@ -13510,6 +13563,16 @@ function bindEvents(){
   };
   document.getElementById('btnNovoLancamento')?.addEventListener('click', ()=> abrirNovoLancamento(null));
   document.getElementById('fabNovoLancamento')?.addEventListener('click', ()=> abrirNovoLancamento(null));
+  // FAB da aba Configurações (mobile): abre/fecha o menu de ações — cada item só dispara o clique do botão
+  // de desktop equivalente (já vinculado abaixo: btnNovaSubcategoria/btnNovaConta/btnNovoMeioPgto/
+  // btnNovoResponsavel), reaproveitando 100% da lógica de criação já existente, sem duplicá-la aqui.
+  document.getElementById('fabConfiguracoes')?.addEventListener('click', ()=>{ UI.fabConfigAberto = !UI.fabConfigAberto; render(); });
+  document.getElementById('fabConfigBackdrop')?.addEventListener('click', ()=>{ UI.fabConfigAberto = false; render(); });
+  document.querySelectorAll('[data-fab-config-acao]').forEach(b=> b.addEventListener('click', ()=>{
+    const idBotao = { subcategoria:'btnNovaSubcategoria', conta:'btnNovaConta', meio:'btnNovoMeioPgto', responsavel:'btnNovoResponsavel' }[b.dataset.fabConfigAcao];
+    UI.fabConfigAberto = false;
+    document.getElementById(idBotao)?.click();
+  }));
   // "+ Novo Lançamento" adicionado aos modais de Contas e Cartões — mesmo formulário, já com a conta/cartão
   // de origem pré-selecionada (ver data-modal-novo-lanc, escrito por renderBotoesAcoesLancamentoModal).
   document.querySelectorAll('[data-modal-novo-lanc]').forEach(b=> b.addEventListener('click', ()=>{
