@@ -82,19 +82,19 @@ input,select{font-family:var(--sans);}
 .tela-inicial{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:74px 24px 24px;background:linear-gradient(180deg,var(--navy-50,#f4f7fc),#fff);}
 .tela-inicial-card{max-width:1000px;width:100%;background:#fff;border:1px solid var(--line);border-radius:20px;padding:36px 40px;box-shadow:0 20px 60px rgba(16,64,141,.14);}
 .tela-inicial-card button:disabled{opacity:.5;cursor:not-allowed;}
-.ti-cabecalho{display:flex;align-items:center;gap:24px;margin-bottom:28px;text-align:center;}
+.ti-cabecalho{display:flex;align-items:center;gap:24px;margin-bottom:28px;}
 .ti-cabecalho .mark{height:200px;width:auto;flex-shrink:0;align-self:center;}
 /* .ti-cabecalho-textos é o container do título+subtítulo+hint. Na marcação real, .hint fica DENTRO de
    .ti-cabecalho-titulos (empilhado depois de h1/.subtitulo, não ao lado) — h1/subtítulo/hint sempre formam
    uma coluna de texto simples, em qualquer largura. */
-.ti-cabecalho-textos{display:flex;align-items:center;justify-content:space-between;gap:24px;flex:1;min-width:0;flex-wrap:wrap;}
+.ti-cabecalho-textos{display:flex;align-items:center;justify-content:flex-start;gap:24px;flex:1;min-width:0;flex-wrap:wrap;}
 .ti-cabecalho-titulos{min-width:0;flex:0 1 auto;}
 .ti-cabecalho h1{font-size:42px;margin:0;color:var(--navy-950);}
 .ti-cabecalho .subtitulo{margin:4px 0 0;font-size:30px;font-weight:600;color:var(--gold-dark);}
 /* Item do requisito: espaçamento vertical explícito entre o subtítulo e o hint — antes .hint tinha margin:0,
    então ficava colado embaixo do subtítulo (0px de vão) sempre que o subtítulo quebrava em mais de uma
    linha. Só afeta essa margem — não mexe no espaçamento h1→subtítulo nem no alinhamento geral do cabeçalho. */
-.ti-cabecalho .hint{color:#5b6b85;margin:10px 0 0;flex:1 1 auto;min-width:0;font-size:14px;font-style:italic;text-align:center;}
+.ti-cabecalho .hint{color:#5b6b85;margin:10px 0 0;flex:1 1 auto;min-width:0;font-size:14px;font-style:italic;}
 .ti-opcoes{display:flex;flex-wrap:wrap;justify-content:center;gap:16px;margin-bottom:28px;}
 .ti-opcao{flex:1 1 280px;max-width:320px;border:1px solid var(--line);border-radius:14px;padding:18px 16px;background:var(--navy-50,#f4f7fc);text-align:center;display:flex;flex-direction:column;align-items:center;transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease;}
 .ti-opcao:hover{border-color:var(--navy-300,#a9bbdd);box-shadow:0 8px 22px rgba(16,64,141,.1);transform:translateY(-2px);}
