@@ -2033,6 +2033,10 @@ const ONEDRIVE_CONFIG = {
   // para localizá-la em /me/drive/sharedWithMe quando não há link de compartilhamento configurado.
   pastaApp: 'Controle Financeiro Familiar',
   pastaBackups: 'Backups',
+  // Subpasta fixa onde os dois arquivos de dados (configuracoes.cfg/registros.log) ficam — nunca mais soltos
+  // na raiz da pasta compartilhada. Mesma pasta para qualquer usuário/dispositivo que conecte ao OneDrive
+  // (ver ensureDadosFolder/caminhoArquivoDados).
+  pastaDados: 'Dados',
   nomeArquivoCfg: 'configuracoes.cfg',
   nomeArquivoReg: 'registros.log',
   nomeArquivoAuditoria: 'auditoria.log',
@@ -2565,6 +2569,17 @@ const oneDriveClient = {
     await graphFetch(this._itemUrl('') + '/children', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: ONEDRIVE_CONFIG.pastaBackups, folder: {}, '@microsoft.graph.conflictBehavior': 'fail' }),
+    }).catch(e=>{ if(!(e instanceof ErroOneDrive) || e.tipo!=='ja-existe') throw e; });
+  },
+  /* Garante que a subpasta Dados (onde configuracoes.cfg/registros.log ficam) existe dentro da pasta raiz já
+   resolvida — criada automaticamente antes de qualquer operação que precise gravar um desses arquivos,
+   nunca deixando os dois soltos na raiz da pasta compartilhada. Mesmo padrão de ensureBackupsFolder. */
+  async ensureDadosFolder(){
+    const existe = await this.existe(ONEDRIVE_CONFIG.pastaDados);
+    if(existe) return;
+    await graphFetch(this._itemUrl('') + '/children', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: ONEDRIVE_CONFIG.pastaDados, folder: {}, '@microsoft.graph.conflictBehavior': 'fail' }),
     }).catch(e=>{ if(!(e instanceof ErroOneDrive) || e.tipo!=='ja-existe') throw e; });
   },
   /* ===== Permissões (seção 4 do requisito) =====
@@ -4365,8 +4380,8 @@ async function verificarAlteracoesExternas(){
   if(!UI.appIniciado || !msalConta || !fileHandleCfg || !fileHandleReg || dadosDesatualizadosExternos) return;
   try{
     const [metaCfg, metaReg] = await Promise.all([
-      oneDriveClient.metadados(ONEDRIVE_CONFIG.nomeArquivoCfg),
-      oneDriveClient.metadados(ONEDRIVE_CONFIG.nomeArquivoReg),
+      oneDriveClient.metadados(caminhoArquivoDados('cfg')),
+      oneDriveClient.metadados(caminhoArquivoDados('reg')),
     ]);
     const mudou = (fileHandleCfg.etag && metaCfg.eTag!==fileHandleCfg.etag) || (fileHandleReg.etag && metaReg.eTag!==fileHandleReg.etag);
     if(mudou){ dadosDesatualizadosExternos = true; render(); }
@@ -5014,25 +5029,39 @@ async function initPersistence(){
    (ou detecta a ausência d)os dois arquivos — chamado tanto na inicialização quanto logo após o login.
    Segue exatamente a ordem do requisito (seção 6): autenticação → identificar usuário → localizar pasta
    compartilhada → verificar permissões → localizar arquivos → carregar .cfg → carregar .log. */
+/* Caminho completo (relativo à pasta compartilhada) de configuracoes.cfg/registros.log — sempre dentro da
+   subpasta Dados (ver ONEDRIVE_CONFIG.pastaDados). Ponto único de montagem deste caminho — nenhum outro
+   lugar do código deve concatenar Dados/ manualmente, para nunca haver uma referência desatualizada
+   apontando para a raiz da pasta compartilhada. */
+function caminhoArquivoDados(tipo){
+  const nome = tipo==='reg' ? ONEDRIVE_CONFIG.nomeArquivoReg : ONEDRIVE_CONFIG.nomeArquivoCfg;
+  return `${ONEDRIVE_CONFIG.pastaDados}/${nome}`;
+}
 const TIMEOUT_LOCALIZAR_PASTA_MS = 30000;
 async function carregarArquivosDoOneDrive(){
   oneDriveIndisponivelMsg = null;
   try{
     // Item 12 do requisito: também esta etapa preliminar (localizar a pasta compartilhada, verificar
-    // permissões, garantir a subpasta de Backups) precisa de um teto de tempo próprio — antes só o
+    // permissões, garantir as subpastas de Dados e Backups) precisa de um teto de tempo próprio — antes só o
     // carregamento de cada arquivo individualmente tinha essa proteção (ver TIMEOUT_CARREGAR_ARQUIVO_MS
     // abaixo); um fetch() que trave aqui (sem lançar nenhum erro) nunca pode deixar a operação presa.
     await comTimeoutOneDrive((async()=>{
       await oneDriveClient.localizarPastaCompartilhada();
       nivelAcessoPasta = await oneDriveClient.verificarPermissaoPasta();
+      await oneDriveClient.ensureDadosFolder().catch(e=>{
+        // Sem permissão de criar a subpasta Dados não impede o resto do app — se ela já existir (criada pelo
+        // proprietário), quem só tem leitura consegue ler os arquivos normalmente mesmo assim; só a CRIAÇÃO
+        // da pasta em si fica bloqueada para esse caso (ver criarArquivosFaltantesNoOneDrive).
+        if(!(e instanceof ErroOneDrive && e.tipo==='sem-permissao')) throw e;
+      });
       await oneDriveClient.ensureBackupsFolder().catch(e=>{
         // Sem permissão de criar a subpasta de Backups não impede o resto do app — só o backup fica
         // indisponível para quem só tem leitura (ver renderização condicionada a nivelAcessoPasta).
         if(!(e instanceof ErroOneDrive && e.tipo==='sem-permissao')) throw e;
       });
     })(), TIMEOUT_LOCALIZAR_PASTA_MS, 'A localização da pasta compartilhada do OneDrive demorou demais para responder.');
-    const caminhoCfg = ONEDRIVE_CONFIG.nomeArquivoCfg;
-    const caminhoReg = ONEDRIVE_CONFIG.nomeArquivoReg;
+    const caminhoCfg = caminhoArquivoDados('cfg');
+    const caminhoReg = caminhoArquivoDados('reg');
     fileHandleCfg = new OneDriveFileHandle(caminhoCfg, ONEDRIVE_CONFIG.nomeArquivoCfg);
     fileHandleReg = new OneDriveFileHandle(caminhoReg, ONEDRIVE_CONFIG.nomeArquivoReg);
     dirHandleBackup = new OneDriveDirectoryHandle(ONEDRIVE_CONFIG.pastaBackups, 'Backups');
@@ -5065,6 +5094,9 @@ async function criarArquivosFaltantesNoOneDrive(){
     return false;
   }
   try{
+    // Garante a subpasta Dados antes de qualquer gravação, mesmo que carregarArquivosDoOneDrive() já a tenha
+    // criado normalmente ao conectar (chamada aqui de novo é barata — existe() checa antes de tentar criar).
+    await oneDriveClient.ensureDadosFolder();
     if(fileStatusCfg==='nao-existe'){ await writeToHandle('cfg'); fileStatusCfg = 'conectado'; }
     if(fileStatusReg==='nao-existe'){ await writeToHandle('reg'); fileStatusReg = 'conectado'; }
     STATE.dirty = false;
@@ -5426,8 +5458,8 @@ async function restaurarConteudoBackup(texto, origemDescricao){
   // sincronização em vez de restaurar por cima de uma alteração que esta sessão nem chegou a ver.
   try{
     const [metaCfg, metaReg] = await Promise.all([
-      fileHandleCfg ? oneDriveClient.metadados(ONEDRIVE_CONFIG.nomeArquivoCfg) : null,
-      fileHandleReg ? oneDriveClient.metadados(ONEDRIVE_CONFIG.nomeArquivoReg) : null,
+      fileHandleCfg ? oneDriveClient.metadados(caminhoArquivoDados('cfg')) : null,
+      fileHandleReg ? oneDriveClient.metadados(caminhoArquivoDados('reg')) : null,
     ]);
     const cfgMudou = fileHandleCfg && metaCfg && fileHandleCfg.etag && metaCfg.eTag!==fileHandleCfg.etag;
     const regMudou = fileHandleReg && metaReg && fileHandleReg.etag && metaReg.eTag!==fileHandleReg.etag;
@@ -8276,14 +8308,14 @@ function renderTelaInicial(){
         <div class="ti-opcao">
           <div class="ti-opcao-icone">➕</div>
           <div class="ti-opcao-titulo">Criar arquivos no OneDrive</div>
-          <div class="ti-opcao-desc">Os arquivos <b>configuracoes.cfg</b> e/ou <b>registros.log</b> ainda não existem em <b>OneDrive/${ONEDRIVE_CONFIG.pastaApp}</b>. Crie-os (vazios) para começar um controle financeiro novo.</div>
+          <div class="ti-opcao-desc">Os arquivos <b>configuracoes.cfg</b> e/ou <b>registros.log</b> ainda não existem em <b>OneDrive/${ONEDRIVE_CONFIG.pastaApp}/${ONEDRIVE_CONFIG.pastaDados}</b>. Crie-os (vazios) para começar um controle financeiro novo.</div>
           <button class="btn btn-primary" id="tiCriarArquivos">➕ Criar arquivos no ${ONEDRIVE_ICON_SVG} OneDrive</button>
         </div>` : ''}
         ${msalConta && faltamCriar && nivelAcessoPasta==='leitura' ? `
         <div class="ti-opcao">
           <div class="ti-opcao-icone">👁️</div>
           <div class="ti-opcao-titulo">Somente leitura</div>
-          <div class="ti-opcao-desc">Os arquivos ainda não existem em <b>OneDrive/${ONEDRIVE_CONFIG.pastaApp}</b> e sua conta tem apenas permissão de leitura nesta pasta — você não pode criá-los. Peça ao proprietário para criá-los, ou para conceder permissão de edição à sua conta.</div>
+          <div class="ti-opcao-desc">Os arquivos ainda não existem em <b>OneDrive/${ONEDRIVE_CONFIG.pastaApp}/${ONEDRIVE_CONFIG.pastaDados}</b> e sua conta tem apenas permissão de leitura nesta pasta — você não pode criá-los. Peça ao proprietário para criá-los, ou para conceder permissão de edição à sua conta.</div>
         </div>` : ''}
         <div class="ti-opcao">
           <div class="ti-opcao-icone">🛡️</div>
