@@ -2052,6 +2052,31 @@ let nivelAcessoPasta = null;
    'conectando' | 'conectado' | 'desconectado'. Só controla a apresentação — a segurança/validação real de
    cada operação continua na resposta de verdade do Graph, nunca só neste indicador visual. */
 let statusConexaoOneDrive = 'desconectado';
+/* Cache local (em memória, nunca em storage) do access token do Graph mais recente — evita que
+   obterTokenGraph() precise chamar acquireTokenSilent() de novo a cada chamada, inclusive logo depois de um
+   loginPopup() bem-sucedido, que já devolve um AuthenticationResult com um accessToken válido pronto para
+   uso (ver loginOneDrive). Reaproveitar esse token evita uma renovação silenciosa REDUNDANTE (e sua consulta
+   de rede) na sequência imediata de chamadas ao Graph que carregam os dois arquivos após o login — a causa
+   raiz identificada para o bug "primeira tentativa sempre falha, segunda sempre funciona": essa renovação
+   redundante, feita a poucos instantes de distância do login recém-concluído, podia ocasionalmente exigir
+   nova interação (acquireTokenSilent lançando InteractionRequiredAuthError mesmo com o login mal terminado
+   de suceder), abrindo um SEGUNDO popup que o navegador bloqueia silenciosamente por já estar fora da janela
+   de "gesto do usuário" do clique original — travando toda a cadeia sem nunca lançar erro nenhum até o
+   timeout. */
+let graphTokenCache = { token: null, expiraEm: 0 };
+function tokenGraphCacheValido(){
+  return !!graphTokenCache.token && Date.now() < graphTokenCache.expiraEm;
+}
+/* Guarda o token de um AuthenticationResult do MSAL (retornado por loginPopup/acquireTokenSilent/
+   acquireTokenPopup — todos têm o mesmo formato) com uma margem de segurança de 60s antes do vencimento
+   real, para nunca usar um token "no limite" que possa expirar entre a leitura do cache e o uso real. */
+function guardarTokenGraph(resultado){
+  if(!resultado || !resultado.accessToken) return;
+  graphTokenCache.token = resultado.accessToken;
+  const expiraEm = resultado.expiresOn ? new Date(resultado.expiresOn).getTime() : (Date.now() + 55*60000);
+  graphTokenCache.expiraEm = expiraEm - 60000;
+}
+function limparCacheTokenGraph(){ graphTokenCache = { token: null, expiraEm: 0 }; }
 
 function msalConfigurado(){
   return !!(ONEDRIVE_CONFIG.clientId && ONEDRIVE_CONFIG.clientId!=='COLOQUE_AQUI_O_CLIENT_ID_DO_APP_REGISTRATION');
@@ -2115,8 +2140,12 @@ let oneDriveOpGen = 0;          // geração da tentativa de login/logout mais r
 let oneDriveOpGenFinalizada = 0; // última geração já finalizada — qualquer chamada para uma geração <= esta é ignorada
 let oneDriveWatchdogCleanup = null; // remove os listeners/timers do watchdog atualmente armado, se houver
 /* Reconhece um cancelamento (fechar a janela manualmente, clicar em "Cancelar"/"Voltar" na própria página
-   da Microsoft, ou qualquer variação disso) — nunca deve virar "Erro de conexão". Além dos códigos já
-   tratados antes, inclui explicitamente:
+   da Microsoft, ou qualquer variação disso) — usado para nunca expor o motivo TÉCNICO bruto do cancelamento
+   na interface (a mensagem amigável mostrada continua sempre genérica, ver finalizarOperacaoOneDrive) e,
+   no logout, para não tratar "o usuário decidiu não sair" como uma falha real de desconexão. No login, um
+   cancelamento passa a refletir 🔴 Erro de conexão (a tentativa não terminou em conexão — ver requisito de
+   fechamento manual da janela), não mais um ⚪ Desconectado silencioso. Além dos códigos já tratados antes,
+   inclui explicitamente:
    - 'access_denied'/'consent_required': a Microsoft devolve isso quando o USUÁRIO recusa/cancela na própria
      tela de login/consentimento (não fechou a janela, mas é a mesma intenção: desistiu desta tentativa);
    - 'interaction_in_progress': não é uma tentativa NOVA falhando — é o MSAL recusando abrir uma segunda
@@ -2151,7 +2180,17 @@ function finalizarOperacaoOneDrive(gen, tipo, resultado){
   oneDriveOpGenFinalizada = gen;
   if(oneDriveWatchdogCleanup){ oneDriveWatchdogCleanup(); oneDriveWatchdogCleanup = null; }
   if(resultado==='cancelado') limparInteracaoTravadaMsal(); // nunca deixa resquício para a PRÓXIMA tentativa
-  if(tipo==='login') statusConexaoOneDrive = resultado==='sucesso' ? 'conectado' : 'desconectado';
+  if(tipo==='login'){
+    statusConexaoOneDrive = resultado==='sucesso' ? 'conectado' : 'desconectado';
+    // Fechar a janela da Microsoft sem concluir o login (ou qualquer outra forma de cancelamento — recusar o
+    // consentimento, etc.) é tratado como uma tentativa que não terminou em conexão: mostra 🔴 Erro de
+    // conexão (não ⚪ Desconectado), com o mesmo texto amigável de "Tente novamente" — nunca detalhe técnico
+    // do cancelamento. Uma nova tentativa de "Conectar" continua liberada imediatamente (statusConexaoOneDrive
+    // já volta a 'desconectado', o único requisito para o botão reaparecer habilitado).
+    if(resultado!=='sucesso' && !oneDriveIndisponivelMsg){
+      oneDriveIndisponivelMsg = 'Não foi possível conectar ao OneDrive. Tente novamente.';
+    }
+  }
   else desconectandoOneDrive = false;
   render();
 }
@@ -2180,44 +2219,82 @@ function armarWatchdogOneDrive(gen, tipo){
     clearTimeout(timeoutMaximo);
   };
 }
+/* Ponto ÚNICO de entrada para "Conectar"/"Tentar Novamente" (item 9 do requisito: nenhuma outra parte do
+   código pode alterar statusConexaoOneDrive por fora daqui/finalizarOperacaoOneDrive). Antes existia um
+   segundo caminho, só no listener do botão (bindEvents), que pulava loginPopup() inteiramente sempre que
+   msalConta já estivesse preenchida — chamando carregarArquivosDoOneDrive() direto, com sua PRÓPRIA lógica
+   de transição de estado embutida no listener, sem gen/watchdog algum. Essa era exatamente a causa raiz do
+   bug relatado (clicar em Conectar sempre dava "Erro de conexão", só o segundo clique conectava de fato):
+   o loginPopup() da primeira tentativa já autentica com sucesso e preenche msalConta ANTES do carregamento
+   dos arquivos começar — então, mesmo quando esse carregamento falhava por qualquer motivo transitório, o
+   PRÓXIMO clique (agora com msalConta já preenchida) tomava aquele atalho paralelo em vez de repetir o fluxo
+   completo, e só por coincidência costumava funcionar da segunda vez. Unificado aqui: com msalConta já
+   autenticada, o loginPopup() é simplesmente pulado (não força um popup novo à toa) e o restante do fluxo —
+   carregamento dos arquivos, gen, watchdog, finalizarOperacaoOneDrive — é sempre o mesmo, único e determinístico,
+   nunca dependendo de qual foi o clique anterior. */
 async function loginOneDrive(){
   await initMsal();
   if(!msalConfigurado()){
     alert('⚠️ Integração com o OneDrive ainda não configurada.\n\nDefina ONEDRIVE_CONFIG.clientId no início do index.html com o "ID do aplicativo (cliente)" do seu App Registration no Microsoft Entra ID (ver instruções no comentário do código).');
     return false;
   }
-  // Limpa qualquer erro de uma tentativa ANTERIOR antes de começar esta nova tentativa — sem isso, um
-  // oneDriveIndisponivelMsg antigo (de um erro real já passado) faria textoDescOpcaoOneDrive() mostrar "Não
-  // foi possível conectar" mesmo que esta nova tentativa termine em cancelamento (nunca em erro de verdade).
+  // Item 7 do requisito: nunca duas tentativas de autenticação/carregamento simultâneas. Uma geração ainda
+  // não finalizada significa que já existe uma tentativa realmente em andamento (o próprio botão já fica
+  // desabilitado nesse estado, mas a checagem aqui é a garantia real, no nível da lógica, não só da UI).
+  if(oneDriveOpGen > oneDriveOpGenFinalizada) return false;
+  // Limpa qualquer erro de uma tentativa ANTERIOR antes de começar esta nova tentativa — enquanto esta nova
+  // tentativa estiver genuinamente em andamento (🟡 Conectando...), nunca deve aparecer um erro de uma
+  // tentativa passada. Se esta tentativa também não terminar em sucesso, finalizarOperacaoOneDrive define a
+  // mensagem apropriada (específica para uma falha real, ou o texto padrão de "Tente novamente" para um
+  // cancelamento — ver comentário lá).
   oneDriveIndisponivelMsg = null;
   limparInteracaoTravadaMsal(); // nunca deixa um resquício da tentativa anterior bloquear esta
   const gen = ++oneDriveOpGen;
   statusConexaoOneDrive = 'conectando';
-  armarWatchdogOneDrive(gen, 'login');
+  const jaAutenticado = !!msalConta; // "Tentar Novamente" após falha no carregamento dos arquivos, sessão já válida
+  if(!jaAutenticado) armarWatchdogOneDrive(gen, 'login'); // só há popup de login para vigiar quando um é de fato aberto
   render();
-  const opts = { scopes: ONEDRIVE_CONFIG.scopes, prompt: 'select_account', popupWindowAttributes: atributosPopupLogin() };
   try{
-    let r;
-    try{
-      r = await msalApp.loginPopup(opts);
-    }catch(e1){
-      // Ver limparInteracaoTravadaMsal(): se mesmo assim o MSAL ainda achar que há uma interação presa,
-      // limpa de novo e tenta abrir a janela mais uma vez, de forma totalmente transparente — o usuário só
-      // vê uma nova janela abrir normalmente, nunca um erro por causa de um resquício interno.
-      if(e1 && e1.errorCode==='interaction_in_progress'){
-        limparInteracaoTravadaMsal();
+    if(!jaAutenticado){
+      const opts = { scopes: ONEDRIVE_CONFIG.scopes, prompt: 'select_account', popupWindowAttributes: atributosPopupLogin() };
+      let r;
+      try{
         r = await msalApp.loginPopup(opts);
-      } else {
-        throw e1;
+      }catch(e1){
+        // Ver limparInteracaoTravadaMsal(): se mesmo assim o MSAL ainda achar que há uma interação presa,
+        // limpa de novo e tenta abrir a janela mais uma vez, de forma totalmente transparente — o usuário só
+        // vê uma nova janela abrir normalmente, nunca um erro por causa de um resquício interno.
+        if(e1 && e1.errorCode==='interaction_in_progress'){
+          limparInteracaoTravadaMsal();
+          r = await msalApp.loginPopup(opts);
+        } else {
+          throw e1;
+        }
       }
+      // Se o watchdog (ou uma tentativa mais nova) já finalizou esta geração antes deste retorno tardio do
+      // MSAL chegar, ignora — nunca reabre um estado que o usuário já deixou para trás.
+      if(gen<=oneDriveOpGenFinalizada) return false;
+      if(r && r.account) msalConta = r.account;
+      // Reaproveita o accessToken que o próprio loginPopup() já devolveu (mesmos scopes usados em
+      // obterTokenGraph) — evita uma renovação silenciosa redundante logo a seguir, a causa raiz do bug em
+      // que a primeira tentativa de conexão sempre falhava (ver comentário de graphTokenCache).
+      guardarTokenGraph(r);
+      // Desarma o watchdog de popup AQUI, assim que o login em si terminou com sucesso — ele só existe para
+      // detectar o fechamento MANUAL da janela de login (ver armarWatchdogOneDrive), não para vigiar o
+      // restante do fluxo. Deixá-lo armado durante o carregamento dos dois arquivos (várias chamadas
+      // sequenciais ao Graph, que juntas facilmente passam da folga de 4s do watchdog numa rede real) era a
+      // causa raiz do bug em que a PRIMEIRA tentativa de conexão sempre "dava errado": o watchdog cancelava a
+      // tentativa por conta própria enquanto o carregamento ainda estava genuinamente em andamento — e como o
+      // login e os arquivos já tinham sido processados com sucesso em segundo plano, o clique seguinte em
+      // "Tentar Novamente" só reaproveitava esse resultado (por isso "funcionava na segunda tentativa" de
+      // forma consistente). O carregamento dos arquivos já tem sua própria proteção contra travamento (ver
+      // TIMEOUT_CARREGAR_ARQUIVO_MS em carregarUmArquivoDoOneDrive), então não precisa do watchdog de popup.
+      if(oneDriveWatchdogCleanup){ oneDriveWatchdogCleanup(); oneDriveWatchdogCleanup = null; }
+      render(); // já mostra "Conectado como" assim que a conta é conhecida, mesmo antes dos arquivos carregarem
     }
-    // Se o watchdog (ou uma tentativa mais nova) já finalizou esta geração antes deste retorno tardio do
-    // MSAL chegar, ignora — nunca reabre um estado que o usuário já deixou para trás.
-    if(gen<=oneDriveOpGenFinalizada) return false;
-    if(r && r.account) msalConta = r.account;
-    render(); // já mostra "Conectado como" assim que a conta é conhecida, mesmo antes dos arquivos carregarem
     // Sem redirect (popup fecha sozinho, a página nunca recarrega), então o carregamento dos arquivos que
-    // antes acontecia em initPersistence() após o retorno do redirect precisa ser disparado aqui.
+    // antes acontecia em initPersistence() após o retorno do redirect precisa ser disparado aqui — tanto após
+    // um login novo quanto ao repetir o carregamento com uma sessão já autenticada (jaAutenticado===true).
     await carregarArquivosDoOneDrive();
     if(gen<=oneDriveOpGenFinalizada) return false;
     const sucesso = !(fileStatusCfg==='erro' || fileStatusReg==='erro');
@@ -2227,8 +2304,9 @@ async function loginOneDrive(){
     if(gen<=oneDriveOpGenFinalizada) return false; // watchdog já assumiu esta tentativa como cancelada
     // Login interrompido pelo próprio usuário (fechou a janela sem concluir, cancelou/negou na própria tela
     // da Microsoft, ou um resquício de 'interaction_in_progress' que nem a nova tentativa automática acima
-    // resolveu) — nunca é uma falha real do OneDrive, então a aplicação só volta ao estado ANTERIOR (nunca
-    // "Erro de conexão"), sem registrar oneDriveIndisponivelMsg.
+    // resolveu) — nunca expõe o motivo técnico do cancelamento (isso continua só no console.warn), mas
+    // termina em 🔴 Erro de conexão, nunca ⚪ Desconectado (ver finalizarOperacaoOneDrive): esta tentativa não
+    // resultou em conexão, e uma nova tentativa de "Conectar" já fica liberada imediatamente.
     if(ehCancelamentoOneDrive(e)){
       console.warn('OneDrive: login cancelado pelo usuário', e);
       finalizarOperacaoOneDrive(gen, 'login', 'cancelado');
@@ -2311,15 +2389,22 @@ const TIMEOUT_TOKEN_POPUP_MS = 60000;
    para um redirect interativo se a renovação silenciosa falhar de verdade (ex.: sessão realmente expirada
    ou revogada), nunca a cada chamada — é isso que evita o usuário ter que logar de novo o tempo todo
    (gerenciamento de token da seção 6). */
-async function obterTokenGraph(){
+async function obterTokenGraph(forcarRenovacao){
   await initMsal();
   if(!msalConta) throw new ErroOneDrive('nao-autenticado', 'Sua sessão não está conectada à conta Microsoft. Conecte-se novamente para sincronizar os dados.');
+  // Reaproveita o token em cache (ver graphTokenCache) sempre que ainda for válido — evita uma renovação
+  // silenciosa redundante a cada chamada ao Graph, inclusive logo após o login (causa raiz do bug em que a
+  // primeira tentativa de conexão sempre falhava). `forcarRenovacao` ignora o cache de propósito: usado pelo
+  // retry de graphFetch quando o Graph já rejeitou este mesmo token com 401 — reaproveitá-lo de novo repetiria
+  // a mesma falha.
+  if(!forcarRenovacao && tokenGraphCacheValido()) return graphTokenCache.token;
   try{
     const r = await comTimeoutOneDrive(
       msalApp.acquireTokenSilent({ scopes: ONEDRIVE_CONFIG.scopes, account: msalConta }),
       TIMEOUT_TOKEN_SILENT_MS,
       'A renovação da sessão Microsoft demorou demais para responder.'
     );
+    guardarTokenGraph(r);
     return r.accessToken;
   }catch(e){
     if(e instanceof msal.InteractionRequiredAuthError){
@@ -2332,6 +2417,7 @@ async function obterTokenGraph(){
           TIMEOUT_TOKEN_POPUP_MS,
           'A janela de autenticação da Microsoft demorou demais para responder.'
         );
+        guardarTokenGraph(r);
         return r.accessToken;
       }catch(e2){
         registrarErroOneDrive(e2);
@@ -2377,19 +2463,47 @@ function codificarLinkCompartilhamento(url){
   const base64url = base64.replace(/=+$/,'').replace(/\//g,'_').replace(/\+/g,'-');
   return 'u!' + base64url;
 }
-async function graphFetch(pathOrUrl, options){
+/* Uma única repetição automática, e só para falhas genuinamente TRANSITÓRIAS (item 8 do requisito: "falha
+   temporária do Microsoft Graph → permitir nova tentativa") — nunca para respostas que já são um resultado
+   definitivo e válido do Graph (403/404/409/412 etc., tratadas normalmente por mapearErroGraph). Cobre:
+   - erro de rede na própria chamada fetch() (ex.: instabilidade momentânea de conexão);
+   - 401 logo após um token que a própria aplicação achava válido — pode acontecer nos instantes seguintes a
+     um login recém-concluído (propagação da concessão/token ainda em andamento do lado da Microsoft); força
+     uma renovação NÃO fica em cache (forcarRenovacao=true) antes de repetir, já que reenviar o mesmo token
+     reproduziria a mesma falha;
+   - 429/502/503/504 (limite de taxa / instabilidade momentânea do próprio serviço).
+   Isto é diferente de "tentar de novo o login inteiro": é uma resiliência padrão no nível da chamada HTTP,
+   transparente, que nunca aparece como "Erro de conexão" para uma falha que na prática durou uma fração de
+   segundo — exatamente a causa raiz identificada para o bug em que a primeira tentativa de "Conectar" sempre
+   falhava e só a segunda funcionava (ver graphTokenCache). Só repete UMA vez — uma segunda falha real já é
+   reportada normalmente, nunca um loop. */
+const GRAPH_RETRY_STATUS = new Set([401, 429, 502, 503, 504]);
+async function graphFetch(pathOrUrl, options, _tentativa){
+  const tentativa = _tentativa || 1;
   let token;
-  try{ token = await obterTokenGraph(); }
+  try{ token = await obterTokenGraph(tentativa > 1); }
   catch(e){ if(e instanceof ErroOneDrive) throw e; throw mapearErroGraph(undefined, e); }
   const url = pathOrUrl.startsWith('http') ? pathOrUrl : `${GRAPH_BASE}${pathOrUrl}`;
   let resp;
   try{
     resp = await fetch(url, { ...options, headers: { ...(options&&options.headers), Authorization: `Bearer ${token}` } });
   }catch(e){
+    if(tentativa===1){
+      console.warn(`OneDrive: falha de rede em ${pathOrUrl}, repetindo uma vez`, e);
+      await new Promise(r=>setTimeout(r, 400));
+      return graphFetch(pathOrUrl, options, tentativa+1);
+    }
     throw new ErroOneDrive('sem-conexao', 'Perda de conexão ao comunicar com o OneDrive. Verifique sua internet e tente novamente.', e);
   }
   if(!resp.ok){
+    if(tentativa===1 && GRAPH_RETRY_STATUS.has(resp.status)){
+      console.warn(`OneDrive: resposta ${resp.status} (transitória) em ${pathOrUrl}, repetindo uma vez`, { autenticado: !!msalConta });
+      if(resp.status===401) limparCacheTokenGraph(); // nunca reenvia o mesmo token já rejeitado
+      await new Promise(r=>setTimeout(r, 400));
+      return graphFetch(pathOrUrl, options, tentativa+1);
+    }
     let corpo = null; try{ corpo = await resp.json(); }catch(e){}
+    console.error(`OneDrive: falha definitiva em ${pathOrUrl}`, { status: resp.status, mensagemGraph: corpo?.error?.message, autenticado: !!msalConta, tentativas: tentativa });
     throw mapearErroGraph(resp.status, new Error(corpo?.error?.message || resp.statusText));
   }
   return resp;
@@ -4900,16 +5014,23 @@ async function initPersistence(){
    (ou detecta a ausência d)os dois arquivos — chamado tanto na inicialização quanto logo após o login.
    Segue exatamente a ordem do requisito (seção 6): autenticação → identificar usuário → localizar pasta
    compartilhada → verificar permissões → localizar arquivos → carregar .cfg → carregar .log. */
+const TIMEOUT_LOCALIZAR_PASTA_MS = 30000;
 async function carregarArquivosDoOneDrive(){
   oneDriveIndisponivelMsg = null;
   try{
-    await oneDriveClient.localizarPastaCompartilhada();
-    nivelAcessoPasta = await oneDriveClient.verificarPermissaoPasta();
-    await oneDriveClient.ensureBackupsFolder().catch(e=>{
-      // Sem permissão de criar a subpasta de Backups não impede o resto do app — só o backup fica
-      // indisponível para quem só tem leitura (ver renderização condicionada a nivelAcessoPasta).
-      if(!(e instanceof ErroOneDrive && e.tipo==='sem-permissao')) throw e;
-    });
+    // Item 12 do requisito: também esta etapa preliminar (localizar a pasta compartilhada, verificar
+    // permissões, garantir a subpasta de Backups) precisa de um teto de tempo próprio — antes só o
+    // carregamento de cada arquivo individualmente tinha essa proteção (ver TIMEOUT_CARREGAR_ARQUIVO_MS
+    // abaixo); um fetch() que trave aqui (sem lançar nenhum erro) nunca pode deixar a operação presa.
+    await comTimeoutOneDrive((async()=>{
+      await oneDriveClient.localizarPastaCompartilhada();
+      nivelAcessoPasta = await oneDriveClient.verificarPermissaoPasta();
+      await oneDriveClient.ensureBackupsFolder().catch(e=>{
+        // Sem permissão de criar a subpasta de Backups não impede o resto do app — só o backup fica
+        // indisponível para quem só tem leitura (ver renderização condicionada a nivelAcessoPasta).
+        if(!(e instanceof ErroOneDrive && e.tipo==='sem-permissao')) throw e;
+      });
+    })(), TIMEOUT_LOCALIZAR_PASTA_MS, 'A localização da pasta compartilhada do OneDrive demorou demais para responder.');
     const caminhoCfg = ONEDRIVE_CONFIG.nomeArquivoCfg;
     const caminhoReg = ONEDRIVE_CONFIG.nomeArquivoReg;
     fileHandleCfg = new OneDriveFileHandle(caminhoCfg, ONEDRIVE_CONFIG.nomeArquivoCfg);
@@ -5025,6 +5146,7 @@ async function desconectarArquivos(){
     fileHandleReg = null; fileHandleCfg = null; dirHandleBackup = null;
     fileStatusReg = 'desconectado'; fileStatusCfg = 'desconectado';
     msalConta = null;
+    limparCacheTokenGraph(); // nunca reaproveita o token de uma conta que acabou de sair
     statusConexaoOneDrive = 'desconectado';
     resetarEstadoParaSessaoZerada();
     render();
@@ -13407,10 +13529,11 @@ function bindEvents(){
   document.getElementById('btnSyncIndicador')?.addEventListener('click', ()=>{ UI.syncPainelAberto = !UI.syncPainelAberto; render(); });
   document.getElementById('spSincronizarAgora')?.addEventListener('click', ()=>{ UI.syncPainelAberto=false; salvarArquivos(); });
   document.getElementById('spTentarNovamente')?.addEventListener('click', ()=>{ UI.syncPainelAberto=false; syncUltimoErro=null; reconectarPacote(); });
-  document.getElementById('spConectar')?.addEventListener('click', async ()=>{
+  // Mesmo ponto único de entrada usado pelo botão da tela inicial (ver comentário em loginOneDrive) — nunca
+  // uma segunda implementação divergente do mesmo fluxo de conexão.
+  document.getElementById('spConectar')?.addEventListener('click', ()=>{
     UI.syncPainelAberto=false;
-    if(msalConta){ statusConexaoOneDrive='conectando'; render(); await carregarArquivosDoOneDrive(); statusConexaoOneDrive = (fileStatusCfg==='erro'||fileStatusReg==='erro') ? 'desconectado' : 'conectado'; render(); }
-    else loginOneDrive();
+    loginOneDrive();
   });
   document.getElementById('btnMenuArquivo')?.addEventListener('click', ()=>{ UI.menuArquivoAberto = !UI.menuArquivoAberto; render(); });
   document.getElementById('btnFecharMenuArquivo')?.addEventListener('click', ()=>{ UI.menuArquivoAberto = false; render(); });
@@ -13428,10 +13551,11 @@ function bindEvents(){
   // Item 5 do requisito: um único botão cobre tanto "Conectar"/"Tentar Novamente" quanto o caso de já
   // haver uma sessão Microsoft válida mas os arquivos não terem carregado (comErro) — reconecta os
   // arquivos em vez de reabrir o login, já que a conta Microsoft continua válida nesse caso.
-  document.getElementById('tiEntrarMicrosoft')?.addEventListener('click', async ()=>{
-    if(msalConta){ statusConexaoOneDrive='conectando'; render(); await carregarArquivosDoOneDrive(); statusConexaoOneDrive = (fileStatusCfg==='erro'||fileStatusReg==='erro') ? 'desconectado' : 'conectado'; render(); }
-    else loginOneDrive();
-  });
+  // "Conectar"/"Tentar Novamente" sempre passam por loginOneDrive() — único ponto de entrada do fluxo de
+  // conexão (gen/watchdog/finalizarOperacaoOneDrive). loginOneDrive() já decide internamente se precisa
+  // abrir um popup de login novo ou só repetir o carregamento dos arquivos com a sessão já autenticada (ver
+  // comentário em loginOneDrive) — nunca duas implementações divergentes do mesmo fluxo.
+  document.getElementById('tiEntrarMicrosoft')?.addEventListener('click', ()=> loginOneDrive());
   document.getElementById('tiSairMicrosoft')?.addEventListener('click', ()=>desconectarArquivos());
   document.getElementById('tiCriarArquivos')?.addEventListener('click', ()=>criarArquivosFaltantesNoOneDrive());
   document.getElementById('tiRestaurarBackup')?.addEventListener('click', ()=>restaurarBackup());
