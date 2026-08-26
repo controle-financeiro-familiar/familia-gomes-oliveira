@@ -2056,6 +2056,12 @@ let nivelAcessoPasta = null;
    'conectando' | 'conectado' | 'desconectado'. Só controla a apresentação — a segurança/validação real de
    cada operação continua na resposta de verdade do Graph, nunca só neste indicador visual. */
 let statusConexaoOneDrive = 'desconectado';
+/* Marca que a tentativa de login interativa mais recente terminou em sucesso (autenticação + carregamento de
+   configuracoes.cfg/registros.log já confirmados — ver finalizarOperacaoOneDrive) e o foco automático no
+   botão "Iniciar App" ainda não foi aplicado. Setado apenas nesse ÚNICO ponto de sucesso (nunca em erro,
+   cancelamento ou fechamento manual da janela), e consumido (zerado) assim que render() aplica o foco pela
+   primeira vez depois disso — nunca reaplica em renders seguintes não relacionados a esta conexão. */
+let focarBotaoIniciarAppPendente = false;
 /* Cache local (em memória, nunca em storage) do access token do Graph mais recente — evita que
    obterTokenGraph() precise chamar acquireTokenSilent() de novo a cada chamada, inclusive logo depois de um
    loginPopup() bem-sucedido, que já devolve um AuthenticationResult com um accessToken válido pronto para
@@ -2194,6 +2200,10 @@ function finalizarOperacaoOneDrive(gen, tipo, resultado){
     if(resultado!=='sucesso' && !oneDriveIndisponivelMsg){
       oneDriveIndisponivelMsg = 'Não foi possível conectar ao OneDrive. Tente novamente.';
     }
+    // Só aqui — autenticação E carregamento de configuracoes.cfg/registros.log já confirmados com sucesso —
+    // nunca em erro, cancelamento ou fechamento manual da janela. render() (chamado logo abaixo) consome esta
+    // marca e aplica o foco no botão "Iniciar App".
+    if(resultado==='sucesso') focarBotaoIniciarAppPendente = true;
   }
   else desconectandoOneDrive = false;
   render();
@@ -8012,6 +8022,25 @@ function renderBannerPWA(){
     ${(!UI.atualizacaoDisponivel && UI.instalarPromptEvento) ? `<span>📲 Instale este aplicativo para acesso rápido e uso offline.</span><button type="button" class="btn btn-primary btn-sm" id="btnInstalarPWA">Adicionar à tela inicial</button><button type="button" class="btn btn-ghost btn-sm" id="btnDispensarInstalarPWA">Agora não</button>` : ''}
   </div>`;
 }
+/* Foco automático no botão "Iniciar App" logo que a conexão com o OneDrive é concluída com sucesso (ver
+   focarBotaoIniciarAppPendente/finalizarOperacaoOneDrive) — nunca em erro, cancelamento ou fechamento manual
+   da janela de autenticação, e nunca quando o botão ainda está desabilitado (arquivosProntos ainda falso,
+   ex.: arquivos existentes mas ainda sendo carregados). No desktop só aplica o foco; no mobile, primeiro rola
+   até o botão SÓ SE ele ainda não estiver visível na área exibida (nunca rola se já estiver visível), e só
+   então aplica o foco — com preventScroll para não deixar o navegador decidir sozinho como/se rolar. */
+function aplicarFocoBotaoIniciarApp(){
+  const btn = document.getElementById('tiIniciarApp');
+  if(!btn || btn.disabled) return;
+  const ehMobile = window.innerWidth<=700;
+  if(ehMobile){
+    const rect = btn.getBoundingClientRect();
+    const alturaJanela = window.innerHeight || document.documentElement.clientHeight;
+    const larguraJanela = window.innerWidth || document.documentElement.clientWidth;
+    const visivel = rect.top>=0 && rect.left>=0 && rect.bottom<=alturaJanela && rect.right<=larguraJanela;
+    if(!visivel) btn.scrollIntoView({ behavior:'smooth', block:'center' });
+  }
+  btn.focus({ preventScroll:true });
+}
 function render(){
   document.documentElement.classList.toggle('forcar-nav-mobile', UI.forcarNavMobile);
   if(!STATE.ready){ root.innerHTML = '<div class="empty-state" style="padding-top:80px;">Carregando...</div>'; return; }
@@ -8022,6 +8051,7 @@ function render(){
   if(!UI.appIniciado && !UI.modalFecharSessao){
     root.innerHTML = renderBannerPWA() + renderTelaInicial() + (UI.backupModal!==null ? renderBackupModal() : "");
     bindEvents();
+    if(focarBotaoIniciarAppPendente){ focarBotaoIniciarAppPendente = false; aplicarFocoBotaoIniciarApp(); }
     return;
   }
   const trocouAba = ultimaAbaRenderizada!==null && ultimaAbaRenderizada!==UI.tab;
