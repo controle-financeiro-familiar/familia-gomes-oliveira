@@ -202,7 +202,7 @@ input,select{font-family:var(--sans);}
     display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:700;
     color:var(--navy-950);padding:2px 16px 10px;
   }
-  .ma-item{min-height:var(--touch-min);padding:10px 16px!important;}
+  .ma-item{padding:10px 16px!important;}
   .ma-item-desc{display:block;font-size:11.5px;color:#6a7a97;font-weight:400;white-space:normal;}
   .menu-arquivo-backdrop{display:block;position:fixed;inset:0;background:rgba(11,42,94,.35);z-index:215;}
 }
@@ -380,7 +380,7 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
 .mais-sheet-alca{width:40px;height:4px;border-radius:var(--radius-full);background:var(--line);margin:0 auto 10px;}
 .mais-sheet-titulo{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#8393ac;padding:0 12px 8px 20px;}
 .mais-sheet-item{
-  display:flex;align-items:center;gap:14px;width:100%;min-height:var(--touch-min);text-align:left;
+  display:flex;align-items:center;gap:14px;width:100%;text-align:left;
   background:transparent;border:none;border-top:1px solid var(--line);box-sizing:border-box;
   color:var(--ink);padding:12px 20px;font-family:var(--sans);cursor:pointer;transition:background .15s;
 }
@@ -427,7 +427,7 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
   flex-direction:column;align-items:flex-end;gap:10px;max-width:calc(100vw - 36px - var(--safe-right));
 }
 .fab-config-item{
-  display:flex;align-items:center;gap:8px;min-height:var(--touch-min);white-space:nowrap;
+  display:flex;align-items:center;gap:8px;white-space:nowrap;
   background:#fff;border:1px solid var(--line);border-radius:var(--radius-full);
   padding:10px 18px 10px 14px;box-shadow:0 8px 20px rgba(11,42,94,.22);
   font-family:var(--sans);font-size:13.5px;font-weight:600;color:var(--ink);cursor:pointer;
@@ -565,7 +565,7 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
     position:static;opacity:1;transform:none;background:transparent;
     display:flex;justify-content:flex-end;margin-bottom:0;order:99;flex-shrink:0;
   }
-  .mini-card-actions .icon-btn{min-width:var(--touch-min);min-height:var(--touch-min);}
+  .mini-card-actions .icon-btn{min-width:var(--touch-min);}
   /* Item 12 do requisito (rodada seguinte): Contas / Meios de Transações / Responsáveis viram linhas
      horizontais compactas no mobile, em vez de uma grade de cards — cada item numa única linha, nome em
      destaque, ícone à esquerda, ações sempre à direita (via order, sem depender da ordem no markup, que
@@ -638,7 +638,7 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
      largos no mobile (min-height:44px = --touch-min, mas com fonte de 9px dentro — nem confortável nem
      compacto). Ajustados para uma altura/largura proporcionais ao conteúdo (até 4 caracteres, "-100"),
      mantendo uma área de toque confortável sem ocupar espaço desnecessário. */
-  .cenario-input-3d{min-height:36px;width:52px;font-size:13px;padding:4px 4px;}
+  .cenario-input-3d{min-height:24px;width:36px;font-size:11px;padding:2px 2px;text-align:center;}
 }
 @media(max-width:900px){.grid-cards{grid-template-columns:repeat(2,1fr);}}
 .kpi{border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;background:var(--paper);position:relative;overflow:hidden;}
@@ -795,7 +795,7 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
     color:#8393ac;flex-shrink:0;
   }
   .tabela-fluxo td.tabela-fluxo-acoes{justify-content:flex-end;gap:14px;}
-  .tabela-fluxo td.tabela-fluxo-acoes .icon-btn{min-width:var(--touch-min);min-height:var(--touch-min);font-size:16px;}
+  .tabela-fluxo td.tabela-fluxo-acoes .icon-btn{min-width:var(--touch-min);font-size:16px;}
   .tabela-fluxo .linha-saldo-atual-label{display:block;padding:5px 0;font-weight:700;}
   /* Item 8 do requisito: a primeira linha do card (coluna "Dia") fica inteira em negrito — rótulo e valor —
      não só o valor da data — e com um background de destaque, sangrando até as bordas do card (a mesma
@@ -839,7 +839,7 @@ tbody tr:hover{background:var(--navy-50);}
 .tabela-registros th:nth-child(10){width:12%;}
 .registros-rodape{
   display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
-  padding:9px 14px;border:1px solid var(--line);border-top:none;border-radius:0 0 8px 8px;
+  padding:4px 6px;border:1px solid var(--line);border-top:none;border-radius:0 0 8px 8px;
   background:var(--navy-50);font-size:12.5px;color:var(--ink);
 }
 .registros-rodape-vazio{border-radius:8px;border-top:1px solid var(--line);margin-top:12px;}
@@ -910,7 +910,7 @@ tbody tr:hover{background:var(--navy-50);}
 .reg-card[data-reg-card-detalhe]{cursor:pointer;}
 /* Seleção em lote na lista mobile (item 18 do requisito de responsividade) — caixa de seleção do card,
    mesma altura mínima de toque das demais ações da lista. */
-.reg-card-check{display:flex;align-items:center;justify-content:center;flex-shrink:0;min-width:var(--touch-min);min-height:var(--touch-min);margin:calc(-1*var(--sp-3)) 0;}
+.reg-card-check{display:flex;align-items:center;justify-content:center;flex-shrink:0;min-width:var(--touch-min);margin:calc(-1*var(--sp-3)) 0;}
 .reg-card-check input{width:18px;height:18px;}
 .reg-select-all-mobile{
   display:flex;align-items:center;gap:8px;font-size:12.5px;color:#5b6b85;font-weight:600;
@@ -941,13 +941,13 @@ tbody tr:hover{background:var(--navy-50);}
 .reg-card-linha2 .tag{white-space:nowrap;flex-shrink:0;}
 .reg-card-secundario{font-size:12px;color:#6a7a97;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .reg-card-menu{position:relative;flex-shrink:0;}
-.reg-card-menu-btn{min-width:var(--touch-min);min-height:var(--touch-min);font-size:18px;}
+.reg-card-menu-btn{min-width:var(--touch-min);font-size:18px;}
 .reg-card-menu-lista{
   position:absolute;right:0;top:100%;z-index:30;background:#fff;border:1px solid var(--line);
   border-radius:var(--radius-sm);box-shadow:0 10px 24px rgba(11,42,94,.18);min-width:160px;overflow:hidden;
 }
 .reg-card-menu-lista button{
-  display:block;width:100%;text-align:left;min-height:var(--touch-min);padding:10px 16px;
+  display:block;width:100%;text-align:left;padding:10px 16px;
   background:transparent;border:none;font-family:var(--sans);font-size:13.5px;color:var(--ink);cursor:pointer;
 }
 .reg-card-menu-lista button:hover{background:var(--navy-50);}
@@ -970,7 +970,7 @@ tbody tr:hover{background:var(--navy-50);}
 .val-cell.neg{color:var(--despesa);}
 .val-cell.pos{color:var(--receita);}
 
-.btn{border:none;border-radius:7px;padding:9px 15px;font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:7px;transition:transform .1s;}
+.btn{border:none;border-radius:7px;padding:6px 10px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:7px;transition:transform .1s;}
 .btn:active{transform:translateY(1px);}
 .btn-primary{background:var(--navy-900);color:#fff;}
 .btn-primary:hover{background:var(--navy-950);}
@@ -1029,10 +1029,10 @@ tbody tr:hover{background:var(--navy-50);}
    em toda a aplicação. */
 .btn-buscar-icone{background:transparent;border:none;color:#2f6fed;border-radius:6px;min-width:var(--touch-min);min-height:34px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;flex:0 0 auto;}
 .btn-buscar-icone:hover{background:var(--navy-100);}
-@media(max-width:700px){ .btn-buscar-icone{min-height:var(--touch-min);} }
+@media(max-width:700px){ .btn-buscar-icone{} }
 /* Ícone SVG padrão de filtro (item 3) e de "Verificar duplicidade" (item 14) — tamanho/alinhamento
    consistentes em qualquer botão que os utilize. */
-.ico-filtro,.ico-dup{width:12px;height:12px;flex:0 0 auto;vertical-align:middle;display:inline-block;}
+.ico-filtro,.ico-dup{width:13px;height:13px;flex:0 0 auto;vertical-align:middle;display:inline-block;}
 .btn-filtro-padrao{display:inline-flex;align-items:center;gap:6px;}
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
 /* Configurações — busca e controles superiores (itens 19/20 do requisito de responsividade): grupos
@@ -1064,7 +1064,7 @@ tbody tr:hover{background:var(--navy-50);}
      direita, com ícone E texto, nunca só o ícone). Só CSS (order + um "quebra-linha" invisível) — o markup
      e a ordem no desktop continuam exatamente os mesmos de antes. */
   .reg-toolbar-acoes{align-items:stretch;gap:6px;}
-  .reg-toolbar-acoes #btnVerificarDuplicidade{order:1;flex:0 0 auto;white-space:nowrap;font-size:12px;padding:8px;}
+  .reg-toolbar-acoes #btnVerificarDuplicidade{order:1;flex:0 0 auto;white-space:nowrap;font-size:12px;padding:6px 10px;}
   /* flex-basis:0 (em vez de auto): faz o item calcular o tamanho a partir do espaço disponível, não do
      conteúdo — com flex-basis:auto, o navegador contava a largura "natural" do campo de busca ao decidir
      se cabia ao lado de "Verificar duplicidade" e, mesmo com min-width:0, mandava a dupla inteira para uma
@@ -1075,7 +1075,7 @@ tbody tr:hover{background:var(--navy-50);}
   /* Mesma lógica de flex-basis:0 para "Importar arquivo do banco" dividir a 2ª linha com "Filtros" — o
      rótulo pode quebrar em duas linhas dentro do próprio botão (nunca é cortado/reduzido a só o ícone),
      mas o botão continua na MESMA linha de "Filtros", só ficando um pouco mais alto quando necessário. */
-  .reg-toolbar-acoes #btnImportar{order:5;flex:1 1 0%;min-height:var(--touch-min);white-space:normal;text-align:center;line-height:1.25;}
+  .reg-toolbar-acoes #btnImportar{order:5;flex:1 1 0%;white-space:normal;text-align:center;line-height:1.25;}
   .reg-toolbar-acoes #btnFiltrosMobileReg .reg-toolbar-label,
   .reg-toolbar-acoes #btnVerificarDuplicidade .reg-toolbar-label{
     white-space:nowrap;
@@ -1085,7 +1085,7 @@ tbody tr:hover{background:var(--navy-50);}
      telas estreitas. */
   #btnNovoLancamento,#btnNovaProjecao,#btnNovaMeta{display:none;}
 }
-.toolbar input[type=text], .toolbar input[type=search]{border:1px solid var(--line);border-radius:7px;padding:13px 10px;font-size:13px;min-width:200px;}
+.toolbar input[type=text], .toolbar input[type=search]{border:1px solid var(--line);border-radius:7px;padding:6px 10px;font-size:12px;min-width:200px;}
 /* ---- Componente padronizado dos modais "Ver Extrato" e "Lançamentos futuros" (qualquer conta) ----
    Largura fixa generosa o bastante para caber todos os filtros numa única linha em desktop/telas largas
    (evita quebra de linha entre contas com mais ou menos filtros/grupos). Em telas estreitas, os filtros
@@ -1208,8 +1208,8 @@ tbody tr:hover{background:var(--navy-50);}
 .col-checkbox-lote{ width:1%; text-align:center; padding-left:10px; padding-right:2px; }
 .barra-acoes-lote{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .barra-acoes-lote.vazia{ display:none; }
-.barra-acoes-lote-contagem{ font-weight:600; color:var(--navy-900); margin-right:4px; }
-.barra-acoes-lote:not(.vazia){ background:var(--navy-50,#eef2f9); border:1px solid var(--line); border-radius:8px; padding:8px 12px; margin-top:10px;}
+.barra-acoes-lote-contagem{ font-weight:600; color:var(--navy-900); margin-right:4px;font-size:14px; }
+.barra-acoes-lote:not(.vazia){ background:var(--navy-50,#eef2f9); border:1px solid var(--line); border-radius:7px; padding:6px 10px; margin-top:10px;}
 /* Modal de Edição em Lote */
 .lote-campo{ border-top:1px solid var(--line); padding:10px 0; }
 .lote-campo:first-of-type{ border-top:none; }
@@ -1450,7 +1450,7 @@ tbody tr:hover{background:var(--navy-50);}
 .status-pill.Pendente{background:#fdecc8;color:#a5690a;}
 select.mini{padding:5px 6px;font-size:12px;border-radius:5px;border:1px solid var(--line);}
 .filtro-data{position:relative;}
-.filtro-data>.filtro-data-btn-abrir{padding:5px 8px;font-size:12px;border-radius:5px;border:1px solid var(--line);cursor:pointer;background:#fff;white-space:nowrap;display:inline-block;font-family:var(--sans);color:var(--ink);}
+.filtro-data>.filtro-data-btn-abrir{padding:6px 10px;font-size:12px;border-radius:7px;border:1px solid var(--line);cursor:pointer;background:#fff;white-space:nowrap;display:inline-block;font-family:var(--sans);color:var(--ink);}
 .filtro-data.aberto>.filtro-data-btn-abrir{border-color:var(--navy-900);color:var(--navy-900);}
 .filtro-data-painel-topo{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-bottom:10px;margin-bottom:8px;border-bottom:1px solid var(--line);}
 .filtro-data-painel-topo .filtro-data-todos{padding:0;margin:0;border:none;}
@@ -1585,7 +1585,7 @@ summary::marker{content:'';}
   .cat-sub-nome{flex-basis:100%;}
   .cat-sub-tags{order:2;}
   .cat-sub-acoes{order:3;margin-left:0;margin-top:2px;}
-  .cat-grupo-acoes .icon-btn,.cat-categoria-acoes .icon-btn,.cat-sub-acoes .icon-btn{min-width:var(--touch-min);min-height:var(--touch-min);}
+  .cat-grupo-acoes .icon-btn,.cat-categoria-acoes .icon-btn,.cat-sub-acoes .icon-btn{min-width:var(--touch-min);}
 }
 .chip{
   display:inline-flex;align-items:center;gap:2px;background:var(--navy-50);border:1px solid var(--line);
@@ -1701,8 +1701,8 @@ summary::marker{content:'';}
   /* Backups (item 1 do requisito de responsividade): "Restaurar" e "Excluir" ficam na MESMA linha — Restaurar
      ocupa o espaço disponível à esquerda, Excluir (só ícone) fica alinhado à direita do card. */
   .tabela-cards-mobile td.backup-linha-acoes{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:8px;padding-top:10px;}
-  .tabela-cards-mobile td.backup-linha-acoes .btn{flex:1 1 auto;min-height:var(--touch-min);}
-  .tabela-cards-mobile td.backup-linha-acoes .icon-btn{flex:0 0 auto;margin-left:auto;min-height:var(--touch-min);min-width:var(--touch-min);}
+  .tabela-cards-mobile td.backup-linha-acoes .btn{flex:1 1 auto;}
+  .tabela-cards-mobile td.backup-linha-acoes .icon-btn{flex:0 0 auto;margin-left:auto;min-width:var(--touch-min);}
   /* Checkbox de seleção de cada card de backup: mesma célula "sem rótulo" das ações, mas alinhada à
      esquerda no topo do card em vez de dentro da linha de botões. */
   .tabela-cards-mobile td.backup-linha-checkbox{justify-content:flex-start;border-bottom:none;padding-bottom:0;}
@@ -1712,7 +1712,7 @@ summary::marker{content:'';}
   .tabela-import-revisao td[data-label]:not([data-label=""])::before{display:block;margin-bottom:3px;}
   .tabela-import-revisao td input[type="text"],
   .tabela-import-revisao td input[type="date"],
-  .tabela-import-revisao td select{width:100%!important;box-sizing:border-box;min-height:var(--touch-min);}
+  .tabela-import-revisao td select{width:100%!important;box-sizing:border-box;}
   .tabela-import-revisao td[data-label="Importar"]{display:flex;align-items:center;gap:8px;}
   .tabela-import-revisao td[data-label="Importar"]::before{margin-bottom:0;}
 }
@@ -1756,9 +1756,9 @@ summary::marker{content:'';}
      desktop o card já é compacto o bastante para não precisar disso, mas no mobile os botões "Ver
      Extrato"/"Ver lançamentos futuros" (32px de altura), o "Importar" no canto (38px) e o ✏️ de editar
      saldo inicial (23px) ficavam abaixo do mínimo recomendado de toque. */
-  .conta-financeira-acoes .btn{min-height:var(--touch-min);}
+  .conta-financeira-acoes .btn{}
   .conta-financeira-card .btn-card-topo-direita{padding:10px;}
-  .conta-financeira-grid .icon-btn{min-width:var(--touch-min);min-height:var(--touch-min);}
+  .conta-financeira-grid .icon-btn{min-width:var(--touch-min);}
 }
 .cartoes-resumo-item{
   display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--navy-50);
@@ -1932,7 +1932,7 @@ summary::marker{content:'';}
     color:#8393ac;flex-shrink:0;
   }
   .tabela-cartoes .data-editavel-linha{justify-content:flex-end;}
-  .tabela-cartoes .edit-data-icon{opacity:1!important;transform:none!important;min-width:var(--touch-min);min-height:var(--touch-min);}
+  .tabela-cartoes .edit-data-icon{opacity:1!important;transform:none!important;min-width:var(--touch-min);}
   /* Item 18 do requisito: todas as linhas do card usam justify-content:space-around para alinhamento
      consistente entre os elementos (rótulo/valor, ou os múltiplos elementos da linha de Status). */
   .tabela-cartoes td{justify-content:space-around;}
@@ -8924,7 +8924,7 @@ function renderMapaCalorDiaModal(){
           </div>
           ${UI.filtrosMobileAberto==='MapaCalor' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropMapaCalor"></div>` : ''}
           <div class="toolbar-modal-padrao-busca">
-            <input type="search" id="mapaCalorBusca" class="mini" style="padding:5px 6px;" placeholder="Buscar na descrição..." value="${escapeHtml(fBusca)}">
+            <input type="search" id="mapaCalorBusca" class="mini" placeholder="Buscar na descrição..." value="${escapeHtml(fBusca)}">
             <button type="button" class="btn-buscar-icone" id="btnBuscarMapaCalor" title="Buscar (ou pressione Enter)" aria-label="Buscar (ou pressione Enter)">🔍</button>
           </div>
         </div>
@@ -11543,7 +11543,7 @@ function renderDuplicarMesesModal(){
             </tbody>
           </table>
         </div>
-        <div class="registros-rodape" style="margin-top:2px;">${rodapePaginacao}</div>
+        <div class="registros-rodape">${rodapePaginacao}</div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" id="cancelDuplicarMeses">Cancelar</button>
