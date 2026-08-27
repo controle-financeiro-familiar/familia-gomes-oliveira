@@ -8163,7 +8163,7 @@ function render(){
   // — mesmo com os dois arquivos já abertos/criados/restaurados e válidos, a aplicação NUNCA carrega
   // sozinha; importar, criar ou restaurar só preparam os arquivos, mas não "entram" no app.
   if(!UI.appIniciado && !UI.modalFecharSessao){
-    root.innerHTML = renderBannerPWA() + renderTelaInicial() + (UI.backupModal!==null ? renderBackupModal() : "");
+    root.innerHTML = renderBannerPWA() + renderTelaInicial() + (UI.backupModal!==null ? renderBackupModal() : "") + (UI.modalInstalarIOS ? renderModalInstalarIOS() : "");
     bindEvents();
     if(focarBotaoIniciarAppPendente){ focarBotaoIniciarAppPendente = false; aplicarFocoBotaoIniciarApp(); }
     return;
