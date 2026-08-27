@@ -6,7 +6,7 @@
    Graph, login.microsoftonline.com, CDNs de bibliotecas) — só lida com os arquivos estáticos do próprio
    app. Isso evita armazenar tokens de acesso ou respostas do Graph no cache HTTP (item 12), e garante que
    a autenticação/sincronização com o OneDrive nunca passe por aqui: sempre vai direto à rede. */
-const CACHE_VERSAO = 'financeiro-familiar-v2'; // v2: ícones do app trocados para o logo-app — versão bumped para invalidar o cache antigo dos ícones (mesma URL, conteúdo novo)
+const CACHE_VERSAO = 'financeiro-familiar-v3'; // v3: nome exibido na tela inicial trocado para "Finus" (manifest.webmanifest) — versão bumped para invalidar o cache antigo do manifest (mesma URL, conteúdo novo)
 const ARQUIVOS_APP_SHELL = [
   './',
   './index.html',
