@@ -4183,6 +4183,8 @@ let UI = {
   textModal: null, // { tipo, nome, original, grupo } — modal genérico de nome único (conta, cartão, meio, grupo, categoria)
   novaProjecaoModal: null, // { ano, mes } — escolha do mês a partir do qual um novo lançamento previsto passa a aparecer
   confirmDelParcela: null, // { id } — pergunta se a exclusão de uma parcela deve incluir as parcelas futuras da mesma compra
+  pendingEdicaoParcela: null, // { novo, antigo, conta } — edição já validada de uma parcela existente, aguardando o usuário escolher o escopo de propagação (ver confirmEditarParcela) antes de ser efetivamente salva
+  confirmEditarParcela: null, // { id } — pergunta se a edição de uma parcela deve ser aplicada só a ela, também às futuras, ou a todas as parcelas da mesma compra
   projecaoFaturaModal: null, // { conta, competenciaSelecionada, filtros, busca, pagina, porPagina } — modal "Próximas Faturas" de um cartão (card de competência clicável filtra a lista abaixo; sem seleção, mostra tudo agrupado), com filtros e paginação próprios (mesmo motor genérico de Data por período + seleção múltipla — ver criarFiltrosPadrao)
   metaModal: null, // { editId, nome, nivel, grupo, categoria, subcategoria, valor, competenciaInicio, recorrencia, observacoes } — cadastro/edição de meta
   metaHistoricoId: null, // id da meta selecionada para o comparativo histórico de 12 meses
@@ -4273,6 +4275,7 @@ const CAMADAS_MODAL = [
                                         // Próximas Faturas), por isso fica no Nível 2, acima deles todos
   'duplicarMesesModal',                // ovDuplicarMeses — Duplicar por vários meses consecutivos
   'confirmDelParcela',                 // ovConfirmDelParcela — confirmar exclusão de parcela
+  'confirmEditarParcela',              // ovConfirmEditarParcela — confirmar escopo da edição de uma parcela
   'backupModal',                       // ovBackup — Backup e Restauração
 
   // Nível 3 — aninhado dentro de um modal do Nível 2
@@ -7577,6 +7580,68 @@ function sincronizarParcelasFuturas(ref){
     });
   }
 }
+/* Propaga os campos classificatórios de uma parcela (referência) para as parcelas ANTERIORES da mesma
+   compra — usada quando o usuário escolhe "Todas as parcelas" na confirmação de edição de um lançamento
+   parcelado (ver renderConfirmEditarParcelaModal/saveTx). Ao contrário de sincronizarParcelasFuturas
+   (que recria as parcelas futuras do zero, inclusive substituindo valor e data), esta função só ATUALIZA
+   em cada parcela já lançada anteriormente os campos que descrevem a natureza da compra em si — categoria/
+   subcategoria (grupo/subgrupo/tipo/natureza), responsável, conta, meio de pagamento, descrição e dados de
+   compra internacional — preservando sempre a data, o valor e a numeração já registrados em cada parcela
+   anterior, exatamente como pedido: essas parcelas já aconteceram e não devem ter seu histórico reescrito.
+   A competência só é recalculada quando a CONTA muda (ex.: correção de qual cartão a compra pertence) —
+   nesse caso, precisa ser recalculada a partir da data já salva de cada parcela para continuar apontando
+   para a fatura certa; do contrário, mantém a competência já salva. */
+function propagarParaParcelasAnteriores(ref){
+  if(!ref || !ref.parcelamentoId || !(Number(ref.totalParcelas)>1)) return;
+  const atual = Number(ref.parcelaAtual)||1;
+  const ehCartaoValido = ref.pgto==='Cartão de Crédito' && STATE.cartoes.includes(ref.conta);
+  STATE.transactions.forEach(t=>{
+    if(t.parcelamentoId!==ref.parcelamentoId || t.id===ref.id) return;
+    if(!(Number(t.parcelaAtual)<atual)) return;
+    const contaMudou = t.conta!==ref.conta;
+    t.descricao = ref.descricao;
+    t.categoria = ref.categoria; t.grupo = ref.grupo; t.subgrupo = ref.subgrupo; t.tipo = ref.tipo; t.natureza = ref.natureza;
+    t.conta = ref.conta; t.pgto = ref.pgto;
+    t.responsavel = ref.responsavel||''; t.entreFamilia = !!ref.entreFamilia;
+    t.internacional = !!ref.internacional; t.taxaConversao = ref.internacional ? (Number(ref.taxaConversao)||null) : null;
+    if(contaMudou) t.competencia = ehCartaoValido ? competenciaFatura(t.data, ref.conta) : '';
+  });
+}
+/* Efetiva a edição de um lançamento já existente (chamada pelo botão Salvar do modal Editar Lançamento —
+   ver bindEvents/saveTx), depois que o escopo de propagação (quando aplicável) já foi decidido: `null`
+   para um lançamento que não faz parte de uma compra parcelada (segue exatamente como sempre funcionou),
+   'somente' para não propagar nada, 'seguintes' para o comportamento padrão de sempre (propaga só para as
+   parcelas futuras via sincronizarParcelasFuturas) e 'todas' para propagar também às parcelas anteriores
+   (ver propagarParaParcelasAnteriores). Extraída para ser chamada tanto diretamente (lançamento comum)
+   quanto a partir da escolha do usuário no modal de confirmação (ver renderConfirmEditarParcelaModal). */
+function commitEdicaoLancamentoExistente(novo, antigo, conta, contaTransferencia, escopoParcela){
+  // Replicação do Contracheque (ver gerarReplicacaoContracheque): ao editar um lançamento de uma conta
+  // do tipo Contracheque, preserva se ele já era uma projeção automática (contrachequeProjecao) e marca
+  // contrachequeValorManual quando o VALOR foi alterado (ou já vinha marcado) — esse mês passa a ser
+  // respeitado como está, e seu valor vira a nova base para os meses seguintes ainda não alterados.
+  if(antigo && STATE.contaTipos[conta]==='Contracheque'){
+    novo.contrachequeProjecao = !!antigo.contrachequeProjecao;
+    novo.contrachequeValorManual = !!antigo.contrachequeValorManual || (Number(antigo.valor)!==Number(novo.valor));
+  }
+  const idx = STATE.transactions.findIndex(t=>t.id===novo.id);
+  if(idx>=0) STATE.transactions[idx]=novo; else STATE.transactions.push(novo);
+  // Se essa parcela pertence a uma compra parcelada, propaga a alteração conforme o escopo escolhido —
+  // nunca modifica lançamentos de OUTRAS compras (parcelamentoId diferente).
+  if(Number(novo.totalParcelas)>1 && novo.parcelamentoId){
+    if(escopoParcela!=='somente') sincronizarParcelasFuturas(novo);
+    if(escopoParcela==='todas') propagarParaParcelasAnteriores(novo);
+  }
+  // Regra única de negócio (a mesma usada na importação de extratos e faturas): marca o lançamento e
+  // mantém o lançamento espelhado na outra conta sempre sincronizado (cria se ainda não existir).
+  if(novo.transferenciaInterna) aplicarTransferenciaInterna(novo, contaTransferencia);
+  // Reaplica a replicação do Contracheque: cria/atualiza os meses seguintes ainda não gerados e
+  // propaga um novo valor-base a partir deste mês para os meses futuros que ainda não foram alterados
+  // manualmente — nunca mexe nos que já foram.
+  if(STATE.contaTipos[conta]==='Contracheque') gerarReplicacaoContracheque(conta);
+  reconciliarPagamentosFatura(); // se este lançamento é um pagamento de fatura, já espelha na hora
+  UI.editingTx=null; UI.pendingEdicaoParcela=null; UI.confirmEditarParcela=null;
+  scheduleSave(); render();
+}
 /* ---------- Replicação de lançamentos recorrentes do Contracheque ----------
    Estende para TODOS os lançamentos do contracheque (receitas, despesas e parcelas de empréstimo) o
    mesmo conceito já usado em sincronizarParcelasFuturas para parcelas de empréstimo/cartão: usa o
@@ -8097,6 +8162,7 @@ function render(){
     ${UI.textModal!==null ? renderTextModal() : ""}
     ${UI.novaProjecaoModal!==null ? renderNovaProjecaoModal() : ""}
     ${UI.confirmDelParcela!==null ? renderConfirmDelParcelaModal() : ""}
+    ${UI.confirmEditarParcela!==null ? renderConfirmEditarParcelaModal() : ""}
     ${UI.projecaoFaturaModal!==null ? renderProjecaoFaturaModal() : ""}
     ${UI.faturaAtualModal!==null ? renderFaturaAtualModal() : ""}
     ${UI.modalDuplicidade!==null ? renderModalDuplicidade() : ""}
@@ -11329,6 +11395,38 @@ function renderConfirmDelParcelaModal(){
     </div>
   </div>`;
 }
+/* ---------- Modal: editar uma parcela — só esta, esta e as seguintes, ou todas as parcelas da compra? ----------
+   Aberto pelo botão Salvar do modal Editar/Novo Lançamento (ver saveTx em bindEvents) quando o lançamento
+   sendo editado já existe e faz parte de uma compra parcelada — a alteração em si (UI.pendingEdicaoParcela)
+   já foi validada e calculada antes de abrir esta confirmação; só falta decidir o escopo de propagação.
+   Cancelar fecha este modal sem tocar em STATE.transactions — nada foi salvo ainda nesse ponto — e mantém o
+   modal Editar Lançamento aberto por trás, com os valores como o usuário os deixou. */
+function renderConfirmEditarParcelaModal(){
+  const pend = UI.pendingEdicaoParcela;
+  if(!pend) return '';
+  const { novo } = pend;
+  const atual = Number(novo.parcelaAtual)||1, total = Number(novo.totalParcelas)||1;
+  const qtdAnteriores = STATE.transactions.filter(t=>t.parcelamentoId===novo.parcelamentoId && t.id!==novo.id && Number(t.parcelaAtual)<atual).length;
+  const qtdSeguintes = STATE.transactions.filter(t=>t.parcelamentoId===novo.parcelamentoId && t.id!==novo.id && Number(t.parcelaAtual)>atual).length;
+  return `
+  <div class="overlay" id="ovConfirmEditarParcela" ${attrZIndexModal('confirmEditarParcela')}>
+    <div class="modal" style="width:480px;">
+      <div class="modal-head"><h3>✏️ Editar parcela ${atual}/${total}</h3><button class="close-x" id="closeConfirmEditarParcela">✕</button></div>
+      <div class="modal-body">
+        <div class="info-card warn" style="margin-top:0;"><span class="info-card-icon">⚠️</span><span>"${escapeHtml(novo.descricao)}" faz parte de uma compra parcelada. Como esta alteração deve ser aplicada?<br>
+        <b>Somente esta parcela</b>: afeta só a parcela ${atual}/${total}.<br>
+        <b>Esta e as seguintes</b>: afeta também as ${qtdSeguintes} parcela(s) futura(s) já geradas.<br>
+        <b>Todas as parcelas</b>: afeta também as ${qtdAnteriores} parcela(s) anterior(es) já lançadas, sem alterar a data, o valor ou a numeração já registrados nelas.</span></div>
+      </div>
+      <div class="modal-foot" style="flex-wrap:wrap;gap:8px;">
+        <button class="btn btn-ghost" id="closeConfirmEditarParcela2">Cancelar</button>
+        <button class="btn btn-ghost" id="editApenasEstaParcela">Somente esta parcela</button>
+        <button class="btn btn-ghost" id="editEstaEFuturas">Esta e as ${qtdSeguintes} seguinte(s)</button>
+        <button class="btn btn-primary" id="editTodasParcelas">Todas as ${total} parcelas</button>
+      </div>
+    </div>
+  </div>`;
+}
 /* ---------- Modal: Duplicar um lançamento por vários meses consecutivos (botão 📄 Duplicar em Registros) ----------
    A data inicial da duplicação é sempre o mesmo dia do mês seguinte ao lançamento original (nunca o próprio
    mês do original), e cada ocorrência seguinte avança mais um mês a partir dali — ver somarMesesData, que já
@@ -12553,7 +12651,7 @@ function renderImportModal(){
   return `
   <div class="overlay" id="ovImport" ${attrZIndexModal('importStep')}>
     <div class="modal" style="width:${largura};">
-      <div class="modal-head"><h3>⬆️ Importar arquivo do banco</h3><button class="close-x" id="closeImport">✕</button></div>
+      <div class="modal-head"><h3>⬆️ Importar arquivo do banco${UI.importMap.contaDestino ? ` — ${escapeHtml(UI.importMap.contaDestino)}` : ''}</h3><button class="close-x" id="closeImport">✕</button></div>
       <div class="modal-body">
         ${UI.modalTaxasConversao ? renderModalTaxasConversao() : ""}
         ${UI.modalParcelasEmprestimo ? renderModalParcelasEmprestimo() : ""}
@@ -15374,29 +15472,35 @@ function bindEvents(){
         transferenciaInterna: !!UI.editingTx.transferenciaInterna, transferenciaVinculoId: UI.editingTx.transferenciaVinculoId||'',
         internacional: internacionalFinal, taxaConversao: internacionalFinal ? taxaConversaoFinal : null
       };
-      // Replicação do Contracheque (ver gerarReplicacaoContracheque): ao editar um lançamento de uma conta
-      // do tipo Contracheque, preserva se ele já era uma projeção automática (contrachequeProjecao) e marca
-      // contrachequeValorManual quando o VALOR foi alterado (ou já vinha marcado) — esse mês passa a ser
-      // respeitado como está, e seu valor vira a nova base para os meses seguintes ainda não alterados.
-      if(antigo && STATE.contaTipos[conta]==='Contracheque'){
-        novo.contrachequeProjecao = !!antigo.contrachequeProjecao;
-        novo.contrachequeValorManual = !!antigo.contrachequeValorManual || (Number(antigo.valor)!==Number(novo.valor));
+      // Lançamento existente que faz parte de uma compra parcelada: antes de salvar, pergunta ao usuário
+      // se a alteração deve valer só para esta parcela, também para as futuras (comportamento padrão de
+      // sempre) ou para todas as parcelas da compra (ver renderConfirmEditarParcelaModal). Nada é escrito
+      // em STATE.transactions até essa escolha — cancelar a confirmação não altera nada.
+      const ehParcelaExistente = !!(UI.editingTx.id && novo.parcelamentoId && Number(novo.totalParcelas)>1);
+      if(ehParcelaExistente){
+        UI.pendingEdicaoParcela = { novo, antigo, conta, contaTransferencia: UI.editingTx.contaTransferencia };
+        UI.confirmEditarParcela = { id: novo.id };
+        render();
+        return;
       }
-      const idx = STATE.transactions.findIndex(t=>t.id===novo.id);
-      if(idx>=0) STATE.transactions[idx]=novo; else STATE.transactions.push(novo);
-      // Se essa parcela pertence a uma compra parcelada, qualquer alteração (valor, nº de parcelas, cartão,
-      // categoria, competência etc.) se propaga automaticamente para todas as parcelas ainda futuras.
-      if(Number(novo.totalParcelas)>1 && novo.parcelamentoId) sincronizarParcelasFuturas(novo);
-      // Regra única de negócio (a mesma usada na importação de extratos e faturas): marca o lançamento e
-      // mantém o lançamento espelhado na outra conta sempre sincronizado (cria se ainda não existir).
-      if(novo.transferenciaInterna) aplicarTransferenciaInterna(novo, UI.editingTx.contaTransferencia);
-      // Reaplica a replicação do Contracheque: cria/atualiza os meses seguintes ainda não gerados e
-      // propaga um novo valor-base a partir deste mês para os meses futuros que ainda não foram alterados
-      // manualmente — nunca mexe nos que já foram.
-      if(STATE.contaTipos[conta]==='Contracheque') gerarReplicacaoContracheque(conta);
-      reconciliarPagamentosFatura(); // se este lançamento é um pagamento de fatura, já espelha na hora
+      commitEdicaoLancamentoExistente(novo, antigo, conta, UI.editingTx.contaTransferencia, null);
+      return;
     }
     UI.editingTx=null; scheduleSave();
+  });
+  document.getElementById('closeConfirmEditarParcela')?.addEventListener('click', ()=>{ UI.confirmEditarParcela=null; UI.pendingEdicaoParcela=null; render(); });
+  document.getElementById('closeConfirmEditarParcela2')?.addEventListener('click', ()=>{ UI.confirmEditarParcela=null; UI.pendingEdicaoParcela=null; render(); });
+  document.getElementById('editApenasEstaParcela')?.addEventListener('click', ()=>{
+    const p = UI.pendingEdicaoParcela; if(!p) return;
+    commitEdicaoLancamentoExistente(p.novo, p.antigo, p.conta, p.contaTransferencia, 'somente');
+  });
+  document.getElementById('editEstaEFuturas')?.addEventListener('click', ()=>{
+    const p = UI.pendingEdicaoParcela; if(!p) return;
+    commitEdicaoLancamentoExistente(p.novo, p.antigo, p.conta, p.contaTransferencia, 'seguintes');
+  });
+  document.getElementById('editTodasParcelas')?.addEventListener('click', ()=>{
+    const p = UI.pendingEdicaoParcela; if(!p) return;
+    commitEdicaoLancamentoExistente(p.novo, p.antigo, p.conta, p.contaTransferencia, 'todas');
   });
 
   document.getElementById('closeImport')?.addEventListener('click', ()=>{ UI.importStep=0; UI.modalTaxasConversao=null; render(); });
