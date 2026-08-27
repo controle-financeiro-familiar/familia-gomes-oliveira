@@ -8274,17 +8274,17 @@ function textoHintConexaoOneDrive(){
   const st = statusConexaoOneDriveInfo();
   if(st.chave==='conectado'){
     const usuario = msalConta ? (msalConta.username||msalConta.name||'') : '';
-    return `<b>A conta ${usuario ? `<span class="ti-email-conectado">${escapeHtml(usuario)}</span>` : ''} já está conectada.</b> Os arquivos são lidos e gravados diretamente na pasta compartilhada do OneDrive.`;
+    return `<b>A conta ${usuario ? `<span class="ti-email-conectado">${escapeHtml(usuario)}</span>` : ''} já está conectada.</b><br>Os arquivos são lidos e gravados diretamente na pasta compartilhada do OneDrive.`;
   }
-  if(st.chave==='conectando') return '<b>Conectando à sua conta Microsoft.</b> Aguarde enquanto estabelecemos a conexão com o OneDrive.';
-  if(st.chave==='sessaoExpirada') return '<b>Sua sessão com a conta Microsoft expirou.</b> Efetue login novamente ou carregue uma cópia dos arquivos para continuar em modo offline.';
-  if(st.chave==='erro') return '<b>Não foi possível conectar ao OneDrive.</b> Tente novamente ou carregue uma cópia dos arquivos para continuar em modo offline.';
+  if(st.chave==='conectando') return '<b>Conectando à sua conta Microsoft.</b><br>Aguarde enquanto estabelecemos a conexão com o OneDrive.';
+  if(st.chave==='sessaoExpirada') return '<b>Sua sessão com a conta Microsoft expirou.</b><br>Efetue login novamente ou carregue uma cópia dos arquivos para continuar em modo offline.';
+  if(st.chave==='erro') return '<b>Não foi possível conectar ao OneDrive.</b><br>Tente novamente ou carregue uma cópia dos arquivos para continuar em modo offline.';
   return '<b>Conecte-se</b> com sua conta Microsoft ou <b>carregue</b> uma cópia dos arquivos para iniciar em modo offline.';
 }
 /* Texto da opção "Conectar ao OneDrive" (ti-opcao-desc) — mesmos 4 estados, textos exatos do requisito. */
 function textoDescOpcaoOneDrive(){
   const comErroReal = !!oneDriveIndisponivelMsg || fileStatusCfg==='token-expirado' || fileStatusReg==='token-expirado';
-  if(statusConexaoOneDrive==='conectado') return 'Sua conta já está conectada. Os arquivos são lidos e gravados diretamente na pasta do OneDrive.';
+  if(statusConexaoOneDrive==='conectado') return 'Sua conta já está conectada. Os arquivos são lidos e gravados diretamente na pasta compartilhada do OneDrive.';
   if(statusConexaoOneDrive==='conectando') return 'Conectando à sua conta Microsoft. Aguarde enquanto estabelecemos a conexão com o OneDrive.';
   if(comErroReal) return 'Não foi possível conectar ao OneDrive. Tente novamente.';
   return 'Conecte-se com sua conta Microsoft para carregar os arquivos da pasta do OneDrive.';
@@ -8367,8 +8367,8 @@ function renderTelaInicial(){
       </div>
       <div class="ti-rodape">
         <div class="ti-checklist">
-          <div class="ti-check-item ${cfgProntoOk?'ok':''}">${cfgProntoOk?'✓':''}⚙️ <b>Configurações (.cfg):</b> ${fileLabel('cfg')}</div>
-          <div class="ti-check-item ${regProntoOk?'ok':''}">${regProntoOk?'✓':''}📒 <b>Registros (.log):</b> ${fileLabel('reg')}</div>
+          <div class="ti-check-item ${cfgProntoOk?'ok':''}">${cfgProntoOk?'✓':''}⚙️ <b>configurações (.cfg):</b> ${fileLabel('cfg')}</div>
+          <div class="ti-check-item ${regProntoOk?'ok':''}">${regProntoOk?'✓':''}📒 <b>registros (.log):</b> ${fileLabel('reg')}</div>
         </div>
         <div class="ti-cta">
           <button class="btn btn-primary btn-iniciar-app" id="tiIniciarApp" ${!arquivosProntos?'disabled':''}><svg width="13" height="13" viewBox="0 0 0.39 0.39" fill="none" xmlns="http://www.w3.org/2000/svg"><path stroke="#0b2a5e" stroke-width=".024" d="M.374.195a.18.18 0 0 1-.179.179.18.18 0 0 1-.179-.179.179.179 0 0 1 .358 0z"/><path d="M.146.276V.114l.13.081z" stroke="#0b2a5e" stroke-width=".024" stroke-linecap="round" stroke-linejoin="round"/></svg> Iniciar App</button>
@@ -8556,9 +8556,9 @@ function filebarInfoTooltip(){
 function fileLabel(tipo){
   const status = tipo==='reg' ? fileStatusReg : fileStatusCfg;
   const nome = tipo==='reg' ? 'registros.log' : 'configuracoes.cfg';
-  if(status==='conectado') return `${nome} conectado (OneDrive)`;
-  if(status==='carregado-manualmente') return `${nome} carregado manualmente (salve para gravar no OneDrive)`;
-  if(status==='nao-existe') return `${nome} ainda não existe no OneDrive`;
+  if(status==='conectado') return `conectado (OneDrive)`;
+  if(status==='carregado-manualmente') return `carregado manualmente (salve para gravar no OneDrive)`;
+  if(status==='nao-existe') return `ainda não existe no OneDrive`;
   if(status==='token-expirado') return 'sessão Microsoft expirada';
   if(status==='sem-suporte') return 'OneDrive não configurado';
   if(status==='erro') return '⚠️ falha ao acessar no OneDrive';
