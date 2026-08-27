@@ -4150,6 +4150,8 @@ let UI = {
   syncPainelAberto: false, // popover do indicador ☁ OneDrive (item 17 do requisito de sincronização)
   atualizacaoDisponivel: false, // true quando um novo Service Worker está instalado e aguardando confirmação (PWA — item 12)
   instalarPromptEvento: null, // BeforeInstallPromptEvent guardado para o botão "Instalar aplicativo" (PWA — item 11)
+  iosInstallDismissed: false, // true depois que o usuário dispensa a faixa "Adicionar à tela inicial" no Safari/iOS (que não dispara beforeinstallprompt) — só dura a sessão atual, igual ao Chrome
+  modalInstalarIOS: false, // true = passo a passo manual de "Adicionar à Tela de Início" está aberto (Safari/iOS)
   backupModal: null, // { aba:'historico'|'config', backups:[...]|null, carregando:bool, selecionados:Set, filtros:{tipo:Set,aberto}, excluindo:{processados,total,nome}|null } — tela "Backup e Restauração" (null = fechada)
   cartoesSecaoAtiva: 'contas', // 'contas' | 'cartoes' — qual painel do acordeão da aba Contas e Cartões está expandido
   appIniciado: false, // só true depois do clique explícito em "<svg width="13" height="13" viewBox="-0.016 0 0.39 0.39" xmlns="http://www.w3.org/2000/svg"><path d="M.36.21v.001a.2.2 0 0 1-.015.07V.28C.317.345.253.39.179.39S.042.345.015.281V.28A.2.2 0 0 1 0 .211V.21C0 .152.028.1.072.067A.03.03 0 0 1 .095.061a.03.03 0 0 1 .019.012.03.03 0 0 1 .006.022.03.03 0 0 1-.012.02.12.12 0 0 0-.048.096.12.12 0 1 0 .192-.096.03.03 0 0 1-.012-.02.03.03 0 0 1 .006-.022.03.03 0 0 1 .02-.012.03.03 0 0 1 .022.006A.18.18 0 0 1 .36.21M.21.03v.151a.03.03 0 0 1-.06 0V.03q0-.013.009-.021T.18 0c.013-.001.016.003.021.009A.03.03 0 0 1 .21.03"/></svg>️ Iniciar App" — a tela inicial nunca dá lugar ao app sozinha, mesmo com os dois arquivos já prontos
@@ -4280,6 +4282,11 @@ const CAMADAS_MODAL = [
 
   // Nível 3 — aninhado dentro de um modal do Nível 2
   'duplicarMesesEditarItem',           // ovDuplicarMesesEditarItem — editar uma ocorrência da prévia
+
+  'modalInstalarIOS',                  // ovModalInstalarIOS — instruções manuais de "Adicionar à Tela de
+                                        // Início" no Safari/iOS (aberto pela faixa do PWA, visível mesmo
+                                        // antes de UI.appIniciado) — sempre por cima de qualquer modal de
+                                        // conteúdo já aberto no momento em que o usuário clica na faixa
 
   // Nível topo — sempre por cima de absolutamente tudo
   'modalConflitoGravacao',              // conflito de versão (ETag) ao gravar no OneDrive
@@ -8079,13 +8086,54 @@ window.addEventListener('afterprint', ()=>{
   if(area) area.innerHTML = '';
   definirOrientacaoImpressao('portrait');
 });
+/* Safari/iOS (e qualquer outro navegador sem suporte a beforeinstallprompt, ex.: Firefox) nunca dispara
+   esse evento — sem isso, esses usuários nunca veriam NENHUMA forma de instalar o app, mesmo o app sendo
+   plenamente instalável ali (o manifest.webmanifest e as meta tags apple-mobile-web-app-* já cobrem esse
+   caso — só falta o convite). iPadOS 13+ se identifica como "Macintosh" no user agent, por isso o
+   suplemento de detecção por touch. `display-mode: standalone` (padrão) cobre a maioria dos navegadores
+   já instalados; `navigator.standalone` é o equivalente específico do Safari mais antigo no iOS. */
+function deveMostrarInstalarIOS(){
+  const ua = navigator.userAgent || '';
+  const ehIOS = /iPad|iPhone|iPod/.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints>1);
+  const jaInstalado = window.navigator.standalone===true || window.matchMedia('(display-mode: standalone)').matches;
+  return ehIOS && !jaInstalado;
+}
 /* Faixa fina de avisos do PWA (item 11/12) — nova versão pronta para atualizar, e/ou opção de instalar
-   como aplicativo. Fica no topo em qualquer tela (inicial ou app), sem depender de UI.appIniciado. */
+   como aplicativo. Fica no topo em qualquer tela (inicial ou app), sem depender de UI.appIniciado.
+   A opção de instalar tem dois caminhos, mutuamente exclusivos, para cobrir todos os navegadores: o
+   prompt nativo do navegador (Chrome/Edge/Android — via UI.instalarPromptEvento) ou, quando esse evento
+   nunca vai existir (Safari/iOS), um passo a passo manual explicando como usar o próprio menu Compartilhar
+   do Safari — o mesmo texto "Adicionar à tela inicial" nos dois casos, para o usuário nunca perceber que
+   são dois mecanismos diferentes por baixo. */
 function renderBannerPWA(){
-  if(!UI.atualizacaoDisponivel && !UI.instalarPromptEvento) return '';
+  const mostrarInstalarChrome = !UI.atualizacaoDisponivel && !!UI.instalarPromptEvento;
+  const mostrarInstalarIOS = !UI.atualizacaoDisponivel && !mostrarInstalarChrome && !UI.iosInstallDismissed && deveMostrarInstalarIOS();
+  if(!UI.atualizacaoDisponivel && !mostrarInstalarChrome && !mostrarInstalarIOS) return '';
   return `<div class="pwa-banner">
     ${UI.atualizacaoDisponivel ? `<span>🔄 Uma nova versão do aplicativo está disponível.</span><button type="button" class="btn btn-primary btn-sm" id="btnAtualizarPWA">Atualizar agora</button>` : ''}
-    ${(!UI.atualizacaoDisponivel && UI.instalarPromptEvento) ? `<span>📲 Instale este aplicativo para acesso rápido e uso offline.</span><button type="button" class="btn btn-primary btn-sm" id="btnInstalarPWA">Adicionar à tela inicial</button><button type="button" class="btn btn-ghost btn-sm" id="btnDispensarInstalarPWA">Agora não</button>` : ''}
+    ${mostrarInstalarChrome ? `<span>📲 Instale este aplicativo para acesso rápido e uso offline.</span><button type="button" class="btn btn-primary btn-sm" id="btnInstalarPWA">Adicionar à tela inicial</button><button type="button" class="btn btn-ghost btn-sm" id="btnDispensarInstalarPWA">Agora não</button>` : ''}
+    ${mostrarInstalarIOS ? `<span>📲 Instale este aplicativo para acesso rápido e uso offline.</span><button type="button" class="btn btn-primary btn-sm" id="btnInstalarIOS">Adicionar à tela inicial</button><button type="button" class="btn btn-ghost btn-sm" id="btnDispensarInstalarIOS">Agora não</button>` : ''}
+  </div>`;
+}
+/* Passo a passo manual de "Adicionar à Tela de Início" no Safari/iOS — aberto pelo botão da faixa acima
+   quando não há beforeinstallprompt disponível (ver deveMostrarInstalarIOS). Mesmo padrão visual dos
+   demais modais simples do app (overlay + modal-head + modal-body + modal-foot com um único botão). */
+function renderModalInstalarIOS(){
+  return `
+  <div class="overlay" id="ovModalInstalarIOS" ${attrZIndexModal('modalInstalarIOS')}>
+    <div class="modal" style="width:420px;">
+      <div class="modal-head"><h3>📲 Adicionar à Tela de Início</h3><button class="close-x" id="closeModalInstalarIOS">✕</button></div>
+      <div class="modal-body">
+        <p class="hint" style="margin-top:0;">No Safari, a instalação é feita pelo próprio menu Compartilhar do navegador:</p>
+        <ol style="margin:0 0 4px;padding-left:20px;line-height:1.7;">
+          <li>Toque no ícone de <b>Compartilhar</b> <span aria-hidden="true">(⬆️)</span>, na barra do Safari.</li>
+          <li>Role a lista de opções e toque em <b>"Adicionar à Tela de Início"</b>.</li>
+          <li>Toque em <b>Adicionar</b>, no canto superior direito.</li>
+        </ol>
+        <p class="hint" style="margin-bottom:0;">O app passa a abrir direto da tela inicial do seu iPhone/iPad, em tela cheia, como qualquer outro aplicativo instalado.</p>
+      </div>
+      <div class="modal-foot"><button class="btn btn-primary" id="closeModalInstalarIOS2">Entendi</button></div>
+    </div>
   </div>`;
 }
 /* Foco automático no botão "Iniciar App" logo que a conexão com o OneDrive é concluída com sucesso (ver
@@ -8163,6 +8211,7 @@ function render(){
     ${UI.novaProjecaoModal!==null ? renderNovaProjecaoModal() : ""}
     ${UI.confirmDelParcela!==null ? renderConfirmDelParcelaModal() : ""}
     ${UI.confirmEditarParcela!==null ? renderConfirmEditarParcelaModal() : ""}
+    ${UI.modalInstalarIOS ? renderModalInstalarIOS() : ""}
     ${UI.projecaoFaturaModal!==null ? renderProjecaoFaturaModal() : ""}
     ${UI.faturaAtualModal!==null ? renderFaturaAtualModal() : ""}
     ${UI.modalDuplicidade!==null ? renderModalDuplicidade() : ""}
@@ -13759,6 +13808,10 @@ function bindEvents(){
     if(evento){ evento.prompt(); await evento.userChoice.catch(()=>{}); }
   });
   document.getElementById('btnDispensarInstalarPWA')?.addEventListener('click', ()=>{ UI.instalarPromptEvento = null; render(); });
+  document.getElementById('btnInstalarIOS')?.addEventListener('click', ()=>{ UI.modalInstalarIOS = true; render(); });
+  document.getElementById('btnDispensarInstalarIOS')?.addEventListener('click', ()=>{ UI.iosInstallDismissed = true; render(); });
+  document.getElementById('closeModalInstalarIOS')?.addEventListener('click', ()=>{ UI.modalInstalarIOS = false; render(); });
+  document.getElementById('closeModalInstalarIOS2')?.addEventListener('click', ()=>{ UI.modalInstalarIOS = false; UI.iosInstallDismissed = true; render(); });
   document.getElementById('btnSyncIndicador')?.addEventListener('click', ()=>{ UI.syncPainelAberto = !UI.syncPainelAberto; render(); });
   document.getElementById('spSincronizarAgora')?.addEventListener('click', ()=>{ UI.syncPainelAberto=false; salvarArquivos(); });
   document.getElementById('spTentarNovamente')?.addEventListener('click', ()=>{ UI.syncPainelAberto=false; syncUltimoErro=null; reconectarPacote(); });
