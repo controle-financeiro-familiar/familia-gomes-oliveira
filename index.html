@@ -4134,6 +4134,7 @@ let UI = {
   importCatModal: null, // { index, tipo, grupo, categoria, subcategoria } — modal de classificação (Grupo → Categoria → Subcategoria) de uma linha da importação
   importRaw: null,
   importParsed: [],
+  importFiltros: null, // { categoria, subcategoria, responsavel, status, aberto } — filtros do passo 4 (revisão), mesmo motor genérico de chips do resto do app; null até o primeiro uso (ver renderImportStep3/criarFiltrosImportacaoPadrao)
   importFileName: "",
   importFileType: "",
   importMap: { data:0, descricao:1, valor:2, temCabecalho:true, formatoValor:"BR", contaDestino: STATE.contas[0] },
@@ -12711,9 +12712,47 @@ function renderImportStep2(){
   ${infoContaPeriodo}
   <p class="hint">Você poderá revisar e ajustar cada linha individualmente no próximo passo.</p>`;
 }
+/* Status de duplicidade de uma linha da revisão, na mesma classificação de 3 estados já exibida na tabela
+   (tag 🔁 Já existe / ❓ Revisar / 🆕 Novo) — usado tanto para montar as opções do filtro quanto para aplicá-lo. */
+function statusImportacaoLinha(r){ return r.duplicata==='exata' ? 'exata' : (r.duplicata==='provavel' ? 'provavel' : 'novo'); }
+const STATUS_IMPORTACAO_LABEL = { exata:'🔁 Já existe', provavel:'❓ Revisar', novo:'🆕 Novo' };
+function criarFiltrosImportacaoPadrao(){ return { categoria:new Set(), subcategoria:new Set(), responsavel:new Set(), status:new Set(), aberto:null }; }
+/* Mesmo critério de pertencimento dos demais filtros multi-seleção do app (passaFiltroMultiSel) — reutilizado
+   tal e qual, nunca um mecanismo de filtro paralelo (ver requisito do passo 4 de revisão da importação). */
+function passaFiltrosImportacao(f, r){
+  return passaFiltroMultiSel(f.categoria, catInfo(r.categoria).subgrupo || '__sem_categoria__')
+    && passaFiltroMultiSel(f.subcategoria, r.categoria || '__sem_subcategoria__')
+    && passaFiltroMultiSel(f.responsavel, r.responsavel || '__sem_responsavel__')
+    && passaFiltroMultiSel(f.status, statusImportacaoLinha(r));
+}
+/* Linhas da revisão (passo 4) após os filtros ativos, preservando o ÍNDICE ORIGINAL de cada uma em
+   UI.importParsed — todo o resto da tela (checkboxes, inputs, exclusão, abrir o modal de categoria) já
+   referencia as linhas por esse índice original (data-imp="i"), então filtrar a EXIBIÇÃO nunca pode
+   renumerar as linhas nem afetar quais serão realmente importadas (isso continua controlado só pelo próprio
+   checkbox "Importar" de cada linha, nunca pelo filtro). */
+function linhasImportFiltradas(){
+  const f = UI.importFiltros || (UI.importFiltros = criarFiltrosImportacaoPadrao());
+  return UI.importParsed.map((r,i)=>({r,i})).filter(({r})=> passaFiltrosImportacao(f, r));
+}
 function renderImportStep3(){
   const qtdExatas = UI.importParsed.filter(r=>r.duplicata==='exata').length;
   const qtdProvaveis = UI.importParsed.filter(r=>r.duplicata==='provavel').length;
+  if(!UI.importFiltros) UI.importFiltros = criarFiltrosImportacaoPadrao();
+  const f = UI.importFiltros;
+  // Opções de cada filtro refletem só o que está realmente presente nas linhas extraídas desta importação
+  // (mesmo critério já usado no filtro "Tipo" do histórico de Backup) — nunca o catálogo inteiro da aplicação.
+  const categoriasPresentes = Array.from(new Set(UI.importParsed.map(r=> catInfo(r.categoria).subgrupo || '__sem_categoria__'))).sort((a,b)=> a==='__sem_categoria__'?1:b==='__sem_categoria__'?-1:a.localeCompare(b,'pt-BR'));
+  const subcategoriasPresentes = Array.from(new Set(UI.importParsed.map(r=> r.categoria || '__sem_subcategoria__'))).sort((a,b)=> a==='__sem_subcategoria__'?1:b==='__sem_subcategoria__'?-1:a.localeCompare(b,'pt-BR'));
+  const responsaveisPresentes = Array.from(new Set(UI.importParsed.map(r=> r.responsavel || '__sem_responsavel__'))).sort((a,b)=> a==='__sem_responsavel__'?1:b==='__sem_responsavel__'?-1:a.localeCompare(b,'pt-BR'));
+  const statusPresentes = Array.from(new Set(UI.importParsed.map(statusImportacaoLinha)));
+  const camposFiltroImport = [
+    { campo:'categoria', label:'Categoria', options: categoriasPresentes.map(v=>({value:v, label: v==='__sem_categoria__'?'Sem categoria':v})) },
+    { campo:'subcategoria', label:'Subcategoria', options: subcategoriasPresentes.map(v=>({value:v, label: v==='__sem_subcategoria__'?'Sem subcategoria':v})) },
+    { campo:'responsavel', label:'Responsável', options: responsaveisPresentes.map(v=>({value:v, label: v==='__sem_responsavel__'?'Sem responsável':v})) },
+    { campo:'status', label:'Status', options: statusPresentes.map(v=>({value:v, label:STATUS_IMPORTACAO_LABEL[v]})) },
+  ];
+  const qtdAtivosImport = contarFiltrosPadraoAtivos(f, camposFiltroImport);
+  const linhas = linhasImportFiltradas();
   return `
   <span class="step-badge">Passo 4 de 4 · Revisar e classificar <span class="badge-count">${UI.importParsed.length}</span></span>
   <p class="hint" style="margin-top:0;">Ajuste tipo, categoria, conta e valor de cada lançamento antes de importar. Desmarque "Importar" para deixar algum de fora — não é preciso removê-lo da lista. O meio de pagamento/recebimento (coluna Pgto) é calculado automaticamente a partir da conta e não pode mais ser escolhido manualmente aqui.</p>
@@ -12731,10 +12770,21 @@ function renderImportStep3(){
     ⚠️ ${qtdExatas>0?`<b>${qtdExatas}</b> lançamento(s) parecem já estar registrados (mesma data, valor e conta) — vieram <b>desmarcados</b> para não duplicar. `:''}
     ${qtdProvaveis>0?`<b>${qtdProvaveis}</b> lançamento(s) têm valor parecido com algo já registrado em data próxima — revise antes de confirmar.`:''}
   </div>` : ''}
+  <div class="toolbar filtros-mobile-toolbar ${filtrosEstaoAgrupados('Import')?'agrupado':''}" style="justify-content:flex-start;">
+    <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Import')?'agrupado':''}" id="btnFiltrosMobileImport" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosImport>0?` <span class="filtros-mobile-badge">${qtdAtivosImport}</span>`:''}</button>
+    <div class="filtros-barra ${filtrosEstaoAgrupados('Import')?'agrupado':''} ${UI.filtrosMobileAberto==='Import'?'aberto-mobile':''}" data-prefixo-filtros="Import">
+      <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileImport" title="Fechar">✕</button></div>
+      ${camposFiltroImport.map(c=>renderFiltroMultiSelect(f,'Import',c.campo,c.label,c.options)).join('')}
+      <div class="filtros-barra-acoes-mobile"><button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileImport">Aplicar</button></div>
+    </div>
+    ${UI.filtrosMobileAberto==='Import' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropImport"></div>` : ''}
+  </div>
+  ${renderChipsFiltrosAtivos(f, 'Import', camposFiltroImport, 'btnLimparFiltrosImport')}
+  ${linhas.length===0 ? `<div class="empty-state" style="margin-top:14px;"><div class="big">🔎</div>Nenhum lançamento encontrado com esses filtros.</div>` : `
   <div class="table-wrap" style="max-height:380px;"><table class="tabela-cards-mobile tabela-import-revisao">
     <thead><tr><th>Importar</th><th>Status</th><th>Data</th><th>Descrição</th><th style="text-align:right;">Valor</th><th>Tipo</th><th>Subcategoria</th><th>Conta</th><th>Pgto</th><th>Parcela</th><th>Responsável</th><th>Interna</th><th class="col-acoes">Ações</th></tr></thead>
     <tbody>
-    ${UI.importParsed.map((r,i)=>`
+    ${linhas.map(({r,i})=>`
       <tr style="${r.duplicata==='exata'?'background:#fbe7e4;':(r.duplicata==='provavel'?'background:#fff4de;':'')}">
         <td data-label="Importar" style="text-align:center;"><input type="checkbox" data-imp="${i}" data-field="incluir" ${r.incluir?'checked':''}></td>
         <td data-label="Status" style="white-space:nowrap;">${r.duplicata==='exata' ? '<span class="tag Despesa">🔁 Já existe</span>' : (r.duplicata==='provavel' ? '<span class="tag Variavel">❓ Revisar</span>' : '<span class="tag Receita">🆕 Novo</span>')}</td>
@@ -12767,7 +12817,7 @@ function renderImportStep3(){
         <td data-label="" class="col-acoes"><button class="icon-btn" data-imp-del="${i}" title="Remover">🗑️</button></td>
       </tr>`).join('')}
     </tbody>
-  </table></div>`;
+  </table></div>`}`;
 }
 
 function renderImportCatModal(){
@@ -12918,6 +12968,11 @@ function parseOFXText(text){
     if(!dt || isNaN(amt)) return;
     const y = dt.slice(0,4), m = dt.slice(4,6), d = dt.slice(6,8);
     const dataISO = `${y}-${m}-${d}`;
+    // TRNTYPE é um campo padrão do próprio protocolo OFX (não específico de nenhum banco): CREDIT identifica
+    // um valor CREDITADO na conta — em um extrato de cartão de crédito, isso é sempre pagamento de fatura,
+    // estorno ou outro crédito, nunca uma compra — independentemente do sinal do TRNAMT usado pelo banco
+    // emissor (ver uso em buildParsedFromMap, que não confia apenas no sinal do valor para essa distinção).
+    const trntype = getTag('TRNTYPE').toUpperCase();
     // Compra internacional: quando existe <CURRENCY> ou <ORIGCURRENCY>, o TRNAMT vem na moeda original
     // (ex.: USD). O banco soma câmbio + spread (não informado) + IOF na conversão real, então não dá pra
     // calcular o valor certo automaticamente — o usuário informa manualmente a taxa efetiva de cada compra
@@ -12929,7 +12984,7 @@ function parseOFXText(text){
       const moeda = getTag('CURSYM');
       if(taxaArquivo && !isNaN(taxaArquivo)) moedaInfo = { valorOriginal: amt, moeda: moeda||'moeda estrangeira', taxaArquivo };
     }
-    rows.push([dataISO, name, moedaInfo ? moedaInfo.valorOriginal*moedaInfo.taxaArquivo : amt, moedaInfo]);
+    rows.push([dataISO, name, moedaInfo ? moedaInfo.valorOriginal*moedaInfo.taxaArquivo : amt, moedaInfo, trntype]);
   });
   return rows;
 }
@@ -13433,7 +13488,10 @@ function buildParsedFromMap(){
     // palavra-chave, conforme a regra "em caso de dúvida, prevalece a classificação da própria fatura".
     // r[6], só presente no extrato CSV da Reserva de Emergência, é a subcategoria já determinada com
     // certeza pelo Tipo do lançamento (ver classificarLancamentoReservaEmergencia) — igualmente prevalece.
-    entries = raw.rows.map(r=>({ data:r[0], descricao:r[1], valor:r[2], tipoExplicito: r[4]||null, parcelaExplicita: r[5]||null, parcelasRestantes: raw.type==='pdf' ? (r[3]||0) : 0, categoriaExplicita: r[6]||null }));
+    // r[4], para OFX, é o TRNTYPE bruto do arquivo (CREDIT/PAYMENT/DEBIT/...) — não o mesmo "tipoExplicito"
+    // usado pelos outros parsers nesse mesmo índice (fatura PDF/XLSX-PB), por isso tratado à parte via
+    // e.trntype (ver árvore de classificação abaixo) e nunca lido como tipoExplicito para esse formato.
+    entries = raw.rows.map(r=>({ data:r[0], descricao:r[1], valor:r[2], tipoExplicito: raw.type==='ofx' ? null : (r[4]||null), trntype: raw.type==='ofx' ? (r[4]||null) : null, parcelaExplicita: r[5]||null, parcelasRestantes: raw.type==='pdf' ? (r[3]||0) : 0, categoriaExplicita: r[6]||null }));
   } else {
     let rows = raw.rows;
     if(UI.importMap.temCabecalho) rows = rows.slice(1);
@@ -13466,6 +13524,21 @@ function buildParsedFromMap(){
       const ehCartaoDestino = STATE.cartoes.includes(conta);
       catSugerida = ehCartaoDestino ? 'Recebimento por Pagamento de Fatura' : 'Pagamento de Fatura de Cartão de Crédito';
       tipo = ehCartaoDestino ? 'Receita' : 'Despesa';
+    } else if(e.trntype==='CREDIT' && STATE.cartoes.includes(conta)){
+      // Sinal do próprio protocolo OFX (não específico de nenhum banco): TRNTYPE=CREDIT num extrato de
+      // cartão de crédito é sempre um valor que reduz o saldo devido (pagamento da fatura, estorno de
+      // compra ou outro crédito) — nunca uma compra. Mais confiável que o sinal do TRNAMT (alguns emissores,
+      // como o Banco do Brasil, gravam esse tipo de lançamento com o mesmo sinal negativo usado pelas
+      // compras) e do que ehPagamentoDeFatura acima, que só reconhece o texto "fatura"/"qrcode+pix" ou um
+      // valor que bate EXATAMENTE com o total de UMA fatura já conhecida — por isso não pega pagamentos
+      // parciais, antecipados ou feitos em mais de uma parcela (ex.: "PGTO. CASH AG.", sem "fatura" no
+      // texto e sem bater sozinho com nenhum total). Ainda tenta reconhecer pelo texto se é especificamente
+      // o pagamento da fatura (categoria com vínculo automático de reconciliação) — senão cai no crédito
+      // genérico "Estorno e/ou Reembolso", mas sempre como Receita, para nunca inflar o valor da fatura.
+      tipo = 'Receita';
+      const pareceTextoDePagamento = /pgto|pagto|pagamento/.test(normalizarTexto(e.descricao));
+      catSugerida = pareceTextoDePagamento ? 'Recebimento por Pagamento de Fatura'
+        : ((catSugerida && CATEGORIAS.some(c=>c[0]===catSugerida && c[3]==='Receita')) ? catSugerida : 'Estorno e/ou Reembolso');
     } else if(e.tipoExplicito){
       // O parser já sabe se é Despesa ou Receita (ex.: fatura de cartão, onde valor negativo é
       // estorno/crédito) — uma sugestão de categoria por palavra-chave que implique o tipo contrário é
@@ -13775,7 +13848,7 @@ function bindEvents(){
     render();
   });
   document.getElementById('btnImportar')?.addEventListener('click', ()=>{
-    UI.importStep=1; UI.importRaw=null; UI.importParsed=[]; UI.importIsContracheque=false; UI.pbValidacao=null;
+    UI.importStep=1; UI.importRaw=null; UI.importParsed=[]; UI.importFiltros=null; UI.importIsContracheque=false; UI.pbValidacao=null;
     UI.modalParcelasEmprestimo=null; UI.importTotaisEmprestimo=null; UI.importContaTravada=false;
     UI.importRefMes = UI.mes; UI.importRefAno = UI.ano;
     render();
@@ -13785,7 +13858,7 @@ function bindEvents(){
   // revisão), só pré-preenchendo e travando a conta de destino com a conta do botão acionado, para nunca
   // permitir importar para uma conta diferente da que originou o clique (ver renderImportPreModal).
   document.querySelectorAll('[data-importar-conta]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.importStep=1; UI.importRaw=null; UI.importParsed=[]; UI.importIsContracheque=false; UI.pbValidacao=null;
+    UI.importStep=1; UI.importRaw=null; UI.importParsed=[]; UI.importFiltros=null; UI.importIsContracheque=false; UI.pbValidacao=null;
     UI.modalParcelasEmprestimo=null; UI.importTotaisEmprestimo=null;
     UI.importRefMes = UI.mes; UI.importRefAno = UI.ano;
     UI.importMap.contaDestino = b.dataset.importarConta;
@@ -15413,9 +15486,28 @@ function bindEvents(){
   document.getElementById('mapDesc')?.addEventListener('change', e=>{ UI.importMap.descricao = Number(e.target.value); });
   document.getElementById('mapValor')?.addEventListener('change', e=>{ UI.importMap.valor = Number(e.target.value); });
   document.getElementById('mapFormato')?.addEventListener('change', e=>{ UI.importMap.formatoValor = e.target.value; });
-  document.getElementById('importToReview')?.addEventListener('click', ()=>{ buildParsedFromMap(); UI.importStep=4; render(); });
+  document.getElementById('importToReview')?.addEventListener('click', ()=>{ buildParsedFromMap(); UI.importFiltros=criarFiltrosImportacaoPadrao(); UI.importStep=4; render(); });
   /* Passo 4 · revisar */
   document.getElementById('importBack2')?.addEventListener('click', ()=>{ UI.importStep=3; render(); });
+  // Filtros da revisão (categoria/subcategoria/responsável/status) — mesmo motor genérico de chips já usado
+  // em todo o resto da aplicação (Registros, Ver Extrato/Futuros/Fatura, Backup etc.), nunca um mecanismo
+  // paralelo. Só ligado quando o passo 4 está de fato na tela.
+  if(UI.importStep===4 && UI.importFiltros){
+    const fImport = UI.importFiltros;
+    // Mesmas opções "presentes nos dados" calculadas em renderImportStep3() — precisam bater exatamente
+    // (usadas aqui só pelo "Selecionar todos" de cada filtro, ver bindFiltroMultiSelect).
+    const opcoesImport = {
+      categoria: Array.from(new Set(UI.importParsed.map(r=> catInfo(r.categoria).subgrupo || '__sem_categoria__'))).map(v=>({value:v})),
+      subcategoria: Array.from(new Set(UI.importParsed.map(r=> r.categoria || '__sem_subcategoria__'))).map(v=>({value:v})),
+      responsavel: Array.from(new Set(UI.importParsed.map(r=> r.responsavel || '__sem_responsavel__'))).map(v=>({value:v})),
+      status: Array.from(new Set(UI.importParsed.map(statusImportacaoLinha))).map(v=>({value:v})),
+    };
+    ['categoria','subcategoria','responsavel','status'].forEach(campo=>
+      bindFiltroMultiSelect(fImport, 'Import', campo, opcoesImport[campo], ()=> render()));
+    bindChipsFiltrosAtivos(fImport, 'Import', ()=> render());
+    bindFiltrosMobileToggle('Import');
+    document.getElementById('btnLimparFiltrosImport')?.addEventListener('click', ()=>{ UI.importFiltros = criarFiltrosImportacaoPadrao(); render(); });
+  }
 
   document.querySelectorAll('[data-imp]').forEach(el=> el.addEventListener('change', e=>{
     const i = Number(el.dataset.imp), field = el.dataset.field;
