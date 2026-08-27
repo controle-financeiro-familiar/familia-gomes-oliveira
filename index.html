@@ -10192,7 +10192,7 @@ function paginasVisiveisRegistros(paginaAtual, totalPaginas){
    mesmo padrão visual e funcional em toda a aplicação, cada consumidor só define seus próprios
    ids/atributos (selectId/dataAttr) para não colidir quando mais de um estiver na página ao mesmo tempo. */
 function renderRodapePaginacaoGenerica(totalFiltrado, porPagina, paginaAtual, totalPaginas, inicioIdx, fimIdx, opts){
-  const { selectId, dataAttr, opcoesPorPagina = [10,25,50,100], unidade = 'registros' } = opts;
+  const { selectId, dataAttr, opcoesPorPagina = [5,10,25,50,100], unidade = 'registros' } = opts;
   const intervaloTexto = totalFiltrado===0 ? `0 de 0 ${unidade}` : `${inicioIdx+1}–${fimIdx} de ${totalFiltrado}`;
   const paginasBtns = totalFiltrado===0 ? '' : paginasVisiveisRegistros(paginaAtual, totalPaginas).map(p=>
     p==='…' ? `<span class="registros-pagina-reticencias">…</span>`
@@ -11517,9 +11517,9 @@ function renderDuplicarMesesModal(){
     <div class="modal" style="width:560px;">
       <div class="modal-head"><h3>📄 Duplicar por vários meses</h3><button class="close-x" id="closeDuplicarMeses">✕</button></div>
       <div class="modal-body" style="padding:8px 10px;">
-        <div class="info-card" style="padding-bottom:2px;margin-top:0;">
+        <div class="info-card" style="padding-bottom:2px;margin-top:0;align-items:center;">
           <span class="info-card-icon">${original.tipo==='Despesa'?'💸':'💰'}</span>
-          <span><b>${escapeHtml(original.descricao)}</b> — ${fmtBRL(original.valor)} · ${fmtData(original.data)} · ${escapeHtml(original.conta)}</span>
+          <span><b>${escapeHtml(original.descricao)}</b><br>${escapeHtml(original.conta)} · ${fmtData(original.data)} · ${fmtBRL(original.valor)}</span>
         </div>
         <div class="field" style="display:flex;align-items:center;margin-top:10px;">
           <label style="width:100%;height:80%;">Duplicar por quantos meses consecutivos?</label>
