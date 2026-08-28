@@ -472,7 +472,11 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
 @media(max-width:600px){
   .app-header{
     display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;
-    padding:50px 14px 8px;gap:0 10px;row-gap:8px;
+    /* padding-top:calc(12px + var(--safe-top)) — antes um valor fixo (50px) "chutado" para caber o notch de
+       um aparelho específico (ver mesmo ajuste já feito no padding-top dos modais mobile): --safe-top é
+       env(safe-area-inset-top), informado pelo próprio navegador para cada aparelho, então o cabeçalho
+       nunca mais fica escondido atrás do notch/Dynamic Island (nem sobra espaço à toa em quem não tem). */
+    padding:calc(12px + var(--safe-top)) 14px 8px;gap:0 10px;row-gap:8px;
   }
   .app-title{display:contents;}
   .app-title-wrap{display:contents;}
