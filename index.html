@@ -12869,17 +12869,23 @@ function renderModalParcelasEmprestimo(){
   </div>`;
 }
 function renderImportStep1(){
-  // Conta do tipo Reserva de Emergência: importação restrita EXCLUSIVAMENTE a .csv (extrato PicPay) — ver
+  // Conta do tipo Reserva de Emergência: importação restrita EXCLUSIVAMENTE a .csv (extrato PicPay); conta
+  // do tipo Contracheque: restrita EXCLUSIVAMENTE a .pdf (Demonstrativo de Pagamento do TRT) — ver
   // handleFile, que repete essa mesma checagem para o caso de arrastar-e-soltar um arquivo de outro tipo.
   const ehContaReservaEmergencia = STATE.contaTipos[UI.importMap.contaDestino]==='Reserva de Emergência';
+  const ehContaContracheque = STATE.contaTipos[UI.importMap.contaDestino]==='Contracheque';
+  const hint = ehContaReservaEmergencia ? 'Conta do tipo Reserva de Emergência — aceita somente o extrato .csv exportado do PicPay.'
+    : ehContaContracheque ? 'Formato aceito: PDF (.pdf)'
+    : 'Aceita extratos em .ofx ou .xlsx exportados do seu banco ou cartão.';
+  const accept = ehContaReservaEmergencia ? '.csv' : ehContaContracheque ? '.pdf,application/pdf' : '.ofx,.xlsx,.pdf';
   return `
   <span class="step-badge">Passo 2 de 4 · Escolher arquivo</span>
   <div class="info-card" style="margin-top:0;"><span class="info-card-icon">📌</span><span>Conta de destino: <b>${escapeHtml(UI.importMap.contaDestino)}</b> · Período: <b>${MESES[UI.importRefMes-1]}/${UI.importRefAno}</b> <button type="button" class="icon-btn" id="btnImportVoltarPre" title="Trocar período/conta" style="padding:1px 4px;">✏️</button></span></div>
   <div class="dropzone" id="dropzone">
     <div style="font-size:30px;">📄</div>
-    <p><b>Arraste o arquivo aqui</b> ou clique para selecionar</p>
-    <p class="hint">${ehContaReservaEmergencia ? 'Conta do tipo Reserva de Emergência — aceita somente o extrato .csv exportado do PicPay.' : 'Aceita extratos em .ofx ou .xlsx exportados do seu banco ou cartão.'}</p>
-    <input type="file" id="fileInput" accept="${ehContaReservaEmergencia ? '.csv' : '.ofx,.xlsx,.pdf'}">
+    <p><b>Arraste o arquivo aqui</b> ou clique para ${ehContaContracheque ? 'selecionar contracheque PDF' : 'selecionar'}</p>
+    <p class="hint">${hint}</p>
+    <input type="file" id="fileInput" accept="${accept}">
   </div>`;
 }
 function renderImportStep2(){
@@ -13424,6 +13430,20 @@ function normalizarTexto(s){
 function handleFile(file){
   UI.importFileName = file.name;
   UI.importFileType = detectFileType(file.name);
+  // Conta do tipo Contracheque: a importação aceita EXCLUSIVAMENTE .pdf (Demonstrativo de Pagamento do
+  // TRT) — regra própria deste módulo, que não altera os formatos aceitos pelos demais importadores da
+  // aplicação. Validação real por extensão e, quando disponível, MIME type (o atributo "accept" do
+  // <input>, ver renderImportStep1, só filtra a caixa de seleção do sistema operacional — não impede
+  // arrastar-e-soltar um arquivo de outro tipo direto na dropzone) — feita antes de qualquer leitura do
+  // conteúdo do arquivo, para nunca chegar a chamar o parser do contracheque com um arquivo que não é PDF.
+  if(STATE.contaTipos[UI.importMap.contaDestino]==='Contracheque'){
+    const nomeArquivo = file.name.toLowerCase();
+    const mimeOk = !file.type || file.type==='application/pdf';
+    if(!nomeArquivo.endsWith('.pdf') || !mimeOk){
+      alert('Arquivo inválido. A importação de contracheque aceita somente arquivos PDF (.pdf).');
+      return;
+    }
+  }
   // A importação de arquivo do banco aceita .ofx, .xlsx e .pdf (PDF só para conta do tipo Contracheque) —
   // e, para uma conta do tipo Reserva de Emergência, aceita EXCLUSIVAMENTE .csv (extrato PicPay), nunca os
   // outros formatos. O atributo "accept" do input já filtra isso na caixa de seleção do sistema
