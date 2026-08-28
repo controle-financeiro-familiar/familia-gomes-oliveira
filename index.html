@@ -1344,7 +1344,7 @@ tbody tr:hover{background:var(--navy-50);}
     /* !important necessário: muitos modais definem width inline (ex.: style="width:480px") — sem isso,
        o estilo inline vence a regra da media query e o modal fica estreito no mobile em vez de tela cheia. */
     width:100%!important;max-width:100vw!important;height:100%!important;max-height:100dvh!important;border-radius:0;
-    display:flex;flex-direction:column;resize:none;padding-top:50px;
+    display:flex;flex-direction:column;resize:none;padding-top:calc(11px + var(--safe-top));
   }
   .modal-head{border-radius:0;flex-shrink:0;}
   .modal-body{flex:1;overflow-y:auto;}
@@ -8098,13 +8098,28 @@ function deveMostrarInstalarIOS(){
   const jaInstalado = window.navigator.standalone===true || window.matchMedia('(display-mode: standalone)').matches;
   return ehIOS && !jaInstalado;
 }
+/* Nome do navegador para o passo a passo de instalação no iOS (ver renderModalInstalarIOS). No iOS, todo
+   navegador é obrigado pela Apple a usar o mecanismo do WebKit por baixo — por isso o menu Compartilhar e
+   a opção "Adicionar à Tela de Início" ficam sempre no mesmo lugar, não importa qual navegador for — só o
+   NOME muda no texto da instrução. Precisa checar os tokens específicos (CriOS/FxiOS/EdgiOS/OPiOS) ANTES
+   do genérico "Safari", já que o user agent desses navegadores no iOS também contém a palavra "Safari". */
+function nomeNavegadorIOS(){
+  const ua = navigator.userAgent || '';
+  if(/CriOS/.test(ua)) return 'Chrome';
+  if(/FxiOS/.test(ua)) return 'Firefox';
+  if(/EdgiOS/.test(ua)) return 'Edge';
+  if(/OPiOS|OPT\//.test(ua)) return 'Opera';
+  if(/DuckDuckGo/.test(ua)) return 'DuckDuckGo';
+  return 'Safari';
+}
 /* Faixa fina de avisos do PWA (item 11/12) — nova versão pronta para atualizar, e/ou opção de instalar
    como aplicativo. Fica no topo em qualquer tela (inicial ou app), sem depender de UI.appIniciado.
    A opção de instalar tem dois caminhos, mutuamente exclusivos, para cobrir todos os navegadores: o
    prompt nativo do navegador (Chrome/Edge/Android — via UI.instalarPromptEvento) ou, quando esse evento
-   nunca vai existir (Safari/iOS), um passo a passo manual explicando como usar o próprio menu Compartilhar
-   do Safari — o mesmo texto "Adicionar à tela inicial" nos dois casos, para o usuário nunca perceber que
-   são dois mecanismos diferentes por baixo. */
+   nunca vai existir (qualquer navegador rodando em iOS, já que todos usam o WebKit por baixo por exigência
+   da Apple), um passo a passo manual explicando como usar o próprio menu Compartilhar do navegador (ver
+   nomeNavegadorIOS — o texto se adapta a Safari/Chrome/Firefox/Edge/Opera) — o mesmo texto "Adicionar à
+   tela inicial" nos dois casos, para o usuário nunca perceber que são dois mecanismos diferentes por baixo. */
 function renderBannerPWA(){
   const mostrarInstalarChrome = !UI.atualizacaoDisponivel && !!UI.instalarPromptEvento;
   const mostrarInstalarIOS = !UI.atualizacaoDisponivel && !mostrarInstalarChrome && !UI.iosInstallDismissed && deveMostrarInstalarIOS();
@@ -8115,18 +8130,21 @@ function renderBannerPWA(){
     ${mostrarInstalarIOS ? `<span>📲 Instale este aplicativo para acesso rápido e uso offline.</span><button type="button" class="btn btn-primary btn-sm" id="btnInstalarIOS">Adicionar à tela inicial</button><button type="button" class="btn btn-ghost btn-sm" id="btnDispensarInstalarIOS">Agora não</button>` : ''}
   </div>`;
 }
-/* Passo a passo manual de "Adicionar à Tela de Início" no Safari/iOS — aberto pelo botão da faixa acima
-   quando não há beforeinstallprompt disponível (ver deveMostrarInstalarIOS). Mesmo padrão visual dos
-   demais modais simples do app (overlay + modal-head + modal-body + modal-foot com um único botão). */
+/* Passo a passo manual de "Adicionar à Tela de Início" no iOS — aberto pelo botão da faixa acima quando
+   não há beforeinstallprompt disponível (ver deveMostrarInstalarIOS). O nome do navegador citado no texto
+   é detectado dinamicamente (ver nomeNavegadorIOS), já que o mecanismo (menu Compartilhar do WebKit) é o
+   mesmo em qualquer navegador do iOS, mas o nome exibido na barra do navegador muda. Mesmo padrão visual
+   dos demais modais simples do app (overlay + modal-head + modal-body + modal-foot com um único botão). */
 function renderModalInstalarIOS(){
+  const navegador = nomeNavegadorIOS();
   return `
   <div class="overlay" id="ovModalInstalarIOS" ${attrZIndexModal('modalInstalarIOS')}>
     <div class="modal" style="width:420px;">
       <div class="modal-head"><h3>📲 Adicionar à Tela de Início</h3><button class="close-x" id="closeModalInstalarIOS">✕</button></div>
       <div class="modal-body">
-        <p class="hint" style="margin-top:0;">No Safari, a instalação é feita pelo próprio menu Compartilhar do navegador:</p>
+        <p class="hint" style="margin-top:0;">No ${navegador}, a instalação é feita pelo próprio menu Compartilhar do navegador:</p>
         <ol style="margin:0 0 4px;padding-left:20px;line-height:1.7;">
-          <li>Toque no ícone de <b>Compartilhar</b> <span aria-hidden="true">(⬆️)</span>, na barra do Safari.</li>
+          <li>Toque no ícone de <b>Compartilhar</b> <span aria-hidden="true">(⬆️)</span>, na barra do ${navegador}.</li>
           <li>Role a lista de opções e toque em <b>"Adicionar à Tela de Início"</b>.</li>
           <li>Toque em <b>Adicionar</b>, no canto superior direito.</li>
         </ol>
