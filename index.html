@@ -2960,6 +2960,9 @@ let CATEGORIAS = [
   ['PJ CISM-BR','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
   ['Outros Serviços PJ','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
   ['Salário TRT','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
+  ['Assistência Saúde','Renda Familiar','Renda de Trabalho e Serviços','Receita','Variável'],
+  ['Assistência Pré-Escolar','Renda Familiar','Renda de Trabalho e Serviços','Receita','Variável'],
+  ['Auxílio Alimentação','Renda Familiar','Renda de Trabalho e Serviços','Receita','Variável'],
   ['Aluguel Garagem','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
   ['Aluguel Apto Ribeirão Preto','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
   ['Arrendamento Fazenda','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
@@ -3101,7 +3104,8 @@ function iconeResponsavelHtml(nome){
    lançamentos dessas subcategorias, editável a qualquer momento em Configurações. */
 const SUBCATEGORIA_RESPONSAVEL_DEFAULT = {
   "Bolsa Doutorado":"Ariana", "Bolsa Anvisa":"Ariana", "PJ CISM-BR":"Ariana", "Outros Serviços PJ":"Ariana",
-  "Salário TRT":"Bruno", "Aluguel Garagem":"Ariana", "Aluguel Apto Ribeirão Preto":"Bruno", "Arrendamento Fazenda":"Bruno"
+  "Salário TRT":"Bruno", "Assistência Saúde":"Bruno", "Assistência Pré-Escolar":"Bruno", "Auxílio Alimentação":"Bruno",
+  "Aluguel Garagem":"Ariana", "Aluguel Apto Ribeirão Preto":"Bruno", "Arrendamento Fazenda":"Bruno"
 };
 /* Modelo inicial da aba Projeções, espelhando a planilha de referência (projeções-mês-atual.ods).
    Itens com cartao definido não usam "valor" (é sempre recalculado pela fatura do mês do cartão).
@@ -3393,15 +3397,12 @@ function determinarPgto(conta, descricao){
   if(desc.includes('pix')) return 'Pix';
   return 'Débito em Conta';
 }
-/* Subcategorias de receita que existiam apenas por causa da leitura linha-a-linha do contracheque
-   (rubricas de crédito lançadas como se fossem receitas próprias) — foram substituídas pela
-   padronização abaixo e não fazem mais parte do cadastro. */
-const SUBCATEGORIAS_RECEITA_CONTRACHEQUE_REMOVIDAS = ['Auxílio Alimentação','Assistência Saúde','Assistência Pré-Escolar'];
-/* Toda receita de uma conta do tipo Contracheque é sempre "Salário TRT", independentemente da descrição
-   (regra do sistema, não uma sugestão). Usada tanto na importação (ver buildParsedFromMap) quanto como
-   migração ao carregar o arquivo, para corrigir lançamentos antigos que ainda usem outra subcategoria de
-   receita nessas contas — e para remover do cadastro as subcategorias que só existiam por causa disso.
-   Idempotente: pode ser chamada em toda carga de arquivo sem efeito colateral se já estiver tudo padronizado. */
+/* Corrige lançamentos órfãos de contas do tipo Contracheque: cada rubrica é classificada individualmente
+   na importação pelo próprio código (ver RUBRICA_TRT_CODIGO_CATEGORIA em buildParsedFromMap), então esta
+   função não força mais toda receita da conta para "Salário TRT" — só recai nesse padrão histórico da
+   conta quando a subcategoria salva no lançamento nem existe mais como categoria de Receita no catálogo
+   (órfã), sem tocar nos lançamentos já corretamente classificados em Assistência Saúde/Pré-Escolar ou
+   Auxílio Alimentação. Idempotente: pode ser chamada em toda carga de arquivo sem efeito colateral. */
 /* Mapa de subcategorias renomeadas ao longo do tempo — quando uma subcategoria é renomeada em
    Configurações, lançamentos já salvos com o nome antigo ficam "órfãos" (a categoria antiga não existe
    mais em CATEGORIAS), e por isso perdem grupo/subgrupo/tipo/natureza (ficam de fora dos totais de
@@ -3737,15 +3738,13 @@ function corrigirClassificacaoDesatualizada(){
 }
 function padronizarReceitasContracheque(){
   const contasContracheque = STATE.contas.filter(c=>STATE.contaTipos[c]==='Contracheque');
-  if(contasContracheque.length){
-    const info = catInfo('Salário TRT');
-    STATE.transactions.forEach(t=>{
-      if(t.tipo==='Receita' && contasContracheque.includes(t.conta) && t.categoria!=='Salário TRT'){
-        t.categoria='Salário TRT'; t.grupo=info.grupo; t.subgrupo=info.subgrupo; t.natureza=info.natureza;
-      }
-    });
-  }
-  CATEGORIAS = CATEGORIAS.filter(c=> !(c[3]==='Receita' && SUBCATEGORIAS_RECEITA_CONTRACHEQUE_REMOVIDAS.includes(c[0])));
+  if(!contasContracheque.length) return;
+  const info = catInfo('Salário TRT');
+  STATE.transactions.forEach(t=>{
+    if(t.tipo==='Receita' && contasContracheque.includes(t.conta) && !CATEGORIAS.some(c=>c[0]===t.categoria && c[3]==='Receita')){
+      t.categoria='Salário TRT'; t.grupo=info.grupo; t.subgrupo=info.subgrupo; t.natureza=info.natureza;
+    }
+  });
 }
 function cartoesOrdenados(){ return [...STATE.cartoes].sort((a,b)=>a.localeCompare(b,'pt-BR')); }
 /* Ordem de exibição da aba Contas e Cartões: por dia de vencimento da fatura (crescente); em caso de
@@ -3791,10 +3790,9 @@ const SUGESTOES = {
   "pgto debito conta":"Recebimento por Pagamento de Fatura","pagamento de fatura":"Recebimento por Pagamento de Fatura","pagto fatura":"Recebimento por Pagamento de Fatura","pgto fatura":"Recebimento por Pagamento de Fatura",
   "desc automatico":"Estorno e/ou Reembolso","estorno":"Estorno e/ou Reembolso","reembolso":"Estorno e/ou Reembolso",
   "anuidade":"Anuidade de Cartão de Crédito",
-  /* Rubricas de desconto do contracheque TRT (Demonstrativo de Pagamento) — as rubricas de crédito
-     (Vencimento, GAJ, Adicional, Auxílio Alimentação, Assistência Saúde/Pré-Escolar etc.) não usam mais
-     palavra-chave própria: toda receita importada de uma conta do tipo Contracheque é padronizada
-     automaticamente para "Salário TRT", independentemente da descrição (ver forcarPadraoDaConta). */
+  /* Rubricas de desconto e crédito do contracheque TRT (Demonstrativo de Pagamento) — usadas só como
+     reserva quando o código da rubrica não é reconhecido (o código tem prioridade, ver
+     RUBRICA_TRT_CODIGO_CATEGORIA em buildParsedFromMap). */
   "abas - 15":"Plano de saúde (mensalidade)","anajustra":"Contribuições Associativas/Sindicais",
   "empréstimos":"Parcela de empréstimo pessoal (bancos ou fintechs)","emprestimos":"Parcela de empréstimo pessoal (bancos ou fintechs)",
   "contribuição rpps":"Contribuição Previdenciária (RPPS)","contribuicao rpps":"Contribuição Previdenciária (RPPS)",
@@ -7853,10 +7851,12 @@ function encontrarLancamentoEfetivoParaProjecao(item, competencia){
 }
 /* Contracheque TRT (item 8): mesma ideia acima, mas com regra própria — o dia vem do lançamento de receita
    efetivamente creditado na conta do tipo Contracheque nesta competência (não por correspondência de
-   descrição, já que toda receita de conta Contracheque já é forçada para a categoria "Salário TRT" — ver
-   forcarPadraoDaConta), e o valor considerado é o total de entradas já efetivamente creditado nessa conta
-   nesta competência (mesma lógica de calcSaldoConta/entradas usada no restante da aplicação), não o valor
-   fixo recorrente do lançamento previsto. */
+   descrição, já que cada rubrica de crédito importada do contracheque pode cair em subcategorias
+   diferentes — Salário TRT, Assistência Saúde, Assistência Pré-Escolar, Auxílio Alimentação — ver
+   RUBRICA_TRT_CODIGO_CATEGORIA), e o valor considerado é o total de entradas já efetivamente creditado
+   nessa conta nesta competência, somando todas as subcategorias de receita (mesma lógica de
+   calcSaldoConta/entradas usada no restante da aplicação), não o valor fixo recorrente do lançamento
+   previsto. */
 function encontrarEfetivoContrachequeTRT(competencia){
   const [ano, mes] = competencia.split('-').map(Number);
   const contaContracheque = STATE.contas.find(c=>STATE.contaTipos[c]==='Contracheque');
@@ -13248,13 +13248,16 @@ const TRT_MONEY_RE = /^-?\d{1,3}(?:\.\d{3})*,\d{2}$/;
 const TRT_MONEY_RE_G = /-?\d{1,3}(?:\.\d{3})*,\d{2}/g;
 function parseContrachequeTRT(rows){
   // Localiza a linha "Previsão de Crédito" (rodapé da tabela): começa com uma data e tem
-  // ao menos 3 valores monetários na sequência (Margem, Bruto, Descontos, Líquido).
+  // ao menos 3 valores monetários na sequência (Margem, Bruto, Descontos, Líquido). O último valor dessa
+  // sequência (mais à direita) é sempre o Líquido — usado depois só para validar se a soma das rubricas
+  // extraídas bate com o valor que o próprio demonstrativo declara (ver validação em processarArquivoImportacao).
   let dataPrevisao = '';
+  let liquidoDeclarado = null;
   for(const r of rows){
     const first = r.items[0];
     if(first && /^\d{2}\/\d{2}\/\d{4}$/.test(first.text)){
-      const qtdMoney = r.items.filter(i=>TRT_MONEY_RE.test(i.text)).length;
-      if(qtdMoney>=3){ dataPrevisao = first.text; break; }
+      const moneyVals = r.items.filter(i=>TRT_MONEY_RE.test(i.text)).map(i=>parseFloat(i.text.replace(/\./g,'').replace(',', '.')));
+      if(moneyVals.length>=3){ dataPrevisao = first.text; liquidoDeclarado = moneyVals[moneyVals.length-1]; break; }
     }
   }
   // Fallback: procura, a partir da linha do cabeçalho "Previsão de Crédito", a primeira
@@ -13284,6 +13287,7 @@ function parseContrachequeTRT(rows){
     const first = items[0];
     // Linhas de rubrica: código numérico na coluna esquerda (x < 85), seguido da descrição (x entre 85 e 330)
     if(!/^\d+$/.test(first.text) || first.x>=85) continue;
+    const codigo = first.text;
     const descItems = items.filter(i=>i.x>=85 && i.x<330);
     const descricao = descItems.map(i=>i.text).join(' ').replace(/\s+/g,' ').trim();
     if(!descricao) continue;
@@ -13299,10 +13303,27 @@ function parseContrachequeTRT(rows){
     // parcela atual quando o usuário informar o total de parcelas do empréstimo.
     const parcelaItem = items.find(i=>i.x>=405 && i.x<440 && /^\d+$/.test(i.text));
     const parcelasRestantes = parcelaItem ? parseInt(parcelaItem.text, 10) : 0;
-    out.push([ dataISO, descricao, valor, parcelasRestantes ]);
+    // O código da rubrica (ex.: 1=Vencimento, 200701=Assistência Saúde) identifica a natureza real de cada
+    // linha de forma muito mais confiável que a descrição, que pode variar ligeiramente entre demonstrativos
+    // — ver RUBRICA_TRT_CODIGO_CATEGORIA, usado em buildParsedFromMap para classificar cada rubrica
+    // individualmente, em vez de tratar toda receita da conta Contracheque como "Salário TRT".
+    out.push([ dataISO, descricao, valor, parcelasRestantes, codigo ]);
   }
-  return out;
+  return { rows: out, liquidoDeclarado };
 }
+/* Classificação de cada rubrica do contracheque TRT pelo código (prioridade sobre a descrição, que serve só
+   de reserva quando o código não é reconhecido — ver uso em buildParsedFromMap). Créditos: remuneração
+   (Vencimento/GAJ/Adicionais/Função Comissionada) sempre "Salário TRT"; benefícios (Assistência Saúde,
+   Assistência Pré-Escolar, Auxílio Alimentação) ficam em subcategorias próprias de Renda Familiar, nunca
+   misturados a "Salário TRT". Descontos: reaproveitam subcategorias já existentes no catálogo (Plano de
+   Saúde, Contribuições Associativas/Sindicais, Empréstimo Pessoal, Contribuição Previdenciária, IRRF). */
+const RUBRICA_TRT_CODIGO_CATEGORIA = {
+  '1':'Salário TRT', '10':'Salário TRT', '31':'Salário TRT', '36':'Salário TRT', '60':'Salário TRT',
+  '200701':'Assistência Saúde', '740':'Assistência Pré-Escolar', '771':'Auxílio Alimentação',
+  '297011':'Plano de Saúde (Mensalidade)', '97061':'Contribuições Associativas/Sindicais',
+  '97204':'Parcela de Empréstimo Pessoal (Bancos ou Fintechs)', '97213':'Parcela de Empréstimo Pessoal (Bancos ou Fintechs)',
+  '99504':'Contribuição Previdenciária (RPPS)', '99700':'Imposto de Renda Retido na Fonte (IRRF)'
+};
 /* ---- Fatura do cartão Personnalité Black (Itaú) ----
    Reformulado para ler o arquivo .xlsx de "Fatura Fechada" exportado pelo Itaú (antes este parser lia o
    PDF da fatura; agora a importação de arquivo do banco aceita apenas .ofx e .xlsx). O arquivo traz, numa
@@ -13507,9 +13528,21 @@ function handleFile(file){
           alert('Este PDF não parece ser um Demonstrativo de Pagamento do TRT. Confira o arquivo e tente novamente.');
           UI.importStep=2; render(); return;
         }
-        const rows = parseContrachequeTRT(pdfRows);
+        const { rows, liquidoDeclarado } = parseContrachequeTRT(pdfRows);
         UI.importRaw = { type:'pdf', headers:['Data','Descrição','Valor'], rows };
         UI.importIsContracheque = true;
+        // Validação obrigatória: a soma das rubricas extraídas (créditos - débitos) precisa bater com o
+        // líquido que o próprio demonstrativo declara no rodapé ("Previsão de Crédito"). Se não bater, a
+        // importação não é silenciosamente aceita como válida — avisa qual foi o valor calculado x o
+        // declarado, para o usuário conferir o PDF antes de prosseguir (ver seção 11 do requisito).
+        if(liquidoDeclarado!=null){
+          const totalCreditos = rows.filter(r=>r[2]>0).reduce((s,r)=>s+r[2],0);
+          const totalDebitos = rows.filter(r=>r[2]<0).reduce((s,r)=>s-r[2],0);
+          const liquidoCalculado = totalCreditos - totalDebitos;
+          if(Math.abs(liquidoCalculado - liquidoDeclarado) > 0.01){
+            alert(`Atenção: a soma das rubricas extraídas deste contracheque (créditos ${fmtBRL(totalCreditos)} − débitos ${fmtBRL(totalDebitos)} = líquido ${fmtBRL(liquidoCalculado)}) não bate com o líquido declarado no documento (${fmtBRL(liquidoDeclarado)}). Confira o PDF — pode haver uma rubrica não reconhecida pelo leitor — antes de importar.`);
+          }
+        }
         // Linhas com parcelasRestantes>0 (rows[i][3]) são descontos de empréstimo consignado. Para cada
         // uma, tenta achar o total de parcelas já informado antes (mesma conta + mesma descrição + valor
         // parecido, ver detectarTotalParcelasEmprestimo); só pergunta ao usuário para empréstimos
@@ -13706,7 +13739,10 @@ function buildParsedFromMap(){
     // r[4], para OFX, é o TRNTYPE bruto do arquivo (CREDIT/PAYMENT/DEBIT/...) — não o mesmo "tipoExplicito"
     // usado pelos outros parsers nesse mesmo índice (fatura PDF/XLSX-PB), por isso tratado à parte via
     // e.trntype (ver árvore de classificação abaixo) e nunca lido como tipoExplicito para esse formato.
-    entries = raw.rows.map(r=>({ data:r[0], descricao:r[1], valor:r[2], tipoExplicito: raw.type==='ofx' ? null : (r[4]||null), trntype: raw.type==='ofx' ? (r[4]||null) : null, parcelaExplicita: r[5]||null, parcelasRestantes: raw.type==='pdf' ? (r[3]||0) : 0, categoriaExplicita: r[6]||null }));
+    // r[4], para o PDF do contracheque TRT, é o código da rubrica (não o "tipoExplicito" usado pelos
+    // demais formatos nesse mesmo índice) — por isso excluído da leitura de tipoExplicito e lido à parte
+    // em codigoRubrica (ver RUBRICA_TRT_CODIGO_CATEGORIA, usado logo abaixo para classificar cada rubrica).
+    entries = raw.rows.map(r=>({ data:r[0], descricao:r[1], valor:r[2], tipoExplicito: (raw.type==='ofx'||raw.type==='pdf') ? null : (r[4]||null), trntype: raw.type==='ofx' ? (r[4]||null) : null, parcelaExplicita: r[5]||null, parcelasRestantes: raw.type==='pdf' ? (r[3]||0) : 0, categoriaExplicita: r[6]||null, codigoRubrica: raw.type==='pdf' ? (r[4]||null) : null }));
   } else {
     let rows = raw.rows;
     if(UI.importMap.temCabecalho) rows = rows.slice(1);
@@ -13770,10 +13806,20 @@ function buildParsedFromMap(){
       // já resolvem isso sozinhos e fornecem o tipo explicitamente, sem passar por este fallback.
       tipo = catSugerida ? tipoParaCategoriaSugerida(catSugerida, e.valor) : (e.valor<0 ? 'Despesa' : 'Receita');
     }
-    // Toda receita importada para uma conta do tipo Contracheque é sempre "Salário TRT" — é uma regra do
-    // sistema para esse tipo de conta, não uma sugestão, e vale independentemente da descrição do extrato
-    // ou de qualquer correspondência (por histórico ou palavra-chave) encontrada acima.
-    if(tipoConta==='Contracheque' && tipo==='Receita') catSugerida = 'Salário TRT';
+    // Cada rubrica do contracheque (crédito ou desconto) é identificada pelo próprio código numérico —
+    // muito mais confiável que a descrição, que pode variar entre demonstrativos (ver
+    // RUBRICA_TRT_CODIGO_CATEGORIA) — e prevalece sobre a sugestão por descrição/histórico feita acima:
+    // remuneração (Vencimento/GAJ/Adicionais/Função Comissionada) vira "Salário TRT", mas benefícios
+    // (Assistência Saúde, Assistência Pré-Escolar, Auxílio Alimentação) ficam em subcategorias próprias —
+    // nunca são misturados a "Salário TRT" — e descontos (plano de saúde, contribuições, empréstimos,
+    // RPPS, IRRF) reaproveitam as subcategorias de despesa já existentes no catálogo. Só quando o código
+    // não é reconhecido (ex.: lançamento manual/CSV nessa conta, sem PDF) é que uma receita da conta
+    // Contracheque continua caindo no padrão histórico "Salário TRT", independentemente da descrição.
+    if(tipoConta==='Contracheque' && e.codigoRubrica && RUBRICA_TRT_CODIGO_CATEGORIA[e.codigoRubrica]){
+      catSugerida = RUBRICA_TRT_CODIGO_CATEGORIA[e.codigoRubrica];
+    } else if(tipoConta==='Contracheque' && tipo==='Receita'){
+      catSugerida = 'Salário TRT';
+    }
     const responsavelPreset = catSugerida ? responsavelPredefinidoDaSubcategoria(catSugerida) : '';
     // Forma de Pagamento: no extrato CSV da Reserva de Emergência, é SEMPRE "Débito em Conta" (regra da
     // importação, ver documentação) — mesmo para os lançamentos "Pix enviado"/"Pix recebido", que na
