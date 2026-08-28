@@ -1,5 +1,5 @@
 {
-  "name": "Controle Financeiro Familiar",
+  "name": "FinUs",
   "short_name": "FinUs",
   "description": "Controle financeiro familiar com dados sincronizados no OneDrive (Microsoft Graph).",
   "start_url": "./index.html",
