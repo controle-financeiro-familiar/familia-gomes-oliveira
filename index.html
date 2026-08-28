@@ -472,7 +472,11 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
 @media(max-width:600px){
   .app-header{
     display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;
-    padding:50px 14px 8px;gap:0 10px;row-gap:8px;
+    /* padding-top:calc(12px + var(--safe-top)) — antes um valor fixo (50px) "chutado" para caber o notch de
+       um aparelho específico (ver mesmo ajuste já feito no padding-top dos modais mobile): --safe-top é
+       env(safe-area-inset-top), informado pelo próprio navegador para cada aparelho, então o cabeçalho
+       nunca mais fica escondido atrás do notch/Dynamic Island (nem sobra espaço à toa em quem não tem). */
+    padding:calc(12px + var(--safe-top)) 14px 8px;gap:0 10px;row-gap:8px;
   }
   .app-title{display:contents;}
   .app-title-wrap{display:contents;}
@@ -1377,7 +1381,10 @@ tbody tr:hover{background:var(--navy-50);}
 .import-titulo-mobile{display:none;}
 @media(max-width:700px){
   .import-titulo-desktop{display:none;}
-  .import-titulo-mobile{display:block;}
+  /* flex + align-items:center (em vez de block, com o ícone só como prefixo do texto): a partir do passo 3
+     o título ganha uma 2ª linha (nome da conta) — sem isolar o ícone num item flex próprio, ele ficava
+     colado à primeira linha (topo do bloco) em vez de centralizado em relação às duas linhas inteiras. */
+  .import-titulo-mobile{display:flex;align-items:center;gap:6px;}
 }
 .modal-head-acoes{display:flex;align-items:center;gap:10px;}
 .modal-head-acoes .btn{color:#fff;border-color:rgba(255,255,255,.35);}
@@ -12760,7 +12767,7 @@ function renderImportModal(){
     <div class="modal" style="width:${largura};">
       <div class="modal-head"><h3>
         <span class="import-titulo-desktop">⬆️ Importar arquivo do banco${UI.importMap.contaDestino ? ` — ${escapeHtml(UI.importMap.contaDestino)}` : ''}</span>
-        <span class="import-titulo-mobile">⬆️ Importar arquivo do banco${(UI.importStep>=3 && UI.importMap.contaDestino) ? `<br>${escapeHtml(UI.importMap.contaDestino)}` : ''}</span>
+        <span class="import-titulo-mobile"><span aria-hidden="true">⬆️</span><span>Importar arquivo do banco${(UI.importStep>=3 && UI.importMap.contaDestino) ? `<br>${escapeHtml(UI.importMap.contaDestino)}` : ''}</span></span>
       </h3><button class="close-x" id="closeImport">✕</button></div>
       <div class="modal-body">
         ${UI.modalTaxasConversao ? renderModalTaxasConversao() : ""}
