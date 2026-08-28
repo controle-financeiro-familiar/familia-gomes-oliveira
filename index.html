@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Controle Financeiro Familiar</title>
+<title>FinUs</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#10408D">
 <meta name="mobile-web-app-capable" content="yes">
@@ -1026,8 +1026,14 @@ tbody tr:hover{background:var(--navy-50);}
 .icon-btn:hover{background:var(--navy-100);color:var(--navy-900);}
 /* Botão de busca somente-ícone (item 11 do requisito): mesma aparência "fantasma" do .icon-btn, mas com
    área de toque mínima garantida em qualquer largura (não só mobile), já que substitui um botão de texto
-   em toda a aplicação. */
-.btn-buscar-icone{background:transparent;border:none;color:#2f6fed;border-radius:6px;min-width:var(--touch-min);min-height:34px;display:inline-flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;flex:0 0 auto;}
+   em toda a aplicação. Usado sempre logo depois de um <input> de busca, em toda a aplicação (Registros,
+   Ver Extrato/Lançamentos futuros/Ver Fatura/Ver Próximas Faturas/Mapa de Calor, Configurações →
+   Categorias) — um único ajuste aqui já vale para todos esses pontos, sem duplicar regra por tela.
+   justify-content:flex-start (em vez de center) + margin-left negativa: aproxima o ícone do campo de busca
+   sem reduzir a área de toque mínima (--touch-min) nem depender do valor de gap de cada contêiner
+   diferente — a lupa em si passa a ficar colada no campo, e a folga de toque extra sobra do lado direito,
+   onde não atrapalha (não há mais nada naquela borda). */
+.btn-buscar-icone{background:transparent;border:none;color:#2f6fed;border-radius:6px;min-width:var(--touch-min);min-height:34px;display:inline-flex;align-items:center;justify-content:flex-start;padding-left:2px;font-size:15px;cursor:pointer;flex:0 0 auto;margin-left:-8px;}
 .btn-buscar-icone:hover{background:var(--navy-100);}
 @media(max-width:700px){ .btn-buscar-icone{} }
 /* Ícone SVG padrão de filtro (item 3) e de "Verificar duplicidade" (item 14) — tamanho/alinhamento
@@ -1064,7 +1070,14 @@ tbody tr:hover{background:var(--navy-50);}
      direita, com ícone E texto, nunca só o ícone). Só CSS (order + um "quebra-linha" invisível) — o markup
      e a ordem no desktop continuam exatamente os mesmos de antes. */
   .reg-toolbar-acoes{align-items:stretch;gap:6px;}
-  .reg-toolbar-acoes #btnVerificarDuplicidade{order:1;flex:0 0 auto;white-space:nowrap;font-size:12px;padding:6px 10px;}
+  /* align-self:center (em vez de esticar com o resto da linha, como align-items:stretch do pai faria por
+     padrão): o botão "🔍 Buscar" dentro de .reg-busca-wrap tem min-height:34px (alvo de toque acessível),
+     o que torna o WRAP inteiro 34px de altura — sem este align-self, o "Verificar duplicidade" esticava
+     junto (também 34px), enquanto o campo de busca em si (dentro do wrap, mas centralizado nele) continuava
+     com sua altura natural de 28px. Com align-self:center, o botão volta à própria altura natural (28px,
+     idêntica à do campo — mesmo padding/fonte/borda) e fica centralizado na mesma altura de linha (34px)
+     que o campo já usa — exatamente o mesmo alinhamento vertical de antes, só que agora com a MESMA altura. */
+  .reg-toolbar-acoes #btnVerificarDuplicidade{order:1;flex:0 0 auto;white-space:nowrap;font-size:12px;padding:6px 10px;align-self:center;}
   /* flex-basis:0 (em vez de auto): faz o item calcular o tamanho a partir do espaço disponível, não do
      conteúdo — com flex-basis:auto, o navegador contava a largura "natural" do campo de busca ao decidir
      se cabia ao lado de "Verificar duplicidade" e, mesmo com min-width:0, mandava a dupla inteira para uma
@@ -1355,6 +1368,17 @@ tbody tr:hover{background:var(--navy-50);}
   background:var(--navy-900);color:#fff;border-radius:12px 12px 0 0;position:sticky;top:0;
 }
 .modal-head h3{margin:0;font-size:15px;font-family:var(--mono);}
+/* Título do modal "Importar arquivo do banco": no desktop, o nome da conta some junto do rótulo assim que
+   é definido, na mesma linha ("Título — Conta", igual aos demais modais do app). No mobile, o requisito é
+   diferente por completo — nunca a mesma linha (mesmo havendo espaço) e só a partir do passo 3 da
+   importação — por isso os dois textos são gerados sempre os dois no HTML e a media query abaixo troca
+   qual aparece, em vez de calcular a diferença em JS (mesmo padrão de outras telas do app que alternam
+   entre uma versão desktop e uma mobile do mesmo conteúdo via CSS, ex.: tabela vs. cards de Registros). */
+.import-titulo-mobile{display:none;}
+@media(max-width:700px){
+  .import-titulo-desktop{display:none;}
+  .import-titulo-mobile{display:block;}
+}
 .modal-head-acoes{display:flex;align-items:center;gap:10px;}
 .modal-head-acoes .btn{color:#fff;border-color:rgba(255,255,255,.35);}
 .modal-head-acoes .btn:hover{background:rgba(255,255,255,.12);}
@@ -8112,6 +8136,22 @@ function nomeNavegadorIOS(){
   if(/DuckDuckGo/.test(ua)) return 'DuckDuckGo';
   return 'Safari';
 }
+/* Alguns campos (ex.: variação % da Simulação de Cenários — ver .cenario-input-3d) usam de propósito uma
+   fonte menor que 16px, para caber num espaço bem estreito: no mobile isso faz o navegador (principalmente
+   Safari/iOS, mas também outros baseados em WebKit) aumentar o zoom da página ao focar o campo — comporta-
+   mento mantido de propósito aqui (ajuda a enxergar/editar um campo tão pequeno), ao contrário do que se
+   faz em campos maiores (ver .field input, onde o próprio font-size:16px evita o zoom). O problema é só
+   garantir que esse zoom SEMPRE volte ao normal sozinho ao sair do campo (clique fora, perda de foco ou
+   fim da edição — todos os três disparam 'blur'). Alternar rapidamente uma restrição de escala no próprio
+   <meta name=viewport> força o navegador a recalcular e voltar ao zoom padrão — truque necessário porque
+   não existe nenhuma API direta para "desfazer" esse zoom automático do sistema. */
+function neutralizarZoomMobileAoSairDoCampo(){
+  const viewport = document.querySelector('meta[name="viewport"]');
+  if(!viewport) return;
+  const original = viewport.getAttribute('content');
+  viewport.setAttribute('content', original + ', maximum-scale=1.0');
+  setTimeout(()=>{ viewport.setAttribute('content', original); }, 60);
+}
 /* Faixa fina de avisos do PWA (item 11/12) — nova versão pronta para atualizar, e/ou opção de instalar
    como aplicativo. Fica no topo em qualquer tela (inicial ou app), sem depender de UI.appIniciado.
    A opção de instalar tem dois caminhos, mutuamente exclusivos, para cobrir todos os navegadores: o
@@ -12718,7 +12758,10 @@ function renderImportModal(){
   return `
   <div class="overlay" id="ovImport" ${attrZIndexModal('importStep')}>
     <div class="modal" style="width:${largura};">
-      <div class="modal-head"><h3>⬆️ Importar arquivo do banco${UI.importMap.contaDestino ? ` — ${escapeHtml(UI.importMap.contaDestino)}` : ''}</h3><button class="close-x" id="closeImport">✕</button></div>
+      <div class="modal-head"><h3>
+        <span class="import-titulo-desktop">⬆️ Importar arquivo do banco${UI.importMap.contaDestino ? ` — ${escapeHtml(UI.importMap.contaDestino)}` : ''}</span>
+        <span class="import-titulo-mobile">⬆️ Importar arquivo do banco${(UI.importStep>=3 && UI.importMap.contaDestino) ? `<br>${escapeHtml(UI.importMap.contaDestino)}` : ''}</span>
+      </h3><button class="close-x" id="closeImport">✕</button></div>
       <div class="modal-body">
         ${UI.modalTaxasConversao ? renderModalTaxasConversao() : ""}
         ${UI.modalParcelasEmprestimo ? renderModalParcelasEmprestimo() : ""}
@@ -13987,13 +14030,19 @@ function bindEvents(){
     // Cenários interativos (seção 9): os percentuais de Conservador/Otimista são editáveis — Provável nunca
     // muda, pois é sempre a projeção principal. UI.intelCenarioParams guarda só os campos alterados; os
     // demais continuam vindo de CENARIO_PADRAO (ver calcInteligenciaFinanceira).
-    document.querySelectorAll('[data-cenario-param]').forEach(inp=> inp.addEventListener('change', e=>{
-      const [cenario, campo] = inp.dataset.cenarioParam.split('|');
-      const v = parseFloat(e.target.value);
-      UI.intelCenarioParams = UI.intelCenarioParams || { conservador:{...CENARIO_PADRAO.conservador}, otimista:{...CENARIO_PADRAO.otimista} };
-      UI.intelCenarioParams[cenario][campo] = isNaN(v) ? 0 : v/100;
-      render();
-    }));
+    document.querySelectorAll('[data-cenario-param]').forEach(inp=> {
+      inp.addEventListener('change', e=>{
+        const [cenario, campo] = inp.dataset.cenarioParam.split('|');
+        const v = parseFloat(e.target.value);
+        UI.intelCenarioParams = UI.intelCenarioParams || { conservador:{...CENARIO_PADRAO.conservador}, otimista:{...CENARIO_PADRAO.otimista} };
+        UI.intelCenarioParams[cenario][campo] = isNaN(v) ? 0 : v/100;
+        render();
+      });
+      // Ver neutralizarZoomMobileAoSairDoCampo: esse campo usa fonte pequena de propósito (cabe no espaço
+      // estreito) e por isso dispara zoom automático do navegador ao focar — 'blur' cobre os três gatilhos
+      // do requisito (tocar fora, perder o foco, terminar a edição) num só evento.
+      inp.addEventListener('blur', neutralizarZoomMobileAoSairDoCampo);
+    });
     document.getElementById('btnResetarCenarios')?.addEventListener('click', ()=>{ UI.intelCenarioParams = null; render(); });
   }
   document.getElementById('regPorPagina')?.addEventListener('change', e=>{
