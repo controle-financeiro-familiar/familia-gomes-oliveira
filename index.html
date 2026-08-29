@@ -2960,9 +2960,9 @@ let CATEGORIAS = [
   ['PJ CISM-BR','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
   ['Outros Serviços PJ','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
   ['Salário TRT','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
-  ['Assistência Saúde','Renda Familiar','Renda de Trabalho e Serviços','Receita','Variável'],
-  ['Assistência Pré-Escolar','Renda Familiar','Renda de Trabalho e Serviços','Receita','Variável'],
-  ['Auxílio Alimentação','Renda Familiar','Renda de Trabalho e Serviços','Receita','Variável'],
+  ['Assistência Saúde','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
+  ['Assistência Pré-Escolar','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
+  ['Auxílio Alimentação','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
   ['Aluguel Garagem','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
   ['Aluguel Apto Ribeirão Preto','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
   ['Arrendamento Fazenda','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
@@ -7809,13 +7809,16 @@ function gerarReplicacaoContracheque(conta){
           existente.tipo = itemBase.tipo; existente.natureza = itemBase.natureza; existente.pgto = itemBase.pgto;
           existente.parcelaAtual = parcelaAtualAlvo; existente.totalParcelas = totalParcelasAlvo;
           existente.responsavel = itemBase.responsavel||''; existente.entreFamilia = !!itemBase.entreFamilia;
+          // Fatura/Competência de um lançamento replicado é sempre a competência do PRÓPRIO mês-alvo (ex.:
+          // 09/2026 para o mês seguinte ao contracheque-base de 08/2026), nunca copiada do contracheque-base.
+          existente.competencia = competenciaAlvo;
           atualizados++;
         }
       } else {
         STATE.transactions.push({
           id: uid(), data: dataAlvo, descricao: itemBase.descricao, valor: valorCorrente,
           categoria: itemBase.categoria, grupo: itemBase.grupo, subgrupo: itemBase.subgrupo,
-          tipo: itemBase.tipo, natureza: itemBase.natureza, conta, pgto: itemBase.pgto, competencia:'',
+          tipo: itemBase.tipo, natureza: itemBase.natureza, conta, pgto: itemBase.pgto, competencia: competenciaAlvo,
           parcelaAtual: parcelaAtualAlvo, totalParcelas: totalParcelasAlvo, parcelamentoId: itemBase.parcelamentoId||'',
           responsavel: itemBase.responsavel||'', entreFamilia: !!itemBase.entreFamilia, contrachequeProjecao:true
         });
@@ -10192,7 +10195,7 @@ function renderRegistros(){
     {campo:'natureza', label:'Natureza', options:[{value:'Fixo',label:'Fixo'},{value:'Variável',label:'Variável'}]},
     {campo:'tipo', label:'Tipo', options:[{value:'Despesa',label:'Despesa'},{value:'Receita',label:'Receita'}]},
     {campo:'conta', label:'Conta', options:contasUsadas.map(c=>({value:c,label:c}))},
-    {campo:'fatura', label:'Fatura', options:faturasUsadas.map(c=>({value:c,label:competenciaLabel(c)}))},
+    {campo:'fatura', label:'Fatura/Competência', options:faturasUsadas.map(c=>({value:c,label:competenciaLabel(c)}))},
   ];
   const qtdAtivos = contarFiltrosPadraoAtivos(f, camposFiltroReg);
   return `
@@ -10208,7 +10211,7 @@ function renderRegistros(){
       <summary>ℹ️ Informações sobre esta tela</summary>
       <div class="ajuda-fluxo-conteudo">
         <p><b>Busca</b>: o campo de busca considera exclusivamente a <b>Descrição</b> do lançamento — não busca por categoria, conta ou valor. Pressione Enter ou clique no ícone 🔍 para aplicar.</p>
-        <p><b>Filtros</b>: o filtro <b>Data</b> permite escolher um intervalo (data inicial e final) livremente, com atalhos para períodos comuns (Hoje, Ontem, Últimos 7/30 dias, Este mês, Mês anterior) ou um período Personalizado — totalmente independente do período exibido no cabeçalho da aplicação. Grupo, Natureza, Tipo, Conta e Fatura aceitam marcar mais de uma opção ao mesmo tempo (dentro do mesmo filtro, os registros que atendem a qualquer uma das opções marcadas aparecem); filtros diferentes se combinam entre si. Cada alteração já atualiza a lista e os totais na hora, sem recarregar a página. Use "↺ Restaurar filtros padrão" para voltar a ver todos os lançamentos.</p>
+        <p><b>Filtros</b>: o filtro <b>Data</b> permite escolher um intervalo (data inicial e final) livremente, com atalhos para períodos comuns (Hoje, Ontem, Últimos 7/30 dias, Este mês, Mês anterior) ou um período Personalizado — totalmente independente do período exibido no cabeçalho da aplicação. Grupo, Natureza, Tipo, Conta e Fatura/Competência aceitam marcar mais de uma opção ao mesmo tempo (dentro do mesmo filtro, os registros que atendem a qualquer uma das opções marcadas aparecem); filtros diferentes se combinam entre si. Cada alteração já atualiza a lista e os totais na hora, sem recarregar a página. Use "↺ Restaurar filtros padrão" para voltar a ver todos os lançamentos.</p>
         <p><b>Seleção em lote</b>: marque as caixas na primeira coluna (ou o checkbox "selecionar todos" no cabeçalho, que cobre a página atual) para abrir a barra de ações — mesmo componente usado nos modais da aba Contas e Cartões. Com pelo menos um lançamento marcado, é possível "✏️ Editar em Lote" (altera só os campos habilitados, em todos os selecionados de uma vez) ou "🗑️ Excluir selecionados" (pede confirmação antes de remover).</p>
         <p><b>Verificar duplicidade</b>: compara todos os lançamentos já registrados e aponta pares com data, valor e conta muito parecidos — útil depois de uma importação para conferir se algo entrou duas vezes.</p>
         <p><b>Importar arquivo do banco</b>: aceita extratos (.ofx/.xlsx) e faturas de cartão, holerites em PDF para contas do tipo Contracheque, e extratos .csv do PicPay para a conta Reserva de Emergência (com descrição e classificação — Aporte, Uso da Reserva ou Rendimento — geradas automaticamente a partir do Tipo de cada lançamento), com detecção automática de compras parceladas e de possíveis duplicatas antes de confirmar. O mesmo fluxo também pode ser iniciado direto pelo botão 📥 de uma conta específica (aba Contas e Cartões) ou de um cartão específico (coluna 📥 da tabela de Cartões) — nesse caso a conta de destino já vem travada, para nunca importar para a conta errada.</p>
@@ -10246,7 +10249,7 @@ function renderRegistros(){
     ${list.length===0 ? `<div class="empty-state"><div class="big">🗒️</div>Nenhum lançamento encontrado com esses filtros.</div>
     <div class="registros-rodape registros-rodape-vazio">${rodapePaginacao}</div>` : `
     <div class="table-wrap table-wrap-registros reg-tabela-principal"><table class="tabela-registros">
-      <thead><tr>${renderColunaSelecaoLoteHead('Reg', pageList.map(t=>t.id), UI.regSelecionados)}<th>Data</th><th>Descrição</th><th>Grupo</th><th>Natureza</th><th>Tipo</th><th>Conta</th><th>Fatura</th><th style="text-align:right;">Valor</th><th class="col-acoes">Ações</th></tr></thead>
+      <thead><tr>${renderColunaSelecaoLoteHead('Reg', pageList.map(t=>t.id), UI.regSelecionados)}<th>Data</th><th>Descrição</th><th>Grupo</th><th>Natureza</th><th>Tipo</th><th>Conta</th><th>Fatura/Competência</th><th style="text-align:right;">Valor</th><th class="col-acoes">Ações</th></tr></thead>
       <tbody>
         ${pageList.map(t=>`
           <tr>
@@ -15983,7 +15986,12 @@ function bindEvents(){
       const info = catInfo(r.categoria);
       const valorAbs = Math.abs(Number(r.valor)||0);
       const ehCartao = r.pgto==='Cartão de Crédito' && STATE.cartoes.includes(r.conta);
-      const competencia = ehCartao ? `${UI.importRefAno}-${pad2(UI.importRefMes)}` : '';
+      // Fatura/Competência: além da fatura do cartão, TODO lançamento importado de uma conta do tipo
+      // Contracheque recebe a competência do próprio contracheque (período selecionado antes do arquivo) —
+      // sem exceção por rubrica (remuneração, benefícios, empréstimos consignados, descontos etc., ver
+      // seção 10 do requisito), nunca só nos descontos de empréstimo.
+      const ehContracheque = STATE.contaTipos[r.conta]==='Contracheque';
+      const competencia = (ehCartao || ehContracheque) ? `${UI.importRefAno}-${pad2(UI.importRefMes)}` : '';
       const ehTransferencia = r.transferenciaInterna && r.contaTransferencia;
       const novaTx = {
         id: uid(), data:r.data, descricao:r.descricao, valor:valorAbs,
