@@ -832,13 +832,13 @@ tbody tr:hover{background:var(--navy-50);}
 .tabela-registros td:nth-child(4), .tabela-registros th:nth-child(4){white-space:normal;overflow-wrap:break-word;word-break:break-word;text-overflow:clip;}
 .tabela-registros td:last-child{overflow:visible;text-overflow:clip;}
 .tabela-registros th:nth-child(1){width:3%;}
-.tabela-registros th:nth-child(2){width:8%;}
-.tabela-registros th:nth-child(3){width:20%;}
+.tabela-registros th:nth-child(2){width:7%;}
+.tabela-registros th:nth-child(3){width:19%;}
 .tabela-registros th:nth-child(4){width:12%;}
 .tabela-registros th:nth-child(5){width:8%;}
-.tabela-registros th:nth-child(6){width:8%;}
+.tabela-registros th:nth-child(6){width:7%;}
 .tabela-registros th:nth-child(7){width:10%;}
-.tabela-registros th:nth-child(8){width:10%;}
+.tabela-registros th:nth-child(8){width:13%;}
 .tabela-registros th:nth-child(9){width:9%;}
 .tabela-registros th:nth-child(10){width:12%;}
 .registros-rodape{
@@ -3168,7 +3168,7 @@ const GRUPO_COLORS = {
 const GRUPO_ICONS = {
   "Moradia/Habitação":"🏠","Transporte":"🚗","Alimentação":"🍽️","Saúde":"🩺",
   "Educação":"🎓","Lazer e Entretenimento":"🎉","Cuidados Pessoais":"🧖",
-  "Filhos e Pets":"🐾","Caridade e Generosidade":"🤝","Economias":"💰","Dívidas e Empréstimos":"📉",
+  "Filhos e Pets":"🐾","Caridade e Generosidade":"🤝","Economias":"🪙","Dívidas e Empréstimos":"📉",
   "Renda Familiar":"💵","Tributos e Despesas Bancárias":"💸","Transações":"🔁",
   "Saldos e Ajustes":"⚖️","Tecnologia e Eletrônicos":"💻","Sem Grupo":"❓"
 };
@@ -9130,7 +9130,7 @@ function renderDashboard(){
   <div class="grid-cards">
     <div class="kpi receita"><div class="bar"></div><div class="lbl">💰 Receitas do mês</div><div class="val">${fmtBRL(d.receitasTotal)}</div></div>
     <div class="kpi despesa"><div class="bar"></div><div class="lbl">💸 Despesas do mês</div><div class="val">${fmtBRL(d.despesasTotal)}</div></div>
-    <div class="kpi saldo"><div class="bar"></div><div class="lbl">⚖️ Resultado do mês</div><div class="val">${fmtBRL(d.saldo)}</div></div>
+    <div class="kpi saldo"><div class="bar"></div><div class="lbl">⚖️ Saldo do mês</div><div class="val">${fmtBRL(d.saldo)}</div></div>
     <div class="kpi"><div class="bar"></div><div class="lbl">🐖 % Poupança</div><div class="val">${fmtPercentSmart(d.poupanca*100)}</div></div>
   </div>
   ${(()=>{
@@ -9147,7 +9147,7 @@ function renderDashboard(){
       <p><b>💰 Receitas, 💸 Despesas e ⚖️ Saldo</b>: somam todos os lançamentos da competência selecionada no topo da página (mês/ano). O <b>🐖 % Poupança</b> é a fração da receita do mês que sobrou como saldo positivo.</p>
       <p><b>🎯 Metas de Gastos</b>: aparece somente quando existem metas cadastradas para o mês; clique no card para abrir a aba Metas de Gastos com o detalhe de cada uma.</p>
       <p><b>👪 Renda Familiar</b>: distribui a receita do mês por fonte (subcategoria) e por responsável, sempre a partir dos lançamentos — nunca de um valor fixo.</p>
-      <p><b>🏦 Investimentos</b> e <b>💳 Fatura atual por cartão</b>: usam os mesmos cálculos das abas Contas e Cartões e Fluxo de Caixa, então ficam sempre consistentes entre si.</p>
+      <p><b>🪙 Economias</b> e <b>💳 Fatura atual por cartão</b>: usam os mesmos cálculos das abas Contas e Cartões e Fluxo de Caixa, então ficam sempre consistentes entre si.</p>
       <p><b>🔥 Mapa de Calor de Despesas</b>: uma célula por dia (7 meses — 3 antes e 3 depois do mês selecionado no cabeçalho, sempre no centro), com a cor mais forte quanto maior o total de despesas naquele dia. Clique num dia com despesas para abrir a lista de lançamentos daquele dia, com filtros e seleção em lote própria — sem precisar trocar de aba.</p>
       <p style="margin-bottom:0;"><b>📊 Visão Geral</b>: mostra como a despesa do mês se distribui entre os grupos (gráfico de barras), a proporção entre despesas e saldo positivo dentro da receita (donut) e a evolução de receitas e despesas nos últimos 6 meses — para comparar o mês atual com o comportamento recente sem precisar trocar de aba. Para uma análise mais aprofundada (tendência, sazonalidade, projeções), use a aba <b>🧠 Inteligência Financeira</b>.</p>
     </div>
@@ -11197,7 +11197,7 @@ function renderInteligencia(){
   const dadosInsuficientes = ctx.historico.length<3;
 
   return `
-  <div class="panel">
+  <div class="panel" style="padding-bottom: 8px;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
       <div>
         <h2 style="margin-bottom:2px;">🧠 Inteligência Financeira</h2>
@@ -11248,7 +11248,7 @@ function renderInteligencia(){
     <div class="empty-state"><div class="big">📊</div><b>Dados insuficientes para uma projeção confiável.</b><br>Continue registrando seus lançamentos para aumentar a precisão da análise (mínimo de 3 meses de histórico com os filtros atuais).</div>
   </div>` : `
 
-  <div class="panel">
+  <div class="panel" style="padding-bottom: 8px;">
     <h2>Resumo Executivo</h2>
     <div class="grid-cards" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));">
       ${cardResumo('💰','Receita Média', ctx.mediaReceita, undefined, ctx.receitaProjetadaMedia)}
