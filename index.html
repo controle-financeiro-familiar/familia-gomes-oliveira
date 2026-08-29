@@ -2824,7 +2824,7 @@ let CATEGORIAS = [
   ['Aplicativos de Entrega (iFood, Keeta, 99 Food)','Alimentação','Delivery e Praticidade','Despesa','Variável'],
   ['Outras Despesas de Alimentação','Alimentação','Outros','Despesa','Variável'],
   ['Seguro de Vida','Saúde','Proteção Familiar','Despesa','Fixo'],
-  ['Plano de Saúde (Mensalidade)','Saúde','Proteção Familiar','Despesa','Fixo'],
+  ['Plano de Saúde','Saúde','Proteção Familiar','Despesa','Fixo'],
   ['Plano Odontológico','Saúde','Proteção Familiar','Despesa','Fixo'],
   ['Taxas de Coparticipação de Consultas ou Exames','Saúde','Proteção Familiar','Despesa','Fixo'],
   ['Medicamentos (Contínuos, Manipulados e Gerais)','Saúde','Medicamentos e Farmácia','Despesa','Variável'],
@@ -3536,7 +3536,8 @@ const CATEGORIAS_RENOMEADAS = {
   'Pilates e treinos funcionais': 'Pilates e Treinos Funcionais',
   'Pix (Enviado)': 'Pix',
   'Pix (Recebido)': 'Pix',
-  'Plano de saúde (mensalidade)': 'Plano de Saúde (Mensalidade)',
+  'Plano de saúde (mensalidade)': 'Plano de Saúde',
+  'Plano de Saúde (Mensalidade)': 'Plano de Saúde',
   'Plano de saúde pet ou consultas veterinárias particulares': 'Saúde Pet',
   'Plano odontológico': 'Plano Odontológico',
   'Pneus e alinhamento/balanceamento': 'Pneus e Alinhamento/Balanceamento',
@@ -3802,7 +3803,7 @@ const SUGESTOES = {
   /* Rubricas de desconto e crédito do contracheque TRT (Demonstrativo de Pagamento) — usadas só como
      reserva quando o código da rubrica não é reconhecido (o código tem prioridade, ver
      RUBRICA_TRT_CODIGO_CATEGORIA em buildParsedFromMap). */
-  "abas - 15":"Plano de saúde (mensalidade)","anajustra":"Contribuições Associativas/Sindicais",
+  "abas - 15":"Plano de Saúde","anajustra":"Contribuições Associativas/Sindicais",
   "empréstimos":"Parcela de empréstimo pessoal (bancos ou fintechs)","emprestimos":"Parcela de empréstimo pessoal (bancos ou fintechs)",
   "contribuição rpps":"Contribuição Previdenciária (RPPS)","contribuicao rpps":"Contribuição Previdenciária (RPPS)",
   "imposto de renda":"Imposto de Renda Retido na Fonte (IRRF)",
@@ -13432,7 +13433,7 @@ function calcularMargemConsignavelTRT(remuneracaoConsignacao, totalDescontos){
 const RUBRICA_TRT_CODIGO_CATEGORIA = {
   '1':'Salário TRT', '10':'Salário TRT', '31':'Salário TRT', '36':'Salário TRT', '60':'Salário TRT',
   '200701':'Assistência Saúde', '740':'Assistência Pré-Escolar', '771':'Auxílio Alimentação',
-  '297011':'Plano de Saúde (Mensalidade)', '97061':'Contribuições Associativas/Sindicais',
+  '297011':'Plano de Saúde', '299033':'Plano de Saúde', '97061':'Contribuições Associativas/Sindicais',
   '97204':'Parcela de Empréstimo Pessoal (Bancos ou Fintechs)', '97213':'Parcela de Empréstimo Pessoal (Bancos ou Fintechs)',
   '99504':'Contribuição Previdenciária (RPPS)', '99700':'Imposto de Renda Retido na Fonte (IRRF)'
 };
@@ -13879,9 +13880,15 @@ function buildParsedFromMap(){
     // usado pelos outros parsers nesse mesmo índice (fatura PDF/XLSX-PB), por isso tratado à parte via
     // e.trntype (ver árvore de classificação abaixo) e nunca lido como tipoExplicito para esse formato.
     // r[4], para o PDF do contracheque TRT, é o código da rubrica (não o "tipoExplicito" usado pelos
-    // demais formatos nesse mesmo índice) — por isso excluído da leitura de tipoExplicito e lido à parte
-    // em codigoRubrica (ver RUBRICA_TRT_CODIGO_CATEGORIA, usado logo abaixo para classificar cada rubrica).
-    entries = raw.rows.map(r=>({ data:r[0], descricao:r[1], valor:r[2], tipoExplicito: (raw.type==='ofx'||raw.type==='pdf') ? null : (r[4]||null), trntype: raw.type==='ofx' ? (r[4]||null) : null, parcelaExplicita: r[5]||null, parcelasRestantes: raw.type==='pdf' ? (r[3]||0) : 0, categoriaExplicita: r[6]||null, codigoRubrica: raw.type==='pdf' ? (r[4]||null) : null }));
+    // demais formatos nesse mesmo índice) — por isso lido à parte em codigoRubrica (ver
+    // RUBRICA_TRT_CODIGO_CATEGORIA, usado logo abaixo para classificar cada rubrica). O tipo de cada
+    // rubrica do contracheque é determinado exclusivamente pela COLUNA em que o valor foi impresso no PDF
+    // — CRÉDITOS (valor positivo) = Receita, DÉBITOS (valor negativo) = Despesa, já codificada no sinal de
+    // r[2] por parseContrachequeTRT — e não pela descrição/código da rubrica: por isso, aqui, tipoExplicito
+    // já vem definido pelo sinal do valor para todo PDF (a importação de PDF só existe para conta do tipo
+    // Contracheque), igual em espírito ao TRNTYPE do OFX ou ao sinal já determinado da fatura PDF/XLSX-PB.
+    // Isso prevalece sobre qualquer sugestão de tipo por palavra-chave da descrição mais abaixo.
+    entries = raw.rows.map(r=>({ data:r[0], descricao:r[1], valor:r[2], tipoExplicito: raw.type==='pdf' ? (r[2]<0 ? 'Despesa' : 'Receita') : (raw.type==='ofx' ? null : (r[4]||null)), trntype: raw.type==='ofx' ? (r[4]||null) : null, parcelaExplicita: r[5]||null, parcelasRestantes: raw.type==='pdf' ? (r[3]||0) : 0, categoriaExplicita: r[6]||null, codigoRubrica: raw.type==='pdf' ? (r[4]||null) : null }));
   } else {
     let rows = raw.rows;
     if(UI.importMap.temCabecalho) rows = rows.slice(1);
