@@ -1828,6 +1828,16 @@ summary::marker{content:'';}
 .cartao-col-textos{display:flex;flex-direction:column;gap:3px;min-width:0;justify-content:center;}
 .cartao-col-nome{font-weight:700;font-size:13.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .cartao-col-badges{display:flex;gap:5px;flex-wrap:wrap;align-items:center;}
+/* Limite de crédito do cartão, exibido dentro da própria célula do cartão (nunca uma coluna nova) —
+   evita qualquer risco de rolagem horizontal na tabela, inclusive no mobile (ver renderCartoes). */
+.limite-cartao-info{display:flex;flex-direction:column;gap:2px;margin-top:3px;max-width:230px;}
+.limite-cartao-valores{font-size:11px;color:#8393ac;white-space:nowrap;}
+.limite-cartao-valores b{color:var(--ink);font-weight:700;}
+.limite-cartao-barra{display:flex;align-items:center;gap:6px;}
+.limite-cartao-barra .progress-track{height:6px;min-width:50px;}
+.limite-cartao-pct{font-size:11px;font-weight:700;white-space:nowrap;}
+.limite-cartao-disponivel{font-size:11px;color:#8393ac;white-space:nowrap;}
+.limite-cartao-disponivel b{color:var(--ink);font-weight:700;}
 .bandeira-cartao{display:inline-flex;align-items:center;height:19px;padding:0 7px;border-radius:4px;font-size:9.5px;font-weight:800;letter-spacing:.3px;line-height:1;}
 .bandeira-cartao-grande{height:24px;padding:0 10px;font-size:11px;border-radius:5px;}
 .bandeira-cartao-logo{height:9px;width:auto;object-fit:contain;vertical-align:bottom;flex-shrink:0;}
@@ -7640,6 +7650,13 @@ function progressoAteVencimento(st){
   return Math.max(0, Math.min(1, (hoje-fech)/total));
 }
 const COR_STATUS_FATURA = { 'paga':'#1e8e5a', 'atrasada':'#c0392b', 'fecha-amanha':'#1c5aa8', 'vence-breve':'#a3590a', 'aberta':'#8a6d00', 'proxima':'#8393ac' };
+/* Cor da barra de utilização do limite de crédito (ver renderCartoes): verde enquanto sobra bastante
+   margem, âmbar perto do limite, vermelho a partir de 90% ou já excedido — nunca escondendo o estouro. */
+function corLimiteCartao(pctUtilizado){
+  if(pctUtilizado>=90) return '#c0392b';
+  if(pctUtilizado>=70) return '#a3590a';
+  return '#1e8e5a';
+}
 /* Geração/atualização automática das parcelas futuras de uma compra parcelada, a partir da parcela de
    referência informada (a que acabou de ser cadastrada, importada ou editada). Sempre que chamada:
    1) remove qualquer parcela futura já existente daquela mesma compra (mesmo parcelamentoId, número de
@@ -10646,6 +10663,15 @@ function renderCartoes(){
         const st = statusDetalhadoFatura(c, competencia);
         const progresso = (st.chave!=='paga' && st.chave!=='proxima' && st.chave!=='fechada-sem-lancamentos') ? progressoAteVencimento(st) : null;
         const infoPagamento = st.chave==='paga' ? (st.pagamento==='parcial' ? 'Parcialmente' : 'Totalmente') : (st.chave==='fechada-sem-lancamentos' ? 'Sem lançamentos' : null);
+        // Limite de crédito do cartão (independente da competência exibida — reflete o comprometido em
+        // TODAS as faturas ainda em aberto, ver comprometidoGrupoCartao) — só aparece quando o cartão tem
+        // um Limite total configurado; recalculado a cada render(), então acompanha ao vivo qualquer
+        // lançamento novo/editado/excluído/pago/estornado, sem precisar fechar e reabrir nada.
+        const limiteTotalC = limiteTotalCartao(c);
+        const temLimiteConfigurado = limiteTotalC > 0;
+        const comprometidoC = temLimiteConfigurado ? comprometidoGrupoCartao(c) : 0;
+        const limiteDisponivelC = limiteTotalC - comprometidoC;
+        const pctUtilizadoC = temLimiteConfigurado ? (comprometidoC/limiteTotalC*100) : 0;
         return `<tr class="linha-fatura ${st.chave}">
           <td data-label="">
             <div class="cartao-col">
@@ -10658,6 +10684,15 @@ function renderCartoes(){
                   ${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
                   ${ehMelhor ? `<span class="tag melhor-hoje-badge" title="Compras realizadas neste cartão terão o maior prazo até o pagamento da fatura">🏆 Melhor opção hoje</span>` : ''}
                 </div>
+                ${temLimiteConfigurado ? `
+                <div class="limite-cartao-info" title="Limite ${comprometidoC>limiteTotalC?'excedido':'utilizado'}: ${fmtBRL(comprometidoC)} de ${fmtBRL(limiteTotalC)} (${pctUtilizadoC.toFixed(0)}%)">
+                  <div class="limite-cartao-valores"><b>${fmtBRL(comprometidoC)}</b> de ${fmtBRL(limiteTotalC)}</div>
+                  <div class="limite-cartao-barra">
+                    <div class="progress-track"><div class="progress-fill" style="width:${Math.min(100,Math.max(0,pctUtilizadoC)).toFixed(0)}%;background:${corLimiteCartao(pctUtilizadoC)};"></div></div>
+                    <span class="limite-cartao-pct" style="color:${corLimiteCartao(pctUtilizadoC)};">${pctUtilizadoC.toFixed(0)}%</span>
+                  </div>
+                  <div class="limite-cartao-disponivel">Limite Disponível <b>${fmtBRL(limiteDisponivelC)}</b></div>
+                </div>` : ''}
               </div>
             </div>
           </td>
