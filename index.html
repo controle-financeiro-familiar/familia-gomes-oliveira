@@ -2987,11 +2987,30 @@ const CONTAS_DEFAULT = ["Inter Ariana","NuConta Ariana","BB Ariana","BB Bruno","
 const CARTOES_DEFAULT = ["BB Elo Nanquim","BB Visa Gold","BB Visa Infinite","NuCartão Ariana","Personnalité Black"];
 const MEIOS_PAGAMENTO_DEFAULT = ["Cartão de Crédito","Débito em Conta","Dinheiro","Folha de Pagamento","Pix"];
 const TIPOS_CONTA = ["Conta Corrente","Poupança","Conta PJ","Cartão de Crédito","Contracheque","Reserva de Emergência"];
+/* Rótulo exibido ao usuário para um tipo de conta — remove a palavra "Conta" quando ela é só um prefixo
+   redundante do nome (ex.: "Conta Corrente" → "Corrente", "Conta PJ" → "PJ"), mantendo os identificadores
+   internos em TIPOS_CONTA/STATE.contaTipos intactos (usados em centenas de comparações por todo o app) —
+   só a apresentação muda, nunca o dado armazenado. Tipos que já não começam com "Conta " (Contracheque,
+   Cartão de Crédito, Reserva de Emergência) saem inalterados. */
+function rotuloTipoConta(tipo){ return String(tipo||'').replace(/^Conta\s+/,''); }
+/* Tipos de conta bancária "tradicionais" (têm Banco/Agência/Nº conta no cadastro) — usado tanto para
+   decidir quais campos extras mostrar no modal de conta quanto para localizar a conta de destino do
+   líquido de um contracheque pela combinação Agência+Nº conta (ver localizarContaPorAgenciaConta). */
+const TIPOS_CONTA_BANCARIA = ["Conta Corrente","Conta PJ","Poupança","Reserva de Emergência"];
 const CONTA_TIPOS_DEFAULT = {
   "Inter Ariana":"Conta PJ","NuConta Ariana":"Conta Corrente","BB Ariana":"Conta Corrente","BB Bruno":"Conta Corrente","Itaú Bruno":"Conta Corrente","CEF Bruno":"Poupança","BB Elo Nanquim":"Cartão de Crédito","BB Visa Gold":"Cartão de Crédito","BB Visa Infinite":"Cartão de Crédito","NuCartão Ariana":"Cartão de Crédito","Personnalité Black":"Cartão de Crédito","TRT":"Contracheque","PicPay":"Reserva de Emergência"
 };
 const CONTA_RESPONSAVEL_DEFAULT = {
   "Inter Ariana":"Ariana","NuConta Ariana":"Ariana","BB Ariana":"Ariana","BB Bruno":"Bruno","Itaú Bruno":"Bruno","CEF Bruno":"Bruno","BB Elo Nanquim":"Bruno","BB Visa Gold":"Ariana","BB Visa Infinite":"Bruno","NuCartão Ariana":"Ariana","Personnalité Black":"Bruno","TRT":"Bruno"
+};
+/* Bandeira padrão dos cartões já conhecidos pelo app — atribuída automaticamente ao identificar o cartão
+   pelo nome, sem precisar de cadastro manual. Só serve de PONTO DE PARTIDA: uma escolha explícita do
+   usuário em Configurações (STATE.contaBandeira, gravada no arquivo) sempre prevalece sobre este padrão
+   (mesma convenção de merge de CONTA_TIPOS_DEFAULT/CONTA_RESPONSAVEL_DEFAULT — ver loadCSVConfig), e
+   cartões fora desta lista continuam exigindo escolha manual, normalmente. */
+const CONTA_BANDEIRA_DEFAULT = {
+  "BB Elo Nanquim":"Elo", "BB Visa Gold":"Visa", "BB Visa Infinite":"Visa",
+  "NuCartão Ariana":"Mastercard", "Personnalité Black":"Mastercard"
 };
 const CARDCFG_DEFAULT = {
   "BB Visa Gold":{fechamento:16, vencimento:28},"BB Visa Infinite":{fechamento:24, vencimento:5},"BB Elo Nanquim":{fechamento:16, vencimento:28},"Personnalité Black":{fechamento:25, vencimento:1},"NuCartão Ariana":{fechamento:7, vencimento:14}
@@ -3305,6 +3324,7 @@ function renomearContaEmTodosOsDados(antiga, nova){
   if(STATE.contaTipos[antiga]!==undefined){ STATE.contaTipos[nova]=STATE.contaTipos[antiga]; delete STATE.contaTipos[antiga]; }
   if(STATE.contaResponsavel[antiga]!==undefined){ STATE.contaResponsavel[nova]=STATE.contaResponsavel[antiga]; delete STATE.contaResponsavel[antiga]; }
   if(STATE.contaBandeira[antiga]!==undefined){ STATE.contaBandeira[nova]=STATE.contaBandeira[antiga]; delete STATE.contaBandeira[antiga]; }
+  if(STATE.contaExtra[antiga]!==undefined){ STATE.contaExtra[nova]=STATE.contaExtra[antiga]; delete STATE.contaExtra[antiga]; }
   STATE.transactions.forEach(t=>{ if(t.conta===antiga) t.conta=nova; });
   corrigirDescricaoSaldoAnterior(); // a descrição "Saldo Anterior - [Nome da Conta]" embute o nome — atualiza junto com o rename
   // Lançamentos previstos vinculados a um cartão têm, por padrão, a descrição igual ao nome do cartão
@@ -3360,6 +3380,8 @@ function excluirConta(conta){
   delete STATE.cardConfig[conta];
   delete STATE.contaTipos[conta];
   delete STATE.contaResponsavel[conta];
+  delete STATE.contaBandeira[conta];
+  delete STATE.contaExtra[conta];
   Object.keys(STATE.cardStatus).forEach(k=>{ if(k.startsWith(conta+'|')) delete STATE.cardStatus[k]; });
   Object.keys(STATE.cardOverrides).forEach(k=>{ if(k.startsWith(conta+'|')) delete STATE.cardOverrides[k]; });
 }
@@ -4146,7 +4168,14 @@ let STATE = {
   meiosPagamento: [...MEIOS_PAGAMENTO_DEFAULT], // meios de pagamento/recebimento (editável)
   contaTipos: {...CONTA_TIPOS_DEFAULT}, // { [conta]: tipo } — classificação da conta
   contaResponsavel: {...CONTA_RESPONSAVEL_DEFAULT}, // { [conta]: responsável } — só preenchido quando a conta tem um único responsável
-  contaBandeira: {}, // { [conta]: "Visa"|"Mastercard"|"Elo"|<nome livre> } — bandeira cadastrada para contas do tipo Cartão de Crédito
+  contaBandeira: {...CONTA_BANDEIRA_DEFAULT}, // { [conta]: "Visa"|"Mastercard"|"Elo"|<nome livre> } — bandeira cadastrada para contas do tipo Cartão de Crédito
+  contaExtra: {}, // { [conta]: {...} } — campos extras dependentes do tipo da conta (ver TEXT_MODAL_INFO/renderTextModal):
+                  // bancária (Conta Corrente/PJ/Poupança/Reserva de Emergência): {banco,agencia,numeroConta};
+                  // Cartão de Crédito: {numeroCartao,validade,nomeImpresso} (bandeira continua em contaBandeira, à parte);
+                  // Contracheque: {matricula,nomeFuncionario,cpf,lotacao,dataAdmissao,cargo,referencia,
+                  // situacaoFuncional,cargoComissao,agencia,contaCorrente,mesAno} — os dois últimos (Agência/Conta
+                  // corrente do contracheque) identificam a conta bancária de destino do líquido, ver
+                  // localizarContaPorAgenciaConta/parseContrachequeTRT.
   responsaveis: [...RESPONSAVEIS_DEFAULT], // lista de responsáveis (pessoas da família) para renda familiar
   responsavelIcone: { "Ariana":"feminino", "Bruno":"masculino" }, // ícone escolhido (masculino/feminino) por responsável
   subcategoriaResponsavel: {...SUBCATEGORIA_RESPONSAVEL_DEFAULT}, // { [subcategoria]: responsável } — pré-definido no cadastro da subcategoria (grupo Renda Familiar), usado automaticamente nos lançamentos
@@ -4182,6 +4211,7 @@ let UI = {
   importRefAno: new Date().getFullYear(),
   importIsContracheque: false,
   importContrachequeResumo: null, // {bruto,descontos,liquido,margemConsignavel,remuneracaoConsignacao} extraídos do PDF na leitura do arquivo — persistido em STATE.contrachequeResumos só na confirmação da importação (ver importConfirm)
+  importContrachequeEspelho: null, // {contaOrigem,competencia,valorLiquido,dataBalanco,contaDestino,reconciliado,origemId} — dados do registro espelho do líquido a criar na confirmação da importação (ver importConfirm), null se não houver conta bancária de destino identificada
   importContaTravada: false, // true quando a importação foi iniciada pelo botão 📥 de uma conta/cartão específico — trava a seleção de conta de destino, para nunca importar para a conta errada (ver data-importar-conta)
   modalTaxasConversao: null,
   modalParcelasEmprestimo: null, // { itens: [{descricao, parcelasRestantes}] } — pede o total de parcelas de empréstimos novos detectados no contracheque
@@ -4689,6 +4719,10 @@ function buildCSVConfig(){
   });
   STATE.contas.forEach(conta=>{
     rows.push(['CONTA', conta, '', '', '', '', '', '', '', '', conta, '', '', '', '', STATE.contaBandeira[conta]||'', STATE.cartoes.includes(conta) ? '1' : '', '', '', '', STATE.contaTipos[conta]||'', STATE.contaResponsavel[conta]||'', '', '']);
+    const extra = STATE.contaExtra[conta];
+    if(extra && Object.keys(extra).length){
+      rows.push(['CONTAEXTRA', conta, '', JSON.stringify(extra), '', '', '', '', '', '', conta, '', '', '', '', '', '', '', '', '', '', '', '', '']);
+    }
   });
   CATEGORIAS.forEach(c=>{
     rows.push(['CATEGORIA', c[0], '', '', '', c[0], c[1], c[2], c[3], c[4], '', '', '', '', '', '', '', '', '', '', '', STATE.subcategoriaResponsavel[c[0]]||'', '', '']);
@@ -4717,7 +4751,7 @@ function buildCSVConfig(){
 }
 function loadCSVConfig(text){
   const parsed = Papa.parse(text.trim(), { header:true, skipEmptyLines:true });
-  const cardConfig = {}, cardOverrides = {}, cardStatus = {}, saldosIniciais = {}, contas = [], cartoes = [], categoriasCSV = [], meiosPagamento = [], contaTipos = {}, contaResponsavel = {}, contaBandeira = {}, responsaveis = [], responsavelIcone = {}, subcategoriaResponsavel = {}, projecoes = [], metas = [], contrachequeResumos = {};
+  const cardConfig = {}, cardOverrides = {}, cardStatus = {}, saldosIniciais = {}, contas = [], cartoes = [], categoriasCSV = [], meiosPagamento = [], contaTipos = {}, contaResponsavel = {}, contaBandeira = {}, contaExtra = {}, responsaveis = [], responsavelIcone = {}, subcategoriaResponsavel = {}, projecoes = [], metas = [], contrachequeResumos = {};
   parsed.data.forEach(r=>{
     if(r.tipo_registro==='CARDCFG'){
       cardConfig[r.id] = { fechamento: r.dia_fechamento?Number(r.dia_fechamento):null, vencimento: r.dia_vencimento?Number(r.dia_vencimento):null };
@@ -4751,12 +4785,15 @@ function loadCSVConfig(text){
         bruto: parseFloat(r.valor)||0, descontos: parseFloat(r.dia_fechamento)||0, liquido: parseFloat(r.dia_vencimento)||0,
         margemConsignavel: parseFloat(r.status)||0, remuneracaoConsignacao: parseFloat(r.parcela_atual)||0
       };
+    } else if(r.tipo_registro==='CONTAEXTRA'){
+      try{ contaExtra[r.id] = JSON.parse(r.descricao||'{}'); }catch(e){ /* linha corrompida — ignora, mantém a conta sem dados extras */ }
     }
   });
   STATE.cardConfig = {...CARDCFG_DEFAULT, ...cardConfig}; STATE.cardOverrides = cardOverrides; STATE.cardStatus = cardStatus; STATE.saldosIniciais = saldosIniciais;
   STATE.contrachequeResumos = contrachequeResumos;
   STATE.contaResponsavel = { ...CONTA_RESPONSAVEL_DEFAULT, ...contaResponsavel };
-  STATE.contaBandeira = { ...contaBandeira };
+  STATE.contaBandeira = { ...CONTA_BANDEIRA_DEFAULT, ...contaBandeira };
+  STATE.contaExtra = { ...contaExtra };
 
   // Mescla: tudo que já está no arquivo é preservado (incluindo edições/exclusões do usuário);
   // qualquer novidade padrão do app que ainda não exista no arquivo (por nome) é adicionada.
@@ -5275,7 +5312,7 @@ function resetarEstadoParaSessaoZerada(){
   STATE.cardConfig = {...CARDCFG_DEFAULT};
   STATE.cardOverrides = {}; STATE.melhorCartaoManual = null; STATE.cardStatus = {}; STATE.saldosIniciais = {};
   STATE.contas = [...CONTAS_DEFAULT]; STATE.cartoes = [...CARTOES_DEFAULT]; STATE.meiosPagamento = [...MEIOS_PAGAMENTO_DEFAULT];
-  STATE.contaTipos = {...CONTA_TIPOS_DEFAULT}; STATE.contaResponsavel = {...CONTA_RESPONSAVEL_DEFAULT}; STATE.contaBandeira = {};
+  STATE.contaTipos = {...CONTA_TIPOS_DEFAULT}; STATE.contaResponsavel = {...CONTA_RESPONSAVEL_DEFAULT}; STATE.contaBandeira = {...CONTA_BANDEIRA_DEFAULT}; STATE.contaExtra = {};
   STATE.responsaveis = [...RESPONSAVEIS_DEFAULT]; STATE.responsavelIcone = { "Ariana":"feminino", "Bruno":"masculino" };
   STATE.subcategoriaResponsavel = {...SUBCATEGORIA_RESPONSAVEL_DEFAULT};
   STATE.projecoes = PROJECOES_DEFAULT.map(p=>({...p, id:uid()})); STATE.metas = [];
@@ -7153,7 +7190,7 @@ function renderExtratoContaModal(){
               <div class="cartao-col-textos">
                 <div class="cartao-col-nome">${escapeHtml(conta)}</div>
                 <div class="cartao-col-badges">
-                  ${tipo ? `<span class="type-badge" style="font-size:11px;font-weight:600;color:${info.cor};">${escapeHtml(tipo)}</span>` : ''}
+                  ${tipo ? `<span class="type-badge" style="font-size:11px;font-weight:600;color:${info.cor};">${escapeHtml(rotuloTipoConta(tipo))}</span>` : ''}
                   ${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
                 </div>
               </div>
@@ -7295,7 +7332,7 @@ function renderFuturosContaModal(){
               <div class="cartao-col-textos">
                 <div class="cartao-col-nome">${escapeHtml(conta)}</div>
                 <div class="cartao-col-badges">
-                  ${tipo ? `<span class="type-badge" style="font-size:11px;font-weight:600;color:${info.cor};">${escapeHtml(tipo)}</span>` : ''}
+                  ${tipo ? `<span class="type-badge" style="font-size:11px;font-weight:600;color:${info.cor};">${escapeHtml(rotuloTipoConta(tipo))}</span>` : ''}
                   ${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
                 </div>
               </div>
@@ -10600,7 +10637,7 @@ function renderPainelContasBancarias(ano, mes){
             <div class="cartao-col-textos">
               <div class="cartao-col-nome">${escapeHtml(c)}</div>
               <div class="cartao-col-badges">
-                ${tipo ? `<span class="type-badge" style="font-size:11px;font-weight:600;color:${info.cor};">${escapeHtml(tipo)}</span>` : ''}
+                ${tipo ? `<span class="type-badge" style="font-size:11px;font-weight:600;color:${info.cor};">${escapeHtml(rotuloTipoConta(tipo))}</span>` : ''}
                 ${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
               </div>
             </div>
@@ -11113,7 +11150,7 @@ function renderEditarSaldoInicialFluxoCaixaModal(){
             </tr>`).join('')}
             <tr style="border-top:2px solid var(--line);"><td><b>Total</b></td><td style="text-align:right;"><b id="totalSaldoInicialFC">${fmtBRL(total)}</b></td></tr>
           </tbody>
-        </table>` : `<div class="empty-state"><div class="big">🏦</div>Nenhuma Conta Corrente, Conta PJ ou Poupança cadastrada. Adicione em Configurações → Contas.</div>`}
+        </table>` : `<div class="empty-state"><div class="big">🏦</div>Nenhuma conta do tipo Corrente, PJ ou Poupança cadastrada. Adicione em Configurações → Contas.</div>`}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" id="cancelEditarSaldoInicialFluxoCaixa">Cancelar</button>
@@ -12109,7 +12146,7 @@ function renderCategorias(){
             <div class="mini-card-title">${escapeHtml(c)}</div>
             <div class="mini-card-quebra" aria-hidden="true"></div>
             <div class="mini-card-tipo-wrap" style="display:flex;gap:5px;flex-wrap:wrap;">
-              ${tipo ? `<span class="type-badge" style="background:${info.cor}1a;color:${info.cor};">${escapeHtml(tipo)}</span>` : ''}
+              ${tipo ? `<span class="type-badge" style="background:${info.cor}1a;color:${info.cor};">${escapeHtml(rotuloTipoConta(tipo))}</span>` : ''}
             </div>
           </div>`;
         }).join('') : '<div class="mini-card-empty">Nenhuma conta cadastrada ainda.</div>'}
@@ -12337,6 +12374,28 @@ function renderNovaSubcategoriaModal(){
     </div>
   </div>`;
 }
+/* Campos extras do modal de conta, dependentes do tipo selecionado (ver renderTextModal/saveTextModal) —
+   guardados em STATE.contaExtra[conta] como um objeto simples {campo:valor}, sem afetar os identificadores
+   internos de tipo de conta nem nenhum outro dado já existente. */
+const CAMPOS_EXTRA_POR_TIPO = {
+  bancaria: ['banco','agencia','numeroConta'],
+  cartao: ['numeroCartao','validade','nomeImpresso'],
+  contracheque: ['matricula','nomeFuncionario','cpf','lotacao','dataAdmissao','cargo','referencia','situacaoFuncional','cargoComissao','agencia','contaCorrente','mesAno'],
+};
+function grupoCamposExtra(tipoConta){
+  if(TIPOS_CONTA_BANCARIA.includes(tipoConta)) return 'bancaria';
+  if(tipoConta==='Cartão de Crédito') return 'cartao';
+  if(tipoConta==='Contracheque') return 'contracheque';
+  return null;
+}
+/* Valor atual de um campo extra no modal — prioriza o que já foi digitado nesta sessão do modal (stashed
+   em t.extra ao trocar o tipo de conta, ver fTextModalTipoConta/stashCamposExtraTextModal), senão cai no
+   que já está salvo em STATE.contaExtra para a conta em edição (vazio para uma conta nova). */
+function valorExtraTextModal(t, campo){
+  if(t.extra && t.extra[campo]!==undefined) return t.extra[campo];
+  const salvo = (t.original && STATE.contaExtra[t.original]) || {};
+  return salvo[campo]!==undefined ? salvo[campo] : '';
+}
 const TEXT_MODAL_INFO = {
   'conta-novo':   { titulo:'🏦 Nova conta', label:'Nome da conta', placeholder:'Ex.: Caixa Bruno', botao:'Adicionar', temTipoConta:true },
   'conta-editar': { titulo:'🏦 Editar conta', label:'Nome da conta', placeholder:'', botao:'Salvar', temTipoConta:true },
@@ -12352,6 +12411,8 @@ function renderTextModal(){
   const info = TEXT_MODAL_INFO[t.tipo];
   const tipoContaAtual = t.tipoConta || info.tipoContaFixo || (STATE.contaTipos[t.original]||'') || TIPOS_CONTA[0];
   const mostrarConfigCartao = info.temTipoConta && tipoContaAtual === 'Cartão de Crédito';
+  const mostrarDadosBancarios = info.temTipoConta && TIPOS_CONTA_BANCARIA.includes(tipoContaAtual);
+  const mostrarContracheque = info.temTipoConta && tipoContaAtual === 'Contracheque';
   const vencimentoAtual = t.vencimento!==undefined ? t.vencimento : (STATE.cardConfig[t.original]?.vencimento || '');
   const fechamentoAtual = t.fechamento!==undefined ? t.fechamento : (STATE.cardConfig[t.original]?.fechamento || '');
   const responsavelAtual = t.responsavelConta!==undefined ? t.responsavelConta : (STATE.contaResponsavel[t.original] || '');
@@ -12372,7 +12433,7 @@ function renderTextModal(){
             <div class="tx-row">
               <div class="field"><label>Tipo de conta</label>
                 <select id="fTextModalTipoConta" ${info.tipoContaFixo?'disabled':''}>
-                  ${TIPOS_CONTA.map(tp=>`<option value="${tp}" ${tipoContaAtual===tp?'selected':''}>${tp}</option>`).join('')}
+                  ${TIPOS_CONTA.map(tp=>`<option value="${tp}" ${tipoContaAtual===tp?'selected':''}>${escapeHtml(rotuloTipoConta(tp))}</option>`).join('')}
                 </select>
                 ${info.tipoContaFixo ? `<input type="hidden" id="fTextModalTipoContaFixo" value="${info.tipoContaFixo}">` : ''}
               </div>
@@ -12409,6 +12470,69 @@ function renderTextModal(){
               </div>
             </div>
             <p class="hint" style="margin:8px 0 0;">Com isso o app calcula automaticamente em qual fatura cada compra deve entrar.</p>
+            <div class="tx-row" style="margin-top:10px;">
+              <div class="field"><label>Nº do cartão</label>
+                <input type="text" id="fTextModalExtra_numeroCartao" placeholder="•••• •••• •••• 1234" value="${escapeHtml(valorExtraTextModal(t,'numeroCartao'))}">
+              </div>
+              <div class="field"><label>Validade</label>
+                <input type="text" id="fTextModalExtra_validade" placeholder="MM/AA" value="${escapeHtml(valorExtraTextModal(t,'validade'))}">
+              </div>
+            </div>
+            <div class="tx-row" style="margin-top:10px;">
+              <div class="field tx-wide"><label>Nome impresso no cartão</label>
+                <input type="text" id="fTextModalExtra_nomeImpresso" placeholder="Exatamente como aparece no cartão" value="${escapeHtml(valorExtraTextModal(t,'nomeImpresso'))}">
+              </div>
+            </div>
+          </div>` : ''}
+          ${mostrarDadosBancarios ? `
+          <div>
+            <div class="field-section-label">Dados bancários</div>
+            <div class="tx-row">
+              <div class="field"><label>Banco</label>
+                <input type="text" id="fTextModalExtra_banco" placeholder="Ex.: Banco do Brasil" value="${escapeHtml(valorExtraTextModal(t,'banco'))}">
+              </div>
+              <div class="field"><label>Agência</label>
+                <input type="text" id="fTextModalExtra_agencia" placeholder="Ex.: 1234-5" value="${escapeHtml(valorExtraTextModal(t,'agencia'))}">
+              </div>
+            </div>
+            <div class="tx-row" style="margin-top:10px;">
+              <div class="field"><label>Nº conta</label>
+                <input type="text" id="fTextModalExtra_numeroConta" placeholder="Ex.: 12345-6" value="${escapeHtml(valorExtraTextModal(t,'numeroConta'))}">
+              </div>
+            </div>
+          </div>` : ''}
+          ${mostrarContracheque ? `
+          <div>
+            <div class="field-section-label">Identificação funcional</div>
+            <div class="tx-row">
+              <div class="field"><label>Matrícula</label><input type="text" id="fTextModalExtra_matricula" value="${escapeHtml(valorExtraTextModal(t,'matricula'))}"></div>
+              <div class="field"><label>Nome</label><input type="text" id="fTextModalExtra_nomeFuncionario" value="${escapeHtml(valorExtraTextModal(t,'nomeFuncionario'))}"></div>
+            </div>
+            <div class="tx-row" style="margin-top:10px;">
+              <div class="field tx-wide"><label>CPF</label><input type="text" id="fTextModalExtra_cpf" value="${escapeHtml(valorExtraTextModal(t,'cpf'))}"></div>
+            </div>
+            <div class="field-section-label" style="margin-top:14px;">Lotação e vínculo</div>
+            <div class="tx-row">
+              <div class="field"><label>Lotação</label><input type="text" id="fTextModalExtra_lotacao" value="${escapeHtml(valorExtraTextModal(t,'lotacao'))}"></div>
+              <div class="field"><label>Data de ingresso no órgão</label><input type="text" id="fTextModalExtra_dataAdmissao" placeholder="DD/MM/AAAA" value="${escapeHtml(valorExtraTextModal(t,'dataAdmissao'))}"></div>
+            </div>
+            <div class="tx-row" style="margin-top:10px;">
+              <div class="field"><label>Cargo</label><input type="text" id="fTextModalExtra_cargo" value="${escapeHtml(valorExtraTextModal(t,'cargo'))}"></div>
+              <div class="field"><label>Referência</label><input type="text" id="fTextModalExtra_referencia" value="${escapeHtml(valorExtraTextModal(t,'referencia'))}"></div>
+            </div>
+            <div class="tx-row" style="margin-top:10px;">
+              <div class="field"><label>Situação funcional</label><input type="text" id="fTextModalExtra_situacaoFuncional" value="${escapeHtml(valorExtraTextModal(t,'situacaoFuncional'))}"></div>
+              <div class="field"><label>Cargo em comissão/Função comissionada</label><input type="text" id="fTextModalExtra_cargoComissao" placeholder="Ex.: FC-02" value="${escapeHtml(valorExtraTextModal(t,'cargoComissao'))}"></div>
+            </div>
+            <div class="field-section-label" style="margin-top:14px;">Dados bancários e competência</div>
+            <div class="tx-row">
+              <div class="field"><label>Agência</label><input type="text" id="fTextModalExtra_agencia" value="${escapeHtml(valorExtraTextModal(t,'agencia'))}"></div>
+              <div class="field"><label>Conta corrente</label><input type="text" id="fTextModalExtra_contaCorrente" value="${escapeHtml(valorExtraTextModal(t,'contaCorrente'))}"></div>
+            </div>
+            <div class="tx-row" style="margin-top:10px;">
+              <div class="field"><label>Mês/Ano</label><input type="text" id="fTextModalExtra_mesAno" placeholder="MM/AAAA" value="${escapeHtml(valorExtraTextModal(t,'mesAno'))}"></div>
+            </div>
+            <p class="hint" style="margin:8px 0 0;">Preenchidos automaticamente ao importar um contracheque em PDF — a Agência e a Conta corrente são usadas para localizar a conta bancária de destino do líquido recebido.</p>
           </div>` : ''}
           ${info.nota ? `<div class="info-card" style="margin-top:0;"><span class="info-card-icon">ℹ️</span><span>${info.nota}</span></div>` : ''}
           ${info.temIconeGenero ? `
@@ -13337,6 +13461,89 @@ function isContrachequeTRT(fullText){
   const t = normalizarTexto(fullText);
   return t.includes('demonstrativodepagamento') && (t.includes('tribunalregionaldotrabalho') || t.includes('poderjudiciario'));
 }
+/* Maiúsculas/sem acento, mas SEM remover espaços/pontuação — ao contrário de normalizarTexto(), preserva a
+   posição de cada caractere em relação ao texto original (troca de acento por base não muda o tamanho da
+   string), permitindo localizar um rótulo com indexOf() e cortar o restante da MESMA linha original a
+   partir dali. Usada só pelo leitor da primeira tabela do contracheque (ver parseCabecalhoContrachequeTRT). */
+function normalizarPreservandoEspacos(s){ return String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+/* Primeira tabela do contracheque TRT (dados cadastrais/funcionais e bancários — seções 5/6 do requisito).
+   Layout de tabela "rótulo → valor": tenta primeiro achar "RÓTULO: valor" ou "RÓTULO   valor" na mesma
+   linha do texto extraído; se não sobrar nada depois do rótulo (layout em que o valor vem numa linha
+   própria abaixo do rótulo), usa a primeira linha seguinte não vazia que não seja ela mesma outro rótulo
+   conhecido. Nunca depende de posição fixa de coluna (só do texto dos próprios rótulos, que são estáveis
+   entre competências), então continua funcionando mesmo que o layout varie ligeiramente entre PDFs. */
+const ROTULOS_CABECALHO_CONTRACHEQUE = [
+  { campo:'matricula', rotulo:'MATRÍCULA' },
+  { campo:'nomeFuncionario', rotulo:'NOME' },
+  { campo:'cpf', rotulo:'CPF' },
+  { campo:'lotacao', rotulo:'LOTAÇÃO' },
+  { campo:'dataAdmissao', rotulo:'DATA DE INGRESSO NO ÓRGÃO' },
+  { campo:'cargoComissao', rotulo:'CARGO EM COMISSÃO' },
+  { campo:'cargo', rotulo:'CARGO', linhaNaoPodeConter:'CARGO EM COMISSAO' },
+  { campo:'referencia', rotulo:'REFERÊNCIA' },
+  { campo:'situacaoFuncional', rotulo:'SITUAÇÃO FUNCIONAL' },
+  { campo:'agencia', rotulo:'AGÊNCIA' },
+  { campo:'contaCorrente', rotulo:'CONTA CORRENTE' },
+  { campo:'mesAno', rotulo:'MÊS/ANO' },
+];
+function parseCabecalhoContrachequeTRT(rows){
+  const linhas = rows.map(r=>r.line||'').filter(Boolean);
+  const linhasNorm = linhas.map(normalizarPreservandoEspacos);
+  const rotulosNorm = ROTULOS_CABECALHO_CONTRACHEQUE.map(r=>normalizarPreservandoEspacos(r.rotulo));
+  const dados = {};
+  ROTULOS_CABECALHO_CONTRACHEQUE.forEach((def, idx)=>{
+    const rotuloNorm = rotulosNorm[idx];
+    for(let i=0;i<linhas.length;i++){
+      const linhaNorm = linhasNorm[i];
+      if(def.linhaNaoPodeConter && linhaNorm.includes(def.linhaNaoPodeConter)) continue;
+      const pos = linhaNorm.indexOf(rotuloNorm);
+      if(pos<0) continue;
+      let resto = linhas[i].slice(pos + def.rotulo.length).replace(/^[:\-\s]+/, '').trim();
+      // Corta se o restante da linha já emendar com o próximo rótulo conhecido (tabela compacta, vários
+      // pares rótulo/valor na mesma linha) — evita engolir o próximo campo dentro deste.
+      const restoNorm = normalizarPreservandoEspacos(resto);
+      rotulosNorm.forEach(outroNorm=>{
+        if(outroNorm===rotuloNorm) return;
+        const corte = restoNorm.indexOf(outroNorm);
+        if(corte===0) resto = '';
+      });
+      if(!resto){
+        for(let j=i+1; j<linhas.length && j<i+3; j++){
+          const candidato = linhas[j].trim();
+          if(!candidato) continue;
+          if(rotulosNorm.some(r=>linhasNorm[j].startsWith(r))) break; // próxima linha já é outro rótulo, não um valor
+          resto = candidato; break;
+        }
+      }
+      if(resto){ dados[def.campo] = resto.replace(/\s+/g,' ').trim(); break; }
+    }
+  });
+  // "Cargo em comissão/Função comissionada" (seção 5 do requisito): usar só os 5 últimos caracteres —
+  // ex.: "AUXILIAR ADMINISTRATIVO II - FC-02" → "FC-02" (o tipo/nível já está identificado por esse sufixo).
+  if(dados.cargoComissao && dados.cargoComissao.length>5) dados.cargoComissao = dados.cargoComissao.slice(-5);
+  return dados;
+}
+/* Remove espaços, pontuação e zeros à esquerda para comparar Agência/Nº conta informados de formas
+   diferentes (com/sem traço, com/sem dígito verificador, zeros de preenchimento) — ver seção 9 do
+   requisito. Mantém dígitos e letras (contas com dígito verificador alfabético, ex.: "152528X"). */
+function normalizarAgenciaConta(v){
+  return String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'').replace(/^0+(?=.)/,'');
+}
+/* Localiza, entre as contas bancárias já cadastradas (tipos "tradicionais", ver TIPOS_CONTA_BANCARIA), a
+   que tem a mesma Agência e Nº conta informados no contracheque (seção 9 do requisito) — usada para saber
+   em qual conta lançar o registro espelho do líquido recebido. Nunca considera contas do tipo Contracheque
+   ou Cartão de Crédito, que não têm esses campos. */
+function localizarContaPorAgenciaConta(agencia, numeroConta){
+  if(!agencia || !numeroConta) return null;
+  const agenciaAlvo = normalizarAgenciaConta(agencia), contaAlvo = normalizarAgenciaConta(numeroConta);
+  if(!agenciaAlvo || !contaAlvo) return null;
+  return STATE.contas.find(c=>{
+    if(!TIPOS_CONTA_BANCARIA.includes(STATE.contaTipos[c])) return false;
+    const extra = STATE.contaExtra[c];
+    if(!extra) return false;
+    return normalizarAgenciaConta(extra.agencia)===agenciaAlvo && normalizarAgenciaConta(extra.numeroConta)===contaAlvo;
+  }) || null;
+}
 const TRT_MONEY_RE = /^-?\d{1,3}(?:\.\d{3})*,\d{2}$/;
 const TRT_MONEY_RE_G = /-?\d{1,3}(?:\.\d{3})*,\d{2}/g;
 function parseContrachequeTRT(rows){
@@ -13683,6 +13890,26 @@ function handleFile(file){
         const liquido = liquidoDeclarado!=null ? liquidoDeclarado : (bruto - descontos);
         const margem = margemDeclarada!=null ? margemDeclarada : calcularMargemConsignavelTRT(remuneracaoConsignacao, descontos);
         UI.importContrachequeResumo = { bruto, descontos, liquido, margemConsignavel: margem, remuneracaoConsignacao };
+        // Primeira tabela do contracheque (dados cadastrais/funcionais/bancários — seções 4-9 do requisito
+        // de cadastro de contas): atualiza/mescla na conta Contracheque/TRT, preservando campos já
+        // cadastrados manualmente que porventura não tenham sido reconhecidos nesta leitura específica.
+        const cabecalho = parseCabecalhoContrachequeTRT(pdfRows);
+        STATE.contaExtra[conta] = { ...(STATE.contaExtra[conta]||{}), ...cabecalho };
+        // Registro espelho do líquido na conta bancária de destino (seções 7-13 do requisito): localizada
+        // pela Agência+Nº conta do próprio contracheque, nunca criado se a reconciliação créditos-débitos=
+        // líquido não bater (ver importConfirm, que efetivamente cria o lançamento só quando reconciliado
+        // e a conta de destino é encontrada) — guardado aqui só como intenção, para ser concretizado na
+        // confirmação da importação junto com os demais lançamentos desta competência.
+        const competenciaImport = `${UI.importRefAno}-${pad2(UI.importRefMes)}`;
+        const dataBalanco = rows.length ? rows[0][0].split('-').reverse().join('/') : '';
+        const contaBancariaDestino = localizarContaPorAgenciaConta(cabecalho.agencia, cabecalho.contaCorrente);
+        const liquidoCalculadoParaEspelho = totalCreditos - totalDebitos;
+        UI.importContrachequeEspelho = {
+          contaOrigem: conta, competencia: competenciaImport, valorLiquido: liquido, dataBalanco,
+          contaDestino: contaBancariaDestino,
+          reconciliado: liquidoDeclarado!=null && Math.abs(liquidoCalculadoParaEspelho - liquidoDeclarado) <= 0.01,
+          origemId: `contracheque:${conta}:${competenciaImport}`,
+        };
         // Linhas com parcelasRestantes>0 (rows[i][3]) são descontos de empréstimo consignado. Para cada
         // uma, tenta achar o total de parcelas já informado antes (mesma conta + mesma descrição + valor
         // parecido, ver detectarTotalParcelasEmprestimo); só pergunta ao usuário para empréstimos
@@ -15287,6 +15514,11 @@ function bindEvents(){
     if(respAtual!==undefined) UI.textModal.responsavelConta = respAtual;
     const bandAtual = document.getElementById('fTextModalBandeira')?.value;
     if(bandAtual!==undefined) UI.textModal.bandeira = bandAtual;
+    // Preserva o que já foi digitado nos campos extras (Banco/Agência/Nº conta, Nº do cartão/Validade/Nome
+    // impresso, campos do contracheque) antes de re-renderizar com o novo tipo — senão trocar o tipo de
+    // conta e voltar atrás perderia tudo que já tinha sido preenchido (ver valorExtraTextModal).
+    UI.textModal.extra = UI.textModal.extra || {};
+    document.querySelectorAll('[id^="fTextModalExtra_"]').forEach(el=>{ UI.textModal.extra[el.id.replace('fTextModalExtra_','')] = el.value; });
     UI.textModal.tipoConta = e.target.value;
     render();
   });
@@ -15350,6 +15582,19 @@ function bindEvents(){
       if(responsavelConta) STATE.contaResponsavel[nomeConta] = responsavelConta;
       else delete STATE.contaResponsavel[nomeConta];
     }
+    // Campos extras dependentes do tipo (Banco/Agência/Nº conta, Nº do cartão/Validade/Nome impresso,
+    // dados estruturados do contracheque) — lidos diretamente do DOM pelo id fTextModalExtra_<campo>,
+    // igual ao padrão já usado para os demais campos deste modal (ver acima).
+    function salvarDadosExtra(nomeConta){
+      const grupo = grupoCamposExtra(tipoConta);
+      if(!grupo){ delete STATE.contaExtra[nomeConta]; return; }
+      const dados = {};
+      CAMPOS_EXTRA_POR_TIPO[grupo].forEach(campo=>{
+        const el = document.getElementById('fTextModalExtra_'+campo);
+        if(el && el.value.trim()) dados[campo] = el.value.trim();
+      });
+      if(Object.keys(dados).length) STATE.contaExtra[nomeConta] = dados; else delete STATE.contaExtra[nomeConta];
+    }
     switch(t.tipo){
       case 'conta-novo':
         if(STATE.contas.includes(nome)){ alert('Já existe uma conta com esse nome.'); return; }
@@ -15357,6 +15602,7 @@ function bindEvents(){
         if(tipoConta){ STATE.contaTipos[nome] = tipoConta; if(tipoConta==='Cartão de Crédito' && !STATE.cartoes.includes(nome)) STATE.cartoes.push(nome); }
         if(tipoConta==='Cartão de Crédito'){ salvarConfigCartao(nome); salvarBandeiraCartao(nome); }
         salvarResponsavelConta(nome);
+        salvarDadosExtra(nome);
         // Se a conta foi criada a partir do fluxo de importação (botão "Nova conta" do modal de
         // período/conta), seleciona-a automaticamente e mantém a importação em andamento.
         if(UI.importStep>0) UI.importMap.contaDestino = nome;
@@ -15365,7 +15611,8 @@ function bindEvents(){
         renomearConta(t.original, nome, tipoConta);
         { const nomeFinalConta = STATE.contas.includes(nome) ? nome : t.original;
           if(tipoConta==='Cartão de Crédito'){ salvarConfigCartao(nomeFinalConta); salvarBandeiraCartao(nomeFinalConta); } else { delete STATE.contaBandeira[nomeFinalConta]; }
-          salvarResponsavelConta(nomeFinalConta); }
+          salvarResponsavelConta(nomeFinalConta);
+          salvarDadosExtra(nomeFinalConta); }
         break;
       case 'meio-novo':
         if(STATE.meiosPagamento.includes(nome)){ alert('Já existe um meio de pagamento com esse nome.'); return; }
@@ -15822,7 +16069,7 @@ function bindEvents(){
     commitEdicaoLancamentoExistente(p.novo, p.antigo, p.conta, p.contaTransferencia, 'todas');
   });
 
-  document.getElementById('closeImport')?.addEventListener('click', ()=>{ UI.importStep=0; UI.modalTaxasConversao=null; UI.importContrachequeResumo=null; render(); });
+  document.getElementById('closeImport')?.addEventListener('click', ()=>{ UI.importStep=0; UI.modalTaxasConversao=null; UI.importContrachequeResumo=null; UI.importContrachequeEspelho=null; render(); });
   document.querySelectorAll('[data-taxa-idx]').forEach(inp=> inp.addEventListener('input', e=>{
     const i = Number(inp.dataset.taxaIdx);
     const info = UI.modalTaxasConversao.rows[i][3];
@@ -15833,7 +16080,7 @@ function bindEvents(){
   }));
   document.getElementById('cancelModalTaxas')?.addEventListener('click', ()=>{
     if(!confirm('Cancelar a importação deste arquivo?')) return;
-    UI.modalTaxasConversao=null; UI.importStep=0; UI.importRaw=null; UI.importContrachequeResumo=null; render();
+    UI.modalTaxasConversao=null; UI.importStep=0; UI.importRaw=null; UI.importContrachequeResumo=null; UI.importContrachequeEspelho=null; render();
   });
   document.getElementById('confirmModalTaxas')?.addEventListener('click', ()=>{
     UI.modalTaxasConversao.rows.forEach(r=>{
@@ -15863,7 +16110,7 @@ function bindEvents(){
   }));
   document.getElementById('cancelModalParcelasEmprestimo')?.addEventListener('click', ()=>{
     if(!confirm('Cancelar a importação deste arquivo?')) return;
-    UI.modalParcelasEmprestimo=null; UI.importStep=0; UI.importRaw=null; UI.importContrachequeResumo=null; render();
+    UI.modalParcelasEmprestimo=null; UI.importStep=0; UI.importRaw=null; UI.importContrachequeResumo=null; UI.importContrachequeEspelho=null; render();
   });
   document.getElementById('confirmModalParcelasEmprestimo')?.addEventListener('click', ()=>{
     const itens = UI.modalParcelasEmprestimo.itens;
@@ -16078,8 +16325,48 @@ function bindEvents(){
         if(!STATE.contrachequeResumos[contaDestinoImport]) STATE.contrachequeResumos[contaDestinoImport] = {};
         STATE.contrachequeResumos[contaDestinoImport][competenciaImportada] = UI.importContrachequeResumo;
       }
+      // Registro espelho do líquido na conta bancária de destino (seções 8-16 do requisito de cadastro de
+      // contas) — só é criado quando: (1) a reconciliação créditos−débitos=líquido bateu na leitura do
+      // arquivo (ver handleFile — se não bateu, o usuário já foi avisado lá, e aqui simplesmente não se
+      // gera nada até uma nova importação validada); (2) a conta bancária de destino foi localizada pela
+      // Agência+Nº conta do próprio contracheque; (3) esse MESMO contracheque (mesma conta+competência)
+      // ainda não tinha gerado um espelho antes (contrachequeOrigemId evita duplicidade ao reimportar o
+      // mesmo PDF). Usa o mecanismo já existente de Transferência entre Contas — a saída sai do TRT como
+      // Despesa e aplicarTransferenciaInterna cria automaticamente a entrada correspondente (Receita) na
+      // conta bancária, classificada como transferência entre contas, nunca como uma segunda receita na
+      // Renda Familiar (ver classificar() dentro de aplicarTransferenciaInterna).
+      const esp = UI.importContrachequeEspelho;
+      if(esp && esp.contaOrigem===contaDestinoImport){
+        const jaExiste = STATE.transactions.some(t=>t.contrachequeOrigemId===esp.origemId);
+        if(!jaExiste && esp.reconciliado && esp.contaDestino){
+          const [dd,mm,aa] = String(esp.dataBalanco||'').split('/');
+          const dataEspelhoISO = (dd && mm && aa) ? `${aa}-${mm}-${dd}` : `${esp.competencia}-01`;
+          const descricaoEspelho = `Recebimento de Proventos - 03.241.738/0001-39 TRIBUNAL REGIONAL D - Data balanc.: ${esp.dataBalanco}`;
+          const txOrigemEspelho = {
+            id: uid(), data: dataEspelhoISO, descricao: descricaoEspelho, valor: Math.abs(Number(esp.valorLiquido)||0),
+            categoria:'', grupo:'', subgrupo:'', tipo:'Despesa', natureza:'Variável',
+            conta: esp.contaOrigem, pgto:'Folha de Pagamento', competencia:'',
+            parcelaAtual:null, totalParcelas:null, parcelamentoId:'',
+            responsavel:'', entreFamilia:false, transferenciaInterna:false, transferenciaVinculoId:'',
+            origemImportacao:true, contrachequeOrigemId: esp.origemId
+          };
+          STATE.transactions.push(txOrigemEspelho);
+          aplicarTransferenciaInterna(txOrigemEspelho, esp.contaDestino);
+          // aplicarTransferenciaInterna ajusta automaticamente a descrição dos dois lados pelo sentido
+          // genérico de transferência — sobrescreve de volta com o texto exato exigido (seção 11 do
+          // requisito) no lado da conta bancária (a entrada efetivamente recebida), e marca o vínculo com
+          // este contracheque em ambos os lados para a checagem de duplicidade acima funcionar de qualquer
+          // lado numa reimportação futura.
+          const espelhoDestino = STATE.transactions.find(t=>t.id!==txOrigemEspelho.id && t.transferenciaVinculoId===txOrigemEspelho.transferenciaVinculoId);
+          if(espelhoDestino){ espelhoDestino.descricao = descricaoEspelho; espelhoDestino.contrachequeOrigemId = esp.origemId; }
+        } else if(!jaExiste && (!esp.reconciliado || !esp.contaDestino)){
+          mostrarToast(!esp.reconciliado
+            ? 'Contracheque importado, mas o registro de recebimento na conta bancária não foi gerado: os totais de créditos/débitos não bateram com o líquido informado no documento.'
+            : 'Contracheque importado, mas não foi possível localizar a conta bancária de destino (Agência/Nº conta do contracheque não corresponde a nenhuma conta cadastrada).');
+        }
+      }
     }
-    UI.importContrachequeResumo = null;
+    UI.importContrachequeResumo = null; UI.importContrachequeEspelho = null;
     const ignorados = UI.importParsed.length - selecionados.length;
     UI.importStep=0; UI.importRaw=null; UI.importParsed=[];
     // O filtro de Data (aba Registros) é um intervalo explícito (De/Até), não uma seleção por ano/mês —
