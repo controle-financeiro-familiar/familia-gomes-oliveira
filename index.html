@@ -13853,6 +13853,11 @@ function handleFile(file){
       alert('Arquivos PDF só são aceitos para uma conta do tipo Contracheque. Para cartão de crédito, importe um arquivo .ofx ou .xlsx.');
       return;
     }
+    // Declarada logo no início do reader.onload (antes de qualquer uso) para evitar o erro "Cannot access
+    // 'conta' before initialization": esta é a conta cadastrada do tipo Contracheque (ex.: "TRT"), nunca a
+    // conta bancária de destino do registro espelho — essa é sempre `contaDestino`, localizada mais abaixo
+    // exclusivamente por Agência+Nº conta (nunca por banco).
+    const contaTRT = UI.importMap.contaDestino;
     const reader = new FileReader();
     reader.onload = async (e)=>{
       try{
@@ -13894,28 +13899,30 @@ function handleFile(file){
         // de cadastro de contas): atualiza/mescla na conta Contracheque/TRT, preservando campos já
         // cadastrados manualmente que porventura não tenham sido reconhecidos nesta leitura específica.
         const cabecalho = parseCabecalhoContrachequeTRT(pdfRows);
-        STATE.contaExtra[conta] = { ...(STATE.contaExtra[conta]||{}), ...cabecalho };
+        STATE.contaExtra[contaTRT] = { ...(STATE.contaExtra[contaTRT]||{}), ...cabecalho };
         // Registro espelho do líquido na conta bancária de destino (seções 7-13 do requisito): localizada
-        // pela Agência+Nº conta do próprio contracheque, nunca criado se a reconciliação créditos-débitos=
-        // líquido não bater (ver importConfirm, que efetivamente cria o lançamento só quando reconciliado
-        // e a conta de destino é encontrada) — guardado aqui só como intenção, para ser concretizado na
-        // confirmação da importação junto com os demais lançamentos desta competência.
+        // exclusivamente pela Agência+Nº conta do próprio contracheque (nunca pelo banco), nunca criado se
+        // a reconciliação créditos-débitos=líquido não bater (ver importConfirm, que efetivamente cria o
+        // lançamento só quando reconciliado e a conta de destino é encontrada) — guardado aqui só como
+        // intenção, para ser concretizado na confirmação da importação junto com os demais lançamentos
+        // desta competência.
         const competenciaImport = `${UI.importRefAno}-${pad2(UI.importRefMes)}`;
         const dataBalanco = rows.length ? rows[0][0].split('-').reverse().join('/') : '';
-        const contaBancariaDestino = localizarContaPorAgenciaConta(cabecalho.agencia, cabecalho.contaCorrente);
+        const agencia = cabecalho.agencia;
+        const numeroConta = cabecalho.contaCorrente;
+        const contaDestino = localizarContaPorAgenciaConta(agencia, numeroConta);
         const liquidoCalculadoParaEspelho = totalCreditos - totalDebitos;
         UI.importContrachequeEspelho = {
-          contaOrigem: conta, competencia: competenciaImport, valorLiquido: liquido, dataBalanco,
-          contaDestino: contaBancariaDestino,
+          contaOrigem: contaTRT, competencia: competenciaImport, valorLiquido: liquido, dataBalanco,
+          contaDestino,
           reconciliado: liquidoDeclarado!=null && Math.abs(liquidoCalculadoParaEspelho - liquidoDeclarado) <= 0.01,
-          origemId: `contracheque:${conta}:${competenciaImport}`,
+          origemId: `contracheque:${contaTRT}:${competenciaImport}`,
         };
         // Linhas com parcelasRestantes>0 (rows[i][3]) são descontos de empréstimo consignado. Para cada
         // uma, tenta achar o total de parcelas já informado antes (mesma conta + mesma descrição + valor
         // parecido, ver detectarTotalParcelasEmprestimo); só pergunta ao usuário para empréstimos
         // genuinamente novos. A chave usa descrição+valor (não só descrição), porque o mesmo contracheque
         // pode ter dois empréstimos distintos do mesmo banco, cada um com sua própria parcela mensal.
-        const conta = UI.importMap.contaDestino;
         UI.importTotaisEmprestimo = {};
         const novosEmprestimos = [];
         const vistosNestaImportacao = new Set();
@@ -13924,7 +13931,7 @@ function handleFile(file){
           const chave = `${r[1]}|${Math.abs(r[2]).toFixed(2)}`;
           if(vistosNestaImportacao.has(chave)) return;
           vistosNestaImportacao.add(chave);
-          const detectado = detectarTotalParcelasEmprestimo(conta, r[1], Math.abs(r[2]));
+          const detectado = detectarTotalParcelasEmprestimo(contaTRT, r[1], Math.abs(r[2]));
           if(detectado) UI.importTotaisEmprestimo[chave] = detectado;
           else novosEmprestimos.push({ chave, descricao:r[1], valor:Math.abs(r[2]), parcelasRestantes:r[3] });
         });
