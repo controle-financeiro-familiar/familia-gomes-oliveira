@@ -2144,12 +2144,21 @@ async function initMsal(){
   }
   return msalApp;
 }
-/* Dimensões/posição do popup de autenticação (item 2 do requisito de responsividade): 630×630, centralizado
-   na tela do usuário quando possível — a aplicação principal nunca é substituída/recarregada durante o
-   login, o popup é que navega para login.microsoftonline.com e fecha sozinho ao concluir (comportamento
-   nativo do MSAL.js com loginPopup). */
+/* Dimensões/posição do popup de autenticação, centralizado na tela do usuário quando possível — a
+   aplicação principal nunca é substituída/recarregada durante o login, o popup é que navega para
+   login.microsoftonline.com e fecha sozinho ao concluir (comportamento nativo do MSAL.js com loginPopup).
+   O conteúdo do popup é de outra origem (login.microsoftonline.com) — o navegador bloqueia qualquer
+   leitura do tamanho real desse conteúdo ou redimensionamento dinâmico conforme ele muda de tela em tela
+   (usuário/senha → MFA → "Continuar conectado?" → acesso condicional), então não é tecnicamente possível
+   ajustar o popup "ao vivo" a partir daqui. Na prática, calcula um tamanho responsivo a partir da área
+   disponível da tela do usuário (nunca maior que ela, para nunca ser recortado pelo próprio navegador),
+   dentro de uma faixa que comporta com folga, sem rolagem, as telas típicas desse fluxo em qualquer
+   resolução/escala. */
 function atributosPopupLogin(){
-  const largura = 630, altura = 630;
+  const availW = window.screen.availWidth || window.screen.width;
+  const availH = window.screen.availHeight || window.screen.height;
+  const largura = Math.round(Math.min(600, Math.max(440, availW*0.34)));
+  const altura = Math.round(Math.min(800, Math.max(620, availH*0.82)));
   const left = Math.max(0, Math.round((window.screen.width - largura) / 2 + (window.screenLeft||0)));
   const top = Math.max(0, Math.round((window.screen.height - altura) / 2 + (window.screenTop||0)));
   return { popupSize: { width: largura, height: altura }, popupPosition: { top, left } };
@@ -8265,6 +8274,36 @@ function aplicarFocoBotaoIniciarApp(){
   }
   btn.focus({ preventScroll:true });
 }
+/* Foco automático no primeiro campo de cada modal (item 3 do requisito de UX): sempre que o modal aberto
+   no topo da pilha (maior z-index entre os .overlay presentes no DOM neste momento — mesmo cálculo já
+   usado para empilhar/sobrepor modais, ver CAMADAS_MODAL/zIndexModal) muda de identidade em relação à
+   última vez em que já aplicamos o foco, foca automaticamente o primeiro campo editável/interativo do seu
+   conteúdo (nunca um botão de fechar/cancelar) — sem precisar de nenhum código extra em cada modal
+   individualmente. Chamada sempre logo após bindEvents() (nunca antes — o innerHTML já foi trocado
+   sincronamente nesse ponto, então os elementos do modal já estão de fato montados no DOM). Comparar pela
+   identidade (não recalcular a cada render) evita roubar o foco de um campo em que o usuário já está
+   digitando sempre que outra interação dispara um novo render() com o MESMO modal ainda aberto; o passo
+   atual do fluxo de importação (várias etapas dentro do mesmo modal `ovImport`) conta como identidade
+   própria, para focar de novo ao avançar/voltar de passo. Nenhum campo editável no modal (ex.: só
+   confirmação/aviso) → não força foco em nada, mantendo o comportamento atual. */
+let ULTIMO_MODAL_FOCADO = null;
+function primeiroCampoFocavel(container){
+  const sel = 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]):not([disabled]), select:not([disabled]), textarea:not([disabled])';
+  for(const el of container.querySelectorAll(sel)){
+    if(el.getClientRects().length>0) return el;
+  }
+  return null;
+}
+function focarPrimeiroCampoModalAberto(){
+  const overlays = [...document.querySelectorAll('.overlay')];
+  if(!overlays.length){ ULTIMO_MODAL_FOCADO = null; return; }
+  const topo = overlays.reduce((a,b)=> (parseInt(b.style.zIndex)||0) > (parseInt(a.style.zIndex)||0) ? b : a);
+  const chave = topo.id + (topo.id==='ovImport' ? `:${UI.importStep}` : '');
+  if(chave===ULTIMO_MODAL_FOCADO) return;
+  ULTIMO_MODAL_FOCADO = chave;
+  const campo = primeiroCampoFocavel(topo);
+  if(campo) campo.focus();
+}
 function render(){
   document.documentElement.classList.toggle('forcar-nav-mobile', UI.forcarNavMobile);
   if(!STATE.ready){ root.innerHTML = '<div class="empty-state" style="padding-top:80px;">Carregando...</div>'; return; }
@@ -8275,6 +8314,7 @@ function render(){
   if(!UI.appIniciado && !UI.modalFecharSessao){
     root.innerHTML = renderBannerPWA() + renderTelaInicial() + (UI.backupModal!==null ? renderBackupModal() : "") + (UI.modalInstalarIOS ? renderModalInstalarIOS() : "");
     bindEvents();
+    focarPrimeiroCampoModalAberto();
     if(focarBotaoIniciarAppPendente){ focarBotaoIniciarAppPendente = false; aplicarFocoBotaoIniciarApp(); }
     return;
   }
@@ -8333,6 +8373,7 @@ function render(){
     ${UI.modalFecharSessao ? renderModalFecharSessao() : ""}
   `;
   bindEvents();
+  focarPrimeiroCampoModalAberto();
   animarTransicaoMapaCalor();
   if(UI.tab==="dashboard" || UI.tab==="metas" || UI.tab==="inteligencia"){
     // Chart.js mede o tamanho do container do canvas no momento em que é criado. Chamar isso logo após
@@ -10405,7 +10446,7 @@ function renderCartoes(){
   <details class="ajuda-fluxo" data-ajuda-cartoes ${UI.ajudaCartoesAberta?'open':''}>
     <summary>ℹ️ Informações sobre esta tela</summary>
     <div class="ajuda-fluxo-conteudo">
-      <p><b>Painel Contas</b>: mostra o saldo atual e a movimentação do período de cada conta bancária cadastrada (corrente, poupança, investimentos, contracheque etc.). <b>👁 Ver Extrato</b> abre o detalhamento de todos os lançamentos da competência exibida, com saldo acumulado.</p>
+      <p><b>Painel Contas</b>: mostra o saldo atual e a movimentação do período de cada conta bancária cadastrada (corrente, poupança, investimentos, contracheque etc.). <b>👁 Ver Extrato</b> abre o detalhamento de todos os lançamentos da competência exibida, com saldo acumulado. <b>⏳ Ver lançamentos futuros</b> mostra os lançamentos já cadastrados com data posterior a hoje nessa conta, permitindo acompanhar compromissos financeiros ainda não efetivados antes que aconteçam.</p>
       <p><b>Painel Cartões</b>: mostra a fatura da competência exibida de cada cartão de crédito. <b>🏆 Melhor opção hoje</b>: compras realizadas neste cartão terão o maior prazo até o pagamento da fatura, considerando as datas de fechamento e vencimento configuradas. ${!melhorCartao.vencedor && (!melhorCartao.candidatos || melhorCartao.candidatos.length===0) ? 'Defina o dia de fechamento e de vencimento de ao menos um cartão em Configurações → Contas para o app calcular essa indicação.' : ''}</p>
       <p><b>Saldo parcelado em aberto</b>: para o mês visualizado nesta aba, soma o valor de todas as parcelas futuras já registradas de compras parceladas em cada cartão (a partir do mês seguinte ao selecionado — a parcela do próprio mês não entra aqui, pois já está incluída no valor da fatura). Muda automaticamente ao trocar o mês. Anuidades parceladas (categoria "Anuidade de Cartão de Crédito") não entram nessa soma.</p>
       <p><b>👁 Ver Fatura</b>: abre a fatura digital da competência exibida, com todos os lançamentos, parcelas e créditos (inclusive estornos, tratados como crédito) que a compõem. <b>👁 Ver Próximas Faturas</b> (ao lado do saldo parcelado) mostra a projeção dos meses seguintes, com os lançamentos de cada competência sob demanda.</p>
@@ -11977,7 +12018,7 @@ function renderCategorias(){
       <div class="ajuda-fluxo-conteudo">
         <p><b>Grupos, categorias e subcategorias</b>: organizam todos os lançamentos em três níveis. Estrutura: <b>Grupo → Categoria → Subcategoria</b> (ex.: Moradia/Habitação → Custos Fixos Ocorrentes → Aluguel ou Prestação do Financiamento). Cada subcategoria já vem classificada como Receita/Despesa e Fixo/Variável. Use ✏️ para editar, 🗑️ para excluir, ↕️ para reposicionar e 🔀 para mover uma categoria ou subcategoria para outro grupo/categoria. Renomear ou mover um grupo, categoria ou subcategoria já atualiza automaticamente todos os lançamentos que o usam.</p>
         <p><b>Contas</b>: cadastre cada conta bancária ou cartão de crédito com seu tipo, responsável e (para cartões) dia de fechamento/vencimento. Contas com importações registradas para a competência selecionada mostram um ícone 📥.</p>
-        <p><b>Meios de pagamento</b> e <b>Responsáveis</b>: usados para classificar como cada lançamento foi pago e a quem uma receita pertence (útil nos indicadores de Renda Familiar do Painel Financeiro).</p>
+        <p><b>Meios de Transação</b> e <b>Responsáveis</b>: usados para classificar como cada lançamento foi pago e a quem uma receita pertence (útil nos indicadores de Renda Familiar do Painel Financeiro).</p>
         <p style="margin-bottom:0;">Alterações feitas aqui refletem imediatamente em todas as outras abas — não é necessário salvar separadamente.</p>
       </div>
     </details>
@@ -12075,8 +12116,8 @@ function renderCategorias(){
     </div>
     <div class="col-direita">
       <div class="panel" style="flex:1;display:flex;flex-direction:column;margin-bottom:0;">
-        <h2><span>Meios de Transações <span class="badge-count">${meiosOrdenados().length}</span></span><button class="btn btn-primary btn-sm" id="btnNovoMeioPgto">+ Novo Meio</button></h2>
-        <p class="panel-desc">Defina os meios de transações disponíveis no sistema.</p>
+        <h2><span>Meios de Transação <span class="badge-count">${meiosOrdenados().length}</span></span><button class="btn btn-primary btn-sm" id="btnNovoMeioPgto">+ Novo Meio</button></h2>
+        <p class="panel-desc">Defina os meios de transação disponíveis no sistema.</p>
         <div class="mini-card-grid" style="flex:1;align-content:flex-start;">
           ${meiosOrdenados().length ? meiosOrdenados().map(m=>`<div class="mini-card">
             <div class="mini-card-actions">
@@ -12811,7 +12852,7 @@ function renderImportModal(){
   <div class="overlay" id="ovImport" ${attrZIndexModal('importStep')}>
     <div class="modal" style="width:${largura};">
       <div class="modal-head"><h3>
-        <span class="import-titulo-desktop">⬆️ Importar arquivo do banco${UI.importMap.contaDestino ? ` — ${escapeHtml(UI.importMap.contaDestino)}` : ''}</span>
+        <span class="import-titulo-desktop">⬆️ Importar arquivo do banco${(UI.importStep>=3 && UI.importMap.contaDestino) ? ` — ${escapeHtml(UI.importMap.contaDestino)}` : ''}</span>
         <span class="import-titulo-mobile"><span aria-hidden="true">⬆️</span><span>Importar arquivo do banco${(UI.importStep>=3 && UI.importMap.contaDestino) ? `<br>${escapeHtml(UI.importMap.contaDestino)}` : ''}</span></span>
       </h3><button class="close-x" id="closeImport">✕</button></div>
       <div class="modal-body">
