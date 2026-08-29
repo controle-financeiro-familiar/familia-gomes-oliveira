@@ -826,6 +826,12 @@ tbody tr:hover{background:var(--navy-50);}
    a página, e não apenas dentro da tabela. */
 .table-wrap-registros{overflow:visible;max-height:none;border-radius:8px 8px 0 0;border-bottom:none;margin-top:10px;}
 .table-wrap-registros thead th{position:static;top:auto;}
+/* Cartões – Competência (renderCartoes): mesma ideia de .table-wrap-registros — sobrescreve o
+   overflow:auto+max-height:520px genérico de .table-wrap para que a altura do painel siga o conteúdo
+   (qualquer quantidade de cartões, qualquer competência), sem rolagem vertical própria. Quando o conteúdo
+   ultrapassa a altura da tela, quem rola é a página — nunca o painel. */
+.table-wrap-cartoes{overflow:visible;max-height:none;}
+.table-wrap-cartoes thead th{position:static;top:auto;}
 .tabela-registros{width:100%;table-layout:fixed;}
 .tabela-registros td, .tabela-registros th{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tabela-registros td.td-descricao, .tabela-registros th:nth-child(3),
@@ -10632,7 +10638,7 @@ function renderCartoes(){
       <div class="cartoes-resumo-item"><span class="ico">🟡</span><div><div class="val">${resumo.pendentes}</div><div class="lbl">pendente${resumo.pendentes===1?'':'s'}</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(resumo.saldoParceladoTotal)}</div><div class="lbl">parcelado em aberto</div></div></div>
     </div>
-    <div class="table-wrap" style="overflow-x:auto;"><table class="tabela-cartoes" style="table-layout:fixed;width:100%;">
+    <div class="table-wrap table-wrap-cartoes" style="overflow-x:auto;"><table class="tabela-cartoes" style="table-layout:fixed;width:100%;">
       <thead><tr>
         <th style="text-align:left;width:${pct(chCartao)}%;">Cartão</th>
         <th style="width:${pct(chImportar)}%;"></th>
