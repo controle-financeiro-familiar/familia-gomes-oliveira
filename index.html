@@ -2960,9 +2960,9 @@ let CATEGORIAS = [
   ['PJ CISM-BR','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
   ['Outros Serviços PJ','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
   ['Salário TRT','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
-  ['Assistência Saúde','Renda Familiar','Renda de Trabalho e Serviços','Receita','Variável'],
-  ['Assistência Pré-Escolar','Renda Familiar','Renda de Trabalho e Serviços','Receita','Variável'],
-  ['Auxílio Alimentação','Renda Familiar','Renda de Trabalho e Serviços','Receita','Variável'],
+  ['Assistência Saúde','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
+  ['Assistência Pré-Escolar','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
+  ['Auxílio Alimentação','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
   ['Aluguel Garagem','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
   ['Aluguel Apto Ribeirão Preto','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
   ['Arrendamento Fazenda','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
@@ -4143,7 +4143,8 @@ let STATE = {
   projecoes: PROJECOES_DEFAULT.map(p=>({...p, id:uid()})), // aba Projeções: lançamentos previstos do fluxo de caixa mensal (editável)
   metas: [], // aba Metas de Gastos: { id, nome, nivel, grupo, categoria, subcategoria, valor, competenciaInicio, recorrencia, observacoes }
   ready: false,
-  dirty: false // true quando há alterações ainda não salvas nos arquivos .cfg/.log conectados
+  dirty: false, // true quando há alterações ainda não salvas nos arquivos .cfg/.log conectados
+  contrachequeResumos: {}, // { [conta]: { [competencia AAAA-MM]: {bruto,descontos,liquido,margemConsignavel,remuneracaoConsignacao} } } — valores oficiais extraídos do PDF do contracheque na importação (ver renderExtratoContaModal/resumoContrachequeCompetencia), nunca recalculados a partir dos lançamentos quando existem
 };
 let UI = {
   tab: "dashboard",
@@ -4170,6 +4171,7 @@ let UI = {
   importRefMes: new Date().getMonth()+1, // período de referência da importação, informado pelo usuário antes de escolher o arquivo
   importRefAno: new Date().getFullYear(),
   importIsContracheque: false,
+  importContrachequeResumo: null, // {bruto,descontos,liquido,margemConsignavel,remuneracaoConsignacao} extraídos do PDF na leitura do arquivo — persistido em STATE.contrachequeResumos só na confirmação da importação (ver importConfirm)
   importContaTravada: false, // true quando a importação foi iniciada pelo botão 📥 de uma conta/cartão específico — trava a seleção de conta de destino, para nunca importar para a conta errada (ver data-importar-conta)
   modalTaxasConversao: null,
   modalParcelasEmprestimo: null, // { itens: [{descricao, parcelasRestantes}] } — pede o total de parcelas de empréstimos novos detectados no contracheque
@@ -4559,7 +4561,6 @@ function loadCSVRegistros(text){
   corrigirCompetenciaParcelasFuturas();
   removerParcelasFuturasEmprestimoContracheque();
   corrigirParcelasEmprestimos();
-  sincronizarReplicacaoContrachequeTodas();
   corrigirCategoriasOrfas();
   corrigirSubgruposMovidos();
   corrigirGrupoRenomeadoSemSubstituto();
@@ -4695,11 +4696,18 @@ function buildCSVConfig(){
   STATE.metas.forEach(m=>{
     rows.push(['META', m.id, '', m.nome||'', m.valor||0, m.subcategoria||'', m.grupo||'', m.categoria||'', m.nivel, m.recorrencia, '', m.observacoes||'', m.competenciaInicio||'', '', '', '', '', '', '', '', '', '', '', '']);
   });
+  Object.keys(STATE.contrachequeResumos||{}).forEach(conta=>{
+    const porCompetencia = STATE.contrachequeResumos[conta];
+    Object.keys(porCompetencia).forEach(competencia=>{
+      const r = porCompetencia[competencia];
+      rows.push(['CONTRACHEQUERESUMO', conta, '', '', r.bruto||0, '', '', '', '', '', conta, '', competencia, r.descontos||0, r.liquido||0, r.margemConsignavel||0, '', r.remuneracaoConsignacao||0, '', '', '', '', '', '']);
+    });
+  });
   return Papa.unparse(rows);
 }
 function loadCSVConfig(text){
   const parsed = Papa.parse(text.trim(), { header:true, skipEmptyLines:true });
-  const cardConfig = {}, cardOverrides = {}, cardStatus = {}, saldosIniciais = {}, contas = [], cartoes = [], categoriasCSV = [], meiosPagamento = [], contaTipos = {}, contaResponsavel = {}, contaBandeira = {}, responsaveis = [], responsavelIcone = {}, subcategoriaResponsavel = {}, projecoes = [], metas = [];
+  const cardConfig = {}, cardOverrides = {}, cardStatus = {}, saldosIniciais = {}, contas = [], cartoes = [], categoriasCSV = [], meiosPagamento = [], contaTipos = {}, contaResponsavel = {}, contaBandeira = {}, responsaveis = [], responsavelIcone = {}, subcategoriaResponsavel = {}, projecoes = [], metas = [], contrachequeResumos = {};
   parsed.data.forEach(r=>{
     if(r.tipo_registro==='CARDCFG'){
       cardConfig[r.id] = { fechamento: r.dia_fechamento?Number(r.dia_fechamento):null, vencimento: r.dia_vencimento?Number(r.dia_vencimento):null };
@@ -4727,9 +4735,16 @@ function loadCSVConfig(text){
       projecoes.push({ id:r.id||uid(), dia:Math.min(31,Math.max(1,Number(r.dia_vencimento)||1)), descricao:r.descricao||'', tipo: r.tipo==='Receita'?'Receita':'Despesa', valor:parseFloat(r.valor)||0, cartao:r.conta||'', competenciaInicio:r.competencia_fatura||'', competenciaFim:r.dia_fechamento||'' });
     } else if(r.tipo_registro==='META'){
       metas.push({ id:r.id||uid(), nome:r.descricao||'', valor:parseFloat(r.valor)||0, subcategoria:r.categoria||'', grupo:r.grupo||'', categoria:r.subgrupo||'', nivel:r.tipo||'grupo', recorrencia:r.natureza||'mensal', observacoes:r.pgto||'', competenciaInicio:r.competencia_fatura||'' });
+    } else if(r.tipo_registro==='CONTRACHEQUERESUMO'){
+      if(!contrachequeResumos[r.id]) contrachequeResumos[r.id] = {};
+      contrachequeResumos[r.id][r.competencia_fatura] = {
+        bruto: parseFloat(r.valor)||0, descontos: parseFloat(r.dia_fechamento)||0, liquido: parseFloat(r.dia_vencimento)||0,
+        margemConsignavel: parseFloat(r.status)||0, remuneracaoConsignacao: parseFloat(r.parcela_atual)||0
+      };
     }
   });
   STATE.cardConfig = {...CARDCFG_DEFAULT, ...cardConfig}; STATE.cardOverrides = cardOverrides; STATE.cardStatus = cardStatus; STATE.saldosIniciais = saldosIniciais;
+  STATE.contrachequeResumos = contrachequeResumos;
   STATE.contaResponsavel = { ...CONTA_RESPONSAVEL_DEFAULT, ...contaResponsavel };
   STATE.contaBandeira = { ...contaBandeira };
 
@@ -7044,6 +7059,26 @@ function itensExtratoConta(conta, ano, mes){
     qtdPeriodo
   };
 }
+/* Resumo oficial do contracheque (Margem Consignável/Bruto/Descontos/Líquido) de uma competência de uma
+   conta do tipo Contracheque, para os cards do Extrato da conta (ver renderExtratoContaModal). Prioridade
+   sempre para os valores extraídos do próprio PDF na importação (STATE.contrachequeResumos — nunca
+   recalculados a partir dos lançamentos quando existem, mesmo que a soma dessas rubricas divirja em
+   poucos centavos da soma bruta de todas as receitas, ver seção 7 do requisito). Quando a competência não
+   tem PDF importado (ex.: mês gerado só pelo botão "Replicar Contracheque"), cai para um cálculo a partir
+   dos próprios lançamentos já lançados nessa competência — nunca deixa os cards em branco. A margem
+   consignável usa sempre a fórmula oficial (remuneração×70% − descontos) como fallback/validação, nunca
+   substituindo um valor que o PDF já declarou explicitamente (ver calcularMargemConsignavelTRT). */
+function resumoContrachequeCompetencia(conta, ano, mes){
+  const competencia = `${ano}-${pad2(mes)}`;
+  const salvo = (STATE.contrachequeResumos && STATE.contrachequeResumos[conta]) ? STATE.contrachequeResumos[conta][competencia] : null;
+  const itens = itensExtratoConta(conta, ano, mes).itens.filter(t=>!ehSaldoAnterior(t));
+  const bruto = salvo ? salvo.bruto : itens.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const descontos = salvo ? salvo.descontos : itens.filter(t=>t.tipo==='Despesa').reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const liquido = salvo ? salvo.liquido : (bruto - descontos);
+  const remuneracaoConsignacao = salvo ? salvo.remuneracaoConsignacao : itens.filter(t=>t.categoria==='Salário TRT').reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const margemConsignavel = (salvo && salvo.margemConsignavel!=null) ? salvo.margemConsignavel : calcularMargemConsignavelTRT(remuneracaoConsignacao, descontos);
+  return { bruto, descontos, liquido, margemConsignavel, remuneracaoConsignacao, temDadosOficiais: !!salvo };
+}
 /* ---------- Modal: Ver Extrato — extrato digital de uma conta bancária na competência selecionada,
    mesma identidade visual do modal Ver Fatura (cabeçalho, painel-resumo, tabela, rodapé). ---------- */
 function renderExtratoContaModal(){
@@ -7123,12 +7158,25 @@ function renderExtratoContaModal(){
             <span><b>${det.qtdPeriodo}</b> lançamento${det.qtdPeriodo===1?'':'s'}</span>
           </div>
         </div>
+        ${tipo==='Contracheque' ? (()=>{
+          // Conta do tipo Contracheque: os 4 cards são substituídos pelo resumo oficial do próprio
+          // documento (Margem Consignável/Bruto/Descontos/Líquido), não pelo genérico entradas/saídas —
+          // ver resumoContrachequeCompetencia (seção 1 do requisito).
+          const resumo = resumoContrachequeCompetencia(conta, ano, mes);
+          return `
+        <div class="cartoes-resumo-grid">
+          <div class="cartoes-resumo-item"><span class="ico">📐</span><div><div class="val">${fmtBRL(resumo.margemConsignavel)}</div><div class="lbl">margem consignável</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">📈</span><div><div class="val">${fmtBRL(resumo.bruto)}</div><div class="lbl">bruto</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">📉</span><div><div class="val">${fmtBRL(resumo.descontos)}</div><div class="lbl">descontos</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(resumo.liquido)}</div><div class="lbl">líquido</div></div></div>
+        </div>`;
+        })() : `
         <div class="cartoes-resumo-grid">
           <div class="cartoes-resumo-item"><span class="ico">🏁</span><div><div class="val">${fmtBRL(det.saldoInicial)}</div><div class="lbl">saldo inicial</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">📈</span><div><div class="val">${fmtBRL(entradasFiltradas)}</div><div class="lbl">entradas</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">📉</span><div><div class="val">${fmtBRL(saidasFiltradas)}</div><div class="lbl">saídas</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(saldoFinalFiltrado)}</div><div class="lbl">saldo final</div></div></div>
-        </div>
+        </div>`}
         ${det.itens.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
           ${renderBotoesAcoesLancamentoModal(conta, itensFiltrados.length>0)}
@@ -7670,10 +7718,10 @@ function commitEdicaoLancamentoExistente(novo, antigo, conta, contaTransferencia
   // Regra única de negócio (a mesma usada na importação de extratos e faturas): marca o lançamento e
   // mantém o lançamento espelhado na outra conta sempre sincronizado (cria se ainda não existir).
   if(novo.transferenciaInterna) aplicarTransferenciaInterna(novo, contaTransferencia);
-  // Reaplica a replicação do Contracheque: cria/atualiza os meses seguintes ainda não gerados e
-  // propaga um novo valor-base a partir deste mês para os meses futuros que ainda não foram alterados
-  // manualmente — nunca mexe nos que já foram.
-  if(STATE.contaTipos[conta]==='Contracheque') gerarReplicacaoContracheque(conta);
+  // A replicação do Contracheque para competências futuras NUNCA é reaplicada automaticamente aqui —
+  // só o botão manual "Replicar Contracheque" (ver Extrato da conta) chama gerarReplicacaoContracheque.
+  // Editar um lançamento já replicado não estende nem atualiza os meses seguintes sozinho; para
+  // propagar o novo valor-base adiante, o usuário clica em "Replicar Contracheque" de novo (idempotente).
   reconciliarPagamentosFatura(); // se este lançamento é um pagamento de fatura, já espelha na hora
   UI.editingTx=null; UI.pendingEdicaoParcela=null; UI.confirmEditarParcela=null;
   scheduleSave(); render();
@@ -7761,13 +7809,16 @@ function gerarReplicacaoContracheque(conta){
           existente.tipo = itemBase.tipo; existente.natureza = itemBase.natureza; existente.pgto = itemBase.pgto;
           existente.parcelaAtual = parcelaAtualAlvo; existente.totalParcelas = totalParcelasAlvo;
           existente.responsavel = itemBase.responsavel||''; existente.entreFamilia = !!itemBase.entreFamilia;
+          // Fatura/Competência de um lançamento replicado é sempre a competência do PRÓPRIO mês-alvo (ex.:
+          // 09/2026 para o mês seguinte ao contracheque-base de 08/2026), nunca copiada do contracheque-base.
+          existente.competencia = competenciaAlvo;
           atualizados++;
         }
       } else {
         STATE.transactions.push({
           id: uid(), data: dataAlvo, descricao: itemBase.descricao, valor: valorCorrente,
           categoria: itemBase.categoria, grupo: itemBase.grupo, subgrupo: itemBase.subgrupo,
-          tipo: itemBase.tipo, natureza: itemBase.natureza, conta, pgto: itemBase.pgto, competencia:'',
+          tipo: itemBase.tipo, natureza: itemBase.natureza, conta, pgto: itemBase.pgto, competencia: competenciaAlvo,
           parcelaAtual: parcelaAtualAlvo, totalParcelas: totalParcelasAlvo, parcelamentoId: itemBase.parcelamentoId||'',
           responsavel: itemBase.responsavel||'', entreFamilia: !!itemBase.entreFamilia, contrachequeProjecao:true
         });
@@ -7776,12 +7827,6 @@ function gerarReplicacaoContracheque(conta){
     }
   });
   return { ok:true, criados, atualizados, preservados, competenciaBase: base.competencia, competenciaFinal };
-}
-/* Roda a replicação em todas as contas do tipo Contracheque cadastradas (usado após carregar o arquivo
-   e após qualquer importação/edição relevante) — silenciosa, sem alertas; quem precisa de feedback ao
-   usuário (botão manual) chama gerarReplicacaoContracheque diretamente e trata o retorno. */
-function sincronizarReplicacaoContrachequeTodas(){
-  STATE.contas.filter(c=> STATE.contaTipos[c]==='Contracheque').forEach(c=> gerarReplicacaoContracheque(c));
 }
 // Status simplificado ("Paga"/"Pendente") usado por contadores e alertas — 100% automático a partir dos
 // lançamentos reais (ver statusPagamentoFatura). Qualquer pagamento identificado (total ou parcial) já
@@ -10150,7 +10195,7 @@ function renderRegistros(){
     {campo:'natureza', label:'Natureza', options:[{value:'Fixo',label:'Fixo'},{value:'Variável',label:'Variável'}]},
     {campo:'tipo', label:'Tipo', options:[{value:'Despesa',label:'Despesa'},{value:'Receita',label:'Receita'}]},
     {campo:'conta', label:'Conta', options:contasUsadas.map(c=>({value:c,label:c}))},
-    {campo:'fatura', label:'Fatura', options:faturasUsadas.map(c=>({value:c,label:competenciaLabel(c)}))},
+    {campo:'fatura', label:'Fatura/Competência', options:faturasUsadas.map(c=>({value:c,label:competenciaLabel(c)}))},
   ];
   const qtdAtivos = contarFiltrosPadraoAtivos(f, camposFiltroReg);
   return `
@@ -10166,7 +10211,7 @@ function renderRegistros(){
       <summary>ℹ️ Informações sobre esta tela</summary>
       <div class="ajuda-fluxo-conteudo">
         <p><b>Busca</b>: o campo de busca considera exclusivamente a <b>Descrição</b> do lançamento — não busca por categoria, conta ou valor. Pressione Enter ou clique no ícone 🔍 para aplicar.</p>
-        <p><b>Filtros</b>: o filtro <b>Data</b> permite escolher um intervalo (data inicial e final) livremente, com atalhos para períodos comuns (Hoje, Ontem, Últimos 7/30 dias, Este mês, Mês anterior) ou um período Personalizado — totalmente independente do período exibido no cabeçalho da aplicação. Grupo, Natureza, Tipo, Conta e Fatura aceitam marcar mais de uma opção ao mesmo tempo (dentro do mesmo filtro, os registros que atendem a qualquer uma das opções marcadas aparecem); filtros diferentes se combinam entre si. Cada alteração já atualiza a lista e os totais na hora, sem recarregar a página. Use "↺ Restaurar filtros padrão" para voltar a ver todos os lançamentos.</p>
+        <p><b>Filtros</b>: o filtro <b>Data</b> permite escolher um intervalo (data inicial e final) livremente, com atalhos para períodos comuns (Hoje, Ontem, Últimos 7/30 dias, Este mês, Mês anterior) ou um período Personalizado — totalmente independente do período exibido no cabeçalho da aplicação. Grupo, Natureza, Tipo, Conta e Fatura/Competência aceitam marcar mais de uma opção ao mesmo tempo (dentro do mesmo filtro, os registros que atendem a qualquer uma das opções marcadas aparecem); filtros diferentes se combinam entre si. Cada alteração já atualiza a lista e os totais na hora, sem recarregar a página. Use "↺ Restaurar filtros padrão" para voltar a ver todos os lançamentos.</p>
         <p><b>Seleção em lote</b>: marque as caixas na primeira coluna (ou o checkbox "selecionar todos" no cabeçalho, que cobre a página atual) para abrir a barra de ações — mesmo componente usado nos modais da aba Contas e Cartões. Com pelo menos um lançamento marcado, é possível "✏️ Editar em Lote" (altera só os campos habilitados, em todos os selecionados de uma vez) ou "🗑️ Excluir selecionados" (pede confirmação antes de remover).</p>
         <p><b>Verificar duplicidade</b>: compara todos os lançamentos já registrados e aponta pares com data, valor e conta muito parecidos — útil depois de uma importação para conferir se algo entrou duas vezes.</p>
         <p><b>Importar arquivo do banco</b>: aceita extratos (.ofx/.xlsx) e faturas de cartão, holerites em PDF para contas do tipo Contracheque, e extratos .csv do PicPay para a conta Reserva de Emergência (com descrição e classificação — Aporte, Uso da Reserva ou Rendimento — geradas automaticamente a partir do Tipo de cada lançamento), com detecção automática de compras parceladas e de possíveis duplicatas antes de confirmar. O mesmo fluxo também pode ser iniciado direto pelo botão 📥 de uma conta específica (aba Contas e Cartões) ou de um cartão específico (coluna 📥 da tabela de Cartões) — nesse caso a conta de destino já vem travada, para nunca importar para a conta errada.</p>
@@ -10204,7 +10249,7 @@ function renderRegistros(){
     ${list.length===0 ? `<div class="empty-state"><div class="big">🗒️</div>Nenhum lançamento encontrado com esses filtros.</div>
     <div class="registros-rodape registros-rodape-vazio">${rodapePaginacao}</div>` : `
     <div class="table-wrap table-wrap-registros reg-tabela-principal"><table class="tabela-registros">
-      <thead><tr>${renderColunaSelecaoLoteHead('Reg', pageList.map(t=>t.id), UI.regSelecionados)}<th>Data</th><th>Descrição</th><th>Grupo</th><th>Natureza</th><th>Tipo</th><th>Conta</th><th>Fatura</th><th style="text-align:right;">Valor</th><th class="col-acoes">Ações</th></tr></thead>
+      <thead><tr>${renderColunaSelecaoLoteHead('Reg', pageList.map(t=>t.id), UI.regSelecionados)}<th>Data</th><th>Descrição</th><th>Grupo</th><th>Natureza</th><th>Tipo</th><th>Conta</th><th>Fatura/Competência</th><th style="text-align:right;">Valor</th><th class="col-acoes">Ações</th></tr></thead>
       <tbody>
         ${pageList.map(t=>`
           <tr>
@@ -13253,17 +13298,26 @@ function isContrachequeTRT(fullText){
 const TRT_MONEY_RE = /^-?\d{1,3}(?:\.\d{3})*,\d{2}$/;
 const TRT_MONEY_RE_G = /-?\d{1,3}(?:\.\d{3})*,\d{2}/g;
 function parseContrachequeTRT(rows){
-  // Localiza a linha "Previsão de Crédito" (rodapé da tabela): começa com uma data e tem
-  // ao menos 3 valores monetários na sequência (Margem, Bruto, Descontos, Líquido). O último valor dessa
-  // sequência (mais à direita) é sempre o Líquido — usado depois só para validar se a soma das rubricas
-  // extraídas bate com o valor que o próprio demonstrativo declara (ver validação em processarArquivoImportacao).
+  // Localiza a linha "Previsão de Crédito" (rodapé da tabela): começa com uma data e tem ao menos 3
+  // valores monetários na sequência, sempre nesta ordem: Margem Consignável (opcional — nem todo
+  // demonstrativo traz essa coluna), Bruto, Descontos, Líquido. Com 4 valores, o primeiro é a margem; com
+  // apenas 3, a margem não veio explícita no documento (fica null — ver validarMargemConsignavelTRT,
+  // usada para calculá-la nesse caso). Os demais servem tanto para exibir os cards do extrato da conta
+  // quanto para validar se a soma das rubricas extraídas bate com o que o próprio demonstrativo declara.
   let dataPrevisao = '';
-  let liquidoDeclarado = null;
+  let liquidoDeclarado = null, brutoDeclarado = null, descontosDeclarado = null, margemDeclarada = null;
   for(const r of rows){
     const first = r.items[0];
     if(first && /^\d{2}\/\d{2}\/\d{4}$/.test(first.text)){
       const moneyVals = r.items.filter(i=>TRT_MONEY_RE.test(i.text)).map(i=>parseFloat(i.text.replace(/\./g,'').replace(',', '.')));
-      if(moneyVals.length>=3){ dataPrevisao = first.text; liquidoDeclarado = moneyVals[moneyVals.length-1]; break; }
+      if(moneyVals.length>=3){
+        dataPrevisao = first.text;
+        if(moneyVals.length>=4) margemDeclarada = moneyVals[moneyVals.length-4];
+        brutoDeclarado = moneyVals[moneyVals.length-3];
+        descontosDeclarado = moneyVals[moneyVals.length-2];
+        liquidoDeclarado = moneyVals[moneyVals.length-1];
+        break;
+      }
     }
   }
   // Fallback: procura, a partir da linha do cabeçalho "Previsão de Crédito", a primeira
@@ -13315,7 +13369,18 @@ function parseContrachequeTRT(rows){
     // individualmente, em vez de tratar toda receita da conta Contracheque como "Salário TRT".
     out.push([ dataISO, descricao, valor, parcelasRestantes, codigo ]);
   }
-  return { rows: out, liquidoDeclarado };
+  return { rows: out, liquidoDeclarado, brutoDeclarado, descontosDeclarado, margemDeclarada };
+}
+/* Fórmula oficial de validação da margem consignável do TRT: (remuneração considerada para consignação ×
+   70%) − total de descontos do contracheque. Usada (1) para conferir a margem declarada no PDF sem
+   substituí-la — o valor do documento é sempre a referência oficial quando existe — e (2) para calcular a
+   margem quando o PDF não traz essa coluna explícita (moneyVals.length===3 em parseContrachequeTRT).
+   Trabalha em centavos inteiros para nunca acumular erro de arredondamento de ponto flutuante. */
+function calcularMargemConsignavelTRT(remuneracaoConsignacao, totalDescontos){
+  const remCent = Math.round((Number(remuneracaoConsignacao)||0)*100);
+  const descCent = Math.round((Number(totalDescontos)||0)*100);
+  const margemCent = Math.round(remCent*70/100) - descCent;
+  return margemCent/100;
 }
 /* Classificação de cada rubrica do contracheque TRT pelo código (prioridade sobre a descrição, que serve só
    de reserva quando o código não é reconhecido — ver uso em buildParsedFromMap). Créditos: remuneração
@@ -13548,21 +13613,34 @@ function handleFile(file){
           alert('Este PDF não parece ser um Demonstrativo de Pagamento do TRT. Confira o arquivo e tente novamente.');
           UI.importStep=2; render(); return;
         }
-        const { rows, liquidoDeclarado } = parseContrachequeTRT(pdfRows);
+        const { rows, liquidoDeclarado, brutoDeclarado, descontosDeclarado, margemDeclarada } = parseContrachequeTRT(pdfRows);
         UI.importRaw = { type:'pdf', headers:['Data','Descrição','Valor'], rows };
         UI.importIsContracheque = true;
         // Validação obrigatória: a soma das rubricas extraídas (créditos - débitos) precisa bater com o
         // líquido que o próprio demonstrativo declara no rodapé ("Previsão de Crédito"). Se não bater, a
         // importação não é silenciosamente aceita como válida — avisa qual foi o valor calculado x o
         // declarado, para o usuário conferir o PDF antes de prosseguir (ver seção 11 do requisito).
+        const totalCreditos = rows.filter(r=>r[2]>0).reduce((s,r)=>s+r[2],0);
+        const totalDebitos = rows.filter(r=>r[2]<0).reduce((s,r)=>s-r[2],0);
         if(liquidoDeclarado!=null){
-          const totalCreditos = rows.filter(r=>r[2]>0).reduce((s,r)=>s+r[2],0);
-          const totalDebitos = rows.filter(r=>r[2]<0).reduce((s,r)=>s-r[2],0);
           const liquidoCalculado = totalCreditos - totalDebitos;
           if(Math.abs(liquidoCalculado - liquidoDeclarado) > 0.01){
             alert(`Atenção: a soma das rubricas extraídas deste contracheque (créditos ${fmtBRL(totalCreditos)} − débitos ${fmtBRL(totalDebitos)} = líquido ${fmtBRL(liquidoCalculado)}) não bate com o líquido declarado no documento (${fmtBRL(liquidoDeclarado)}). Confira o PDF — pode haver uma rubrica não reconhecida pelo leitor — antes de importar.`);
           }
         }
+        // Resumo do contracheque (cards do Extrato da conta: Margem Consignável, Bruto, Descontos,
+        // Líquido — ver renderExtratoContaModal/resumoContrachequeCompetencia) — guardado aqui e só
+        // persistido em STATE.contrachequeResumos na confirmação da importação (ver importConfirm),
+        // vinculado à competência selecionada, nunca a outras. Remuneração para consignação é a soma das
+        // rubricas de remuneração (códigos mapeados para "Salário TRT" — ver RUBRICA_TRT_CODIGO_CATEGORIA),
+        // usada tanto para exibir quanto para validar/calcular a margem consignável (nunca para substituir
+        // um valor de margem que o próprio PDF já declara explicitamente).
+        const remuneracaoConsignacao = rows.filter(r=>RUBRICA_TRT_CODIGO_CATEGORIA[r[4]]==='Salário TRT').reduce((s,r)=>s+r[2],0);
+        const bruto = brutoDeclarado!=null ? brutoDeclarado : totalCreditos;
+        const descontos = descontosDeclarado!=null ? descontosDeclarado : totalDebitos;
+        const liquido = liquidoDeclarado!=null ? liquidoDeclarado : (bruto - descontos);
+        const margem = margemDeclarada!=null ? margemDeclarada : calcularMargemConsignavelTRT(remuneracaoConsignacao, descontos);
+        UI.importContrachequeResumo = { bruto, descontos, liquido, margemConsignavel: margem, remuneracaoConsignacao };
         // Linhas com parcelasRestantes>0 (rows[i][3]) são descontos de empréstimo consignado. Para cada
         // uma, tenta achar o total de parcelas já informado antes (mesma conta + mesma descrição + valor
         // parecido, ver detectarTotalParcelasEmprestimo); só pergunta ao usuário para empréstimos
@@ -15696,7 +15774,7 @@ function bindEvents(){
     commitEdicaoLancamentoExistente(p.novo, p.antigo, p.conta, p.contaTransferencia, 'todas');
   });
 
-  document.getElementById('closeImport')?.addEventListener('click', ()=>{ UI.importStep=0; UI.modalTaxasConversao=null; render(); });
+  document.getElementById('closeImport')?.addEventListener('click', ()=>{ UI.importStep=0; UI.modalTaxasConversao=null; UI.importContrachequeResumo=null; render(); });
   document.querySelectorAll('[data-taxa-idx]').forEach(inp=> inp.addEventListener('input', e=>{
     const i = Number(inp.dataset.taxaIdx);
     const info = UI.modalTaxasConversao.rows[i][3];
@@ -15707,7 +15785,7 @@ function bindEvents(){
   }));
   document.getElementById('cancelModalTaxas')?.addEventListener('click', ()=>{
     if(!confirm('Cancelar a importação deste arquivo?')) return;
-    UI.modalTaxasConversao=null; UI.importStep=0; UI.importRaw=null; render();
+    UI.modalTaxasConversao=null; UI.importStep=0; UI.importRaw=null; UI.importContrachequeResumo=null; render();
   });
   document.getElementById('confirmModalTaxas')?.addEventListener('click', ()=>{
     UI.modalTaxasConversao.rows.forEach(r=>{
@@ -15737,7 +15815,7 @@ function bindEvents(){
   }));
   document.getElementById('cancelModalParcelasEmprestimo')?.addEventListener('click', ()=>{
     if(!confirm('Cancelar a importação deste arquivo?')) return;
-    UI.modalParcelasEmprestimo=null; UI.importStep=0; UI.importRaw=null; render();
+    UI.modalParcelasEmprestimo=null; UI.importStep=0; UI.importRaw=null; UI.importContrachequeResumo=null; render();
   });
   document.getElementById('confirmModalParcelasEmprestimo')?.addEventListener('click', ()=>{
     const itens = UI.modalParcelasEmprestimo.itens;
@@ -15908,7 +15986,12 @@ function bindEvents(){
       const info = catInfo(r.categoria);
       const valorAbs = Math.abs(Number(r.valor)||0);
       const ehCartao = r.pgto==='Cartão de Crédito' && STATE.cartoes.includes(r.conta);
-      const competencia = ehCartao ? `${UI.importRefAno}-${pad2(UI.importRefMes)}` : '';
+      // Fatura/Competência: além da fatura do cartão, TODO lançamento importado de uma conta do tipo
+      // Contracheque recebe a competência do próprio contracheque (período selecionado antes do arquivo) —
+      // sem exceção por rubrica (remuneração, benefícios, empréstimos consignados, descontos etc., ver
+      // seção 10 do requisito), nunca só nos descontos de empréstimo.
+      const ehContracheque = STATE.contaTipos[r.conta]==='Contracheque';
+      const competencia = (ehCartao || ehContracheque) ? `${UI.importRefAno}-${pad2(UI.importRefMes)}` : '';
       const ehTransferencia = r.transferenciaInterna && r.contaTransferencia;
       const novaTx = {
         id: uid(), data:r.data, descricao:r.descricao, valor:valorAbs,
@@ -15930,17 +16013,25 @@ function bindEvents(){
       // contracheque daquele mês for importado (pode variar, ou o empréstimo pode ser liquidado antes).
       if(novaTx.pgto==='Cartão de Crédito' && Number(novaTx.totalParcelas)>1) sincronizarParcelasFuturas(novaTx);
     });
-    // Replicação do Contracheque: se o destino é uma conta do tipo Contracheque, o contracheque agora
-    // importado (dado real) passa a valer para este mês — remove qualquer lançamento gerado
-    // automaticamente antes (contrachequeProjecao) que porventura já existisse para essa mesma
-    // competência nesta conta, e então reaplica a replicação a partir deste novo contracheque-base
-    // (que passa a ser o mais recente real), estendendo/atualizando os meses seguintes.
+    // Contracheque: o contracheque agora importado (dado real) passa a valer só para a competência
+    // selecionada — remove qualquer lançamento gerado antes automaticamente pelo botão "Replicar
+    // Contracheque" (contrachequeProjecao) que porventura já existisse para essa mesma competência nesta
+    // conta, substituindo-o pelos dados reais recém-importados. NÃO estende mais a réplica para os meses
+    // seguintes automaticamente aqui — a importação de um PDF cria lançamentos somente para a competência
+    // selecionada; replicar para competências futuras passa a ser sempre uma ação manual, através do
+    // botão "Replicar Contracheque" no Extrato da conta (ver gerarReplicacaoContracheque). O resumo
+    // oficial do contracheque (cards do Extrato: Margem Consignável/Bruto/Descontos/Líquido — ver
+    // renderExtratoContaModal) fica salvo por competência, nunca sobrescrevendo outras já importadas.
     const contaDestinoImport = UI.importMap.contaDestino;
     if(STATE.contaTipos[contaDestinoImport]==='Contracheque'){
       const competenciaImportada = `${UI.importRefAno}-${pad2(UI.importRefMes)}`;
       STATE.transactions = STATE.transactions.filter(t=> !(t.conta===contaDestinoImport && t.contrachequeProjecao && competenciaDeData(t.data)===competenciaImportada));
-      gerarReplicacaoContracheque(contaDestinoImport);
+      if(UI.importContrachequeResumo){
+        if(!STATE.contrachequeResumos[contaDestinoImport]) STATE.contrachequeResumos[contaDestinoImport] = {};
+        STATE.contrachequeResumos[contaDestinoImport][competenciaImportada] = UI.importContrachequeResumo;
+      }
     }
+    UI.importContrachequeResumo = null;
     const ignorados = UI.importParsed.length - selecionados.length;
     UI.importStep=0; UI.importRaw=null; UI.importParsed=[];
     // O filtro de Data (aba Registros) é um intervalo explícito (De/Até), não uma seleção por ano/mês —
