@@ -3017,7 +3017,7 @@ const CONTA_TIPOS_DEFAULT = {
   "Inter":"Conta PJ","NuConta":"Conta Corrente","BB Ariana":"Conta Corrente","BB Bruno":"Conta Corrente","Itaú":"Conta Corrente","Caixa":"Poupança","Estilo Elo Nanquim":"Cartão de Crédito","Visa Gold":"Cartão de Crédito","Infinite Visa Estilo":"Cartão de Crédito","NuCartão":"Cartão de Crédito","Personnalité Black":"Cartão de Crédito","TRT":"Contracheque","PicPay":"Reserva de Emergência"
 };
 const CONTA_RESPONSAVEL_DEFAULT = {
-  "Inter":"Ariana","NuConta":"Ariana","BB Ariana":"Ariana","BB Bruno":"Bruno","Itaú":"Bruno","Caixa":"Bruno","Estilo Elo Nanquim":"Bruno","Visa Gold":"Ariana","Infinite Visa Estilo":"Bruno","NuCartão":"Ariana","Personnalité Black":"Bruno","TRT":"Bruno"
+  "Inter":"Ariana","NuConta":"Ariana","BB Ariana":"Ariana","BB Bruno":"Bruno","Itaú":"Bruno","Caixa":"Bruno","Estilo Elo Nanquim":"Bruno","Visa Gold":"Ariana","Infinite Visa Estilo":"Bruno","NuCartão":"Ariana","Personnalité Black":"Bruno","TRT":"Bruno","PicPay":"Bruno"
 };
 /* Bandeira padrão dos cartões já conhecidos pelo app — atribuída automaticamente ao identificar o cartão
    pelo nome, sem precisar de cadastro manual. Só serve de PONTO DE PARTIDA: uma escolha explícita do
@@ -3395,6 +3395,13 @@ function migrarNomesContasPadrao(){
   migrarNomeConta('Itaú Bruno', 'Itaú');
   migrarNomeConta('CEF Bruno', 'Caixa');
   migrarNomeConta('NuConta Ariana', 'NuConta');
+}
+/* Toda conta do tipo Reserva de Emergência tem Bruno como responsável fixo, independentemente do nome da
+   conta ou do que porventura já estivesse salvo — reflete automaticamente em qualquer tela/filtro/relatório
+   que leia STATE.contaResponsavel (fonte única da verdade). Chamada junto com migrarNomesContasPadrao(),
+   nos mesmos dois pontos de carregamento de dados. */
+function aplicarResponsavelPadraoPorTipo(){
+  STATE.contas.forEach(c=>{ if(STATE.contaTipos[c]==='Reserva de Emergência') STATE.contaResponsavel[c] = 'Bruno'; });
 }
 function migrarNomeConta(antiga, nova){
   // Config e registros podem carregar em qualquer ordem — a lista de contas pode já ter sido renomeada
@@ -4662,6 +4669,7 @@ function loadCSVRegistros(text){
   corrigirDescricaoSaldoAnterior();
   migrarCompetenciaParaVencimento();
   migrarNomesContasPadrao();
+  aplicarResponsavelPadraoPorTipo();
   reconciliarPagamentosFatura(); // cria os espelhos de pagamento de fatura que ainda faltarem (ver função)
 }
 /* Corrige, para compras já cadastradas antes da correção deste bug, a competência das parcelas futuras
@@ -4894,6 +4902,7 @@ function loadCSVConfig(text){
   padronizarReceitasContracheque();
   migrarCompetenciaParaVencimento();
   migrarNomesContasPadrao();
+  aplicarResponsavelPadraoPorTipo();
   reconciliarPagamentosFatura(); // cartões/fechamentos podem ter chegado só agora — reconcilia de novo (idempotente)
 }
 function mesclarLista(doArquivo, padrao){
@@ -12544,7 +12553,7 @@ function renderNovaSubcategoriaModal(){
 // agora usa Limite total/vínculo de limite (ver cardLimite/gruposLimiteCartao) e Contracheque usa a
 // Conta vinculada (ver contaVinculada), ambos com sua própria UI dedicada no modal.
 const CAMPOS_EXTRA_POR_TIPO = {
-  bancaria: ['banco','agencia','numeroConta'],
+  bancaria: ['banco','agencia','numeroConta','chavePix'],
 };
 function grupoCamposExtra(tipoConta){
   if(TIPOS_CONTA_BANCARIA.includes(tipoConta)) return 'bancaria';
@@ -12589,10 +12598,11 @@ function renderTextModal(){
   const vinculoLimiteAtivo = t.vinculoLimite!==undefined ? t.vinculoLimite : !!limiteCfgAtual.grupoLimiteId;
   const cartoesVinculadosAtuais = t.cartoesVinculados!==undefined ? t.cartoesVinculados : membrosGrupoLimite(limiteCfgAtual.grupoLimiteId).filter(c=>c!==t.original);
   const limiteTotalAtual = t.limiteTotal!==undefined ? t.limiteTotal : (t.original ? (limiteTotalCartao(t.original)||'') : '');
-  const limiteDisponivelExibicao = t.original ? limiteDisponivelCartao(t.original) : (Number(limiteTotalAtual)||0);
   const outrosCartoesParaVinculo = STATE.cartoes.filter(c=>c!==t.original);
-  // Conta vinculada de uma conta do tipo Contracheque (seção 1 do requisito): só contas bancárias
-  // tradicionais (Corrente/PJ/Poupança/Reserva de Emergência) podem receber o pagamento.
+  // Conta vinculada/associada: para Contracheque, a conta bancária que recebe o pagamento (seção 1 do
+  // requisito); para Cartão de Crédito, a conta associada exibida no lugar do antigo campo "Limite
+  // disponível" (esse valor continua calculado e visível na tabela de Cartões). Em ambos os casos só
+  // contas bancárias tradicionais (Corrente/PJ/Poupança/Reserva de Emergência) são compatíveis.
   const contaVinculadaAtual = t.contaVinculada!==undefined ? t.contaVinculada : (STATE.contaVinculada[t.original] || '');
   const opcoesContaVinculada = STATE.contas.filter(c=>c!==t.original && TIPOS_CONTA_BANCARIA.includes(STATE.contaTipos[c]));
   return `
@@ -12649,11 +12659,14 @@ function renderTextModal(){
               <div class="field"><label>Limite total${vinculoLimiteAtivo?' (compartilhado)':''}</label>
                 <input type="number" min="0" step="0.01" id="fTextModalLimiteTotal" placeholder="Ex.: 10000.00" value="${escapeHtml(String(limiteTotalAtual))}">
               </div>
-              <div class="field"><label>Limite disponível</label>
-                <input type="text" disabled value="${fmtBRL(limiteDisponivelExibicao)}" style="${limiteDisponivelExibicao<0?'color:var(--danger,#c0392b);font-weight:600;':''}">
+              <div class="field"><label>Conta associada</label>
+                <select id="fTextModalContaVinculada">
+                  <option value="" ${!contaVinculadaAtual?'selected':''}>Selecione...</option>
+                  ${opcoesContaVinculada.map(c=>`<option value="${escapeHtml(c)}" ${contaVinculadaAtual===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
+                </select>
               </div>
             </div>
-            <p class="hint" style="margin:4px 0 0;">Calculado automaticamente: limite total − compras/faturas ainda em aberto. ${limiteDisponivelExibicao<0?'⚠️ Limite excedido.':''}</p>
+            <p class="hint" style="margin:4px 0 0;">O limite disponível (limite total − compras/faturas ainda em aberto) é calculado automaticamente e exibido na tabela de Cartões.</p>
             <div class="tx-row" style="margin-top:10px;">
               <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:${outrosCartoesParaVinculo.length?'pointer':'not-allowed'};">
                 <input type="checkbox" id="fTextModalVinculoLimite" ${vinculoLimiteAtivo?'checked':''} ${outrosCartoesParaVinculo.length?'':'disabled'}>
@@ -12675,6 +12688,11 @@ function renderTextModal(){
           <div>
             <div class="field-section-label">Dados bancários</div>
             <div class="tx-row">
+              <div class="field tx-wide"><label>Nome do banco</label>
+                <input type="text" id="fTextModalExtra_banco" placeholder="Ex.: Banco do Brasil" value="${escapeHtml(valorExtraTextModal(t,'banco'))}">
+              </div>
+            </div>
+            <div class="tx-row" style="margin-top:10px;">
               <div class="field"><label>Agência</label>
                 <input type="text" id="fTextModalExtra_agencia" placeholder="Ex.: 1234-5" value="${escapeHtml(valorExtraTextModal(t,'agencia'))}">
               </div>
@@ -12683,8 +12701,8 @@ function renderTextModal(){
               </div>
             </div>
             <div class="tx-row" style="margin-top:10px;">
-              <div class="field tx-wide"><label>Nome do banco</label>
-                <input type="text" id="fTextModalExtra_banco" placeholder="Ex.: Banco do Brasil" value="${escapeHtml(valorExtraTextModal(t,'banco'))}">
+              <div class="field tx-wide"><label>Chave Pix</label>
+                <input type="text" id="fTextModalExtra_chavePix" placeholder="Ex.: CPF, e-mail, telefone ou chave aleatória" value="${escapeHtml(valorExtraTextModal(t,'chavePix'))}">
               </div>
             </div>
           </div>` : ''}
@@ -15846,7 +15864,8 @@ function bindEvents(){
         : [];
       aplicarVinculoLimiteCartao(nomeConta, cartoesVinculadosSelecionados, limiteTotalNovo);
     }
-    // Conta vinculada de uma conta do tipo Contracheque (seção 1 do requisito) — armazena o nome da conta
+    // Conta vinculada/associada — de uma conta Contracheque (recebe o pagamento) ou de um Cartão de
+    // Crédito (substitui o antigo campo "Limite disponível" no modal) — armazena o nome da conta
     // (identificador único de conta nesta aplicação), migrado automaticamente por
     // renomearContaEmTodosOsDados caso qualquer um dos dois lados seja renomeado depois.
     function salvarContaVinculada(nomeConta){
@@ -15874,7 +15893,7 @@ function bindEvents(){
         STATE.contas.push(nome);
         if(tipoConta){ STATE.contaTipos[nome] = tipoConta; if(tipoConta==='Cartão de Crédito' && !STATE.cartoes.includes(nome)) STATE.cartoes.push(nome); }
         if(tipoConta==='Cartão de Crédito'){ salvarConfigCartao(nome); salvarBandeiraCartao(nome); salvarLimiteCartao(nome); }
-        if(tipoConta==='Contracheque') salvarContaVinculada(nome);
+        if(tipoConta==='Contracheque' || tipoConta==='Cartão de Crédito') salvarContaVinculada(nome);
         salvarResponsavelConta(nome);
         salvarDadosExtra(nome);
         // Se a conta foi criada a partir do fluxo de importação (botão "Nova conta" do modal de
@@ -15885,7 +15904,7 @@ function bindEvents(){
         renomearConta(t.original, nome, tipoConta);
         { const nomeFinalConta = STATE.contas.includes(nome) ? nome : t.original;
           if(tipoConta==='Cartão de Crédito'){ salvarConfigCartao(nomeFinalConta); salvarBandeiraCartao(nomeFinalConta); salvarLimiteCartao(nomeFinalConta); } else { delete STATE.contaBandeira[nomeFinalConta]; delete STATE.cardLimite[nomeFinalConta]; }
-          if(tipoConta==='Contracheque') salvarContaVinculada(nomeFinalConta); else delete STATE.contaVinculada[nomeFinalConta];
+          if(tipoConta==='Contracheque' || tipoConta==='Cartão de Crédito') salvarContaVinculada(nomeFinalConta); else delete STATE.contaVinculada[nomeFinalConta];
           salvarResponsavelConta(nomeFinalConta);
           salvarDadosExtra(nomeFinalConta); }
         break;
