@@ -10906,17 +10906,17 @@ function renderPainelContasBancarias(ano, mes){
             <span class="lbl">Data do Crédito</span><span class="val">${dataCreditoCtq ? fmtData(dataCreditoCtq) : '—'}</span>
           </div>
           <div class="conta-financeira-grid">
-            <div><span class="lbl">Bruto</span><span class="val pos">${fmtBRL(resumoCtq.bruto)}</span></div>
-            <div><span class="lbl">Descontos</span><span class="val neg">${fmtBRL(resumoCtq.descontos)}</span></div>
             <div><span class="lbl">Margem Consignável</span><span class="val">${fmtBRL(resumoCtq.margemConsignavel)}</span></div>
             <div><span class="lbl">Líquido</span><span class="val">${fmtBRL(resumoCtq.liquido)}</span></div>
+            <div><span class="lbl">Bruto</span><span class="val pos">${fmtBRL(resumoCtq.bruto)}</span></div>
+            <div><span class="lbl">Descontos</span><span class="val neg">${fmtBRL(resumoCtq.descontos)}</span></div>
           </div>` : `
           <div class="conta-financeira-saldo ${saldoAtualReal>=0?'pos':'neg'}">
             <span class="lbl">Saldo atual <span class="hint" style="margin:0;font-weight:400;" title="Considera todos os lançamentos até hoje — lançamentos com data futura só entram nesse valor quando a data chegar.">(hoje)</span></span><span class="val">${fmtBRL(saldoAtualReal)}</span>
           </div>
           <div class="conta-financeira-grid">
             <div><span class="lbl">Saldo inicial do período</span><span class="val">${fmtBRL(s.saldoInicial)} <button type="button" class="icon-btn" data-editar-saldo-inicial-conta="${escapeHtml(c)}" title="Editar saldo inicial do período">✏️</button></span></div>
-            <div><span class="lbl">Saldo líquido do período <span class="hint" style="margin:0;font-weight:400;" title="Considera somente entradas e saídas já ocorridas até hoje — lançamentos com data futura só entram quando a data chegar.">(realizado)</span></span><span class="val ${s.liquidoRealizado>=0?'pos':'neg'}">${fmtBRL(s.liquidoRealizado)}</span></div>
+            <div><span class="lbl">Saldo líquido do período <span class="hint" style="margin:0;font-weight:400;" title="Considera somente entradas e saídas já ocorridas até hoje — lançamentos com data futura só entram quando a data chegar."></span></span><span class="val ${s.liquidoRealizado>=0?'pos':'neg'}">${fmtBRL(s.liquidoRealizado)}</span></div>
             <div><span class="lbl">Entradas</span><span class="val pos">${fmtBRL(s.entradasRealizadas)}</span></div>
             <div><span class="lbl">Saídas</span><span class="val neg">${fmtBRL(s.saidasRealizadas)}</span></div>
           </div>`}
