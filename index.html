@@ -7378,7 +7378,7 @@ function renderExtratoContaModal(){
           <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Extrato')?'agrupado':''}" id="btnFiltrosMobileExtrato" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosExtrato>0?` <span class="filtros-mobile-badge">${qtdAtivosExtrato}</span>`:''}</button>
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Extrato')?'agrupado':''} ${UI.filtrosMobileAberto==='Extrato'?'aberto-mobile':''}" data-prefixo-filtros="Extrato">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileExtrato" title="Fechar">✕</button></div>
-            ${renderBarraFiltrosPadrao(f, 'Extrato', camposFiltroExtrato)}
+            ${renderBarraFiltrosPadrao(f, 'Extrato', camposFiltroExtrato, limitesCompetenciaISO(chaveMes(ano, mes)))}
             <div class="filtros-barra-acoes-mobile"><button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileExtrato">Aplicar</button></div>
           </div>
           ${UI.filtrosMobileAberto==='Extrato' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropExtrato"></div>` : ''}
@@ -7839,10 +7839,12 @@ function aplicarTransferenciaInterna(txPrincipal, contaOutraPonta){
 
   const espelhoExistente = STATE.transactions.find(t=>t.id!==txPrincipal.id && t.transferenciaVinculoId===vinculoId);
   if(espelhoExistente){
-    // Já existe (edição de uma transferência já criada) — mantém os dois lados sempre sincronizados.
+    // Já existe (edição de uma transferência já criada) — mantém os dois lados sempre sincronizados,
+    // inclusive a competência (ex.: registro espelho do líquido do contracheque — ver importConfirm — deve
+    // sempre carregar a mesma competência do lado de origem, nunca a data de crédito/depósito).
     espelhoExistente.data = txPrincipal.data; espelhoExistente.valor = txPrincipal.valor;
     espelhoExistente.descricao = ajustarSentidoDescricao(txPrincipal.descricao, clEspelho.tipo); espelhoExistente.pgto = txPrincipal.pgto;
-    espelhoExistente.conta = contaOutraPonta;
+    espelhoExistente.conta = contaOutraPonta; espelhoExistente.competencia = txPrincipal.competencia || '';
     espelhoExistente.tipo = clEspelho.tipo; espelhoExistente.grupo = clEspelho.grupo; espelhoExistente.subgrupo = clEspelho.subgrupo;
     espelhoExistente.categoria = clEspelho.categoria; espelhoExistente.natureza = clEspelho.natureza;
     return vinculoId;
@@ -7850,7 +7852,9 @@ function aplicarTransferenciaInterna(txPrincipal, contaOutraPonta){
   STATE.transactions.push({
     id: uid(), data: txPrincipal.data, descricao: ajustarSentidoDescricao(txPrincipal.descricao, clEspelho.tipo), valor: txPrincipal.valor,
     categoria: clEspelho.categoria, grupo: clEspelho.grupo, subgrupo: clEspelho.subgrupo, tipo: clEspelho.tipo, natureza: clEspelho.natureza,
-    conta: contaOutraPonta, pgto: txPrincipal.pgto, competencia:'',
+    // Competência sempre herdada do lado principal (nunca derivada da data deste lançamento espelho) —
+    // ver comentário acima e o registro espelho do líquido do contracheque em importConfirm.
+    conta: contaOutraPonta, pgto: txPrincipal.pgto, competencia: txPrincipal.competencia || '',
     parcelaAtual:null, totalParcelas:null, parcelamentoId:'',
     responsavel:'', entreFamilia:true, transferenciaInterna:true, transferenciaVinculoId: vinculoId
   });
@@ -8082,6 +8086,16 @@ function statusFatura(conta,competencia){ return statusPagamentoFatura(conta,com
 
 /* ---------- Projeções: fluxo de caixa mensal previsto (saldo inicial + lançamentos previstos) ---------- */
 function chaveMes(ano,mes){ return `${ano}-${pad2(mes)}`; }
+/* Bounds ISO (primeiro/último dia) do mês-calendário de uma competência "YYYY-MM" — usado para restringir
+   o filtro de Data por período dos modais Ver Extrato e Ver Fatura exclusivamente ao período da
+   competência exibida (nunca permite escolher/exibir datas de outra competência), recalculado a cada
+   render a partir da competência atualmente visualizada. */
+function limitesCompetenciaISO(competencia){
+  const [anoStr, mesStr] = String(competencia).split('-');
+  const ano = Number(anoStr), mes = Number(mesStr);
+  const ultimoDia = new Date(ano, mes, 0).getDate();
+  return { min: `${anoStr}-${mesStr}-01`, max: `${anoStr}-${mesStr}-${pad2(ultimoDia)}` };
+}
 function proximoMes(ano, mes){ mes+=1; if(mes>12){ mes=1; ano+=1; } return {ano,mes}; }
 function mesAnterior(ano, mes){ mes-=1; if(mes<1){ mes=12; ano-=1; } return {ano,mes}; }
 /* Tipos de conta que compõem o Saldo Inicial do Fluxo de Caixa — usa o TIPO da conta (não nomes fixos),
@@ -9896,8 +9910,12 @@ function contarFiltrosPadraoAtivos(f, campos){
 /* Filtro de Data compacto: botão que abre um popover com períodos predefinidos + campos De/Até editáveis
    de forma independente (modo "Personalizado"). Aplica na hora, sem recarregar a página, e valida
    automaticamente para nunca deixar a data final ficar antes da inicial (ver bindFiltroDataRange). */
-function renderFiltroDataRange(f, prefixo){
-  const modoLivre = f.dataPreset==='personalizado';
+function renderFiltroDataRange(f, prefixo, limites){
+  // `limites` ({min,max} ISO, ver limitesCompetenciaISO) restringe este filtro exclusivamente ao período
+  // da competência exibida (modais Ver Extrato/Ver Fatura): os presets de período "corrente" (Hoje/Ontem/
+  // 7 dias/30 dias/Este mês/Mês anterior) não fazem sentido nesse contexto e são omitidos — só resta o
+  // intervalo De/Até, sempre habilitado e limitado pelos atributos min/max dos próprios campos de data.
+  const modoLivre = f.dataPreset==='personalizado' || !!limites;
   return `
   <div class="filtro-data filtro-range ${f.aberto==='data'?'aberto':''}">
     <button type="button" class="mini filtro-data-btn-abrir" id="btnAbrirFiltroData${prefixo}">${ICONE_FILTRO_SVG} ${dataRangeLabel(f)}</button>
@@ -9907,12 +9925,13 @@ function renderFiltroDataRange(f, prefixo){
         <b>Período</b>
         <button type="button" class="close-x-claro" id="btnFecharFiltroData${prefixo}" title="Fechar">✕</button>
       </div>
+      ${limites ? `<p class="hint" style="margin:0 0 8px;">Restrito ao período da competência exibida (${fmtData(limites.min)} a ${fmtData(limites.max)}).</p>` : `
       <div class="filtro-range-presets">
         ${FILTRO_PRESETS_DATA.map(p=>`<button type="button" class="chip-preset ${f.dataPreset===p.id?'ativo':''}" data-preset-data="${p.id}" data-prefixo-data="${prefixo}">${p.label}</button>`).join('')}
-      </div>
+      </div>`}
       <div class="filtro-range-datas">
-        <label>De<input type="date" id="dataRangeInicio${prefixo}" value="${f.dataInicio||''}" ${modoLivre?'':'disabled'} max="${f.dataFim||''}"></label>
-        <label>Até<input type="date" id="dataRangeFim${prefixo}" value="${f.dataFim||''}" ${modoLivre?'':'disabled'} min="${f.dataInicio||''}"></label>
+        <label>De<input type="date" id="dataRangeInicio${prefixo}" value="${f.dataInicio||''}" ${modoLivre?'':'disabled'} min="${limites?limites.min:''}" max="${f.dataFim||(limites?limites.max:'')}"></label>
+        <label>Até<input type="date" id="dataRangeFim${prefixo}" value="${f.dataFim||''}" ${modoLivre?'':'disabled'} min="${f.dataInicio||(limites?limites.min:'')}" max="${limites?limites.max:''}"></label>
       </div>
       ${(f.dataInicio||f.dataFim) ? `<button type="button" class="btn btn-ghost btn-sm filtro-padrao-limpar" id="btnLimparData${prefixo}">↺ Restaurar filtros padrão</button>` : ''}
     </div>` : ''}
@@ -9958,7 +9977,13 @@ function renderFiltroMultiSelect(f, prefixo, campo, label, options){
 }
 /* Liga os eventos do filtro de Data por período. `onChange` deve reaplicar a paginação (página 1) e
    chamar render() — ver usos em Registros e nos modais. */
-function bindFiltroDataRange(f, prefixo, onChange){
+function clampDataISO(v, limites){
+  if(!v || !limites) return v;
+  if(limites.min && v<limites.min) return limites.min;
+  if(limites.max && v>limites.max) return limites.max;
+  return v;
+}
+function bindFiltroDataRange(f, prefixo, onChange, limites){
   document.getElementById('btnAbrirFiltroData'+prefixo)?.addEventListener('click', ()=>{
     f.aberto = f.aberto==='data' ? null : 'data'; onChange(false);
   });
@@ -9967,17 +9992,17 @@ function bindFiltroDataRange(f, prefixo, onChange){
     btn.addEventListener('click', ()=>{
       const p = btn.dataset.presetData;
       if(p==='personalizado'){ f.dataPreset='personalizado'; }
-      else { const r = calcularPresetData(p); f.dataPreset=p; f.dataInicio=r.inicio; f.dataFim=r.fim; }
+      else { const r = calcularPresetData(p); f.dataPreset=p; f.dataInicio=clampDataISO(r.inicio,limites); f.dataFim=clampDataISO(r.fim,limites); }
       f.aberto='data'; onChange(true);
     });
   });
   document.getElementById('dataRangeInicio'+prefixo)?.addEventListener('change', e=>{
-    let v = e.target.value;
+    let v = clampDataISO(e.target.value, limites);
     if(v && f.dataFim && v>f.dataFim) f.dataFim = v; // nunca deixa a data final ficar antes da inicial
     f.dataPreset='personalizado'; f.dataInicio=v; f.aberto='data'; onChange(true);
   });
   document.getElementById('dataRangeFim'+prefixo)?.addEventListener('change', e=>{
-    let v = e.target.value;
+    let v = clampDataISO(e.target.value, limites);
     if(v && f.dataInicio && v<f.dataInicio) f.dataInicio = v;
     f.dataPreset='personalizado'; f.dataFim=v; f.aberto='data'; onChange(true);
   });
@@ -10015,12 +10040,12 @@ function bindFiltroMultiSelect(f, prefixo, campo, options, onChange){
 /* Liga um conjunto padrão de filtros (Data + multi-selects) de uma só vez — usado pelos três pontos da
    aplicação que têm filtros (Registros, modal Ver Extrato e modal Lançamentos futuros). `campos` é uma
    lista de {campo, options}; `onChange(resetPagina)` é chamado a cada interação. */
-function bindFiltrosPadrao(f, prefixo, campos, onChange){
-  bindFiltroDataRange(f, prefixo, onChange);
+function bindFiltrosPadrao(f, prefixo, campos, onChange, limites){
+  bindFiltroDataRange(f, prefixo, onChange, limites);
   campos.forEach(c=> bindFiltroMultiSelect(f, prefixo, c.campo, c.options, onChange));
 }
-function renderBarraFiltrosPadrao(f, prefixo, campos){
-  return `${renderFiltroDataRange(f, prefixo)}${campos.map(c=>renderFiltroMultiSelect(f, prefixo, c.campo, c.label, c.options)).join('')}`;
+function renderBarraFiltrosPadrao(f, prefixo, campos, limites){
+  return `${renderFiltroDataRange(f, prefixo, limites)}${campos.map(c=>renderFiltroMultiSelect(f, prefixo, c.campo, c.label, c.options)).join('')}`;
 }
 /* Item 2 do requisito (rodada de ajustes globais): chips dos filtros aplicados, entre a toolbar de
    filtros e a tabela — um chip por filtro ativo (Data + cada campo de seleção múltipla com opção
@@ -11015,7 +11040,7 @@ function renderFaturaAtualModal(){
           <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Fatura')?'agrupado':''}" id="btnFiltrosMobileFatura" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosFatura>0?` <span class="filtros-mobile-badge">${qtdAtivosFatura}</span>`:''}</button>
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Fatura')?'agrupado':''} ${UI.filtrosMobileAberto==='Fatura'?'aberto-mobile':''}" data-prefixo-filtros="Fatura">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileFatura" title="Fechar">✕</button></div>
-            ${renderBarraFiltrosPadrao(f, 'Fatura', camposFiltroFatura)}
+            ${renderBarraFiltrosPadrao(f, 'Fatura', camposFiltroFatura, limitesCompetenciaISO(competencia))}
             <div class="filtros-barra-acoes-mobile"><button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileFatura">Aplicar</button></div>
           </div>
           ${UI.filtrosMobileAberto==='Fatura' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropFatura"></div>` : ''}
@@ -14991,7 +15016,7 @@ function bindEvents(){
     bindFiltrosPadrao(UI.faturaAtualModal.filtros, 'Fatura', [
       {campo:'tipo', options:[{value:'Receita'},{value:'Despesa'}]},
       {campo:'parcela', options:[{value:'parcelado'},{value:'avista'}]},
-    ], resetPagina=>{ if(resetPagina) UI.faturaAtualModal.pagina = 1; render(); });
+    ], resetPagina=>{ if(resetPagina) UI.faturaAtualModal.pagina = 1; render(); }, limitesCompetenciaISO(chaveMes(UI.ano, UI.mes)));
     bindChipsFiltrosAtivos(UI.faturaAtualModal.filtros, 'Fatura', ()=>{ UI.faturaAtualModal.pagina = 1; render(); });
     bindSelecaoLote('Fatura', UI.faturaAtualModal.selecionados, ()=>render());
   }
@@ -15033,7 +15058,7 @@ function bindEvents(){
     bindFiltrosPadrao(UI.extratoContaModal.filtros, 'Extrato', [
       {campo:'grupo', options:[{value:'__sem_grupo__'}, ...gruposExtratoAtual.map(g=>({value:g}))]},
       {campo:'tipo', options:[{value:'Receita'},{value:'Despesa'}]},
-    ], resetPagina=>{ if(resetPagina) UI.extratoContaModal.pagina = 1; render(); });
+    ], resetPagina=>{ if(resetPagina) UI.extratoContaModal.pagina = 1; render(); }, limitesCompetenciaISO(chaveMes(UI.ano, UI.mes)));
     bindChipsFiltrosAtivos(UI.extratoContaModal.filtros, 'Extrato', ()=>{ UI.extratoContaModal.pagina = 1; render(); });
     bindSelecaoLote('Extrato', UI.extratoContaModal.selecionados, ()=>render());
   }
@@ -16676,7 +16701,11 @@ function bindEvents(){
           const txOrigemEspelho = {
             id: uid(), data: dataEspelhoISO, descricao: descricaoEspelho, valor: Math.abs(Number(esp.valorLiquido)||0),
             categoria:'', grupo:'', subgrupo:'', tipo:'Despesa', natureza:'Variável',
-            conta: esp.contaOrigem, pgto:'Folha de Pagamento', competencia:'',
+            // Competência = a do contracheque de origem (esp.competencia), nunca derivada da data de
+            // crédito/depósito — mantida também no lançamento espelho do lado da conta bancária de destino
+            // (ver aplicarTransferenciaInterna, que agora propaga esta competência para o espelho) para que
+            // consultas, filtros, relatórios e demais cálculos por competência considerem os dois lados.
+            conta: esp.contaOrigem, pgto:'Folha de Pagamento', competencia: esp.competencia,
             parcelaAtual:null, totalParcelas:null, parcelamentoId:'',
             responsavel:'', entreFamilia:false, transferenciaInterna:false, transferenciaVinculoId:'',
             origemImportacao:true, contrachequeOrigemId: esp.origemId
