@@ -1832,7 +1832,10 @@ summary::marker{content:'';}
 .cartao-col-logo{width:32px;height:36px;object-fit:contain;flex-shrink:0;align-self:flex-start;}
 .cartao-col-logo-fallback{width:32px;height:36px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;flex-shrink:0;align-self:center;}
 .cartao-col-textos{display:flex;flex-direction:column;gap:3px;min-width:0;justify-content:center;}
-.cartao-col-nome{font-weight:700;font-size:13.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cartao-col-nome{font-weight:700;font-size:13.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+/* Card da conta Reserva de Emergência (painel Contas): o badge do responsável fica ao lado do nome, não
+   embaixo junto do badge de tipo — ver renderPainelContasBancarias. */
+.cartao-col-nome-linha{display:flex;align-items:center;gap:6px;min-width:0;}
 .cartao-col-badges{display:flex;gap:5px;flex-wrap:wrap;align-items:center;}
 /* Limite de crédito do cartão, exibido dentro da própria célula do cartão (nunca uma coluna nova) —
    evita qualquer risco de rolagem horizontal na tabela, inclusive no mobile (ver renderCartoes). */
@@ -10888,16 +10891,22 @@ function renderPainelContasBancarias(ano, mes){
         const dataCreditoCtq = ehContracheque ? dataCreditoContracheque(c, ano, mes) : null;
         const s = ehContracheque ? null : calcSaldoConta(c, ano, mes);
         const saldoAtualReal = ehContracheque ? null : saldoContaAteData(c, hojeISO());
+        // Reserva de Emergência: o badge do responsável fica ao lado do NOME da conta (não abaixo, junto
+        // do badge de tipo, como nas demais contas) — pedido específico para este tipo de card.
+        const ehReserva = tipo==='Reserva de Emergência';
         return `<div class="conta-financeira-card">
           <button type="button" class="icon-btn btn-card-topo-direita no-print" data-importar-conta="${escapeHtml(c)}" title="Importar arquivo do banco" aria-label="Importar arquivo do banco">📥</button>
           <div class="cartao-col">
             <span class="faixa-cartao" style="background:${info.cor};"></span>
             ${logoInstituicaoCartaoHtml(c)}
             <div class="cartao-col-textos">
-              <div class="cartao-col-nome">${escapeHtml(c)}</div>
+              <div class="cartao-col-nome-linha">
+                <div class="cartao-col-nome">${escapeHtml(c)}</div>
+                ${ehReserva && resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);flex-shrink:0;">${escapeHtml(resp)}</span>` : ''}
+              </div>
               <div class="cartao-col-badges">
                 ${tipo ? `<span class="type-badge" style="font-size:11px;font-weight:600;color:${info.cor};">${escapeHtml(rotuloTipoConta(tipo))}</span>` : ''}
-                ${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
+                ${!ehReserva && resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
               </div>
             </div>
           </div>
