@@ -4377,7 +4377,7 @@ let UI = {
   editarSaldoInicialContaModal: null, // { conta } — editar o Saldo Anterior de uma conta na competência atual
   futurosContaModal: null, // { conta, filtros, busca, pagina, porPagina } — modal "Ver lançamentos futuros" do card de Contas (lançamentos com data > hoje), com filtros próprios do modal (mesmo motor genérico de Data por período + seleção múltipla da aba Registros — ver criarFiltrosPadrao)
   evolucaoReservaModal: null, // { conta } — modal "Evolução" do card de uma conta Reserva de Emergência (ver renderEvolucaoReservaModal), substitui "Ver lançamentos futuros" para esse tipo de conta
-  historicoContrachequeModal: null, // { conta } — modal "Histórico" do card de uma conta Contracheque (ver renderHistoricoContrachequeModal), substitui "Ver lançamentos futuros" para esse tipo de conta
+  historicoContrachequeModal: null, // { conta, pagina, porPagina } — modal "Histórico" do card de uma conta Contracheque (ver renderHistoricoContrachequeModal), substitui "Ver lançamentos futuros" para esse tipo de conta; paginação com o mesmo componente genérico usado nos demais modais (ver renderRodapePaginacaoGenerica)
   editarSaldoInicialFluxoCaixaModal: null, // true — editar os saldos iniciais das contas que compõem o Fluxo de Caixa
   modalEmpateCartao: null, // { empatados:[...], chaveEmpate, hojeISO } — escolha manual quando há empate persistente
   mapaCalorDiaModal: null, // { ano, mes, dia, filtros, busca, selecionados } — modal de transações do dia, aberto ao clicar numa célula do Mapa de Calor de Despesas
@@ -7612,6 +7612,18 @@ function renderFuturosContaModal(){
 function renderHistoricoContrachequeModal(){
   const conta = UI.historicoContrachequeModal.conta;
   const historico = historicoContrachequeConta(conta);
+  // Paginação da tabela — mesmo padrão/componente das demais tabelas de lançamentos da aplicação
+  // (ver renderRodapePaginacaoGenerica), evita rolagem interna limitando a quantidade de linhas por página.
+  if(UI.historicoContrachequeModal.porPagina===undefined) UI.historicoContrachequeModal.porPagina = 10;
+  if(UI.historicoContrachequeModal.pagina===undefined) UI.historicoContrachequeModal.pagina = 1;
+  const htcPorPagina = UI.historicoContrachequeModal.porPagina;
+  const htcTotalPaginas = htcPorPagina==='TODOS' ? 1 : Math.max(1, Math.ceil(historico.length/htcPorPagina));
+  if(UI.historicoContrachequeModal.pagina>htcTotalPaginas) UI.historicoContrachequeModal.pagina = htcTotalPaginas;
+  if(UI.historicoContrachequeModal.pagina<1) UI.historicoContrachequeModal.pagina = 1;
+  const htcInicioIdx = htcPorPagina==='TODOS' ? 0 : (UI.historicoContrachequeModal.pagina-1)*htcPorPagina;
+  const htcFimIdx = htcPorPagina==='TODOS' ? historico.length : Math.min(htcInicioIdx+htcPorPagina, historico.length);
+  const historicoPagina = historico.slice(htcInicioIdx, htcFimIdx);
+  const rodapePaginacaoHistorico = renderRodapePaginacaoGenerica(historico.length, htcPorPagina, UI.historicoContrachequeModal.pagina, htcTotalPaginas, htcInicioIdx, htcFimIdx, { selectId:'historicoContrachequePorPagina', dataAttr:'historico-contracheque-pagina', unidade:'competências' });
   return `
   <div class="overlay" id="ovHistoricoContracheque" ${attrZIndexModal('historicoContrachequeModal')}>
     <div class="modal" style="width:820px;">
@@ -7625,7 +7637,7 @@ function renderHistoricoContrachequeModal(){
             <th style="text-align:right;">Descontos</th><th style="text-align:right;">Líquido</th><th>Data do Crédito</th><th class="no-print"></th>
           </tr></thead>
           <tbody>
-            ${historico.map(h=>`<tr>
+            ${historicoPagina.map(h=>`<tr>
               <td>${competenciaLabel(h.competencia)}</td>
               <td style="text-align:right;">${fmtBRL(h.margemConsignavel)}</td>
               <td style="text-align:right;" class="val-cell pos">${fmtBRL(h.bruto)}</td>
@@ -7635,7 +7647,8 @@ function renderHistoricoContrachequeModal(){
               <td class="no-print"><button type="button" class="btn btn-ghost btn-sm" data-abrir-competencia-contracheque="${escapeHtml(conta)}|${h.competencia}">Ver detalhes</button></td>
             </tr>`).join('')}
           </tbody>
-        </table></div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhum contracheque importado ainda para esta conta.</div>`}
+        </table></div>
+        <div class="registros-rodape no-print">${rodapePaginacaoHistorico}</div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhum contracheque importado ainda para esta conta.</div>`}
       </div>
       <div class="modal-foot">
         <button class="btn btn-primary" id="closeHistoricoContracheque2">Fechar</button>
@@ -15296,10 +15309,23 @@ function bindEvents(){
   document.getElementById('closeEvolucaoReserva')?.addEventListener('click', ()=>{ UI.evolucaoReservaModal=null; render(); });
   document.getElementById('closeEvolucaoReserva2')?.addEventListener('click', ()=>{ UI.evolucaoReservaModal=null; render(); });
   document.querySelectorAll('[data-historico-contracheque]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.historicoContrachequeModal = { conta: b.dataset.historicoContracheque }; render();
+    UI.historicoContrachequeModal = { conta: b.dataset.historicoContracheque, pagina:1, porPagina:10 }; render();
   }));
   document.getElementById('closeHistoricoContracheque')?.addEventListener('click', ()=>{ UI.historicoContrachequeModal=null; render(); });
   document.getElementById('closeHistoricoContracheque2')?.addEventListener('click', ()=>{ UI.historicoContrachequeModal=null; render(); });
+  document.getElementById('historicoContrachequePorPagina')?.addEventListener('change', (e)=>{
+    const v = e.target.value;
+    UI.historicoContrachequeModal.porPagina = v==='TODOS' ? 'TODOS' : Number(v);
+    UI.historicoContrachequeModal.pagina = 1;
+    render();
+  });
+  document.querySelectorAll('[data-historico-contracheque-pagina]').forEach(b=> b.addEventListener('click', ()=>{
+    const v = b.dataset.historicoContrachequePagina;
+    if(v==='prev') UI.historicoContrachequeModal.pagina = Math.max(1, UI.historicoContrachequeModal.pagina-1);
+    else if(v==='next') UI.historicoContrachequeModal.pagina = UI.historicoContrachequeModal.pagina+1; // clamp final em renderHistoricoContrachequeModal()
+    else UI.historicoContrachequeModal.pagina = Number(v);
+    render();
+  }));
   // Linha do Histórico → abre os detalhes daquela competência: navega o topo do app para o mês/ano
   // correspondente (mesma navegação já usada em qualquer troca de competência) e abre o mesmo modal
   // Contracheque (data-extrato-conta) usado pelo botão do card, agora já mostrando aquele mês.
