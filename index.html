@@ -7872,9 +7872,19 @@ function blocoLimiteCartaoHtml(conta, extraClass){
 }
 /* Bloco de Agência/Nº Conta para os cabeçalhos dos modais "Ver Extrato"/"Lançamentos futuros" (painel
    Contas) — mesma fonte de dados já usada no modal de edição da conta (STATE.contaExtra, grupo
-   'bancaria'). Não aparece quando a conta não tem esses dados preenchidos (ex.: Contracheque, que usa
-   Conta vinculada em vez de dados bancários próprios). */
+   'bancaria'). Não aparece quando a conta não tem esses dados preenchidos. Para uma conta do tipo
+   Contracheque (que usa Conta vinculada em vez de dados bancários próprios), mostra a Data do Crédito da
+   competência exibida no topo do app (UI.ano/UI.mes — mesma fonte e período do card e do Histórico do
+   Contracheque, ver dataCreditoContracheque), "—" quando essa competência ainda não teve nenhum
+   contracheque importado. */
 function dadosBancariosCabecalhoHtml(conta){
+  if(STATE.contaTipos[conta]==='Contracheque'){
+    const dataCredito = dataCreditoContracheque(conta, UI.ano, UI.mes);
+    return `
+    <div class="conta-cabecalho-bancario">
+      <div class="conta-cabecalho-bancario-item"><span class="lbl">Data do Crédito</span> <span class="val">${dataCredito ? fmtData(dataCredito) : '—'}</span></div>
+    </div>`;
+  }
   const extra = STATE.contaExtra[conta] || {};
   if(!extra.agencia && !extra.numeroConta) return '';
   return `
