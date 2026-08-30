@@ -10894,9 +10894,9 @@ function renderPainelContasBancarias(ano, mes){
             <span class="lbl">Data do Crédito</span><span class="val">${dataCreditoCtq ? fmtData(dataCreditoCtq) : '—'}</span>
           </div>
           <div class="conta-financeira-grid">
-            <div><span class="lbl">Margem Consignável</span><span class="val">${fmtBRL(resumoCtq.margemConsignavel)}</span></div>
             <div><span class="lbl">Bruto</span><span class="val pos">${fmtBRL(resumoCtq.bruto)}</span></div>
             <div><span class="lbl">Descontos</span><span class="val neg">${fmtBRL(resumoCtq.descontos)}</span></div>
+            <div><span class="lbl">Margem Consignável</span><span class="val">${fmtBRL(resumoCtq.margemConsignavel)}</span></div>
             <div><span class="lbl">Líquido</span><span class="val">${fmtBRL(resumoCtq.liquido)}</span></div>
           </div>` : `
           <div class="conta-financeira-saldo ${saldoAtualReal>=0?'pos':'neg'}">
