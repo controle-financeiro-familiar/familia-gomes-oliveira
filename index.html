@@ -14452,10 +14452,17 @@ function handleFile(file){
           alert(`A conta bancária informada no contracheque (Agência ${agencia||'?'} / Conta ${numeroConta||'?'}, identificada como "${contaPorDadosDoPdf}") não corresponde à conta vinculada ao cadastro do Contracheque ("${contaVinculadaConfigurada}").\n\nRevise a Conta vinculada em Configurações → Contas antes de confirmar esta importação, se necessário. O registro espelho será criado na conta vinculada configurada.`);
         }
         const liquidoCalculadoParaEspelho = totalCreditos - totalDebitos;
+        // Quando o PDF não declara o líquido no rodapé (dataPrevisao só recuperada pelos fallbacks de
+        // parseContrachequeTRT — ver ali), não há valor declarado para conferir a soma das rubricas: nesse
+        // caso o espelho é considerado reconciliado com base só no total calculado, mesmo critério já usado
+        // para o resumo do card (bruto/descontos/líquido também caem no calculado quando não há valor
+        // declarado — ver liquido acima). Só bloqueia a criação do espelho quando HÁ um valor declarado e
+        // ele diverge do calculado (inconsistência real a ser conferida pelo usuário).
+        const reconciliado = liquidoDeclarado==null || Math.abs(liquidoCalculadoParaEspelho - liquidoDeclarado) <= 0.01;
         UI.importContrachequeEspelho = {
           contaOrigem: contaTRT, competencia: competenciaImport, valorLiquido: liquido, dataBalanco,
           contaDestino: contaVinculadaConfigurada,
-          reconciliado: liquidoDeclarado!=null && Math.abs(liquidoCalculadoParaEspelho - liquidoDeclarado) <= 0.01,
+          reconciliado,
           origemId: `contracheque:${contaTRT}:${competenciaImport}`,
         };
         // Linhas com parcelasRestantes>0 (rows[i][3]) são descontos de empréstimo consignado. Para cada
