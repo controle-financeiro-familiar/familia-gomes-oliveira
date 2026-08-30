@@ -1860,6 +1860,19 @@ summary::marker{content:'';}
 .fatura-digital-head-top .btn-imprimir-fatura{flex-shrink:0;}
 .fatura-digital-head-info{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;font-size:12.5px;color:#4a5468;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);}
 .fatura-digital-head-info b{color:#8393ac;font-weight:700;margin-right:4px;}
+/* Cabeçalho dos modais Ver Extrato/Lançamentos futuros/Ver Fatura/Ver Próximas Faturas: logo+nome+badges
+   à esquerda, e Agência/Nº Conta (conta bancária) ou o bloco de limite (cartão) à direita, colados no
+   botão Imprimir — mesma ideia de espaço reaproveitado do requisito de limite na tabela de Cartões. Em
+   telas estreitas, quebra para empilhar verticalmente, sem gerar rolagem horizontal nem vertical extra. */
+.fatura-digital-head-top-principal{display:flex;align-items:center;gap:16px;flex:1 1 auto;min-width:0;flex-wrap:wrap;}
+.conta-cabecalho-bancario{display:flex;flex-direction:column;gap:2px;margin-left:auto;font-size:11px;color:#8393ac;white-space:nowrap;}
+.conta-cabecalho-bancario-item .lbl{font-weight:700;color:#8393ac;margin-right:4px;}
+.conta-cabecalho-bancario-item .val{color:var(--ink);font-weight:700;}
+.limite-cartao-info-cabecalho{margin-top:0;margin-left:auto;max-width:260px;}
+@media (max-width: 760px){
+  .fatura-digital-head-top-principal{gap:8px 16px;}
+  .conta-cabecalho-bancario,.limite-cartao-info-cabecalho{margin-left:0;}
+}
 .linha-grupo-competencia td{background:var(--navy-50,#f4f7fc);font-weight:700;font-size:12px;color:#4a5468;padding:6px 10px;}
 /* Navegação Grupo→Categoria→Subcategoria→Lançamentos da aba Inteligência Financeira (seção 15). */
 .linha-drill-intel:hover{background:var(--navy-50,#f4f7fc);}
@@ -7279,8 +7292,6 @@ function renderExtratoContaModal(){
   const conta = UI.extratoContaModal.conta;
   const ano = UI.ano, mes = UI.mes;
   const tipo = STATE.contaTipos[conta]||'';
-  const resp = STATE.contaResponsavel[conta];
-  const info = infoTipoConta(tipo);
   const det = itensExtratoConta(conta, ano, mes);
   // Filtros do próprio modal (Data, Grupo, Tipo e busca por descrição) — os cards do painel-resumo
   // (entradas/saídas/saldo final) agora são recalculados com base SOMENTE nos itens filtrados/exibidos na
@@ -7331,17 +7342,7 @@ function renderExtratoContaModal(){
       <div class="modal-body">
         <div class="fatura-digital-head">
           <div class="fatura-digital-head-top">
-            <div class="cartao-col">
-              <span class="faixa-cartao" style="background:${info.cor};"></span>
-              ${logoInstituicaoCartaoHtml(conta)}
-              <div class="cartao-col-textos">
-                <div class="cartao-col-nome">${escapeHtml(conta)}</div>
-                <div class="cartao-col-badges">
-                  ${tipo ? `<span class="type-badge" style="font-size:11px;font-weight:600;color:${info.cor};">${escapeHtml(rotuloTipoConta(tipo))}</span>` : ''}
-                  ${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
-                </div>
-              </div>
-            </div>
+            ${cabecalhoContaModalHtml(conta)}
             <div class="no-print extrato-conta-acoes-topo">
               ${tipo==='Contracheque' ? `<button type="button" class="btn btn-ghost btn-sm no-print btn-imprimir-fatura" data-replicar-contracheque="${escapeHtml(conta)}" title="Replica todos os lançamentos do contracheque atual para os meses seguintes, até a última parcela do empréstimo mais longo">🔁 Replicar Contracheque</button>` : ''}
               <button class="btn btn-ghost btn-sm no-print btn-imprimir-fatura" id="printExtratoConta">🖨️ Imprimir</button>
@@ -7430,9 +7431,6 @@ function renderExtratoContaModal(){
    acumulado à medida que cada lançamento futuro é considerado. ---------- */
 function renderFuturosContaModal(){
   const conta = UI.futurosContaModal.conta;
-  const tipo = STATE.contaTipos[conta]||'';
-  const resp = STATE.contaResponsavel[conta];
-  const info = infoTipoConta(tipo);
   const saldoAtual = saldoContaAteData(conta, hojeISO());
   const futuros = lancamentosFuturosConta(conta);
   // Filtros do próprio modal (Data, Tipo e busca por descrição) — os cards do painel-resumo (quantidade e
@@ -7473,17 +7471,7 @@ function renderFuturosContaModal(){
       <div class="modal-body">
         <div class="fatura-digital-head">
           <div class="fatura-digital-head-top">
-            <div class="cartao-col">
-              <span class="faixa-cartao" style="background:${info.cor};"></span>
-              ${logoInstituicaoCartaoHtml(conta)}
-              <div class="cartao-col-textos">
-                <div class="cartao-col-nome">${escapeHtml(conta)}</div>
-                <div class="cartao-col-badges">
-                  ${tipo ? `<span class="type-badge" style="font-size:11px;font-weight:600;color:${info.cor};">${escapeHtml(rotuloTipoConta(tipo))}</span>` : ''}
-                  ${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
-                </div>
-              </div>
-            </div>
+            ${cabecalhoContaModalHtml(conta)}
             <div class="no-print"><button class="btn btn-ghost btn-sm no-print btn-imprimir-fatura" id="printFuturosConta">🖨️ Imprimir</button></div>
           </div>
         </div>
@@ -7687,6 +7675,64 @@ function corLimiteCartao(pctUtilizado){
   if(pctUtilizado>=90) return '#c0392b';
   if(pctUtilizado>=70) return '#a3590a';
   return '#1e8e5a';
+}
+/* Bloco visual de limite de crédito (utilizado de total / barra com percentual / limite disponível) —
+   mesma fonte de dados/cálculo da coluna Cartão da tabela principal (ver limiteTotalCartao/
+   comprometidoGrupoCartao/limiteDisponivelCartao), reaproveitado também nos cabeçalhos dos modais
+   "Ver Fatura" e "Ver Próximas Faturas" (ver cabecalhoFaturaCartaoHtml), sempre ao vivo a cada render().
+   extraClass permite ajustar o posicionamento (ex.: empurrar para a direita do cabeçalho) sem afetar o
+   uso já existente na tabela. Retorna '' quando o cartão não tem limite total configurado. */
+function blocoLimiteCartaoHtml(conta, extraClass){
+  const limiteTotalC = limiteTotalCartao(conta);
+  if(!(limiteTotalC>0)) return '';
+  const comprometidoC = comprometidoGrupoCartao(conta);
+  const limiteDisponivelC = limiteTotalC - comprometidoC;
+  const pctUtilizadoC = comprometidoC/limiteTotalC*100;
+  return `
+  <div class="limite-cartao-info${extraClass?' '+extraClass:''}" title="Limite ${comprometidoC>limiteTotalC?'excedido':'utilizado'}: ${fmtBRL(comprometidoC)} de ${fmtBRL(limiteTotalC)} (${pctUtilizadoC.toFixed(0)}%)">
+    <div class="limite-cartao-valores"><b>${fmtBRL(comprometidoC)}</b> de ${fmtBRL(limiteTotalC)}</div>
+    <div class="limite-cartao-barra">
+      <div class="progress-track"><div class="progress-fill" style="width:${Math.min(100,Math.max(0,pctUtilizadoC)).toFixed(0)}%;background:${corLimiteCartao(pctUtilizadoC)};"></div></div>
+      <span class="limite-cartao-pct" style="color:${corLimiteCartao(pctUtilizadoC)};">${pctUtilizadoC.toFixed(0)}%</span>
+    </div>
+    <div class="limite-cartao-disponivel">Limite Disponível <b>${fmtBRL(limiteDisponivelC)}</b></div>
+  </div>`;
+}
+/* Bloco de Agência/Nº Conta para os cabeçalhos dos modais "Ver Extrato"/"Lançamentos futuros" (painel
+   Contas) — mesma fonte de dados já usada no modal de edição da conta (STATE.contaExtra, grupo
+   'bancaria'). Não aparece quando a conta não tem esses dados preenchidos (ex.: Contracheque, que usa
+   Conta vinculada em vez de dados bancários próprios). */
+function dadosBancariosCabecalhoHtml(conta){
+  const extra = STATE.contaExtra[conta] || {};
+  if(!extra.agencia && !extra.numeroConta) return '';
+  return `
+  <div class="conta-cabecalho-bancario">
+    <div class="conta-cabecalho-bancario-item"><span class="lbl">Agência</span> <span class="val">${escapeHtml(extra.agencia||'—')}</span></div>
+    <div class="conta-cabecalho-bancario-item"><span class="lbl">Nº Conta</span> <span class="val">${escapeHtml(extra.numeroConta||'—')}</span></div>
+  </div>`;
+}
+/* Cabeçalho compartilhado entre "Ver Extrato" e "Lançamentos futuros" (painel Contas): mesmo padrão
+   visual (classes) da coluna Conta da tabela principal, com Agência/Nº Conta à direita quando disponíveis
+   — mesma ideia de cabecalhoFaturaCartaoHtml para os modais de cartão. */
+function cabecalhoContaModalHtml(conta){
+  const tipo = STATE.contaTipos[conta]||'';
+  const resp = STATE.contaResponsavel[conta];
+  const info = infoTipoConta(tipo);
+  return `
+  <div class="fatura-digital-head-top-principal">
+    <div class="cartao-col">
+      <span class="faixa-cartao" style="background:${info.cor};"></span>
+      ${logoInstituicaoCartaoHtml(conta)}
+      <div class="cartao-col-textos">
+        <div class="cartao-col-nome">${escapeHtml(conta)}</div>
+        <div class="cartao-col-badges">
+          ${tipo ? `<span class="type-badge" style="font-size:11px;font-weight:600;color:${info.cor};">${escapeHtml(rotuloTipoConta(tipo))}</span>` : ''}
+          ${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
+        </div>
+      </div>
+    </div>
+    ${dadosBancariosCabecalhoHtml(conta)}
+  </div>`;
 }
 /* Geração/atualização automática das parcelas futuras de uma compra parcelada, a partir da parcela de
    referência informada (a que acabou de ser cadastrada, importada ou editada). Sempre que chamada:
@@ -10695,14 +10741,9 @@ function renderCartoes(){
         const progresso = (st.chave!=='paga' && st.chave!=='proxima' && st.chave!=='fechada-sem-lancamentos') ? progressoAteVencimento(st) : null;
         const infoPagamento = st.chave==='paga' ? (st.pagamento==='parcial' ? 'Parcialmente' : 'Totalmente') : (st.chave==='fechada-sem-lancamentos' ? 'Sem lançamentos' : null);
         // Limite de crédito do cartão (independente da competência exibida — reflete o comprometido em
-        // TODAS as faturas ainda em aberto, ver comprometidoGrupoCartao) — só aparece quando o cartão tem
-        // um Limite total configurado; recalculado a cada render(), então acompanha ao vivo qualquer
-        // lançamento novo/editado/excluído/pago/estornado, sem precisar fechar e reabrir nada.
-        const limiteTotalC = limiteTotalCartao(c);
-        const temLimiteConfigurado = limiteTotalC > 0;
-        const comprometidoC = temLimiteConfigurado ? comprometidoGrupoCartao(c) : 0;
-        const limiteDisponivelC = limiteTotalC - comprometidoC;
-        const pctUtilizadoC = temLimiteConfigurado ? (comprometidoC/limiteTotalC*100) : 0;
+        // TODAS as faturas ainda em aberto) — ver blocoLimiteCartaoHtml, mesma fonte reaproveitada nos
+        // cabeçalhos dos modais "Ver Fatura"/"Ver Próximas Faturas"; recalculado a cada render(), então
+        // acompanha ao vivo qualquer lançamento novo/editado/excluído/pago/estornado.
         return `<tr class="linha-fatura ${st.chave}">
           <td data-label="">
             <div class="cartao-col">
@@ -10715,15 +10756,7 @@ function renderCartoes(){
                   ${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
                   ${ehMelhor ? `<span class="tag melhor-hoje-badge" title="Compras realizadas neste cartão terão o maior prazo até o pagamento da fatura">🏆 Melhor opção hoje</span>` : ''}
                 </div>
-                ${temLimiteConfigurado ? `
-                <div class="limite-cartao-info" title="Limite ${comprometidoC>limiteTotalC?'excedido':'utilizado'}: ${fmtBRL(comprometidoC)} de ${fmtBRL(limiteTotalC)} (${pctUtilizadoC.toFixed(0)}%)">
-                  <div class="limite-cartao-valores"><b>${fmtBRL(comprometidoC)}</b> de ${fmtBRL(limiteTotalC)}</div>
-                  <div class="limite-cartao-barra">
-                    <div class="progress-track"><div class="progress-fill" style="width:${Math.min(100,Math.max(0,pctUtilizadoC)).toFixed(0)}%;background:${corLimiteCartao(pctUtilizadoC)};"></div></div>
-                    <span class="limite-cartao-pct" style="color:${corLimiteCartao(pctUtilizadoC)};">${pctUtilizadoC.toFixed(0)}%</span>
-                  </div>
-                  <div class="limite-cartao-disponivel">Limite Disponível <b>${fmtBRL(limiteDisponivelC)}</b></div>
-                </div>` : ''}
+                ${blocoLimiteCartaoHtml(c)}
               </div>
             </div>
           </td>
@@ -10867,16 +10900,19 @@ function renderEditarSaldoInicialContaModal(){
 function cabecalhoFaturaCartaoHtml(conta){
   const resp = STATE.contaResponsavel[conta];
   return `
-  <div class="cartao-col">
-    <span class="faixa-cartao" style="background:${corCartao(conta)};"></span>
-    ${logoInstituicaoCartaoHtml(conta)}
-    <div class="cartao-col-textos">
-      <div class="cartao-col-nome">${escapeHtml(conta)}</div>
-      <div class="cartao-col-badges">
-        ${bandeiraCartaoHtml(conta)}
-        ${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
+  <div class="fatura-digital-head-top-principal">
+    <div class="cartao-col">
+      <span class="faixa-cartao" style="background:${corCartao(conta)};"></span>
+      ${logoInstituicaoCartaoHtml(conta)}
+      <div class="cartao-col-textos">
+        <div class="cartao-col-nome">${escapeHtml(conta)}</div>
+        <div class="cartao-col-badges">
+          ${bandeiraCartaoHtml(conta)}
+          ${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
+        </div>
       </div>
     </div>
+    ${blocoLimiteCartaoHtml(conta, 'limite-cartao-info-cabecalho')}
   </div>`;
 }
 /* Linha de lançamento do modal "Ver Fatura". Qualquer Receita lançada no cartão (inclusive estornos) é
