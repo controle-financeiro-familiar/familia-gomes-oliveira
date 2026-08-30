@@ -11057,11 +11057,11 @@ function renderPainelContasBancarias(ano, mes){
             <div class="cartao-col-textos">
               <div class="cartao-col-nome-linha">
                 <div class="cartao-col-nome">${escapeHtml(c)}</div>
-                ${ehReserva && resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);flex-shrink:0;">${escapeHtml(resp)}</span>` : ''}
+                ${(ehReserva || ehContracheque) && resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);flex-shrink:0;">${escapeHtml(resp)}</span>` : ''}
               </div>
               <div class="cartao-col-badges">
                 ${tipo ? `<span class="type-badge" style="font-size:11px;font-weight:600;color:${info.cor};">${escapeHtml(rotuloTipoConta(tipo))}</span>` : ''}
-                ${!ehReserva && resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
+                ${!ehReserva && !ehContracheque && resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
               </div>
             </div>
           </div>
