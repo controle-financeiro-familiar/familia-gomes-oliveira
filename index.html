@@ -1768,14 +1768,25 @@ summary::marker{content:'';}
 }
 .aportes-tabela-itens td{padding:4px 10px;border-bottom:1px solid var(--line);}
 .contas-financeiras-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;}
+/* Altura padronizada (seção 1 do requisito): sem um valor fixo, cards em linhas diferentes do grid podiam
+   ficar alguns pixels mais baixos/altos entre si (cada linha do CSS Grid só estica para acompanhar a
+   própria linha, nunca as demais) — 300px cobre com folga o conteúdo de todos os tipos de card já
+   existentes (a rede de segurança global de quebra de texto, ver seletor .conta-financeira-card acima,
+   evita qualquer estouro mesmo em casos extremos). A área de ações (margin-top:auto dentro do flex-column)
+   fica sempre ancorada na base do card, qualquer que seja a altura do conteúdo acima dela. */
 .conta-financeira-card{
   position:relative;
   border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--paper);
   display:flex;flex-direction:column;gap:12px;transition:box-shadow .15s ease,transform .15s ease;
+  height:300px;
 }
 .conta-financeira-card .btn-card-topo-direita{position:absolute;top:8px;right:24px;font-size:24px;}
-.conta-financeira-acoes{display:flex;gap:8px;}
+.conta-financeira-acoes{display:flex;gap:8px;margin-top:auto;}
 .conta-financeira-acoes .btn{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;font-size:15px;}
+/* Botões de ação específicos da Reserva de Emergência (Movimentações/Evolução) e do Contracheque
+   (Contracheque/Histórico) — seção 2 do requisito: fonte menor só nesses quatro botões, nenhum outro
+   texto/label/valor/ícone do card é afetado. */
+.conta-financeira-acoes .btn-acao-especial{font-size:11px;}
 .contagem-futuros-btn{font-size:11px;font-weight:400;}
 .conta-financeira-card .cartao-col{padding-right:30px;}
 .conta-financeira-card:hover{box-shadow:0 6px 16px rgba(16,64,141,.12);transform:translateY(-2px);}
@@ -11075,11 +11086,11 @@ function renderPainelContasBancarias(ano, mes){
           </div>`}
           <div class="conta-financeira-acoes">
             ${ehReserva ? `
-            <button type="button" class="btn btn-ghost btn-sm" data-extrato-conta="${escapeHtml(c)}" title="Movimentações" aria-label="Movimentações">👁 Movimentações</button>
-            <button type="button" class="btn btn-ghost btn-sm" data-evolucao-reserva="${escapeHtml(c)}" title="Evolução" aria-label="Evolução">📈 Evolução</button>
+            <button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-extrato-conta="${escapeHtml(c)}" title="Movimentações" aria-label="Movimentações">👁 Movimentações</button>
+            <button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-evolucao-reserva="${escapeHtml(c)}" title="Evolução" aria-label="Evolução">📈 Evolução</button>
             ` : ehContracheque ? `
-            <button type="button" class="btn btn-ghost btn-sm" data-extrato-conta="${escapeHtml(c)}" title="Contracheque" aria-label="Contracheque">🧾 Contracheque</button>
-            <button type="button" class="btn btn-ghost btn-sm" data-historico-contracheque="${escapeHtml(c)}" title="Histórico" aria-label="Histórico">🕒 Histórico</button>
+            <button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-extrato-conta="${escapeHtml(c)}" title="Contracheque" aria-label="Contracheque">🧾 Contracheque</button>
+            <button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-historico-contracheque="${escapeHtml(c)}" title="Histórico" aria-label="Histórico">🕒 Histórico</button>
             ` : `
             <button type="button" class="btn btn-ghost btn-sm" data-extrato-conta="${escapeHtml(c)}" title="Ver Extrato" aria-label="Ver Extrato">👁</button>
             <button type="button" class="btn btn-ghost btn-sm" data-futuros-conta="${escapeHtml(c)}" title="Ver lançamentos futuros" aria-label="Ver lançamentos futuros">⏳${qtdFuturos>0?` <span class="contagem-futuros-btn">(${qtdFuturos})</span>`:''}</button>
