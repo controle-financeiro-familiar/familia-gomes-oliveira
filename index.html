@@ -3462,7 +3462,10 @@ function renomearResponsavel(antigo, novo){
 }
 function excluirResponsavel(nome){ STATE.responsaveis = STATE.responsaveis.filter(p=>p!==nome); delete STATE.responsavelIcone[nome]; }
 
-const ORDEM_TIPO_CONTA = ["Conta PJ","Conta Corrente","Poupança","Cartão de Crédito","Contracheque","Reserva de Emergência"];
+// Contracheque por último: a única conta desse tipo (ex.: TRT) deve sempre aparecer na última posição em
+// toda a aplicação (painéis, tabelas, dropdowns, filtros, relatórios), independentemente de ordem
+// alfabética ou data de criação — ver contasOrdenadas() e compararContasComContrachequePorUltimo().
+const ORDEM_TIPO_CONTA = ["Conta PJ","Conta Corrente","Poupança","Cartão de Crédito","Reserva de Emergência","Contracheque"];
 /* Agrupa as contas por tipo (ordem fixa em ORDEM_TIPO_CONTA) e, dentro de cada tipo, preserva a ordem em
    que as contas aparecem em STATE.contas — ou seja, a ordem do arquivo .cfg (linhas CONTA) ou, para contas
    novas criadas na sessão, a ordem de criação (ver excluirConta/criação em STATE.contas.push). NÃO reordena
@@ -3474,6 +3477,15 @@ function contasOrdenadas(){
     const pa = ia===-1 ? ORDEM_TIPO_CONTA.length : ia; const pb = ib===-1 ? ORDEM_TIPO_CONTA.length : ib;
     return pa-pb;
   });
+}
+/* Comparador para os poucos pontos da aplicação que ainda ordenam nomes de conta puramente em ordem
+   alfabética (filtros derivados dos lançamentos, não da lista cadastrada de contas — ver contasOrdenadas
+   para o caso mais comum). Mesma regra: a conta do tipo Contracheque (ex.: TRT) sempre por último,
+   independentemente de ordem alfabética. */
+function compararContasComContrachequePorUltimo(a, b){
+  const ca = STATE.contaTipos[a]==='Contracheque', cb = STATE.contaTipos[b]==='Contracheque';
+  if(ca!==cb) return ca ? 1 : -1;
+  return a.localeCompare(b,'pt-BR');
 }
 function meiosOrdenados(){ return [...STATE.meiosPagamento].sort((a,b)=>a.localeCompare(b,'pt-BR')); }
 /* Determina automaticamente o meio de pagamento/recebimento a partir do tipo da conta (definida antes
@@ -9291,7 +9303,7 @@ function renderMapaCalorDiaModal(){
   const fBusca = UI.mapaCalorDiaModal.busca || '';
   const gruposUsados = Array.from(new Set(itensBase.filter(t=>t.grupo).map(t=>t.grupo))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const temSemGrupo = itensBase.some(t=>!t.grupo);
-  const contasUsadas = Array.from(new Set(itensBase.filter(t=>t.conta).map(t=>t.conta))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const contasUsadas = Array.from(new Set(itensBase.filter(t=>t.conta).map(t=>t.conta))).sort(compararContasComContrachequePorUltimo);
   let itensFiltrados = itensBase.filter(t=> passaFiltroMultiSel(f.grupo, t.grupo || '__sem_grupo__')
     && passaFiltroMultiSel(f.conta, t.conta));
   if(fBusca.trim()){
@@ -10478,7 +10490,7 @@ function renderRegistros(){
     list = list.filter(t=> (t.descricao||"").toLowerCase().includes(f));
   }
   const todasTransacoes = STATE.transactions;
-  const contasUsadas = [...new Set(todasTransacoes.map(t=>t.conta))].filter(Boolean).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const contasUsadas = [...new Set(todasTransacoes.map(t=>t.conta))].filter(Boolean).sort(compararContasComContrachequePorUltimo);
   const gruposUsados = [...new Set(todasTransacoes.map(t=>t.grupo))].filter(Boolean).sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const faturasUsadas = [...new Set(todasTransacoes.map(t=>t.competencia))].filter(Boolean).sort();
   const temSemGrupo = todasTransacoes.some(t=>!t.grupo);
@@ -10949,7 +10961,11 @@ function renderEditarSaldoInicialContaModal(){
 /* ---------- Modais de fatura: cabeçalho compartilhado entre "Ver Fatura" e "Ver Próximas Faturas",
    reaproveitando exatamente o mesmo padrão visual (classes) da coluna Cartão da tabela principal, para
    que os dois modais sejam percebidos como parte de uma mesma experiência. */
-function cabecalhoFaturaCartaoHtml(conta){
+function cabecalhoFaturaCartaoHtml(conta, mostrarLimite){
+  // mostrarLimite (default true): o modal "Ajustar datas da fatura" (ovFaturaEditModal) é estreito e de
+  // tamanho dinâmico (ajustado ao conteúdo) — o bloco de limite não cabe bem nesse espaço e não faz parte
+  // do que foi pedido para esse modal especificamente; permanece nos modais Ver Fatura/Ver Próximas
+  // Faturas, que continuam chamando esta função sem o 2º argumento.
   const resp = STATE.contaResponsavel[conta];
   return `
   <div class="fatura-digital-head-top-principal">
@@ -10964,7 +10980,7 @@ function cabecalhoFaturaCartaoHtml(conta){
         </div>
       </div>
     </div>
-    ${blocoLimiteCartaoHtml(conta, 'limite-cartao-info-cabecalho')}
+    ${mostrarLimite===false ? '' : blocoLimiteCartaoHtml(conta, 'limite-cartao-info-cabecalho')}
   </div>`;
 }
 /* Linha de lançamento do modal "Ver Fatura". Qualquer Receita lançada no cartão (inclusive estornos) é
@@ -11262,11 +11278,11 @@ function renderFaturaEditModal(){
   const m = UI.faturaEditModal;
   return `
   <div class="overlay" id="ovFaturaEditModal" ${attrZIndexModal('faturaEditModal')}>
-    <div class="modal" style="width:420px;">
+    <div class="modal" style="width:auto;min-width:340px;max-width:460px;">
       <div class="modal-head"><h3>📆 Ajustar datas da fatura</h3><button class="close-x" id="closeFaturaEditModal">✕</button></div>
       <div class="modal-body">
         <div class="fatura-digital-head">
-          ${cabecalhoFaturaCartaoHtml(m.conta)}
+          ${cabecalhoFaturaCartaoHtml(m.conta, false)}
           <div class="fatura-digital-head-info">
             <span><b>Competência</b> ${competenciaLabel(m.competencia)}</span>
           </div>
@@ -11465,7 +11481,7 @@ function renderInteligencia(){
   if(!UI.intelFiltros) UI.intelFiltros = intelFiltrosPadrao();
   const f = UI.intelFiltros;
   const ctx = calcInteligenciaFinanceira(f);
-  const contasOpcoes = [...STATE.contas].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(c=>({value:c,label:c}));
+  const contasOpcoes = [...STATE.contas].sort(compararContasComContrachequePorUltimo).map(c=>({value:c,label:c}));
   const gruposOpcoes = todosGrupos().map(g=>({value:g,label:`${iconeGrupo(g)} ${g}`}));
   const categoriasOpcoes = [...new Set(CATEGORIAS.map(c=>c[0]))].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(c=>({value:c,label:c}));
   const tipoOpcoes = [{value:'Receita',label:'Receita'},{value:'Despesa',label:'Despesa'}];
