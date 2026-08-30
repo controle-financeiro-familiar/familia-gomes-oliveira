@@ -4364,6 +4364,8 @@ let UI = {
   aportesModal: false, // true quando o modal "Ver detalhes" de Investimentos/Reserva de Emergência está aberto
   editarSaldoInicialContaModal: null, // { conta } — editar o Saldo Anterior de uma conta na competência atual
   futurosContaModal: null, // { conta, filtros, busca, pagina, porPagina } — modal "Ver lançamentos futuros" do card de Contas (lançamentos com data > hoje), com filtros próprios do modal (mesmo motor genérico de Data por período + seleção múltipla da aba Registros — ver criarFiltrosPadrao)
+  evolucaoReservaModal: null, // { conta } — modal "Evolução" do card de uma conta Reserva de Emergência (ver renderEvolucaoReservaModal), substitui "Ver lançamentos futuros" para esse tipo de conta
+  historicoContrachequeModal: null, // { conta } — modal "Histórico" do card de uma conta Contracheque (ver renderHistoricoContrachequeModal), substitui "Ver lançamentos futuros" para esse tipo de conta
   editarSaldoInicialFluxoCaixaModal: null, // true — editar os saldos iniciais das contas que compõem o Fluxo de Caixa
   modalEmpateCartao: null, // { empatados:[...], chaveEmpate, hojeISO } — escolha manual quando há empate persistente
   mapaCalorDiaModal: null, // { ano, mes, dia, filtros, busca, selecionados } — modal de transações do dia, aberto ao clicar numa célula do Mapa de Calor de Despesas
@@ -4406,6 +4408,8 @@ const CAMADAS_MODAL = [
   'futurosContaModal',                 // painel Contas — Ver lançamentos futuros
   'faturaAtualModal',                  // painel Cartões — Ver Fatura
   'projecaoFaturaModal',               // painel Cartões — Ver Próximas Faturas
+  'evolucaoReservaModal',              // painel Contas — Evolução (card Reserva de Emergência)
+  'historicoContrachequeModal',        // painel Contas — Histórico (card Contracheque)
   'aportesModal',                      // Painel Financeiro — detalhe de aportes em Economias
   'mapaCalorDiaModal',                 // Painel Financeiro — transações do dia, aberto de uma célula do Mapa de Calor de Despesas
   'metaModal',                         // Metas de Gastos — nova/editar meta
@@ -7311,6 +7315,38 @@ function dataCreditoContracheque(conta, ano, mes){
   const tx = STATE.transactions.find(t=>t.conta===conta && t.contrachequeOrigemId===origemId);
   return tx ? tx.data : null;
 }
+/* Histórico de todas as competências de contracheque já importadas para uma conta (STATE.contrachequeResumos
+   — a mesma fonte oficial usada em resumoContrachequeCompetencia), cada uma já com a Data do Crédito
+   correspondente (ver dataCreditoContracheque). Mais recente primeiro. Nunca inventa competências: só
+   aparecem as que já têm um contracheque de fato importado. */
+function historicoContrachequeConta(conta){
+  const resumos = (STATE.contrachequeResumos && STATE.contrachequeResumos[conta]) || {};
+  return Object.keys(resumos).sort((a,b)=> b.localeCompare(a)).map(competencia=>{
+    const [ano, mes] = competencia.split('-').map(Number);
+    return { competencia, ...resumos[competencia], dataCredito: dataCreditoContracheque(conta, ano, mes) };
+  });
+}
+/* Evolução mensal do saldo de uma conta patrimonial (ex.: Reserva de Emergência), com aportes/resgates/
+   rendimentos de cada mês quando existirem — nunca fabrica valores: cada mês usa somente os lançamentos
+   reais já registrados. Aportes/resgates reaproveitam exatamente a mesma classificação já usada em
+   detalheAportes/ehUsoReservaEmergencia; rendimento usa a mesma subcategoria automática já aplicada na
+   importação do extrato da Reserva de Emergência (ver classificarLancamentoReservaEmergencia). Considera
+   os 12 meses terminando na competência atualmente selecionada no topo do app (UI.ano/UI.mes). */
+function evolucaoContaPatrimonial(conta, anoFim, mesFim){
+  const meses = [];
+  let ano = anoFim, mes = mesFim;
+  for(let i=0;i<12;i++){ meses.unshift({ano,mes}); const p = mesAnterior(ano,mes); ano=p.ano; mes=p.mes; }
+  return meses.map(({ano,mes})=>{
+    const ultimoDia = new Date(ano, mes, 0).getDate();
+    const saldoFinal = saldoContaAteData(conta, `${ano}-${pad2(mes)}-${pad2(ultimoDia)}`);
+    const txsMes = STATE.transactions.filter(t=>t.conta===conta && txInPeriod(t,ano,mes));
+    const aportes = txsMes.filter(t=> (t.grupo==='Economias' && !t.entreFamilia && !ehUsoReservaEmergencia(t))
+      || (t.entreFamilia && t.transferenciaInterna && t.tipo==='Receita')).reduce((s,t)=>s+(Number(t.valor)||0),0);
+    const resgates = txsMes.filter(ehUsoReservaEmergencia).reduce((s,t)=>s+(Number(t.valor)||0),0);
+    const rendimentos = txsMes.filter(t=>t.categoria==='Rendimento de Conta Corrente / Liquidez Diária').reduce((s,t)=>s+(Number(t.valor)||0),0);
+    return { ano, mes, competencia: chaveMes(ano,mes), saldoFinal, aportes, resgates, rendimentos };
+  });
+}
 /* ---------- Modal: Ver Extrato — extrato digital de uma conta bancária na competência selecionada,
    mesma identidade visual do modal Ver Fatura (cabeçalho, painel-resumo, tabela, rodapé). ---------- */
 function renderExtratoContaModal(){
@@ -7554,6 +7590,90 @@ function renderFuturosContaModal(){
       </div>
       <div class="modal-foot no-print">
         <button class="btn btn-primary" id="closeFuturosConta2">Fechar</button>
+      </div>
+    </div>
+  </div>`;
+}
+/* ---------- Modal: Histórico do Contracheque (card da conta Contracheque, ex.: TRT) — lista todas as
+   competências já importadas (STATE.contrachequeResumos, mesma fonte oficial do card e do modal
+   Movimentações/Contracheque), permitindo comparar e abrir os detalhes de qualquer uma delas. ---------- */
+function renderHistoricoContrachequeModal(){
+  const conta = UI.historicoContrachequeModal.conta;
+  const historico = historicoContrachequeConta(conta);
+  return `
+  <div class="overlay" id="ovHistoricoContracheque" ${attrZIndexModal('historicoContrachequeModal')}>
+    <div class="modal" style="width:820px;">
+      <div class="modal-head"><h3>🕒 Histórico do Contracheque</h3><button class="close-x" id="closeHistoricoContracheque">✕</button></div>
+      <div class="modal-body">
+        ${cabecalhoContaModalHtml(conta)}
+        ${historico.length ? `
+        <div class="table-wrap table-wrap-registros" style="margin-top:14px;"><table>
+          <thead><tr>
+            <th>Competência</th><th style="text-align:right;">Margem Consignável</th><th style="text-align:right;">Bruto</th>
+            <th style="text-align:right;">Descontos</th><th style="text-align:right;">Líquido</th><th>Data do Crédito</th><th class="no-print"></th>
+          </tr></thead>
+          <tbody>
+            ${historico.map(h=>`<tr>
+              <td>${competenciaLabel(h.competencia)}</td>
+              <td style="text-align:right;">${fmtBRL(h.margemConsignavel)}</td>
+              <td style="text-align:right;" class="val-cell pos">${fmtBRL(h.bruto)}</td>
+              <td style="text-align:right;" class="val-cell neg">${fmtBRL(h.descontos)}</td>
+              <td style="text-align:right;">${fmtBRL(h.liquido)}</td>
+              <td>${h.dataCredito ? fmtData(h.dataCredito) : '—'}</td>
+              <td class="no-print"><button type="button" class="btn btn-ghost btn-sm" data-abrir-competencia-contracheque="${escapeHtml(conta)}|${h.competencia}">Ver detalhes</button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhum contracheque importado ainda para esta conta.</div>`}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-primary" id="closeHistoricoContracheque2">Fechar</button>
+      </div>
+    </div>
+  </div>`;
+}
+/* ---------- Modal: Evolução da Reserva de Emergência (card da conta Reserva de Emergência, ex.: PicPay) —
+   saldo mês a mês dos últimos 12 meses (terminando na competência exibida no topo do app), com aportes,
+   resgates e rendimentos de cada mês quando existirem (ver evolucaoContaPatrimonial). Nunca fabrica dados:
+   tudo vem diretamente dos lançamentos já registrados na conta. ---------- */
+function renderEvolucaoReservaModal(){
+  const conta = UI.evolucaoReservaModal.conta;
+  const serie = evolucaoContaPatrimonial(conta, UI.ano, UI.mes);
+  const saldoAtualReal = saldoContaAteData(conta, hojeISO());
+  const totalAportes = serie.reduce((s,m)=>s+m.aportes,0);
+  const totalResgates = serie.reduce((s,m)=>s+m.resgates,0);
+  const totalRendimentos = serie.reduce((s,m)=>s+m.rendimentos,0);
+  const temRendimentos = totalRendimentos>0;
+  return `
+  <div class="overlay" id="ovEvolucaoReserva" ${attrZIndexModal('evolucaoReservaModal')}>
+    <div class="modal" style="width:820px;">
+      <div class="modal-head"><h3>📈 Evolução da Reserva de Emergência</h3><button class="close-x" id="closeEvolucaoReserva">✕</button></div>
+      <div class="modal-body">
+        ${cabecalhoContaModalHtml(conta)}
+        <div class="cartoes-resumo-grid" style="margin-top:14px;">
+          <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(saldoAtualReal)}</div><div class="lbl">saldo atual (hoje)</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">📥</span><div><div class="val">${fmtBRL(totalAportes)}</div><div class="lbl">aportes nos últimos 12 meses</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">📤</span><div><div class="val">${fmtBRL(totalResgates)}</div><div class="lbl">resgates nos últimos 12 meses</div></div></div>
+          ${temRendimentos ? `<div class="cartoes-resumo-item"><span class="ico">🌱</span><div><div class="val">${fmtBRL(totalRendimentos)}</div><div class="lbl">rendimentos nos últimos 12 meses</div></div></div>` : ''}
+        </div>
+        <div class="chart-box" style="height:260px;margin-top:14px;"><canvas id="chartEvolucaoReserva"></canvas></div>
+        <div class="table-wrap table-wrap-registros" style="margin-top:14px;"><table>
+          <thead><tr>
+            <th>Competência</th><th style="text-align:right;">Saldo</th><th style="text-align:right;">Aportes</th>
+            <th style="text-align:right;">Resgates</th>${temRendimentos ? '<th style="text-align:right;">Rendimentos</th>' : ''}
+          </tr></thead>
+          <tbody>
+            ${serie.slice().reverse().map(m=>`<tr>
+              <td>${competenciaLabel(m.competencia)}</td>
+              <td style="text-align:right;">${fmtBRL(m.saldoFinal)}</td>
+              <td style="text-align:right;" class="${m.aportes>0?'val-cell pos':''}">${m.aportes>0?fmtBRL(m.aportes):'—'}</td>
+              <td style="text-align:right;" class="${m.resgates>0?'val-cell neg':''}">${m.resgates>0?fmtBRL(m.resgates):'—'}</td>
+              ${temRendimentos ? `<td style="text-align:right;" class="${m.rendimentos>0?'val-cell pos':''}">${m.rendimentos>0?fmtBRL(m.rendimentos):'—'}</td>` : ''}
+            </tr>`).join('')}
+          </tbody>
+        </table></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-primary" id="closeEvolucaoReserva2">Fechar</button>
       </div>
     </div>
   </div>`;
@@ -8643,6 +8763,8 @@ function render(){
     ${UI.faturaAtualModal!==null ? renderFaturaAtualModal() : ""}
     ${UI.modalDuplicidade!==null ? renderModalDuplicidade() : ""}
     ${UI.regCardDetalheId!==null ? renderRegCardDetalheModal() : ""}
+    ${UI.evolucaoReservaModal!==null ? renderEvolucaoReservaModal() : ""}
+    ${UI.historicoContrachequeModal!==null ? renderHistoricoContrachequeModal() : ""}
     ${UI.aportesModal ? renderModalAportes() : ""}
     ${UI.mapaCalorDiaModal ? renderMapaCalorDiaModal() : ""}
     ${UI.duplicarMesesModal!==null ? renderDuplicarMesesModal() : ""}
@@ -8652,7 +8774,7 @@ function render(){
   bindEvents();
   focarPrimeiroCampoModalAberto();
   animarTransicaoMapaCalor();
-  if(UI.tab==="dashboard" || UI.tab==="metas" || UI.tab==="inteligencia"){
+  if(UI.tab==="dashboard" || UI.tab==="metas" || UI.tab==="inteligencia" || UI.evolucaoReservaModal!==null){
     // Chart.js mede o tamanho do container do canvas no momento em que é criado. Chamar isso logo após
     // trocar o innerHTML (síncrono, no mesmo tick) pode medir um layout ainda não assentado pelo navegador
     // — especialmente com grid/flex — e os gráficos nascem cortados/errados até algo forçar um novo layout
@@ -8661,7 +8783,8 @@ function render(){
     const meuRenderId = ++renderSeq;
     requestAnimationFrame(()=> requestAnimationFrame(()=>{
       if(meuRenderId===renderSeq){
-        if(UI.tab==='inteligencia') drawChartsInteligencia(); else drawCharts();
+        if(UI.evolucaoReservaModal!==null) drawChartEvolucaoReserva();
+        else if(UI.tab==='inteligencia') drawChartsInteligencia(); else drawCharts();
         if(UI.tab==='dashboard') ajustarAlturaFaturaCartao();
       }
     }));
@@ -9539,6 +9662,26 @@ function renderDashboard(){
     })()}
   </div>
   `;
+}
+/* Gráfico de linha do saldo mês a mês no modal "Evolução" (card Reserva de Emergência) — mesmo padrão
+   visual/Chart.js já usado no gráfico "Evolução Patrimonial" da aba Inteligência Financeira. */
+function drawChartEvolucaoReserva(){
+  if(!UI.evolucaoReservaModal) return;
+  const el = document.getElementById('chartEvolucaoReserva');
+  if(!el) return;
+  const serie = evolucaoContaPatrimonial(UI.evolucaoReservaModal.conta, UI.ano, UI.mes);
+  const labels = serie.map(m=>`${MESES[m.mes-1].slice(0,3)}/${String(m.ano).slice(2)}`);
+  const saldos = serie.map(m=>m.saldoFinal);
+  chartInstances.push(new Chart(el, {
+    type:'line',
+    data:{ labels, datasets:[
+      { label:'Saldo', data:saldos, borderColor:'#7c3aed', backgroundColor:'rgba(124,58,237,.08)', fill:true, tension:.25 },
+    ]},
+    options:{ maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c=>fmtBRL(c.parsed.y) } }, datalabels:{display:false} },
+      scales:{ y:{ ticks:{ callback:v=>fmtBRL(v) } }, x:{ ticks:{ font:{family:"'Roboto Mono'",size:10} } } }
+    }
+  }));
 }
 function drawCharts(){
   const d = calcDashboard(UI.ano, UI.mes);
@@ -10930,8 +11073,16 @@ function renderPainelContasBancarias(ano, mes){
             <div><span class="lbl">Saídas</span><span class="val neg">${fmtBRL(s.saidasRealizadas)}</span></div>
           </div>`}
           <div class="conta-financeira-acoes">
+            ${ehReserva ? `
+            <button type="button" class="btn btn-ghost btn-sm" data-extrato-conta="${escapeHtml(c)}" title="Movimentações" aria-label="Movimentações">👁 Movimentações</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-evolucao-reserva="${escapeHtml(c)}" title="Evolução" aria-label="Evolução">📈 Evolução</button>
+            ` : ehContracheque ? `
+            <button type="button" class="btn btn-ghost btn-sm" data-extrato-conta="${escapeHtml(c)}" title="Contracheque" aria-label="Contracheque">🧾 Contracheque</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-historico-contracheque="${escapeHtml(c)}" title="Histórico" aria-label="Histórico">🕒 Histórico</button>
+            ` : `
             <button type="button" class="btn btn-ghost btn-sm" data-extrato-conta="${escapeHtml(c)}" title="Ver Extrato" aria-label="Ver Extrato">👁</button>
             <button type="button" class="btn btn-ghost btn-sm" data-futuros-conta="${escapeHtml(c)}" title="Ver lançamentos futuros" aria-label="Ver lançamentos futuros">⏳${qtdFuturos>0?` <span class="contagem-futuros-btn">(${qtdFuturos})</span>`:''}</button>
+            `}
           </div>
         </div>`;
       }).join('')}
@@ -15126,6 +15277,28 @@ function bindEvents(){
   document.getElementById('closeFuturosConta')?.addEventListener('click', ()=>{ UI.futurosContaModal=null; render(); });
   document.getElementById('closeFuturosConta2')?.addEventListener('click', ()=>{ UI.futurosContaModal=null; render(); });
   document.getElementById('printFuturosConta')?.addEventListener('click', ()=>imprimirModal('ovFuturosConta'));
+  // "Evolução" (card Reserva de Emergência) e "Histórico" (card Contracheque) — ver renderPainelContasBancarias.
+  document.querySelectorAll('[data-evolucao-reserva]').forEach(b=> b.addEventListener('click', ()=>{
+    UI.evolucaoReservaModal = { conta: b.dataset.evolucaoReserva }; render();
+  }));
+  document.getElementById('closeEvolucaoReserva')?.addEventListener('click', ()=>{ UI.evolucaoReservaModal=null; render(); });
+  document.getElementById('closeEvolucaoReserva2')?.addEventListener('click', ()=>{ UI.evolucaoReservaModal=null; render(); });
+  document.querySelectorAll('[data-historico-contracheque]').forEach(b=> b.addEventListener('click', ()=>{
+    UI.historicoContrachequeModal = { conta: b.dataset.historicoContracheque }; render();
+  }));
+  document.getElementById('closeHistoricoContracheque')?.addEventListener('click', ()=>{ UI.historicoContrachequeModal=null; render(); });
+  document.getElementById('closeHistoricoContracheque2')?.addEventListener('click', ()=>{ UI.historicoContrachequeModal=null; render(); });
+  // Linha do Histórico → abre os detalhes daquela competência: navega o topo do app para o mês/ano
+  // correspondente (mesma navegação já usada em qualquer troca de competência) e abre o mesmo modal
+  // Contracheque (data-extrato-conta) usado pelo botão do card, agora já mostrando aquele mês.
+  document.querySelectorAll('[data-abrir-competencia-contracheque]').forEach(b=> b.addEventListener('click', ()=>{
+    const [conta, competencia] = b.dataset.abrirCompetenciaContracheque.split('|');
+    const [ano, mes] = competencia.split('-').map(Number);
+    UI.ano = ano; UI.mes = mes;
+    UI.historicoContrachequeModal = null;
+    UI.extratoContaModal = { conta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    render();
+  }));
   // Paginação de Lançamentos futuros — mesmo padrão da tabela de Registros (ver renderRodapePaginacaoGenerica).
   document.getElementById('futurosPorPagina')?.addEventListener('change', e=>{
     const v = e.target.value;
