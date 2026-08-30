@@ -2999,8 +2999,8 @@ let CATEGORIAS = [
 ];
 const CATEGORIAS_PADRAO_SNAPSHOT = CATEGORIAS.map(c=>[...c]); // cópia congelada dos padrões atuais, usada para migrar arquivos antigos
 
-const CONTAS_DEFAULT = ["Inter","NuConta","BB Ariana","BB Bruno","Itaú","Caixa","Estilo Elo Nanquim","Visa Gold","Visa Infinite Estilo","NuCartão","Personnalité Black","TRT","PicPay"];
-const CARTOES_DEFAULT = ["Estilo Elo Nanquim","Visa Gold","Visa Infinite Estilo","NuCartão","Personnalité Black"];
+const CONTAS_DEFAULT = ["Inter","NuConta","BB Ariana","BB Bruno","Itaú","Caixa","Estilo Elo Nanquim","Visa Gold","Infinite Visa Estilo","NuCartão","Personnalité Black","TRT","PicPay"];
+const CARTOES_DEFAULT = ["Estilo Elo Nanquim","Visa Gold","Infinite Visa Estilo","NuCartão","Personnalité Black"];
 const MEIOS_PAGAMENTO_DEFAULT = ["Cartão de Crédito","Débito em Conta","Dinheiro","Folha de Pagamento","Pix"];
 const TIPOS_CONTA = ["Conta Corrente","Poupança","Conta PJ","Cartão de Crédito","Contracheque","Reserva de Emergência"];
 /* Rótulo exibido ao usuário para um tipo de conta — remove a palavra "Conta" quando ela é só um prefixo
@@ -3014,10 +3014,10 @@ function rotuloTipoConta(tipo){ return String(tipo||'').replace(/^Conta\s+/,'');
    líquido de um contracheque pela combinação Agência+Nº conta (ver localizarContaPorAgenciaConta). */
 const TIPOS_CONTA_BANCARIA = ["Conta Corrente","Conta PJ","Poupança","Reserva de Emergência"];
 const CONTA_TIPOS_DEFAULT = {
-  "Inter":"Conta PJ","NuConta":"Conta Corrente","BB Ariana":"Conta Corrente","BB Bruno":"Conta Corrente","Itaú":"Conta Corrente","Caixa":"Poupança","Estilo Elo Nanquim":"Cartão de Crédito","Visa Gold":"Cartão de Crédito","Visa Infinite Estilo":"Cartão de Crédito","NuCartão":"Cartão de Crédito","Personnalité Black":"Cartão de Crédito","TRT":"Contracheque","PicPay":"Reserva de Emergência"
+  "Inter":"Conta PJ","NuConta":"Conta Corrente","BB Ariana":"Conta Corrente","BB Bruno":"Conta Corrente","Itaú":"Conta Corrente","Caixa":"Poupança","Estilo Elo Nanquim":"Cartão de Crédito","Visa Gold":"Cartão de Crédito","Infinite Visa Estilo":"Cartão de Crédito","NuCartão":"Cartão de Crédito","Personnalité Black":"Cartão de Crédito","TRT":"Contracheque","PicPay":"Reserva de Emergência"
 };
 const CONTA_RESPONSAVEL_DEFAULT = {
-  "Inter":"Ariana","NuConta":"Ariana","BB Ariana":"Ariana","BB Bruno":"Bruno","Itaú":"Bruno","Caixa":"Bruno","Estilo Elo Nanquim":"Bruno","Visa Gold":"Ariana","Visa Infinite Estilo":"Bruno","NuCartão":"Ariana","Personnalité Black":"Bruno","TRT":"Bruno"
+  "Inter":"Ariana","NuConta":"Ariana","BB Ariana":"Ariana","BB Bruno":"Bruno","Itaú":"Bruno","Caixa":"Bruno","Estilo Elo Nanquim":"Bruno","Visa Gold":"Ariana","Infinite Visa Estilo":"Bruno","NuCartão":"Ariana","Personnalité Black":"Bruno","TRT":"Bruno"
 };
 /* Bandeira padrão dos cartões já conhecidos pelo app — atribuída automaticamente ao identificar o cartão
    pelo nome, sem precisar de cadastro manual. Só serve de PONTO DE PARTIDA: uma escolha explícita do
@@ -3025,11 +3025,11 @@ const CONTA_RESPONSAVEL_DEFAULT = {
    (mesma convenção de merge de CONTA_TIPOS_DEFAULT/CONTA_RESPONSAVEL_DEFAULT — ver loadCSVConfig), e
    cartões fora desta lista continuam exigindo escolha manual, normalmente. */
 const CONTA_BANDEIRA_DEFAULT = {
-  "Estilo Elo Nanquim":"Elo", "Visa Gold":"Visa", "Visa Infinite Estilo":"Visa",
+  "Estilo Elo Nanquim":"Elo", "Visa Gold":"Visa", "Infinite Visa Estilo":"Visa",
   "NuCartão":"Mastercard", "Personnalité Black":"Mastercard"
 };
 const CARDCFG_DEFAULT = {
-  "Visa Gold":{fechamento:16, vencimento:28},"Visa Infinite Estilo":{fechamento:24, vencimento:5},"Estilo Elo Nanquim":{fechamento:16, vencimento:28},"Personnalité Black":{fechamento:25, vencimento:1},"NuCartão":{fechamento:7, vencimento:14}
+  "Visa Gold":{fechamento:16, vencimento:28},"Infinite Visa Estilo":{fechamento:24, vencimento:5},"Estilo Elo Nanquim":{fechamento:16, vencimento:28},"Personnalité Black":{fechamento:25, vencimento:1},"NuCartão":{fechamento:7, vencimento:14}
 };
 /* Ícone e cor fixos por tipo de conta — usados de forma consistente em toda a aplicação (painel Contas,
    filtros, tags etc.), não só no novo layout em mini-cards. */
@@ -3061,7 +3061,7 @@ const LOGO_PICPAY = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAA
 const INSTITUICOES_FINANCEIRAS = [
   { re:/personnalit/i,             sigla:"Itaú",  logo:LOGO_ITAU },
   { re:/\bitau\b|itaú/i,           sigla:"Itaú",  logo:LOGO_ITAU },
-  { re:/\bbb\b|banco do brasil|^estilo elo nanquim$|^visa gold$|^visa infinite estilo$/i,  sigla:"BB",    logo:LOGO_BB },
+  { re:/\bbb\b|banco do brasil|^estilo elo nanquim$|^visa gold$|^infinite visa estilo$/i,  sigla:"BB",    logo:LOGO_BB },
   { re:/nubank|\bnu\b|nucart|nuconta/i, sigla:"Nubank",    logo:LOGO_NUBANK },
   { re:/picpay/i,                  sigla:"PicPay",   logo:LOGO_PICPAY },
   { re:/\bcef\b|caixa/i,           sigla:"CEF",   logo:LOGO_CAIXA },
@@ -3161,7 +3161,7 @@ const SUBCATEGORIA_RESPONSAVEL_DEFAULT = {
 const PROJECOES_DEFAULT = [
   { dia:1,  descricao:"Personnalité Black",     tipo:"Despesa", valor:0,     cartao:"Personnalité Black", competenciaInicio:"" },
   { dia:5,  descricao:"Aluguel Garagem",        tipo:"Receita", valor:350,   cartao:"", competenciaInicio:"" },
-  { dia:5,  descricao:"Visa Infinite Estilo",       tipo:"Despesa", valor:0,     cartao:"Visa Infinite Estilo", competenciaInicio:"" },
+  { dia:5,  descricao:"Infinite Visa Estilo",       tipo:"Despesa", valor:0,     cartao:"Infinite Visa Estilo", competenciaInicio:"" },
   { dia:5,  descricao:"Bolsa Doutorado",        tipo:"Receita", valor:3100, cartao:"", competenciaInicio:"" },
   { dia:5,  descricao:"Escola/Creche",          tipo:"Despesa", valor:2600, cartao:"", competenciaInicio:"" },
   { dia:7,  descricao:"Previdência Breno",      tipo:"Despesa", valor:185.4,   cartao:"", competenciaInicio:"" },
@@ -3389,6 +3389,7 @@ function migrarNomesContasPadrao(){
   migrarNomeConta('BB Elo Nanquim', 'Estilo Elo Nanquim');
   migrarNomeConta('BB Visa Gold', 'Visa Gold');
   migrarNomeConta('BB Visa Infinite', 'Visa Infinite Estilo');
+  migrarNomeConta('Visa Infinite Estilo', 'Infinite Visa Estilo');
   migrarNomeConta('NuCartão Ariana', 'NuCartão');
   migrarNomeConta('Inter Ariana', 'Inter');
   migrarNomeConta('Itaú Bruno', 'Itaú');
