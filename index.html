@@ -1784,9 +1784,11 @@ summary::marker{content:'';}
 .conta-financeira-acoes{display:flex;gap:8px;margin-top:auto;}
 .conta-financeira-acoes .btn{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;font-size:15px;}
 /* Botões de ação específicos da Reserva de Emergência (Movimentações/Evolução) e do Contracheque
-   (Contracheque/Histórico) — seção 2 do requisito: fonte menor só nesses quatro botões, nenhum outro
-   texto/label/valor/ícone do card é afetado. */
-.conta-financeira-acoes .btn-acao-especial{font-size:11px;}
+   (Contracheque/Histórico) — tipografia própria só nesses quatro botões, nenhum outro texto/label/
+   valor/ícone do card é afetado: ícone e texto ficam em spans separados (ver renderPainelContasBancarias)
+   para permitir tamanhos de fonte diferentes entre eles. */
+.conta-financeira-acoes .btn-acao-especial-icone{font-size:15px;}
+.conta-financeira-acoes .btn-acao-especial-texto{font-size:10px;}
 .contagem-futuros-btn{font-size:11px;font-weight:400;}
 .conta-financeira-card .cartao-col{padding-right:30px;}
 .conta-financeira-card:hover{box-shadow:0 6px 16px rgba(16,64,141,.12);transform:translateY(-2px);}
@@ -11099,11 +11101,11 @@ function renderPainelContasBancarias(ano, mes){
           </div>`}
           <div class="conta-financeira-acoes">
             ${ehReserva ? `
-            <button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-extrato-conta="${escapeHtml(c)}" title="Movimentações" aria-label="Movimentações">👁 Movimentações</button>
-            <button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-evolucao-reserva="${escapeHtml(c)}" title="Evolução" aria-label="Evolução">📈 Evolução</button>
+            <button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-extrato-conta="${escapeHtml(c)}" title="Movimentações" aria-label="Movimentações"><span class="btn-acao-especial-icone">👁</span><span class="btn-acao-especial-texto">Movimentações</span></button>
+            <button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-evolucao-reserva="${escapeHtml(c)}" title="Evolução" aria-label="Evolução"><span class="btn-acao-especial-icone">📈</span><span class="btn-acao-especial-texto">Evolução</span></button>
             ` : ehContracheque ? `
-            <button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-extrato-conta="${escapeHtml(c)}" title="Contracheque" aria-label="Contracheque">🧾 Contracheque</button>
-            <button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-historico-contracheque="${escapeHtml(c)}" title="Histórico" aria-label="Histórico">🕒 Histórico</button>
+            <button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-extrato-conta="${escapeHtml(c)}" title="Contracheque" aria-label="Contracheque"><span class="btn-acao-especial-icone">🧾</span><span class="btn-acao-especial-texto">Contracheque</span></button>
+            <button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-historico-contracheque="${escapeHtml(c)}" title="Histórico" aria-label="Histórico"><span class="btn-acao-especial-icone">🕒</span><span class="btn-acao-especial-texto">Histórico</span></button>
             ` : `
             <button type="button" class="btn btn-ghost btn-sm" data-extrato-conta="${escapeHtml(c)}" title="Ver Extrato" aria-label="Ver Extrato">👁</button>
             <button type="button" class="btn btn-ghost btn-sm" data-futuros-conta="${escapeHtml(c)}" title="Ver lançamentos futuros" aria-label="Ver lançamentos futuros">⏳${qtdFuturos>0?` <span class="contagem-futuros-btn">(${qtdFuturos})</span>`:''}</button>
