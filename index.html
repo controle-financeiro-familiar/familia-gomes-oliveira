@@ -7424,6 +7424,10 @@ function renderExtratoContaModal(){
             </div>
           </div>
           <div class="fatura-digital-head-info">
+            ${tipo==='Contracheque' ? (()=>{
+              const dataCreditoCtq = dataCreditoContracheque(conta, ano, mes);
+              return `<span><b>Data do Crédito</b> ${dataCreditoCtq ? fmtData(dataCreditoCtq) : '—'}</span>`;
+            })() : ''}
             <span><b>Competência</b> ${MESES[mes-1]}/${ano}</span>
             <span><b>${det.qtdPeriodo}</b> lançamento${det.qtdPeriodo===1?'':'s'}</span>
           </div>
