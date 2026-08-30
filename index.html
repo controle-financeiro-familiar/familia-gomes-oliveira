@@ -7286,6 +7286,16 @@ function resumoContrachequeCompetencia(conta, ano, mes){
   const margemConsignavel = (salvo && salvo.margemConsignavel!=null) ? salvo.margemConsignavel : calcularMargemConsignavelTRT(remuneracaoConsignacao, descontos);
   return { bruto, descontos, liquido, margemConsignavel, remuneracaoConsignacao, temDadosOficiais: !!salvo };
 }
+/* Data efetiva em que o líquido do contracheque foi creditado na conta de destino (ver importConfirm/
+   aplicarTransferenciaInterna) — NUNCA a competência do contracheque, que é só o período de referência e
+   pode cair num mês diferente do crédito efetivo. contrachequeOrigemId é determinístico a partir de
+   conta+competência (ver importConfirm), então não precisa varrer nada além de um find direto. Retorna
+   null quando essa competência ainda não teve nenhum contracheque importado (nunca gerou o espelho). */
+function dataCreditoContracheque(conta, ano, mes){
+  const origemId = `contracheque:${conta}:${chaveMes(ano,mes)}`;
+  const tx = STATE.transactions.find(t=>t.conta===conta && t.contrachequeOrigemId===origemId);
+  return tx ? tx.data : null;
+}
 /* ---------- Modal: Ver Extrato — extrato digital de uma conta bancária na competência selecionada,
    mesma identidade visual do modal Ver Fatura (cabeçalho, painel-resumo, tabela, rodapé). ---------- */
 function renderExtratoContaModal(){
@@ -10853,12 +10863,19 @@ function renderPainelContasBancarias(ano, mes){
     </div>
     ${contas.length ? `<div class="contas-financeiras-grid">
       ${contas.map(c=>{
-        const s = calcSaldoConta(c, ano, mes);
-        const saldoAtualReal = saldoContaAteData(c, hojeISO());
-        const qtdFuturos = lancamentosFuturosConta(c).length;
         const tipo = STATE.contaTipos[c]||'';
         const info = infoTipoConta(tipo);
         const resp = STATE.contaResponsavel[c];
+        const qtdFuturos = lancamentosFuturosConta(c).length;
+        // Conta do tipo Contracheque (ex.: TRT): o card mostra os quatro valores oficiais do contracheque
+        // da competência exibida (ver resumoContrachequeCompetencia) e a Data do Crédito efetiva do
+        // líquido (ver dataCreditoContracheque — NUNCA a competência, que é só o período de referência),
+        // no lugar do bloco financeiro padrão de conta bancária (que não faz sentido para este tipo).
+        const ehContracheque = tipo==='Contracheque';
+        const resumoCtq = ehContracheque ? resumoContrachequeCompetencia(c, ano, mes) : null;
+        const dataCreditoCtq = ehContracheque ? dataCreditoContracheque(c, ano, mes) : null;
+        const s = ehContracheque ? null : calcSaldoConta(c, ano, mes);
+        const saldoAtualReal = ehContracheque ? null : saldoContaAteData(c, hojeISO());
         return `<div class="conta-financeira-card">
           <button type="button" class="icon-btn btn-card-topo-direita no-print" data-importar-conta="${escapeHtml(c)}" title="Importar arquivo do banco" aria-label="Importar arquivo do banco">📥</button>
           <div class="cartao-col">
@@ -10872,6 +10889,16 @@ function renderPainelContasBancarias(ano, mes){
               </div>
             </div>
           </div>
+          ${ehContracheque ? `
+          <div class="conta-financeira-saldo">
+            <span class="lbl">Data do Crédito</span><span class="val">${dataCreditoCtq ? fmtData(dataCreditoCtq) : '—'}</span>
+          </div>
+          <div class="conta-financeira-grid">
+            <div><span class="lbl">Margem Consignável</span><span class="val">${fmtBRL(resumoCtq.margemConsignavel)}</span></div>
+            <div><span class="lbl">Bruto</span><span class="val pos">${fmtBRL(resumoCtq.bruto)}</span></div>
+            <div><span class="lbl">Descontos</span><span class="val neg">${fmtBRL(resumoCtq.descontos)}</span></div>
+            <div><span class="lbl">Líquido</span><span class="val">${fmtBRL(resumoCtq.liquido)}</span></div>
+          </div>` : `
           <div class="conta-financeira-saldo ${saldoAtualReal>=0?'pos':'neg'}">
             <span class="lbl">Saldo atual <span class="hint" style="margin:0;font-weight:400;" title="Considera todos os lançamentos até hoje — lançamentos com data futura só entram nesse valor quando a data chegar.">(hoje)</span></span><span class="val">${fmtBRL(saldoAtualReal)}</span>
           </div>
@@ -10880,7 +10907,7 @@ function renderPainelContasBancarias(ano, mes){
             <div><span class="lbl">Saldo líquido do período <span class="hint" style="margin:0;font-weight:400;" title="Considera somente entradas e saídas já ocorridas até hoje — lançamentos com data futura só entram quando a data chegar.">(realizado)</span></span><span class="val ${s.liquidoRealizado>=0?'pos':'neg'}">${fmtBRL(s.liquidoRealizado)}</span></div>
             <div><span class="lbl">Entradas</span><span class="val pos">${fmtBRL(s.entradasRealizadas)}</span></div>
             <div><span class="lbl">Saídas</span><span class="val neg">${fmtBRL(s.saidasRealizadas)}</span></div>
-          </div>
+          </div>`}
           <div class="conta-financeira-acoes">
             <button type="button" class="btn btn-ghost btn-sm" data-extrato-conta="${escapeHtml(c)}" title="Ver Extrato" aria-label="Ver Extrato">👁</button>
             <button type="button" class="btn btn-ghost btn-sm" data-futuros-conta="${escapeHtml(c)}" title="Ver lançamentos futuros" aria-label="Ver lançamentos futuros">⏳${qtdFuturos>0?` <span class="contagem-futuros-btn">(${qtdFuturos})</span>`:''}</button>
