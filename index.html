@@ -668,8 +668,15 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 /* Mapa de Calor de Despesas (Painel Financeiro) — grid com rolagem horizontal própria (.mc-scroll), nunca
    forçando a página inteira a rolar de lado; min-width no grid garante que as células nunca fiquem
    pequenas demais para o dedo/tooltip, mesmo em telas estreitas (iPhone) — mesma técnica de rolagem interna
-   já usada nas tabelas largas de Cartões/Registros. */
-.mc-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+   já usada nas tabelas largas de Cartões/Registros.
+   padding em .mc-scroll (correção do overflow no hover): .mc-cel-clicavel:hover aplica
+   transform:scale(1.15) + box-shadow, que nas células da última linha/coluna do grid ultrapassa a caixa
+   deste container (que tem overflow-x:auto — e, por regra do CSS, um eixo com overflow não-visible força o
+   outro eixo a também ser tratado como auto) e, em alguns navegadores, isso faz aparecer barra de rolagem
+   vertical/horizontal só de passar o mouse. O padding dá a folga necessária para a célula ampliada
+   (incluindo o halo do :focus-visible) continuar dentro da caixa de .mc-scroll em qualquer célula das
+   quatro bordas do grid, sem precisar recorrer a overflow:hidden (que cortaria o tooltip). */
+.mc-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:10px 12px;}
 .mc-grid{display:grid;gap:3px;min-width:620px;align-items:center;}
 .mc-canto{}
 .mc-dia-header{font-size:10px;text-align:center;color:#8393ac;font-weight:600;font-family:var(--mono);}
@@ -700,6 +707,7 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 .mc-grid-transicionando{animation:mc-fade-suave .4s ease;}
 @keyframes mc-fade-suave{from{opacity:.35;}to{opacity:1;}}
 @media(max-width:700px){
+  .mc-scroll{padding:6px;}
   .mc-grid{min-width:520px;gap:2px;}
   .mc-cel{min-width:13px;}
   .mc-mes-label{font-size:10.5px;padding-right:6px;}
