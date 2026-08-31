@@ -1842,7 +1842,7 @@ summary::marker{content:'';}
 .linha-fatura.aberta,.linha-fatura.fecha-amanha,.linha-fatura.vence-breve{background:#fffbea;}
 .linha-fatura.fechada-sem-lancamentos{background:#f1f2f5;}
 .linha-fatura.paga:hover,.linha-fatura.atrasada:hover,.linha-fatura.aberta:hover,.linha-fatura.fecha-amanha:hover,.linha-fatura.vence-breve:hover,.linha-fatura.fechada-sem-lancamentos:hover{filter:brightness(0.98);}
-.cartao-col{display:flex;align-items:stretch;gap:10px;}
+.cartao-col{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;}
 .faixa-cartao{width:4px;border-radius:3px;flex-shrink:0;align-self:stretch;min-height:36px;}
 .cartao-col-logo{width:32px;height:36px;object-fit:contain;flex-shrink:0;align-self:flex-start;}
 .cartao-col-logo-fallback{width:32px;height:36px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;flex-shrink:0;align-self:center;}
@@ -7935,16 +7935,26 @@ function cabecalhoContaModalHtml(conta){
   const tipo = STATE.contaTipos[conta]||'';
   const resp = STATE.contaResponsavel[conta];
   const info = infoTipoConta(tipo);
+  // Reserva de Emergência e Contracheque: o badge do responsável fica ao lado do NOME da conta (não abaixo,
+  // junto do badge de tipo, como nas demais contas) — mesma regra já aplicada ao card do painel de Contas
+  // (ver renderPainelContasBancarias), reaproveitada aqui para que o posicionamento seja consistente em
+  // todos os cabeçalhos de modal que mostram essas contas (Ver Extrato/"Contracheque"/"Movimentações",
+  // Lançamentos futuros, Histórico do Contracheque, Evolução da Reserva de Emergência).
+  const ehReserva = tipo==='Reserva de Emergência';
+  const ehContracheque = tipo==='Contracheque';
   return `
   <div class="fatura-digital-head-top-principal">
     <div class="cartao-col">
       <span class="faixa-cartao" style="background:${info.cor};"></span>
       ${logoInstituicaoCartaoHtml(conta)}
       <div class="cartao-col-textos">
-        <div class="cartao-col-nome">${escapeHtml(conta)}</div>
+        <div class="cartao-col-nome-linha">
+          <div class="cartao-col-nome">${escapeHtml(conta)}</div>
+          ${(ehReserva || ehContracheque) && resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);flex-shrink:0;">${escapeHtml(resp)}</span>` : ''}
+        </div>
         <div class="cartao-col-badges">
           ${tipo ? `<span class="type-badge" style="font-size:11px;font-weight:600;color:${info.cor};">${escapeHtml(rotuloTipoConta(tipo))}</span>` : ''}
-          ${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
+          ${!ehReserva && !ehContracheque && resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
         </div>
       </div>
     </div>
@@ -10942,7 +10952,10 @@ function renderCartoes(){
   // Larguras responsivas: mesma técnica já usada no Fluxo de Caixa — cada coluna vira uma % de um total
   // em "unidades de caractere" (ch), garantindo que a soma seja sempre exatamente 100% (sem vazar para
   // rolagem horizontal) e ainda assim proporcional ao conteúdo de cada coluna.
-  const chCartao = 34, chData = 12, chStatus = 13, chValor = 16, chSaldo = 20, chImportar = 5;
+  // chCartao aumentado (seção 2 do requisito de layout): a coluna de identificação do cartão agora também
+  // acomoda o bloco de limite ao lado do nome/badges (ver blocoLimiteCartaoHtml mais abaixo), em vez de só
+  // logo+nome+badges — precisa de mais espaço horizontal que antes.
+  const chCartao = 44, chData = 12, chStatus = 13, chValor = 16, chSaldo = 16, chImportar = 5;
   const chTotal = chCartao + chData*2 + chStatus + chValor + chSaldo + chImportar;
   const pct = ch => (ch/chTotal*100).toFixed(2);
   return `
@@ -11021,8 +11034,8 @@ function renderCartoes(){
                   ${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
                   ${ehMelhor ? `<span class="tag melhor-hoje-badge" title="Compras realizadas neste cartão terão o maior prazo até o pagamento da fatura">🏆 Melhor opção hoje</span>` : ''}
                 </div>
-                ${blocoLimiteCartaoHtml(c)}
               </div>
+              ${blocoLimiteCartaoHtml(c, 'limite-cartao-info-cabecalho')}
             </div>
           </td>
           <td data-label="" class="col-importar-cartao" style="text-align:center;">
@@ -11045,7 +11058,6 @@ function renderCartoes(){
                 <span>${vencData||'<span class="hint">—</span>'}</span>
                 ${vencAjustado ? '<span class="hint" style="margin:0;">(ajustado)</span>' : ''}
               </div>
-              <button type="button" class="icon-btn edit-data-icon" data-edit-fatura="${escapeHtml(c)}|${competencia}" title="Ajustar data de vencimento desta fatura">✏️</button>
             </div>
           </td>
           <td data-label="" class="col-editar-fatura-mobile">
