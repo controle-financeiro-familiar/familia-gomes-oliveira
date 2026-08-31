@@ -1807,11 +1807,22 @@ summary::marker{content:'';}
 .conta-financeira-saldo.pos .val{color:var(--receita);}
 .conta-financeira-saldo.neg .val{color:var(--despesa);}
 /* Agência/Nº Conta no card de Contas (substitui o antigo "Saldo Atual (hoje)" — ver
-   renderPainelContasBancarias/agenciaNumeroContaResumo): é texto, não um valor monetário, então usa fonte
-   menor/não-mono e trunca com "…" em vez de quebrar linha — a altura do card é fixa (.conta-financeira-card
-   height:250px), então mesmo um número de agência/conta incomumente longo nunca pode empurrar o conteúdo
-   para fora do card (min-width:0 no valor permite o texto encolher dentro do flex e a ellipsis funcionar). */
-.conta-financeira-saldo-texto .val{font-family:inherit;font-weight:700;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto;text-align:right;margin-left:8px;}
+   renderPainelContasBancarias): dois blocos independentes (cada um com seu próprio .lbl/.val), lado a lado
+   — nunca um título único "Agência e nº conta" combinando os dois valores. É texto, não um valor monetário,
+   então usa fonte menor/não-mono e cada valor trunca com "…" em vez de quebrar linha — a altura do card é
+   fixa (.conta-financeira-card height:250px), então mesmo um número de agência/conta incomumente longo
+   nunca pode empurrar o conteúdo para fora do card (min-width:0 permite o texto encolher dentro do flex e a
+   ellipsis funcionar, tanto no bloco quanto no valor). */
+.conta-financeira-saldo-bancaria{gap:10px;}
+.conta-financeira-saldo-bancaria > div{display:flex;align-items:baseline;gap:5px;min-width:0;flex:1 1 0;}
+.conta-financeira-saldo-bancaria > div:last-child{justify-content:flex-end;text-align:right;}
+.conta-financeira-saldo-bancaria .val{font-family:inherit;font-weight:700;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+@media(max-width:700px){
+  /* Em telas estreitas o card ainda tem largura suficiente para os dois blocos lado a lado (o mesmo grid
+     2 colunas abaixo, Saldo inicial/líquido/Entradas/Saídas, já convive nessa largura) — só reduz o gap
+     para dar mais espaço ao texto antes de truncar. */
+  .conta-financeira-saldo-bancaria{gap:6px;}
+}
 .conta-financeira-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;text-align:center;}
 .conta-financeira-grid .lbl{display:block;color:#8393ac;font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;}
 .conta-financeira-grid .val{display:block;font-family:var(--mono);font-weight:700;font-size:13px;color:var(--ink);}
@@ -7966,18 +7977,6 @@ function dadosBancariosCabecalhoHtml(conta){
     <div class="conta-cabecalho-bancario-item"><span class="lbl">Nº Conta</span> <span class="val">${escapeHtml(extra.numeroConta||'—')}</span></div>
   </div>`;
 }
-/* Resumo de Agência/Nº Conta em uma única linha ("Agência 1234 · Nº Conta 12345-6"), usado no card do
-   painel de Contas no lugar do antigo "Saldo Atual (hoje)" — mesma fonte de dados de
-   dadosBancariosCabecalhoHtml (STATE.contaExtra), sem duplicar nem criar novos campos. Mostra só a parte
-   disponível quando falta agência ou número, e "—" quando nenhum dos dois está cadastrado (nunca
-   undefined/null/NaN). */
-function agenciaNumeroContaResumo(conta){
-  const extra = STATE.contaExtra[conta] || {};
-  const partes = [];
-  if(extra.agencia) partes.push(`Agência ${extra.agencia}`);
-  if(extra.numeroConta) partes.push(`Nº Conta ${extra.numeroConta}`);
-  return partes.length ? partes.join(' · ') : '—';
-}
 /* Cabeçalho compartilhado entre "Ver Extrato" e "Lançamentos futuros" (painel Contas): mesmo padrão
    visual (classes) da coluna Conta da tabela principal, com Agência/Nº Conta à direita quando disponíveis
    — mesma ideia de cabecalhoFaturaCartaoHtml para os modais de cartão. */
@@ -11163,6 +11162,7 @@ function renderPainelContasBancarias(ano, mes){
         const resumoCtq = ehContracheque ? resumoContrachequeCompetencia(c, ano, mes) : null;
         const dataCreditoCtq = ehContracheque ? dataCreditoContracheque(c, ano, mes) : null;
         const s = ehContracheque ? null : calcSaldoConta(c, ano, mes);
+        const extra = ehContracheque ? null : (STATE.contaExtra[c] || {});
         // Reserva de Emergência: o badge do responsável fica ao lado do NOME da conta (não abaixo, junto
         // do badge de tipo, como nas demais contas) — pedido específico para este tipo de card.
         const ehReserva = tipo==='Reserva de Emergência';
@@ -11192,8 +11192,9 @@ function renderPainelContasBancarias(ano, mes){
             <div><span class="lbl">Bruto</span><span class="val pos">${fmtBRL(resumoCtq.bruto)}</span></div>
             <div><span class="lbl">Descontos</span><span class="val neg">${fmtBRL(resumoCtq.descontos)}</span></div>
           </div>` : `
-          <div class="conta-financeira-saldo conta-financeira-saldo-texto">
-            <span class="lbl">Agência e nº conta</span><span class="val" title="${escapeHtml(agenciaNumeroContaResumo(c))}">${escapeHtml(agenciaNumeroContaResumo(c))}</span>
+          <div class="conta-financeira-saldo conta-financeira-saldo-bancaria">
+            <div><span class="lbl">Agência</span><span class="val" title="${escapeHtml(extra.agencia||'—')}">${escapeHtml(extra.agencia||'—')}</span></div>
+            <div><span class="lbl">Nº Conta</span><span class="val" title="${escapeHtml(extra.numeroConta||'—')}">${escapeHtml(extra.numeroConta||'—')}</span></div>
           </div>
           <div class="conta-financeira-grid">
             <div><span class="lbl">Saldo inicial</span><span class="val">${fmtBRL(s.saldoInicial)} <button type="button" class="icon-btn" data-editar-saldo-inicial-conta="${escapeHtml(c)}" title="Editar saldo inicial do período">✏️</button></span></div>
