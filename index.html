@@ -17036,7 +17036,14 @@ function bindEvents(){
   document.getElementById('importConfirm')?.addEventListener('click', ()=>{
     const selecionados = UI.importParsed.filter(r=>r.incluir!==false);
     if(selecionados.length===0){ alert('Nenhum lançamento marcado para importar.'); return; }
-    const semCategoria = selecionados.filter(r=>!r.categoria);
+    // Transação Interna entre Contas é uma classificação própria (ver aplicarTransferenciaInterna), não uma
+    // transação comum que depende de Grupo/Categoria/Subcategoria — nunca deve contar como "sem categoria",
+    // mesmo com r.categoria vazio (é sempre vazio para esse tipo, de propósito: ver a criação de novaTx mais
+    // abaixo e o modal Novo/Editar Lançamento, que também deixa a categoria em branco nesse caso). Mesma
+    // condição de "é de fato uma transferência" usada logo abaixo (ehTransferencia) — se o checkbox foi
+    // marcado mas por algum motivo não há conta de destino definida, o lançamento não vira transferência de
+    // verdade na criação, então continua exigindo categoria normalmente.
+    const semCategoria = selecionados.filter(r=>!r.categoria && !(r.transferenciaInterna && r.contaTransferencia));
     if(semCategoria.length>0 && !confirm(`${semCategoria.length} lançamento(s) sem categoria definida. Importar assim mesmo?`)) return;
     selecionados.forEach(r=>{
       const info = catInfo(r.categoria);
