@@ -4039,7 +4039,33 @@ function responsavelPredefinidoDaSubcategoria(subcategoriaNome){
   if(!item || !permiteResponsavelPredefinido(item[1], item[2])) return '';
   return STATE.subcategoriaResponsavel[subcategoriaNome] || '';
 }
-function fmtBRL(v){ const n = Number(v)||0; return n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+/* Arredonda um valor monetário para 2 casas decimais e normaliza qualquer resultado que dê exatamente zero
+   após esse arredondamento (inclusive -0 e resíduos de ponto flutuante como -0,0000001 ou -0,004) para o
+   zero positivo — base de fmtBRL e de toda a lógica de cor/sinal de valores monetários (ver
+   classeSinalMoeda/classeReceitaDespesaMoeda), para que "zero" seja sempre tratado de forma neutra e
+   uniforme em toda a aplicação (nunca -R$ 0,00, nunca cor de crédito/débito num resultado que é zero) —
+   nunca usada para os cálculos internos em si, só para a camada de exibição. */
+function arredondarMoeda(v){
+  const n = Math.round((Number(v)||0)*100)/100;
+  return n===0 ? 0 : n;
+}
+function fmtBRL(v){ return arredondarMoeda(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+/* Classe de cor para um valor monetário calculado (saldo, diferença, projeção etc.): neutra ("", cor
+   padrão do texto) quando o valor arredondado é zero, 'pos' quando positivo, 'neg' quando negativo — ver
+   .val-cell.pos/.val-cell.neg, .reg-card-valor.pos/.neg etc. Centraliza a regra de "zero é sempre neutro"
+   (ver arredondarMoeda): nenhum componente deve comparar o sinal de um valor monetário diretamente
+   (v>=0/v<0) para decidir cor, sempre por aqui, senão a regra fica implementada de forma inconsistente
+   entre cards/tabelas/gráficos/modais. */
+function classeSinalMoeda(v){
+  const n = arredondarMoeda(v);
+  return n>0 ? 'pos' : (n<0 ? 'neg' : '');
+}
+/* Mesma regra de classeSinalMoeda, para os poucos componentes que usam as classes 'receita'/'despesa' em
+   vez de 'pos'/'neg' (ver .kpi.receita/.kpi.despesa). */
+function classeReceitaDespesaMoeda(v){
+  const n = arredondarMoeda(v);
+  return n>0 ? 'receita' : (n<0 ? 'despesa' : '');
+}
 function pctSeguro(v, total){ return total>0 ? (v/total*100) : 0; }
 /* Formatação padrão de porcentagem em toda a aplicação: sempre uma casa decimal, vírgula como separador
    (ex.: "23,5%") — nunca omite a casa decimal mesmo quando o valor é um número inteiro (ex.: "20,0%", não
@@ -7528,7 +7554,7 @@ function renderExtratoContaModal(){
             <td>${escapeHtml(t.grupo||'—')}</td>
             <td style="text-align:center;"><span class="tag ${t.tipo}">${t.tipo}</span></td>
             <td class="val-cell ${t.tipo==='Receita'?'pos':'neg'}" style="text-align:right;">${fmtBRL(t.valor)}</td>
-            <td class="val-cell ${t.saldoAcumulado>=0?'pos':'neg'}" style="text-align:right;">${fmtBRL(t.saldoAcumulado)}</td>
+            <td class="val-cell ${classeSinalMoeda(t.saldoAcumulado)}" style="text-align:right;">${fmtBRL(t.saldoAcumulado)}</td>
             <td class="no-print col-acoes">
               <button class="icon-btn" data-edit="${t.id}" title="Editar">✏️</button>
               <button class="icon-btn" data-duplicar="${t.id}" title="Duplicar">📄</button>
@@ -7540,7 +7566,7 @@ function renderExtratoContaModal(){
           valorTexto: t=>fmtBRL(t.valor), valorClasse: t=> ehSaldoAnterior(t)?'':(t.tipo==='Receita'?'pos':'neg'),
           secundario: t=>`${fmtData(t.data)} · ${t.grupo||'Sem Grupo'}`,
           tags: t=> ehSaldoAnterior(t) ? '' : `<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`,
-          extra: t=>`<div class="reg-card-extra">Saldo: <b class="val-cell ${t.saldoAcumulado>=0?'pos':'neg'}">${fmtBRL(t.saldoAcumulado)}</b></div>`,
+          extra: t=>`<div class="reg-card-extra">Saldo: <b class="val-cell ${classeSinalMoeda(t.saldoAcumulado)}">${fmtBRL(t.saldoAcumulado)}</b></div>`,
           semAcao: t=> ehSaldoAnterior(t),
           prefixo: 'Extrato', selecionados: UI.extratoContaModal.selecionados,
         })}
@@ -7605,7 +7631,7 @@ function renderFuturosContaModal(){
         <div class="cartoes-resumo-grid">
           <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(saldoAtual)}</div><div class="lbl">saldo atual (hoje)</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">📅</span><div><div class="val">${futurosFiltrados.length}</div><div class="lbl">lançamento${futurosFiltrados.length===1?'':'s'} futuro${futurosFiltrados.length===1?'':'s'}</div></div></div>
-          <div class="cartoes-resumo-item"><span class="ico">📊</span><div><div class="val ${saldoProjetadoFiltrado>=0?'pos':'neg'}">${fmtBRL(saldoProjetadoFiltrado)}</div><div class="lbl">saldo projetado ao final</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">📊</span><div><div class="val ${classeSinalMoeda(saldoProjetadoFiltrado)}">${fmtBRL(saldoProjetadoFiltrado)}</div><div class="lbl">saldo projetado ao final</div></div></div>
         </div>
         ${futuros.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
@@ -7636,7 +7662,7 @@ function renderFuturosContaModal(){
             </td>
             <td style="text-align:center;"><span class="tag ${t.tipo}">${t.tipo}</span></td>
             <td class="val-cell ${t.tipo==='Receita'?'pos':'neg'}" style="text-align:right;">${t.tipo==='Despesa'?'-':''}${fmtBRL(t.valor)}</td>
-            <td class="val-cell ${t.saldoProjetado>=0?'pos':'neg'}" style="text-align:right;">${fmtBRL(t.saldoProjetado)}</td>
+            <td class="val-cell ${classeSinalMoeda(t.saldoProjetado)}" style="text-align:right;">${fmtBRL(t.saldoProjetado)}</td>
             <td class="no-print col-acoes">
               <button class="icon-btn" data-edit="${t.id}" title="Editar">✏️</button>
               <button class="icon-btn" data-duplicar="${t.id}" title="Duplicar">📄</button>
@@ -7648,7 +7674,7 @@ function renderFuturosContaModal(){
           valorTexto: t=>`${t.tipo==='Despesa'?'-':''}${fmtBRL(t.valor)}`, valorClasse: t=> t.tipo==='Receita'?'pos':'neg',
           secundario: t=>`${fmtData(t.data)} (prevista)`,
           tags: t=>`<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`,
-          extra: t=>`<div class="reg-card-extra">Saldo projetado: <b class="val-cell ${t.saldoProjetado>=0?'pos':'neg'}">${fmtBRL(t.saldoProjetado)}</b></div>`,
+          extra: t=>`<div class="reg-card-extra">Saldo projetado: <b class="val-cell ${classeSinalMoeda(t.saldoProjetado)}">${fmtBRL(t.saldoProjetado)}</b></div>`,
           prefixo: 'Futuros', selecionados: UI.futurosContaModal.selecionados,
         })}
         <div class="registros-rodape no-print">${rodapePaginacaoFuturos}</div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">📅</div>Nenhum lançamento encontrado com esses filtros.</div>`}` : `${renderBotoesAcoesLancamentoModal(conta, false)}<div class="empty-state" style="margin-top:14px;"><div class="big">📅</div>Nenhum lançamento futuro cadastrado para esta conta.</div>`}
@@ -8367,7 +8393,7 @@ function parseMoedaTexto(v){
   const n = parseFloat(String(v??'').trim().replace(/\./g,'').replace(',', '.'));
   return isNaN(n) ? 0 : n;
 }
-function fmtMoedaInput(v){ return (Number(v)||0).toFixed(2).replace('.', ','); }
+function fmtMoedaInput(v){ return arredondarMoeda(v).toFixed(2).replace('.', ','); }
 /* Valor de um lançamento previsto: se estiver vinculado a um cartão, é sempre o total já lançado na
    fatura do mês em questão (compras avulsas + parcela do mês de compras parceladas + demais lançamentos
    da fatura) — nunca um valor digitado. Caso contrário, é o valor informado manualmente (o mesmo valor
@@ -9629,7 +9655,7 @@ function renderDashboard(){
       <div class="dash-hero-saldo-lbl">💼 Saldo Atual (Hoje)</div>
       <div class="dash-hero-saldo-data">${fmtData(hojeISO())}</div>
     </div>
-    <div class="dash-hero-saldo-val ${saldoAtual<0?'neg':''}">${fmtBRL(saldoAtual)}</div>
+    <div class="dash-hero-saldo-val ${arredondarMoeda(saldoAtual)<0?'neg':''}">${fmtBRL(saldoAtual)}</div>
   </div>
   <div class="grid-cards">
     <div class="kpi receita"><div class="bar"></div><div class="lbl">💰 Receitas do mês</div><div class="val">${fmtBRL(d.receitasTotal)}</div></div>
@@ -11169,7 +11195,7 @@ function renderPainelContasBancarias(ano, mes){
           </div>
           <div class="conta-financeira-grid">
             <div><span class="lbl">Saldo inicial</span><span class="val">${fmtBRL(s.saldoInicial)} <button type="button" class="icon-btn" data-editar-saldo-inicial-conta="${escapeHtml(c)}" title="Editar saldo inicial do período">✏️</button></span></div>
-            <div><span class="lbl">Saldo líquido<span class="hint" style="margin:0;font-weight:400;" title="Saldo inicial da competência + entradas − saídas já ocorridas até hoje — lançamentos com data futura só entram quando a data chegar."></span></span><span class="val ${(s.saldoInicial+s.liquidoRealizado)>=0?'pos':'neg'}">${fmtBRL(s.saldoInicial+s.liquidoRealizado)}</span></div>
+            <div><span class="lbl">Saldo líquido<span class="hint" style="margin:0;font-weight:400;" title="Saldo inicial da competência + entradas − saídas já ocorridas até hoje — lançamentos com data futura só entram quando a data chegar."></span></span><span class="val ${classeSinalMoeda(s.saldoInicial+s.liquidoRealizado)}">${fmtBRL(s.saldoInicial+s.liquidoRealizado)}</span></div>
             <div><span class="lbl">Entradas</span><span class="val pos">${fmtBRL(s.entradasRealizadas)}</span></div>
             <div><span class="lbl">Saídas</span><span class="val neg">${fmtBRL(s.saidasRealizadas)}</span></div>
           </div>`}
@@ -11651,7 +11677,7 @@ function renderPainelProjecao(m, idx){
         <span class="fluxo-mes-titulo">📅 ${MESES[m.mes-1]}/${m.ano}</span>
         <span class="fluxo-mes-resumo">
           ${idx===0 ? '' : `<span class="hint" style="margin:0;">Saldo inicial ${fmtBRL(m.saldoInicial)}</span>`}
-          <b class="${m.saldoFinal>=0?'pos':'neg'}">Saldo final ${fmtBRL(m.saldoFinal)}</b>
+          <b class="${classeSinalMoeda(m.saldoFinal)}">Saldo final ${fmtBRL(m.saldoFinal)}</b>
         </span>
         <span class="expand-arrow" data-arrow-for="fluxo-mes-${chaveMesFluxo}">${abertoFluxo?'➖':'➕'}</span>
       </summary>
@@ -11667,7 +11693,7 @@ function renderPainelProjecao(m, idx){
           </tr></thead>
           <tbody>${linhasHtml}</tbody>
         </table></div>
-        <div class="saldo-final-projetado ${m.saldoFinal>=0?'pos':'neg'}"><span>Saldo final projetado</span><span class="val">${fmtBRL(m.saldoFinal)}</span></div>
+        <div class="saldo-final-projetado ${classeSinalMoeda(m.saldoFinal)}"><span>Saldo final projetado</span><span class="val">${fmtBRL(m.saldoFinal)}</span></div>
       </div>
     </details>
   </div>`;
@@ -11904,7 +11930,7 @@ function renderInteligencia(){
             <td data-label="Mês">${MESES[p.mes-1]}/${p.ano} ${p.risco==='alto'?'🔴':(p.risco==='medio'?'🟡':'')}</td>
             <td data-label="Receita Prevista" style="text-align:right;">${fmtBRL(p.receitaProjetada)}</td>
             <td data-label="Despesa Prevista" style="text-align:right;">${fmtBRL(p.despesaProjetada)}</td>
-            <td data-label="Saldo Previsto" class="val-cell ${p.saldoProjetado>=0?'pos':'neg'}" style="text-align:right;">${fmtBRL(p.saldoProjetado)}<br><span class="hint" style="margin:0;font-weight:400;">${fmtBRL(p.faixaInferior)} a ${fmtBRL(p.faixaSuperior)}</span></td>
+            <td data-label="Saldo Previsto" class="val-cell ${classeSinalMoeda(p.saldoProjetado)}" style="text-align:right;">${fmtBRL(p.saldoProjetado)}<br><span class="hint" style="margin:0;font-weight:400;">${fmtBRL(p.faixaInferior)} a ${fmtBRL(p.faixaSuperior)}</span></td>
             <td data-label="Poupança" style="text-align:right;">${fmtPercentSmart(p.poupancaProjetada*100)}</td>
           </tr>`).join('')}
         </tbody>
@@ -12072,7 +12098,7 @@ function renderResumo(){
     <h2><span>Fluxo de Caixa</span></h2>
     <div class="grid-cards">
       ${meses.map(m=>`
-        <div class="kpi ${m.saldoFinal>=0?'receita':'despesa'}">
+        <div class="kpi ${classeReceitaDespesaMoeda(m.saldoFinal)}">
           <div class="bar"></div>
           <div class="lbl">📆 Saldo em ${MESES[m.mes-1]}/${m.ano}</div>
           <div class="val">${fmtBRL(m.saldoFinal)}</div>
@@ -12339,7 +12365,7 @@ function renderMetas(){
   <div class="grid-cards">
     <div class="kpi"><div class="bar"></div><div class="lbl">💰 Orçamento Total</div><div class="val">${fmtBRL(r.orcamentoTotal)}</div></div>
     <div class="kpi despesa"><div class="bar"></div><div class="lbl">💸 Gasto Atual</div><div class="val">${fmtBRL(r.gastoAtual)}</div></div>
-    <div class="kpi ${r.saldoDisponivel>=0?'receita':'despesa'}"><div class="bar"></div><div class="lbl">📊 Saldo Disponível</div><div class="val">${fmtBRL(r.saldoDisponivel)}</div></div>
+    <div class="kpi ${classeReceitaDespesaMoeda(r.saldoDisponivel)}"><div class="bar"></div><div class="lbl">📊 Saldo Disponível</div><div class="val">${fmtBRL(r.saldoDisponivel)}</div></div>
     <div class="kpi">
       <div class="bar"></div><div class="lbl">🎯 Percentual Consumido</div><div class="val">${fmtPercentSmart(r.pctConsumido)}</div>
       <div class="progress-track" style="margin-top:8px;"><div class="progress-fill" style="width:${Math.min(100,r.pctConsumido)}%;background:${r.pctConsumido>100?'#c0392b':(r.pctConsumido>=80?'#c98f00':'#1e8e5a')};"></div></div>
@@ -12373,7 +12399,7 @@ function renderMetas(){
           <td data-label="Subcategoria">${m.nivel==='subcategoria' ? escapeHtml(m.subcategoria) : '<span class="hint">—</span>'}</td>
           <td class="val-cell" data-label="Meta (planejado)" style="text-align:right;">${fmtBRL(m.valor)}</td>
           <td class="val-cell ${m.gasto>m.valor?'neg':''}" data-label="Gasto (realizado)" style="text-align:right;">${fmtBRL(m.gasto)}</td>
-          <td class="val-cell ${m.saldo<0?'neg':'pos'}" data-label="Saldo (diferença)" style="text-align:right;">${fmtBRL(m.saldo)}</td>
+          <td class="val-cell ${classeSinalMoeda(m.saldo)}" data-label="Saldo (diferença)" style="text-align:right;">${fmtBRL(m.saldo)}</td>
           <td data-label="% Utilizado" style="min-width:110px;">
             <div class="progress-track"><div class="progress-fill" style="width:${Math.min(100,m.pct)}%;background:${info.cor};"></div></div>
             <span class="hint" style="margin:2px 0 0;">${fmtPercentSmart(m.pct)}</span>
@@ -12474,7 +12500,7 @@ function renderHistoricoMetaPanel(competencia){
           <td data-label="Mês">${competenciaLabel(x.competencia)}</td>
           <td class="val-cell" data-label="Meta" style="text-align:right;">${fmtBRL(x.meta)}</td>
           <td class="val-cell" data-label="Gasto" style="text-align:right;">${fmtBRL(x.gasto)}</td>
-          <td class="val-cell ${diferenca<0?'neg':'pos'}" data-label="Diferença" style="text-align:right;">${fmtBRL(diferenca)}</td>
+          <td class="val-cell ${classeSinalMoeda(diferenca)}" data-label="Diferença" style="text-align:right;">${fmtBRL(diferenca)}</td>
           <td data-label="Situação"><span class="meta-situacao-tag" style="background:${info.cor}1a;color:${info.cor};">${info.emoji} ${info.label}</span></td>
         </tr>`;
       }).join('')}
@@ -13784,7 +13810,7 @@ function renderImportStep3(){
         <td data-label="Status" style="white-space:nowrap;">${r.duplicata==='exata' ? '<span class="tag Despesa">🔁 Já existe</span>' : (r.duplicata==='provavel' ? '<span class="tag Variavel">❓ Revisar</span>' : '<span class="tag Receita">🆕 Novo</span>')}</td>
         <td data-label="Data"><input type="date" data-imp="${i}" data-field="data" value="${r.data}" style="border:1px solid var(--line);border-radius:5px;padding:4px;"></td>
         <td data-label="Descrição"><input type="text" data-imp="${i}" data-field="descricao" value="${escapeHtml(r.descricao)}" style="border:1px solid var(--line);border-radius:5px;padding:4px;width:160px;"></td>
-        <td data-label="Valor"><input type="text" inputmode="decimal" data-imp="${i}" data-field="valor" value="${fmtMoedaInput(r.valor)}" class="val-cell ${r.valor<0?'neg':'pos'}" style="text-align:right;width:90px;border:1px solid var(--line);border-radius:5px;padding:4px;"></td>
+        <td data-label="Valor"><input type="text" inputmode="decimal" data-imp="${i}" data-field="valor" value="${fmtMoedaInput(r.valor)}" class="val-cell ${classeSinalMoeda(r.valor)}" style="text-align:right;width:90px;border:1px solid var(--line);border-radius:5px;padding:4px;"></td>
         <td data-label="Tipo"><select data-imp="${i}" data-field="tipo" class="mini"><option value="Despesa" ${r.tipo==='Despesa'?'selected':''}>Despesa</option><option value="Receita" ${r.tipo==='Receita'?'selected':''}>Receita</option></select></td>
         <td data-label="Subcategoria">${r.transferenciaInterna ? `<span class="hint">— (transferência interna)</span>` : `
           <button type="button" class="btn btn-ghost btn-sm" data-imp-cat-abrir="${i}" style="text-align:left;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;">
