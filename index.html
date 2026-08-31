@@ -7157,10 +7157,14 @@ function calcSaldoConta(conta, ano, mes){
   // entradas/saidas/liquido: TODOS os lançamentos do período (inclusive datas futuras dentro do mês
   // selecionado) — mantido para o Saldo Final projetado e demais usos já existentes.
   // *Realizadas: apenas os lançamentos do período com data <= hoje (data real do dispositivo) — usadas
-  // nos indicadores "Entradas", "Saídas" e "Saldo Líquido do Período" dos cards de Contas, para refletir
-  // exclusivamente o cenário já efetivamente ocorrido, na mesma lógica de corte do Saldo Atual
-  // (ver saldoContaAteData). Lançamentos futuros passam a compor esses indicadores automaticamente assim
-  // que sua data chegar, pois o corte é sempre feito contra a data real de hoje, recalculada a cada render.
+  // nos indicadores "Entradas" e "Saídas" dos cards de Contas, para refletir exclusivamente o cenário já
+  // efetivamente ocorrido, na mesma lógica de corte do Saldo Atual (ver saldoContaAteData). Lançamentos
+  // futuros passam a compor esses indicadores automaticamente assim que sua data chegar, pois o corte é
+  // sempre feito contra a data real de hoje, recalculada a cada render.
+  // liquidoRealizado é só entradasRealizadas − saidasRealizadas (o movimento líquido do período, SEM o
+  // saldo inicial) — nunca usar isto sozinho como "Saldo Líquido da competência": essa métrica é sempre
+  // saldoInicial + liquidoRealizado (ver renderPainelContasBancarias/itensExtratoConta), a mesma fórmula
+  // em todo componente que a exibe (card, extrato etc.), nunca um cálculo paralelo.
   let entradas = 0, saidas = 0, qtdPeriodo = 0;
   let entradasRealizadas = 0, saidasRealizadas = 0;
   txsConta.forEach(t=>{
@@ -11134,7 +11138,7 @@ function renderPainelContasBancarias(ano, mes){
           </div>
           <div class="conta-financeira-grid">
             <div><span class="lbl">Saldo inicial</span><span class="val">${fmtBRL(s.saldoInicial)} <button type="button" class="icon-btn" data-editar-saldo-inicial-conta="${escapeHtml(c)}" title="Editar saldo inicial do período">✏️</button></span></div>
-            <div><span class="lbl">Saldo líquido<span class="hint" style="margin:0;font-weight:400;" title="Considera somente entradas e saídas já ocorridas até hoje — lançamentos com data futura só entram quando a data chegar."></span></span><span class="val ${s.liquidoRealizado>=0?'pos':'neg'}">${fmtBRL(s.liquidoRealizado)}</span></div>
+            <div><span class="lbl">Saldo líquido<span class="hint" style="margin:0;font-weight:400;" title="Saldo inicial da competência + entradas − saídas já ocorridas até hoje — lançamentos com data futura só entram quando a data chegar."></span></span><span class="val ${(s.saldoInicial+s.liquidoRealizado)>=0?'pos':'neg'}">${fmtBRL(s.saldoInicial+s.liquidoRealizado)}</span></div>
             <div><span class="lbl">Entradas</span><span class="val pos">${fmtBRL(s.entradasRealizadas)}</span></div>
             <div><span class="lbl">Saídas</span><span class="val neg">${fmtBRL(s.saidasRealizadas)}</span></div>
           </div>`}
