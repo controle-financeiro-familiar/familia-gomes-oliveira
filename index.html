@@ -1886,7 +1886,7 @@ summary::marker{content:'';}
 .conta-cabecalho-bancario{display:flex;flex-direction:column;gap:2px;margin-left:auto;font-size:11px;color:#8393ac;white-space:nowrap;}
 .conta-cabecalho-bancario-item .lbl{font-weight:700;color:#8393ac;margin-right:4px;}
 .conta-cabecalho-bancario-item .val{color:var(--ink);font-weight:700;}
-.limite-cartao-info-cabecalho{margin-top:0;margin-left:auto;max-width:260px;}
+.limite-cartao-info-cabecalho{margin-top:0;margin-left:auto;max-width:260px;text-align:right;}
 @media (max-width: 760px){
   .fatura-digital-head-top-principal{gap:8px 16px;}
   .conta-cabecalho-bancario,.limite-cartao-info-cabecalho{margin-left:0;}
@@ -10955,7 +10955,7 @@ function renderCartoes(){
   // chCartao aumentado (seção 2 do requisito de layout): a coluna de identificação do cartão agora também
   // acomoda o bloco de limite ao lado do nome/badges (ver blocoLimiteCartaoHtml mais abaixo), em vez de só
   // logo+nome+badges — precisa de mais espaço horizontal que antes.
-  const chCartao = 44, chData = 12, chStatus = 13, chValor = 16, chSaldo = 16, chImportar = 5;
+  const chCartao = 31, chData = 10, chStatus = 13, chValor = 13, chSaldo = 20, chImportar = 3;
   const chTotal = chCartao + chData*2 + chStatus + chValor + chSaldo + chImportar;
   const pct = ch => (ch/chTotal*100).toFixed(2);
   return `
@@ -10963,7 +10963,7 @@ function renderCartoes(){
     <summary>ℹ️ Informações sobre esta tela</summary>
     <div class="ajuda-fluxo-conteudo">
       <p><b>Painel Contas</b>: mostra o saldo atual e a movimentação do período de cada conta bancária cadastrada (corrente, poupança, investimentos, contracheque etc.). <b>👁 Ver Extrato</b> abre o detalhamento de todos os lançamentos da competência exibida, com saldo acumulado. <b>⏳ Ver lançamentos futuros</b> mostra os lançamentos já cadastrados com data posterior a hoje nessa conta, permitindo acompanhar compromissos financeiros ainda não efetivados antes que aconteçam.</p>
-      <p><b>Painel Cartões</b>: mostra a fatura da competência exibida de cada cartão de crédito. <b>🏆 Melhor opção hoje</b>: compras realizadas neste cartão terão o maior prazo até o pagamento da fatura, considerando as datas de fechamento e vencimento configuradas. ${!melhorCartao.vencedor && (!melhorCartao.candidatos || melhorCartao.candidatos.length===0) ? 'Defina o dia de fechamento e de vencimento de ao menos um cartão em Configurações → Contas para o app calcular essa indicação.' : ''}</p>
+      <p><b>Painel Cartões</b>: mostra a fatura da competência exibida de cada cartão de crédito. <b>🏆</b>: compras realizadas neste cartão terão o maior prazo até o pagamento da fatura, considerando as datas de fechamento e vencimento configuradas. ${!melhorCartao.vencedor && (!melhorCartao.candidatos || melhorCartao.candidatos.length===0) ? 'Defina o dia de fechamento e de vencimento de ao menos um cartão em Configurações → Contas para o app calcular essa indicação.' : ''}</p>
       <p><b>Saldo parcelado em aberto</b>: para o mês visualizado nesta aba, soma o valor de todas as parcelas futuras já registradas de compras parceladas em cada cartão (a partir do mês seguinte ao selecionado — a parcela do próprio mês não entra aqui, pois já está incluída no valor da fatura). Muda automaticamente ao trocar o mês. Anuidades parceladas (categoria "Anuidade de Cartão de Crédito") não entram nessa soma.</p>
       <p><b>👁 Ver Fatura</b>: abre a fatura digital da competência exibida, com todos os lançamentos, parcelas e créditos (inclusive estornos, tratados como crédito) que a compõem. <b>👁 Ver Próximas Faturas</b> (ao lado do saldo parcelado) mostra a projeção dos meses seguintes, com os lançamentos de cada competência sob demanda.</p>
       <p><b>Fechamento e vencimento</b>: o dia padrão de cada cartão é configurado na aba Configurações → Contas. Use os lápis ✏️ na tabela para ajustar a data desta fatura específica, quando o cartão não tiver dia de fechamento fixo ou quando o vencimento cair em fim de semana/feriado e for antecipado ou adiado. Uma compra feita após o dia de fechamento entra automaticamente na fatura do mês seguinte.</p>
@@ -11032,7 +11032,7 @@ function renderCartoes(){
                 <div class="cartao-col-badges">
                   ${bandeiraCartaoHtml(c)}
                   ${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}
-                  ${ehMelhor ? `<span class="tag melhor-hoje-badge" title="Compras realizadas neste cartão terão o maior prazo até o pagamento da fatura">🏆 Melhor opção hoje</span>` : ''}
+                  ${ehMelhor ? `<span class="tag melhor-hoje-badge" title="Compras realizadas neste cartão terão o maior prazo até o pagamento da fatura">🏆</span>` : ''}
                 </div>
               </div>
               ${blocoLimiteCartaoHtml(c, 'limite-cartao-info-cabecalho')}
