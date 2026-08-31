@@ -1802,10 +1802,16 @@ summary::marker{content:'';}
 .conta-financeira-card .cartao-col{padding-right:30px;}
 .conta-financeira-card:hover{box-shadow:0 6px 16px rgba(16,64,141,.12);transform:translateY(-2px);}
 .conta-financeira-saldo{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:9px;background:var(--navy-50);}
-.conta-financeira-saldo .lbl{font-size:11.5px;font-weight:700;color:#6a7a97;}
+.conta-financeira-saldo .lbl{font-size:11.5px;font-weight:700;color:#6a7a97;flex-shrink:0;}
 .conta-financeira-saldo .val{font-family:var(--mono);font-weight:800;font-size:17px;}
 .conta-financeira-saldo.pos .val{color:var(--receita);}
 .conta-financeira-saldo.neg .val{color:var(--despesa);}
+/* Agência/Nº Conta no card de Contas (substitui o antigo "Saldo Atual (hoje)" — ver
+   renderPainelContasBancarias/agenciaNumeroContaResumo): é texto, não um valor monetário, então usa fonte
+   menor/não-mono e trunca com "…" em vez de quebrar linha — a altura do card é fixa (.conta-financeira-card
+   height:250px), então mesmo um número de agência/conta incomumente longo nunca pode empurrar o conteúdo
+   para fora do card (min-width:0 no valor permite o texto encolher dentro do flex e a ellipsis funcionar). */
+.conta-financeira-saldo-texto .val{font-family:inherit;font-weight:700;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto;text-align:right;margin-left:8px;}
 .conta-financeira-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;text-align:center;}
 .conta-financeira-grid .lbl{display:block;color:#8393ac;font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;}
 .conta-financeira-grid .val{display:block;font-family:var(--mono);font-weight:700;font-size:13px;color:var(--ink);}
@@ -7071,6 +7077,20 @@ function aplicarVinculoLimiteCartao(contaAtual, cartoesSelecionados, limiteTotal
       .forEach(c=>{ STATE.cardLimite[c] = { grupoLimiteId: null, limiteTotal: null }; });
   }
 }
+/* Atualiza só o VALOR do limite total de um cartão, preservando o vínculo de grupo já existente (nunca
+   desfaz nem cria um vínculo novo) — usado pelo modal "Editar datas e limite do cartão" (ovFaturaEditModal),
+   que só edita o valor em si, não a lista de cartões vinculados (essa continua exclusiva do modal de edição
+   da conta, ver aplicarVinculoLimiteCartao). Quando o cartão compartilha limite com outros (grupoLimiteId
+   definido), o valor é gravado no grupo (gruposLimiteCartao), refletindo automaticamente em todos os
+   cartões do grupo; senão, grava direto em cardLimite[conta].limiteTotal — nunca duplicando o dado. */
+function salvarLimiteTotalCartaoInline(conta, limiteTotalNovo){
+  const cfg = STATE.cardLimite[conta];
+  if(cfg?.grupoLimiteId){
+    STATE.gruposLimiteCartao[cfg.grupoLimiteId] = { ...(STATE.gruposLimiteCartao[cfg.grupoLimiteId]||{}), limiteTotal: limiteTotalNovo };
+  } else {
+    STATE.cardLimite[conta] = { ...(cfg||{}), grupoLimiteId: null, limiteTotal: limiteTotalNovo };
+  }
+}
 /* Todas as contas cadastradas que NÃO são cartão de crédito (Conta Corrente, Conta PJ, Poupança, Reserva
    de Emergência, Investimentos, Contracheque, e qualquer outro tipo cadastrado), na mesma ordem já usada
    em toda a aplicação (contasOrdenadas, por tipo e depois por nome). */
@@ -7917,6 +7937,18 @@ function dadosBancariosCabecalhoHtml(conta){
     <div class="conta-cabecalho-bancario-item"><span class="lbl">Agência</span> <span class="val">${escapeHtml(extra.agencia||'—')}</span></div>
     <div class="conta-cabecalho-bancario-item"><span class="lbl">Nº Conta</span> <span class="val">${escapeHtml(extra.numeroConta||'—')}</span></div>
   </div>`;
+}
+/* Resumo de Agência/Nº Conta em uma única linha ("Agência 1234 · Nº Conta 12345-6"), usado no card do
+   painel de Contas no lugar do antigo "Saldo Atual (hoje)" — mesma fonte de dados de
+   dadosBancariosCabecalhoHtml (STATE.contaExtra), sem duplicar nem criar novos campos. Mostra só a parte
+   disponível quando falta agência ou número, e "—" quando nenhum dos dois está cadastrado (nunca
+   undefined/null/NaN). */
+function agenciaNumeroContaResumo(conta){
+  const extra = STATE.contaExtra[conta] || {};
+  const partes = [];
+  if(extra.agencia) partes.push(`Agência ${extra.agencia}`);
+  if(extra.numeroConta) partes.push(`Nº Conta ${extra.numeroConta}`);
+  return partes.length ? partes.join(' · ') : '—';
 }
 /* Cabeçalho compartilhado entre "Ver Extrato" e "Lançamentos futuros" (painel Contas): mesmo padrão
    visual (classes) da coluna Conta da tabela principal, com Agência/Nº Conta à direita quando disponíveis
@@ -11103,7 +11135,6 @@ function renderPainelContasBancarias(ano, mes){
         const resumoCtq = ehContracheque ? resumoContrachequeCompetencia(c, ano, mes) : null;
         const dataCreditoCtq = ehContracheque ? dataCreditoContracheque(c, ano, mes) : null;
         const s = ehContracheque ? null : calcSaldoConta(c, ano, mes);
-        const saldoAtualReal = ehContracheque ? null : saldoContaAteData(c, hojeISO());
         // Reserva de Emergência: o badge do responsável fica ao lado do NOME da conta (não abaixo, junto
         // do badge de tipo, como nas demais contas) — pedido específico para este tipo de card.
         const ehReserva = tipo==='Reserva de Emergência';
@@ -11133,8 +11164,8 @@ function renderPainelContasBancarias(ano, mes){
             <div><span class="lbl">Bruto</span><span class="val pos">${fmtBRL(resumoCtq.bruto)}</span></div>
             <div><span class="lbl">Descontos</span><span class="val neg">${fmtBRL(resumoCtq.descontos)}</span></div>
           </div>` : `
-          <div class="conta-financeira-saldo ${saldoAtualReal>=0?'pos':'neg'}">
-            <span class="lbl">Saldo atual <span class="hint" style="margin:0;font-weight:400;" title="Considera todos os lançamentos até hoje — lançamentos com data futura só entram nesse valor quando a data chegar.">(hoje)</span></span><span class="val">${fmtBRL(saldoAtualReal)}</span>
+          <div class="conta-financeira-saldo conta-financeira-saldo-texto">
+            <span class="lbl">Agência e nº conta</span><span class="val" title="${escapeHtml(agenciaNumeroContaResumo(c))}">${escapeHtml(agenciaNumeroContaResumo(c))}</span>
           </div>
           <div class="conta-financeira-grid">
             <div><span class="lbl">Saldo inicial</span><span class="val">${fmtBRL(s.saldoInicial)} <button type="button" class="icon-btn" data-editar-saldo-inicial-conta="${escapeHtml(c)}" title="Editar saldo inicial do período">✏️</button></span></div>
@@ -11503,13 +11534,19 @@ function renderModalEmpateCartao(){
   </div>`;
 }
 
-/* ---------- Modal: ajuste pontual de fechamento/vencimento de uma fatura ---------- */
+/* ---------- Modal: ajuste pontual de fechamento/vencimento de uma fatura + limite total do cartão ----------
+   Título e textos deixaram de falar só em "datas" (seção 17-18 do requisito "Card de Contas e Modal de
+   Ajuste de Cartões") desde que o campo de Limite total passou a viver aqui também. Datas (fechamento/
+   vencimento) continuam valendo só para ESTA fatura/competência (via STATE.cardOverrides); o Limite total é
+   uma propriedade do cartão como um todo (STATE.cardLimite/gruposLimiteCartao — ver limiteTotalCartao/
+   salvarLimiteTotalCartaoInline), então uma alteração feita aqui vale para todas as faturas do cartão, não
+   só a exibida no momento — texto explicativo deixa essa diferença clara para não confundir o usuário. */
 function renderFaturaEditModal(){
   const m = UI.faturaEditModal;
   return `
   <div class="overlay" id="ovFaturaEditModal" ${attrZIndexModal('faturaEditModal')}>
     <div class="modal" style="width:auto;min-width:340px;max-width:460px;">
-      <div class="modal-head"><h3>📆 Ajustar datas da fatura</h3><button class="close-x" id="closeFaturaEditModal">✕</button></div>
+      <div class="modal-head"><h3>✏️ Editar datas e limite do cartão</h3><button class="close-x" id="closeFaturaEditModal">✕</button></div>
       <div class="modal-body">
         <div class="fatura-digital-head">
           ${cabecalhoFaturaCartaoHtml(m.conta, false)}
@@ -11521,7 +11558,13 @@ function renderFaturaEditModal(){
           <div class="field"><label>Data de fechamento</label><input type="date" id="fFaturaFechamento" value="${m.fechamento||''}"></div>
           <div class="field"><label>Data de vencimento</label><input type="date" id="fFaturaVencimento" value="${m.vencimento||''}"></div>
         </div>
-        <p class="hint" style="margin:10px 0 0;">Vale só para esta fatura (${competenciaLabel(m.competencia)}). Deixe em branco ou use "Restaurar padrão" para voltar a usar o dia fixo configurado na conta.</p>
+        <p class="hint" style="margin:10px 0 0;">As datas valem só para esta fatura (${competenciaLabel(m.competencia)}). Deixe em branco ou use "Restaurar padrão" para voltar a usar o dia fixo configurado na conta.</p>
+        <div class="field" style="margin-top:14px;">
+          <label>Limite total do cartão (R$)</label>
+          <input type="text" inputmode="decimal" id="fFaturaLimiteTotal" value="${fmtMoedaInput(limiteTotalCartao(m.conta))}">
+        </div>
+        <p class="hint" id="fFaturaLimiteTotalErro" style="display:none;margin:4px 0 0;color:var(--despesa);"></p>
+        <p class="hint" style="margin:4px 0 0;">O limite total é do cartão como um todo — a alteração vale para todas as faturas, não só a desta competência.</p>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" id="btnRestaurarPadraoFatura">↺ Restaurar padrão</button>
@@ -15905,11 +15948,26 @@ function bindEvents(){
   });
   document.getElementById('saveFaturaEditModal')?.addEventListener('click', ()=>{
     const { conta, competencia } = UI.faturaEditModal;
+    // Limite total (seções 12-14 do requisito "Card de Contas e Modal de Ajuste de Cartões"): validado
+    // ANTES de aplicar qualquer alteração — nem as datas nem o limite são salvos se o valor do limite for
+    // inválido, para nunca deixar o formulário em um estado parcialmente salvo e ambíguo para o usuário.
+    const inpLimite = document.getElementById('fFaturaLimiteTotal');
+    const elErro = document.getElementById('fFaturaLimiteTotalErro');
+    const textoLimite = (inpLimite.value||'').trim();
+    const limiteTotalNovo = parseMoedaTexto(textoLimite);
+    const limiteInvalido = textoLimite==='' || isNaN(limiteTotalNovo) || limiteTotalNovo<0;
+    if(limiteInvalido){
+      elErro.textContent = 'Informe um limite total válido (maior ou igual a zero) para salvar.';
+      elErro.style.display = 'block';
+      inpLimite.focus();
+      return;
+    }
     const fechamento = document.getElementById('fFaturaFechamento').value || null;
     const vencimento = document.getElementById('fFaturaVencimento').value || null;
     const key = `${conta}|${competencia}`;
     if(!fechamento && !vencimento){ delete STATE.cardOverrides[key]; }
     else { STATE.cardOverrides[key] = { fechamento, vencimento }; }
+    salvarLimiteTotalCartaoInline(conta, limiteTotalNovo);
     UI.faturaEditModal=null; scheduleSave();
   });
 
