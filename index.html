@@ -1768,17 +1768,18 @@ summary::marker{content:'';}
 }
 .aportes-tabela-itens td{padding:4px 10px;border-bottom:1px solid var(--line);}
 .contas-financeiras-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;}
-/* Altura padronizada (seção 1 do requisito): sem um valor fixo, cards em linhas diferentes do grid podiam
-   ficar alguns pixels mais baixos/altos entre si (cada linha do CSS Grid só estica para acompanhar a
-   própria linha, nunca as demais) — 300px cobre com folga o conteúdo de todos os tipos de card já
-   existentes (a rede de segurança global de quebra de texto, ver seletor .conta-financeira-card acima,
-   evita qualquer estouro mesmo em casos extremos). A área de ações (margin-top:auto dentro do flex-column)
-   fica sempre ancorada na base do card, qualquer que seja a altura do conteúdo acima dela. */
+/* Altura padronizada (seção 4 do requisito "Correções e ajustes — Contracheque, Reserva de Emergência e
+   cards de Contas"): sem um valor fixo, cards em linhas diferentes do grid podiam ficar alguns pixels mais
+   baixos/altos entre si (cada linha do CSS Grid só estica para acompanhar a própria linha, nunca as
+   demais) — 270px cobre o conteúdo de todos os tipos de card já existentes (a rede de segurança global de
+   quebra de texto, ver seletor .conta-financeira-card acima, evita qualquer estouro mesmo em casos
+   extremos). A área de ações (margin-top:auto dentro do flex-column) fica sempre ancorada na base do card,
+   qualquer que seja a altura do conteúdo acima dela. */
 .conta-financeira-card{
   position:relative;
   border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--paper);
-  display:flex;flex-direction:column;gap:12px;transition:box-shadow .15s ease,transform .15s ease;
-  height:300px;
+  display:flex;flex-direction:column;gap:10px;transition:box-shadow .15s ease,transform .15s ease;
+  height:270px;
 }
 .conta-financeira-card .btn-card-topo-direita{position:absolute;top:8px;right:24px;font-size:24px;}
 .conta-financeira-acoes{display:flex;gap:8px;margin-top:auto;}
@@ -4861,7 +4862,7 @@ function buildCSVConfig(){
     const porCompetencia = STATE.contrachequeResumos[conta];
     Object.keys(porCompetencia).forEach(competencia=>{
       const r = porCompetencia[competencia];
-      rows.push(['CONTRACHEQUERESUMO', conta, '', '', r.bruto||0, '', '', '', '', '', conta, '', competencia, r.descontos||0, r.liquido||0, r.margemConsignavel||0, '', r.remuneracaoConsignacao||0, '', '', '', '', '', '']);
+      rows.push(['CONTRACHEQUERESUMO', conta, r.dataCredito||'', '', r.bruto||0, '', '', '', '', '', conta, '', competencia, r.descontos||0, r.liquido||0, r.margemConsignavel||0, '', r.remuneracaoConsignacao||0, '', '', '', '', '', '']);
     });
   });
   return Papa.unparse(rows);
@@ -4900,7 +4901,8 @@ function loadCSVConfig(text){
       if(!contrachequeResumos[r.id]) contrachequeResumos[r.id] = {};
       contrachequeResumos[r.id][r.competencia_fatura] = {
         bruto: parseFloat(r.valor)||0, descontos: parseFloat(r.dia_fechamento)||0, liquido: parseFloat(r.dia_vencimento)||0,
-        margemConsignavel: parseFloat(r.status)||0, remuneracaoConsignacao: parseFloat(r.parcela_atual)||0
+        margemConsignavel: parseFloat(r.status)||0, remuneracaoConsignacao: parseFloat(r.parcela_atual)||0,
+        dataCredito: r.data || null,
       };
     } else if(r.tipo_registro==='CONTAEXTRA'){
       try{ contaExtra[r.id] = JSON.parse(r.descricao||'{}'); }catch(e){ /* linha corrompida — ignora, mantém a conta sem dados extras */ }
@@ -7308,9 +7310,33 @@ function itensExtratoConta(conta, ano, mes){
    dos próprios lançamentos já lançados nessa competência — nunca deixa os cards em branco. A margem
    consignável usa sempre a fórmula oficial (remuneração×70% − descontos) como fallback/validação, nunca
    substituindo um valor que o PDF já declarou explicitamente (ver calcularMargemConsignavelTRT). */
+/* Confere se uma competência de uma conta Contracheque ainda tem, de fato, algum lançamento importado do
+   PDF na aplicação (rubricas e/ou o registro espelho — ver importConfirm) — nunca uma projeção gerada pelo
+   botão "Replicar Contracheque" (contrachequeProjecao), que não representa uma importação real. É o único
+   critério usado para decidir se um resumo salvo em STATE.contrachequeResumos ainda é válido: excluir todos
+   os lançamentos importados de uma competência (Registros, exclusão em lote etc.) faz essa função voltar a
+   retornar false, mesmo que o resumo continue fisicamente salvo em STATE.contrachequeResumos — garante que
+   o card, o cabeçalho dos modais e o Histórico nunca voltem a mostrar uma competência cujos lançamentos já
+   foram excluídos (seção 2 do requisito "Correções e ajustes — Contracheque..."), sem precisar caçar todo
+   ponto de exclusão de lançamento da aplicação para limpar o resumo em cada um deles. */
+function contrachequeCompetenciaImportada(conta, competencia){
+  return STATE.transactions.some(t=>t.conta===conta && t.competencia===competencia && t.origemImportacao && !t.contrachequeProjecao);
+}
+/* Resumo oficial do contracheque (Margem Consignável/Bruto/Descontos/Líquido) de uma competência de uma
+   conta do tipo Contracheque, para os cards do Extrato da conta (ver renderExtratoContaModal). Prioridade
+   sempre para os valores extraídos do próprio PDF na importação (STATE.contrachequeResumos — nunca
+   recalculados a partir dos lançamentos quando existem, mesmo que a soma dessas rubricas divirja em
+   poucos centavos da soma bruta de todas as receitas, ver seção 7 do requisito), e só quando a competência
+   ainda tem lançamentos importados de fato (ver contrachequeCompetenciaImportada) — um resumo cujos
+   lançamentos já foram todos excluídos é tratado como se nunca tivesse sido importado. Quando a competência
+   não tem PDF importado (ex.: mês gerado só pelo botão "Replicar Contracheque"), cai para um cálculo a
+   partir dos próprios lançamentos já lançados nessa competência — nunca deixa os cards em branco. A margem
+   consignável usa sempre a fórmula oficial (remuneração×70% − descontos) como fallback/validação, nunca
+   substituindo um valor que o PDF já declarou explicitamente (ver calcularMargemConsignavelTRT). */
 function resumoContrachequeCompetencia(conta, ano, mes){
   const competencia = `${ano}-${pad2(mes)}`;
-  const salvo = (STATE.contrachequeResumos && STATE.contrachequeResumos[conta]) ? STATE.contrachequeResumos[conta][competencia] : null;
+  const salvo = (contrachequeCompetenciaImportada(conta, competencia) && STATE.contrachequeResumos && STATE.contrachequeResumos[conta])
+    ? STATE.contrachequeResumos[conta][competencia] : null;
   const itens = itensExtratoConta(conta, ano, mes).itens.filter(t=>!ehSaldoAnterior(t));
   const bruto = salvo ? salvo.bruto : itens.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
   const descontos = salvo ? salvo.descontos : itens.filter(t=>t.tipo==='Despesa').reduce((s,t)=>s+(Number(t.valor)||0),0);
@@ -7319,23 +7345,34 @@ function resumoContrachequeCompetencia(conta, ano, mes){
   const margemConsignavel = (salvo && salvo.margemConsignavel!=null) ? salvo.margemConsignavel : calcularMargemConsignavelTRT(remuneracaoConsignacao, descontos);
   return { bruto, descontos, liquido, margemConsignavel, remuneracaoConsignacao, temDadosOficiais: !!salvo };
 }
-/* Data efetiva em que o líquido do contracheque foi creditado na conta de destino (ver importConfirm/
-   aplicarTransferenciaInterna) — NUNCA a competência do contracheque, que é só o período de referência e
-   pode cair num mês diferente do crédito efetivo. contrachequeOrigemId é determinístico a partir de
-   conta+competência (ver importConfirm), então não precisa varrer nada além de um find direto. Retorna
-   null quando essa competência ainda não teve nenhum contracheque importado (nunca gerou o espelho). */
+/* Data efetiva em que o líquido do contracheque foi creditado na conta de destino — NUNCA a competência do
+   contracheque, que é só o período de referência e pode cair num mês diferente do crédito efetivo. Fonte
+   primária: o campo "Previsão de Crédito" do próprio PDF, persistido junto do resumo oficial da competência
+   em STATE.contrachequeResumos (ver handleFile/importConfirm) — sobrevive independentemente de o registro
+   espelho ter sido criado (ex.: Conta vinculada configurada só depois da importação) e é sempre atualizado
+   numa reimportação. Fallback para a data do próprio registro espelho só para dados salvos antes desta
+   correção (resumo antigo sem o campo dataCredito). Retorna null quando a competência não tem mais nenhum
+   lançamento importado (ver contrachequeCompetenciaImportada) — nunca recupera uma competência já excluída. */
 function dataCreditoContracheque(conta, ano, mes){
-  const origemId = `contracheque:${conta}:${chaveMes(ano,mes)}`;
+  const competencia = chaveMes(ano, mes);
+  if(!contrachequeCompetenciaImportada(conta, competencia)) return null;
+  const salvo = (STATE.contrachequeResumos && STATE.contrachequeResumos[conta]) ? STATE.contrachequeResumos[conta][competencia] : null;
+  if(salvo && salvo.dataCredito) return salvo.dataCredito;
+  const origemId = `contracheque:${conta}:${competencia}`;
   const tx = STATE.transactions.find(t=>t.conta===conta && t.contrachequeOrigemId===origemId);
   return tx ? tx.data : null;
 }
 /* Histórico de todas as competências de contracheque já importadas para uma conta (STATE.contrachequeResumos
    — a mesma fonte oficial usada em resumoContrachequeCompetencia), cada uma já com a Data do Crédito
    correspondente (ver dataCreditoContracheque). Mais recente primeiro. Nunca inventa competências: só
-   aparecem as que já têm um contracheque de fato importado. */
+   aparecem as que já têm um contracheque de fato importado — e, tão importante quanto, deixam de aparecer
+   assim que todos os lançamentos importados dessa competência forem excluídos da aplicação (ver
+   contrachequeCompetenciaImportada), mesmo que STATE.contrachequeResumos ainda guarde o resumo antigo
+   internamente: o Histórico é sempre derivado dos dados efetivamente existentes no momento da renderização,
+   nunca de um cache/estado que possa ficar dessincronizado da exclusão de lançamentos. */
 function historicoContrachequeConta(conta){
   const resumos = (STATE.contrachequeResumos && STATE.contrachequeResumos[conta]) || {};
-  return Object.keys(resumos).sort((a,b)=> b.localeCompare(a)).map(competencia=>{
+  return Object.keys(resumos).filter(competencia=>contrachequeCompetenciaImportada(conta, competencia)).sort((a,b)=> b.localeCompare(a)).map(competencia=>{
     const [ano, mes] = competencia.split('-').map(Number);
     return { competencia, ...resumos[competencia], dataCredito: dataCreditoContracheque(conta, ano, mes) };
   });
@@ -7413,7 +7450,7 @@ function renderExtratoContaModal(){
   return `
   <div class="overlay" id="ovExtratoConta" ${attrZIndexModal('extratoContaModal')}>
     <div class="modal modal-impressao modal-extrato-futuros" style="width:1280px;">
-      <div class="modal-head"><h3>👁 Extrato</h3><button class="close-x no-print" id="closeExtratoConta">✕</button></div>
+      <div class="modal-head"><h3>${tipo==='Reserva de Emergência' ? '👁 Movimentações da Reserva de Emergência' : tipo==='Contracheque' ? '🧾 Contracheque Detalhado' : '👁 Extrato'}</h3><button class="close-x no-print" id="closeExtratoConta">✕</button></div>
       <div class="modal-body">
         <div class="fatura-digital-head">
           <div class="fatura-digital-head-top">
@@ -7618,9 +7655,12 @@ function renderFuturosContaModal(){
 function renderHistoricoContrachequeModal(){
   const conta = UI.historicoContrachequeModal.conta;
   const historico = historicoContrachequeConta(conta);
-  // Paginação da tabela — mesmo padrão/componente das demais tabelas de lançamentos da aplicação
-  // (ver renderRodapePaginacaoGenerica), evita rolagem interna limitando a quantidade de linhas por página.
-  if(UI.historicoContrachequeModal.porPagina===undefined) UI.historicoContrachequeModal.porPagina = 10;
+  // Paginação própria deste modal (seção 3 do requisito): opções de quantidade por página diferentes do
+  // padrão usado no restante da aplicação (5/10/25/50/100) — aqui 3/6/12/18/24, com 12 como padrão inicial,
+  // já que o volume típico de competências de um contracheque é bem menor que o de uma tabela de
+  // lançamentos. Reaproveita o mesmo componente visual genérico (renderRodapePaginacaoGenerica), só com
+  // outra lista de opções.
+  if(UI.historicoContrachequeModal.porPagina===undefined) UI.historicoContrachequeModal.porPagina = 12;
   if(UI.historicoContrachequeModal.pagina===undefined) UI.historicoContrachequeModal.pagina = 1;
   const htcPorPagina = UI.historicoContrachequeModal.porPagina;
   const htcTotalPaginas = htcPorPagina==='TODOS' ? 1 : Math.max(1, Math.ceil(historico.length/htcPorPagina));
@@ -7629,7 +7669,7 @@ function renderHistoricoContrachequeModal(){
   const htcInicioIdx = htcPorPagina==='TODOS' ? 0 : (UI.historicoContrachequeModal.pagina-1)*htcPorPagina;
   const htcFimIdx = htcPorPagina==='TODOS' ? historico.length : Math.min(htcInicioIdx+htcPorPagina, historico.length);
   const historicoPagina = historico.slice(htcInicioIdx, htcFimIdx);
-  const rodapePaginacaoHistorico = renderRodapePaginacaoGenerica(historico.length, htcPorPagina, UI.historicoContrachequeModal.pagina, htcTotalPaginas, htcInicioIdx, htcFimIdx, { selectId:'historicoContrachequePorPagina', dataAttr:'historico-contracheque-pagina', unidade:'competências' });
+  const rodapePaginacaoHistorico = renderRodapePaginacaoGenerica(historico.length, htcPorPagina, UI.historicoContrachequeModal.pagina, htcTotalPaginas, htcInicioIdx, htcFimIdx, { selectId:'historicoContrachequePorPagina', dataAttr:'historico-contracheque-pagina', unidade:'competências', opcoesPorPagina:[3,6,12,18,24] });
   return `
   <div class="overlay" id="ovHistoricoContracheque" ${attrZIndexModal('historicoContrachequeModal')}>
     <div class="modal" style="width:820px;">
@@ -7876,19 +7916,10 @@ function blocoLimiteCartaoHtml(conta, extraClass){
 }
 /* Bloco de Agência/Nº Conta para os cabeçalhos dos modais "Ver Extrato"/"Lançamentos futuros" (painel
    Contas) — mesma fonte de dados já usada no modal de edição da conta (STATE.contaExtra, grupo
-   'bancaria'). Não aparece quando a conta não tem esses dados preenchidos. Para uma conta do tipo
-   Contracheque (que usa Conta vinculada em vez de dados bancários próprios), mostra a Data do Crédito da
-   competência exibida no topo do app (UI.ano/UI.mes — mesma fonte e período do card e do Histórico do
-   Contracheque, ver dataCreditoContracheque), "—" quando essa competência ainda não teve nenhum
-   contracheque importado. */
+   'bancaria'). Não aparece quando a conta não tem esses dados preenchidos (ex.: Contracheque, que usa
+   Conta vinculada em vez de dados bancários próprios — a Data do Crédito dessa conta já é exibida em
+   .fatura-digital-head-info e na tabela do Histórico, não é duplicada aqui). */
 function dadosBancariosCabecalhoHtml(conta){
-  if(STATE.contaTipos[conta]==='Contracheque'){
-    const dataCredito = dataCreditoContracheque(conta, UI.ano, UI.mes);
-    return `
-    <div class="conta-cabecalho-bancario">
-      <div class="conta-cabecalho-bancario-item"><span class="lbl">Data do Crédito</span> <span class="val">${dataCredito ? fmtData(dataCredito) : '—'}</span></div>
-    </div>`;
-  }
   const extra = STATE.contaExtra[conta] || {};
   if(!extra.agencia && !extra.numeroConta) return '';
   return `
@@ -14166,7 +14197,7 @@ function parseContrachequeTRT(rows){
     // individualmente, em vez de tratar toda receita da conta Contracheque como "Salário TRT".
     out.push([ dataISO, descricao, valor, parcelasRestantes, codigo ]);
   }
-  return { rows: out, liquidoDeclarado, brutoDeclarado, descontosDeclarado, margemDeclarada };
+  return { rows: out, liquidoDeclarado, brutoDeclarado, descontosDeclarado, margemDeclarada, dataISO };
 }
 /* Fórmula oficial de validação da margem consignável do TRT: (remuneração considerada para consignação ×
    70%) − total de descontos do contracheque. Usada (1) para conferir a margem declarada no PDF sem
@@ -14415,7 +14446,7 @@ function handleFile(file){
           alert('Este PDF não parece ser um Demonstrativo de Pagamento do TRT. Confira o arquivo e tente novamente.');
           UI.importStep=2; render(); return;
         }
-        const { rows, liquidoDeclarado, brutoDeclarado, descontosDeclarado, margemDeclarada } = parseContrachequeTRT(pdfRows);
+        const { rows, liquidoDeclarado, brutoDeclarado, descontosDeclarado, margemDeclarada, dataISO } = parseContrachequeTRT(pdfRows);
         UI.importRaw = { type:'pdf', headers:['Data','Descrição','Valor'], rows };
         UI.importIsContracheque = true;
         // Validação obrigatória: a soma das rubricas extraídas (créditos - débitos) precisa bater com o
@@ -14442,7 +14473,14 @@ function handleFile(file){
         const descontos = descontosDeclarado!=null ? descontosDeclarado : totalDebitos;
         const liquido = liquidoDeclarado!=null ? liquidoDeclarado : (bruto - descontos);
         const margem = margemDeclarada!=null ? margemDeclarada : calcularMargemConsignavelTRT(remuneracaoConsignacao, descontos);
-        UI.importContrachequeResumo = { bruto, descontos, liquido, margemConsignavel: margem, remuneracaoConsignacao };
+        // Data do Crédito: extraída diretamente do campo "Previsão de Crédito" do próprio PDF (dataISO, ver
+        // parseContrachequeTRT) — nunca inferida da data de importação, da data de um lançamento ou de
+        // qualquer outra fonte. Guardada aqui junto do resumo oficial (persistido em STATE.contrachequeResumos
+        // na confirmação — ver importConfirm) para permanecer vinculada à competência de forma independente
+        // do registro espelho: mesmo que o espelho não seja criado (sem Conta vinculada, ou reconciliação
+        // pendente), a Data do Crédito já fica disponível para o card/cabeçalho/Histórico (ver
+        // dataCreditoContracheque), e uma reimportação sempre sobrescreve com o valor atual do documento.
+        UI.importContrachequeResumo = { bruto, descontos, liquido, margemConsignavel: margem, remuneracaoConsignacao, dataCredito: dataISO || null };
         // Primeira tabela do contracheque continua sendo lida (Agência/Conta corrente e demais dados —
         // seção 2 do requisito), mas não é mais gravada como cadastro manual da conta Contracheque (isso
         // foi removido do modal — ver seção 1). Usada aqui só como CONFERÊNCIA da Conta vinculada que o
@@ -14456,7 +14494,7 @@ function handleFile(file){
         // (ver importConfirm, que efetivamente cria o lançamento) — guardado aqui só como intenção, para
         // ser concretizado na confirmação da importação junto com os demais lançamentos desta competência.
         const competenciaImport = `${UI.importRefAno}-${pad2(UI.importRefMes)}`;
-        const dataBalanco = rows.length ? rows[0][0].split('-').reverse().join('/') : '';
+        const dataBalanco = dataISO ? dataISO.split('-').reverse().join('/') : '';
         const agencia = cabecalho.agencia;
         const numeroConta = cabecalho.contaCorrente;
         const contaVinculadaConfigurada = STATE.contaVinculada[contaTRT] || null;
@@ -15332,7 +15370,7 @@ function bindEvents(){
   document.getElementById('closeEvolucaoReserva')?.addEventListener('click', ()=>{ UI.evolucaoReservaModal=null; render(); });
   document.getElementById('closeEvolucaoReserva2')?.addEventListener('click', ()=>{ UI.evolucaoReservaModal=null; render(); });
   document.querySelectorAll('[data-historico-contracheque]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.historicoContrachequeModal = { conta: b.dataset.historicoContracheque, pagina:1, porPagina:10 }; render();
+    UI.historicoContrachequeModal = { conta: b.dataset.historicoContracheque, pagina:1, porPagina:12 }; render();
   }));
   document.getElementById('closeHistoricoContracheque')?.addEventListener('click', ()=>{ UI.historicoContrachequeModal=null; render(); });
   document.getElementById('closeHistoricoContracheque2')?.addEventListener('click', ()=>{ UI.historicoContrachequeModal=null; render(); });
@@ -17005,6 +17043,18 @@ function bindEvents(){
           // lado numa reimportação futura.
           const espelhoDestino = STATE.transactions.find(t=>t.id!==txOrigemEspelho.id && t.transferenciaVinculoId===txOrigemEspelho.transferenciaVinculoId);
           if(espelhoDestino){ espelhoDestino.descricao = descricaoEspelho; espelhoDestino.contrachequeOrigemId = esp.origemId; }
+        } else if(jaExiste && esp.reconciliado && esp.contaDestino){
+          // Reimportação do MESMO contracheque (mesma conta+competência) sem excluir os lançamentos
+          // anteriores: o espelho já existe (evita duplicidade), mas se a Previsão de Crédito lida agora for
+          // diferente da vez anterior, os dois lados do espelho (origem na conta Contracheque e destino na
+          // conta vinculada) precisam refletir a data atual — nunca deixar o registro na conta com uma data
+          // desatualizada enquanto o resumo/card já mostra a nova.
+          const [dd,mm,aa] = String(esp.dataBalanco||'').split('/');
+          const dataEspelhoISO = (dd && mm && aa) ? `${aa}-${mm}-${dd}` : `${esp.competencia}-01`;
+          const descricaoEspelho = `Recebimento de Proventos - 03.241.738/0001-39 TRIBUNAL REGIONAL D - Data balanc.: ${esp.dataBalanco}`;
+          STATE.transactions.filter(t=>t.contrachequeOrigemId===esp.origemId).forEach(t=>{
+            t.data = dataEspelhoISO; t.descricao = descricaoEspelho;
+          });
         } else if(!jaExiste && (!esp.reconciliado || !esp.contaDestino)){
           mostrarToast(!esp.reconciliado
             ? 'Contracheque importado, mas o registro de recebimento na conta bancária não foi gerado: os totais de créditos/débitos não bateram com o líquido informado no documento.'
