@@ -1853,7 +1853,7 @@ summary::marker{content:'';}
 .cartao-col-badges{display:flex;gap:5px;flex-wrap:wrap;align-items:center;}
 /* Limite de crédito do cartão — coluna própria (LIMITE) na tabela de Cartões (ver renderCartoes), e também
    reaproveitado nos cabeçalhos dos modais de fatura/conta com a variante .limite-cartao-info-cabecalho. */
-.limite-cartao-info{display:flex;flex-direction:column;gap:2px;max-width:230px;}
+.limite-cartao-info{display:flex;flex-direction:column;gap:2px;max-width:230px;text-align:right;}
 .limite-cartao-valores{font-size:11px;color:#8393ac;white-space:nowrap;}
 .limite-cartao-valores b{color:var(--ink);font-weight:700;}
 .limite-cartao-barra{display:flex;align-items:center;gap:6px;}
@@ -10971,7 +10971,7 @@ function renderCartoes(){
     <div class="table-wrap table-wrap-cartoes" style="overflow-x:auto;"><table class="tabela-cartoes" style="table-layout:fixed;width:100%;">
       <thead><tr>
         <th style="text-align:left;width:${pct(chCartao)}%;">Cartão</th>
-        <th style="text-align:left;width:${pct(chLimite)}%;">Limite</th>
+        <th style="text-align:center;width:${pct(chLimite)}%;">Limite</th>
         <th style="text-align:center;width:${pct(chAcoes)}%;">Ações</th>
         <th style="text-align:right;width:${pct(chValor)}%;">Valor da fatura</th>
         <th style="text-align:center;width:${pct(chData)}%;">Fechamento</th>
