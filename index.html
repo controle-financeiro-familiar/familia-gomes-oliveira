@@ -2905,6 +2905,7 @@ let CATEGORIAS = [
   ['Hobbies e Colecionáveis','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
   ['Equipamentos e Acessórios de Lazer','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
   ['Ensaios Fotográficos','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
+  ['Jogos e Loterias','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
   ['Outras Despesas de Lazer e Entretenimento','Lazer e Entretenimento','Outros','Despesa','Variável'],
   ['Celulares e Smartphones','Tecnologia e Eletrônicos','Equipamentos','Despesa','Variável'],
   ['Notebooks e Computadores','Tecnologia e Eletrônicos','Equipamentos','Despesa','Variável'],
@@ -3016,6 +3017,7 @@ let CATEGORIAS = [
   ['Arrendamento Fazenda','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
   ['Rendimento de Conta Corrente / Liquidez Diária','Renda Familiar','Rendimentos e Ganhos de Capital','Receita','Variável'],
   ['Rendimento de Investimentos (Dividendos / Juros)','Renda Familiar','Rendimentos e Ganhos de Capital','Receita','Variável'],
+  ['Rendimento de Poupança (Correção Monetária / Juros)','Renda Familiar','Rendimentos e Ganhos de Capital','Receita','Variável'],
   ['Resgates e Empréstimos Recebidos','Renda Familiar','Entradas Patrimoniais e Resgates','Receita','Variável'],
   ['Restituição do Imposto de Renda (IRPF)','Renda Familiar','Entradas Patrimoniais e Resgates','Receita','Variável'],
   ['Outras Receitas de Renda Familiar','Renda Familiar','Outros','Receita','Variável'],
@@ -14872,12 +14874,21 @@ function buildParsedFromMap(){
       catSugerida = 'Salário TRT';
     }
     const responsavelPreset = catSugerida ? responsavelPredefinidoDaSubcategoria(catSugerida) : '';
+    // Responsável automático da conta (seção 3 do requisito "Categorias e Importação Bancária"): quando o
+    // lançamento é Receita do grupo Renda Familiar e a subcategoria sugerida NÃO já tem um responsável
+    // pré-definido mais específico (responsavelPreset, verificado primeiro — regra mais específica sempre
+    // prevalece), assume o responsável cadastrado na própria conta de origem — nunca inventa um responsável
+    // quando a conta não tem um cadastrado (STATE.contaResponsavel[conta]||'' preserva o campo vazio nesse
+    // caso, igual à regra atual de ausência de responsável). Nunca se aplica a despesas, transferências
+    // internas ou outros grupos — só Receita + Renda Familiar.
+    const responsavelDaConta = (tipo==='Receita' && catInfo(catSugerida).grupo===GRUPO_RENDA_FAMILIAR)
+      ? (STATE.contaResponsavel[conta]||'') : '';
     // Forma de Pagamento: no extrato CSV da Reserva de Emergência, é SEMPRE "Débito em Conta" (regra da
     // importação, ver documentação) — mesmo para os lançamentos "Pix enviado"/"Pix recebido", que na
     // detecção padrão (determinarPgto) normalmente virariam meio "Pix" pela própria descrição.
     const item = { data:e.data, descricao:e.descricao, valor:e.valor, categoria:catSugerida, tipo,
       conta, pgto: e.categoriaExplicita ? 'Débito em Conta' : determinarPgto(conta, e.descricao),
-      responsavel: responsavelPreset || ((UI.importIsContracheque && tipo==='Receita') ? 'Bruno' : '') };
+      responsavel: responsavelPreset || ((UI.importIsContracheque && tipo==='Receita') ? 'Bruno' : '') || responsavelDaConta };
     if(item.pgto==='Cartão de Crédito'){
       const parc = e.parcelaExplicita || detectarParcela(e.descricao);
       if(parc){
