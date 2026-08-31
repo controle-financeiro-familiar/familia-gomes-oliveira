@@ -1827,12 +1827,11 @@ summary::marker{content:'';}
 .cartoes-resumo-item > div{min-width:0;}
 .cartoes-resumo-item .val{font-family:var(--mono);font-weight:800;font-size:var(--val-font-size, 15px);color:var(--navy-900);line-height:1.2;white-space:nowrap;overflow:hidden;}
 .cartoes-resumo-item .lbl{font-size:10.5px;color:#6a7a97;font-weight:600;}
-.tabela-cartoes{min-width:640px;}
-/* Item 18 do requisito: célula extra só para o card mobile — um ÚNICO ícone de editar compartilhado entre
-   Fechamento e Vencimento (a edição já altera as duas datas de uma vez, então dois ícones eram redundantes).
-   Fica oculta no desktop (onde cada coluna já tem o próprio ícone, revelado no hover) — table-layout:fixed
-   ignora células display:none na contagem de colunas, então não desalinha o <thead> de 7 colunas. */
-.col-editar-fatura-mobile{display:none;}
+.tabela-cartoes{min-width:760px;}
+/* Reorganização "Ordem das Colunas, Limite e Ações": Ações concentra Importar + o ícone único de editar
+   fechamento/vencimento (o modal já edita as duas datas de uma vez) — sempre visível, sem depender de hover,
+   igual ao ícone único que já existia só no card mobile antes deste ajuste. */
+.cartao-acoes{display:flex;align-items:center;justify-content:center;gap:6px;}
 .tabela-cartoes td{padding:10px 8px;vertical-align:middle;}
 .tabela-cartoes th{padding:8px;}
 .linha-fatura{transition:background-color .15s ease;}
@@ -1852,9 +1851,9 @@ summary::marker{content:'';}
    embaixo junto do badge de tipo — ver renderPainelContasBancarias. */
 .cartao-col-nome-linha{display:flex;align-items:center;gap:6px;min-width:0;}
 .cartao-col-badges{display:flex;gap:5px;flex-wrap:wrap;align-items:center;}
-/* Limite de crédito do cartão, exibido dentro da própria célula do cartão (nunca uma coluna nova) —
-   evita qualquer risco de rolagem horizontal na tabela, inclusive no mobile (ver renderCartoes). */
-.limite-cartao-info{display:flex;flex-direction:column;gap:2px;margin-top:3px;max-width:230px;}
+/* Limite de crédito do cartão — coluna própria (LIMITE) na tabela de Cartões (ver renderCartoes), e também
+   reaproveitado nos cabeçalhos dos modais de fatura/conta com a variante .limite-cartao-info-cabecalho. */
+.limite-cartao-info{display:flex;flex-direction:column;gap:2px;max-width:230px;}
 .limite-cartao-valores{font-size:11px;color:#8393ac;white-space:nowrap;}
 .limite-cartao-valores b{color:var(--ink);font-weight:700;}
 .limite-cartao-barra{display:flex;align-items:center;gap:6px;}
@@ -1915,15 +1914,10 @@ summary::marker{content:'';}
 .competencia-futura-card .comp-mes{font-weight:700;font-size:12.5px;color:var(--ink);}
 .competencia-futura-card .comp-valor{font-size:15px;font-weight:800;color:var(--navy-900);margin:4px 0 2px;}
 .competencia-futura-card .comp-meta{font-size:11px;color:#8393ac;}
-.col-data-editavel{position:relative;}
-/* Data (fechamento/vencimento) + hint "(ajustado)": sempre empilhados, com o hint abaixo da data, e o
-   bloco inteiro centralizado horizontalmente na coluna — o ícone de editar fica ao lado, como um grupo. */
-.data-editavel-linha{display:flex;align-items:center;justify-content:center;gap:2px;}
+/* Data (fechamento/vencimento) + hint "(ajustado)": sempre empilhados e centralizados na coluna. O ícone de
+   editar as duas datas mora agora só na coluna Ações (ver .cartao-acoes), nunca mais dentro de Fechamento
+   ou Vencimento — por isso não depende mais de hover para aparecer. */
 .data-editavel-valor{display:flex;flex-direction:column;align-items:center;line-height:1.3;}
-.col-data-editavel .edit-data-icon{
-  opacity:0;transform:translateX(-3px);transition:opacity .15s ease,transform .15s ease;margin-left:0;vertical-align:middle;flex-shrink:0;
-}
-.linha-fatura:hover .edit-data-icon,.col-data-editavel:focus-within .edit-data-icon{opacity:1;transform:translateX(0);}
 /* Cartões no mobile (item 15 do requisito de responsividade): mesma técnica de card já usada no Fluxo de
    Caixa — cada <tr> vira um card, sem depender de hover para revelar o ícone de editar (item 25: ações
    nunca dependentes de hover em touch) nem duplicar a lógica de cálculo das faturas. */
@@ -1957,43 +1951,31 @@ summary::marker{content:'';}
   .tabela-cartoes td:first-child{flex:1 1 0;min-width:0;order:1;border-bottom:none;padding-bottom:8px;justify-content:flex-start;}
   /* Sem isto, .cartao-col (flex item de td:first-child, que também é flex por herdar a regra genérica
      ".tabela-cartoes td{display:flex}") mantém seu min-width:auto padrão e nunca encolhe abaixo do seu
-     conteúdo — em nomes de cartão longos, isso empurra o botão "Importar arquivo do banco" para a linha de
-     baixo em vez de ficar na mesma linha (item 13 do requisito), mesmo com overflow:hidden/ellipsis no nome. */
+     conteúdo — em nomes de cartão longos, isso empurra a coluna Ações para a linha de baixo em vez de
+     ficar na mesma linha (item 13 do requisito), mesmo com overflow:hidden/ellipsis no nome. */
   .tabela-cartoes td:first-child .cartao-col{min-width:0;}
-  .tabela-cartoes td.col-importar-cartao{flex:0 0 auto;order:2;border-bottom:none;padding-bottom:8px;justify-content:flex-end;}
-  /* Item 16/18 do requisito: ordem explícita das linhas do card no mobile — identificação (1/2), valor da
-     fatura (3), fechamento+vencimento+ícone único de editar (4), status (5), parcelado em aberto com o
-     resumo de compras/parcelas (6) — nunca depender da ordem "3" genérica/empatada por ordem de documento.
-     Coluna 6 é a nova .col-editar-fatura-mobile (ver markup), então Status/Saldo parcelado avançaram uma
-     posição (7ª/8ª) em relação à versão anterior deste card. */
-  .tabela-cartoes td:nth-child(3){order:3;}
-  .tabela-cartoes td:nth-child(7){order:5;}
-  .tabela-cartoes td:nth-child(8){order:6;}
-  /* Fechamento e Vencimento (colunas 4 e 5) formam duas colunas de largura equilibrada na mesma linha, em
+  /* Ordem "Ordem das Colunas, Limite e Ações": Cartão(1)+Ações(3) na 1ª linha do card, Limite(2) logo
+     abaixo ocupando a linha inteira, depois Valor da fatura(4), Fechamento+Vencimento(5/6) lado a lado,
+     Status(7) e Saldo parcelado em aberto(8) — mesma hierarquia visual da tabela desktop. */
+  .tabela-cartoes td.col-acoes-cartao{flex:0 0 auto;order:2;border-bottom:none;padding-bottom:8px;justify-content:flex-end;}
+  .tabela-cartoes td:nth-child(2){order:3;flex:1 1 100%;}
+  .tabela-cartoes td:nth-child(4){order:4;}
+  .tabela-cartoes td:nth-child(7){order:6;}
+  .tabela-cartoes td:nth-child(8){order:7;}
+  /* Fechamento e Vencimento (colunas 5 e 6) formam duas colunas de largura equilibrada na mesma linha, em
      vez de duas linhas cheias empilhadas — mesma técnica flex-basis:0 já usada nesta sessão para dividir
-     largura igualmente entre itens sem depender do tamanho do conteúdo. flex-basis:42% (não 45%) abre
-     espaço para o ícone único de editar (col-editar-fatura-mobile) ficar entre os dois na mesma linha. */
+     largura igualmente entre itens sem depender do tamanho do conteúdo. Sem mais ícone de editar aqui (foi
+     para a coluna Ações), então a divisão volta a ser 50/50. */
   /* Coluna estreita demais para rótulo+valor lado a lado (como nas outras linhas) — rótulo empilha ACIMA
      do valor em vez de à esquerda, senão o texto "Fechamento"/"Vencimento" espreme a data a ponto de
      quebrar caractere por caractere (largura efetiva de cada metade gira em torno de 110-170px). */
-  .tabela-cartoes td:nth-child(4),.tabela-cartoes td:nth-child(5){
-    flex:1 1 42%;min-width:0;order:4;flex-direction:column;align-items:flex-start;gap:2px;
+  .tabela-cartoes td:nth-child(5),.tabela-cartoes td:nth-child(6){
+    flex:1 1 45%;min-width:0;order:5;flex-direction:column;align-items:flex-start;gap:2px;
   }
-  .tabela-cartoes td:nth-child(4) .data-editavel-linha,
-  .tabela-cartoes td:nth-child(5) .data-editavel-linha{justify-content:flex-start;width:100%;}
-  /* Vencimento (coluna 5) alinhado à direita — Fechamento (coluna 4) continua à esquerda; as duas bordas
+  /* Vencimento (coluna 6) alinhado à direita — Fechamento (coluna 5) continua à esquerda; as duas bordas
      externas do par ficam alinhadas com o restante do card (rótulo à esquerda / valor à direita nas demais
      linhas), em vez das duas datas empurradas para o mesmo lado. */
-  .tabela-cartoes td:nth-child(5){align-items:flex-end;}
-  .tabela-cartoes td:nth-child(5) .data-editavel-linha{justify-content:flex-end;}
-  /* Item 18: só um ícone de editar entre Fechamento e Vencimento no mobile — os dois ícones originais (um
-     por coluna, revelados no hover no desktop) ficam ocultos; o ícone único (.col-editar-fatura-mobile,
-     mesma ação: ajusta as duas datas de uma vez) mora entre os dois, centralizado na própria linha. */
-  .tabela-cartoes td:nth-child(4) .edit-data-icon,
-  .tabela-cartoes td:nth-child(5) .edit-data-icon{display:none;}
-  .tabela-cartoes td.col-editar-fatura-mobile{
-    display:flex;order:4;flex:0 0 auto;align-self:center;justify-content:center;padding:0;border-bottom:none;
-  }
+  .tabela-cartoes td:nth-child(6){align-items:flex-end;}
   /* Item 18: linha de Status — a tag e a informação complementar (progresso/"Totalmente"/"Parcialmente")
      ficam lado a lado (não mais empilhadas) e alinhadas à direita do card. */
   .tabela-cartoes .status-col{flex-direction:row;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;}
@@ -2009,8 +1991,7 @@ summary::marker{content:'';}
     content:attr(data-label);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;
     color:#8393ac;flex-shrink:0;
   }
-  .tabela-cartoes .data-editavel-linha{justify-content:flex-end;}
-  .tabela-cartoes .edit-data-icon{opacity:1!important;transform:none!important;min-width:var(--touch-min);}
+  .tabela-cartoes .edit-data-icon{min-width:var(--touch-min);}
   /* Item 18 do requisito: todas as linhas do card usam justify-content:space-around para alinhamento
      consistente entre os elementos (rótulo/valor, ou os múltiplos elementos da linha de Status). */
   .tabela-cartoes td{justify-content:space-around;}
@@ -10952,11 +10933,11 @@ function renderCartoes(){
   // Larguras responsivas: mesma técnica já usada no Fluxo de Caixa — cada coluna vira uma % de um total
   // em "unidades de caractere" (ch), garantindo que a soma seja sempre exatamente 100% (sem vazar para
   // rolagem horizontal) e ainda assim proporcional ao conteúdo de cada coluna.
-  // chCartao aumentado (seção 2 do requisito de layout): a coluna de identificação do cartão agora também
-  // acomoda o bloco de limite ao lado do nome/badges (ver blocoLimiteCartaoHtml mais abaixo), em vez de só
-  // logo+nome+badges — precisa de mais espaço horizontal que antes.
-  const chCartao = 32, chData = 10, chStatus = 13, chValor = 13, chSaldo = 19, chImportar = 3;
-  const chTotal = chCartao + chData*2 + chStatus + chValor + chSaldo + chImportar;
+  // Reorganização "Ordem das Colunas, Limite e Ações": Limite e Ações agora são colunas próprias (em vez de
+  // o bloco de limite ficar dentro da coluna Cartão e o ícone de editar datas ficar hover-revelado dentro de
+  // Fechamento) — larguras redistribuídas de acordo com o conteúdo de cada uma.
+  const chCartao = 22, chLimite = 24, chAcoes = 9, chData = 10, chStatus = 13, chValor = 13, chSaldo = 18;
+  const chTotal = chCartao + chLimite + chAcoes + chData*2 + chStatus + chValor + chSaldo;
   const pct = ch => (ch/chTotal*100).toFixed(2);
   return `
   <details class="ajuda-fluxo" data-ajuda-cartoes ${UI.ajudaCartoesAberta?'open':''}>
@@ -10990,7 +10971,8 @@ function renderCartoes(){
     <div class="table-wrap table-wrap-cartoes" style="overflow-x:auto;"><table class="tabela-cartoes" style="table-layout:fixed;width:100%;">
       <thead><tr>
         <th style="text-align:left;width:${pct(chCartao)}%;">Cartão</th>
-        <th style="width:${pct(chImportar)}%;"></th>
+        <th style="text-align:left;width:${pct(chLimite)}%;">Limite</th>
+        <th style="text-align:center;width:${pct(chAcoes)}%;">Ações</th>
         <th style="text-align:right;width:${pct(chValor)}%;">Valor da fatura</th>
         <th style="text-align:center;width:${pct(chData)}%;">Fechamento</th>
         <th style="text-align:center;width:${pct(chData)}%;">Vencimento</th>
@@ -11035,33 +11017,28 @@ function renderCartoes(){
                   ${ehMelhor ? `<span class="tag melhor-hoje-badge" title="Compras realizadas neste cartão terão o maior prazo até o pagamento da fatura">🏆</span>` : ''}
                 </div>
               </div>
-              ${blocoLimiteCartaoHtml(c, 'limite-cartao-info-cabecalho')}
             </div>
           </td>
-          <td data-label="" class="col-importar-cartao" style="text-align:center;">
-            <button type="button" class="icon-btn" data-importar-conta="${escapeHtml(c)}" title="Importar arquivo do banco" aria-label="Importar arquivo do banco">📥</button>
+          <td data-label="Limite">${blocoLimiteCartaoHtml(c) || '<span class="hint">—</span>'}</td>
+          <td data-label="" class="col-acoes-cartao">
+            <div class="cartao-acoes">
+              <button type="button" class="icon-btn" data-importar-conta="${escapeHtml(c)}" title="Importar arquivo do banco" aria-label="Importar arquivo do banco">📥</button>
+              <button type="button" class="icon-btn edit-data-icon" data-edit-fatura="${escapeHtml(c)}|${competencia}" title="Ajustar fechamento e vencimento desta fatura" aria-label="Ajustar fechamento e vencimento desta fatura">✏️</button>
+            </div>
           </td>
           <td data-label="Valor da fatura" class="val-cell ${v===0?'valor-zero':'valor-destaque'}" style="text-align:right;">${fmtBRL(v)}<button type="button" class="icon-btn btn-projecao" data-ver-fatura="${escapeHtml(c)}" title="Ver fatura">👁</button>
           </td>
-          <td data-label="Fechamento" style="text-align:center;" class="col-data-editavel">
-            <div class="data-editavel-linha">
-              <div class="data-editavel-valor">
-                <span>${fechData||'<span class="hint">—</span>'}</span>
-                ${fechAjustado ? '<span class="hint" style="margin:0;">(ajustado)</span>' : ''}
-              </div>
-              <button type="button" class="icon-btn edit-data-icon" data-edit-fatura="${escapeHtml(c)}|${competencia}" title="Ajustar data de fechamento desta fatura">✏️</button>
+          <td data-label="Fechamento" style="text-align:center;">
+            <div class="data-editavel-valor">
+              <span>${fechData||'<span class="hint">—</span>'}</span>
+              ${fechAjustado ? '<span class="hint" style="margin:0;">(ajustado)</span>' : ''}
             </div>
           </td>
-          <td data-label="Vencimento" style="text-align:center;" class="col-data-editavel">
-            <div class="data-editavel-linha">
-              <div class="data-editavel-valor">
-                <span>${vencData||'<span class="hint">—</span>'}</span>
-                ${vencAjustado ? '<span class="hint" style="margin:0;">(ajustado)</span>' : ''}
-              </div>
+          <td data-label="Vencimento" style="text-align:center;">
+            <div class="data-editavel-valor">
+              <span>${vencData||'<span class="hint">—</span>'}</span>
+              ${vencAjustado ? '<span class="hint" style="margin:0;">(ajustado)</span>' : ''}
             </div>
-          </td>
-          <td data-label="" class="col-editar-fatura-mobile">
-            <button type="button" class="icon-btn edit-data-icon" data-edit-fatura="${escapeHtml(c)}|${competencia}" title="Ajustar fechamento e vencimento desta fatura" aria-label="Ajustar fechamento e vencimento desta fatura">✏️</button>
           </td>
           <td data-label="Status" style="text-align:center;">
             <div class="status-col">
@@ -11078,7 +11055,7 @@ function renderCartoes(){
             ` : '<span class="hint">—</span>'}
           </td>
         </tr>`;
-      }).join('') || '<tr><td colspan="6" class="hint" style="text-align:center;padding:14px;">Nenhum cartão cadastrado. Adicione um em Configurações → Contas.</td></tr>'}
+      }).join('') || '<tr><td colspan="8" class="hint" style="text-align:center;padding:14px;">Nenhum cartão cadastrado. Adicione um em Configurações → Contas.</td></tr>'}
       </tbody>
     </table></div>
     ${!melhorCartao.vencedor && melhorCartao.candidatos && melhorCartao.candidatos.length>0 ? `<p class="hint">Nenhum cartão com 🏆 ainda: há um empate no prazo até o vencimento entre ${melhorCartao.empatados.length} cartões — <button type="button" class="btn btn-ghost btn-sm" id="btnResolverEmpateCartao" style="padding:2px 8px;">escolher manualmente</button>.</p>` : ''}
