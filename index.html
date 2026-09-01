@@ -247,10 +247,14 @@ input,select{font-family:var(--sans);}
 .cc-accordion-header.ativo{color:var(--navy-900);border-bottom-color:var(--gold,var(--navy-900));}
 .cc-accordion-body{max-height:0;overflow:hidden;transition:max-height .35s ease;}
 .cc-accordion-body.aberto{max-height:6000px;}
+/* flex-wrap:nowrap — .app-title e .header-right sempre na mesma linha, mesmo em telas intermediárias (a
+   partir daqui é .header-right, não mais o cabeçalho inteiro, que se comprime — ver .header-right e seus
+   filhos abaixo); só o layout mobile dedicado (@media(max-width:600px)) reativa o wrap, para o grid de 3
+   linhas próprio daquela faixa. */
 .app-header{
   background:linear-gradient(135deg,var(--navy-900) 0%, var(--navy-950) 100%);
   color:#fff;padding:16px 26px 14px;display:flex;align-items:flex-end;justify-content:space-between;
-  flex-wrap:wrap;gap:10px;border-bottom:3px solid var(--gold);
+  flex-wrap:nowrap;gap:10px;border-bottom:3px solid var(--gold);
 }
 .app-title{display:flex;align-items:center;gap:18px;font-family:var(--mono);min-width:0;flex:1 1 auto;}
 .app-title-wrap{min-width:0;padding-left:18px;border-left:1px solid rgba(255,255,255,.18);}
@@ -273,7 +277,7 @@ input,select{font-family:var(--sans);}
 .app-title-linha2 p{margin:2px 0 0;min-width:0;}
 .app-title-linha2 p:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;}
 .app-title-tab-atual{display:block;color:var(--gold)!important;font-weight:700;font-size:12.5px!important;flex:0 0 auto;white-space:nowrap;}
-.header-right{display:flex;flex-direction:column;align-items:flex-end;gap:16px;flex-wrap:wrap;}
+.header-right{display:flex;flex-direction:column;align-items:flex-end;gap:16px;flex-wrap:wrap;flex:0 1 auto;min-width:0;max-width:100%;}
 .period-select{display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:15px;margin:13px 2px 0;flex-wrap:wrap;max-width:100%;}
 .period-select select{
   background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.25);
@@ -452,12 +456,27 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
 }
 
 /* ---- Responsividade do cabeçalho e do menu de abas ---- */
+/* Telas intermediárias (600–900px): .app-title e .header-right (☁ sync / ☰ Menu / última atualização)
+   continuam OBRIGATORIAMENTE na mesma linha (flex-wrap:nowrap já no .app-header base) — antes,
+   .header-right virava width:100% aqui, o que forçava o próprio flex a quebrar linha por falta de espaço
+   e empurrava o bloco inteiro para baixo do título. Em vez de uma largura fixa que quebra a linha, cada
+   propriedade (altura da logo, fonte do título, padding/fonte do indicador de sync, do botão Menu e do
+   texto de última atualização) usa clamp() com um termo em vw: encolhe progressivamente conforme a
+   viewport diminui dentro desta faixa (nunca um salto brusco de tamanho), sem nunca aumentar além do
+   valor de desktop (900px) nem cair abaixo do piso de legibilidade — e o piso já converge perto dos
+   valores fixos que o layout mobile dedicado (@media(max-width:600px) abaixo) assume a partir de 600px. */
 @media(max-width:900px){
-  .app-header{padding:12px 16px 10px;}
-  .app-title .mark{height:70px;}
-  .app-title h1{font-size:22px;}
+  .app-header{padding:12px 16px 10px;gap:6px;}
+  .app-title{gap:clamp(8px, 2vw, 18px);}
+  .app-title .mark{height:clamp(40px, calc(10vw - 20px), 70px);}
+  .app-title h1{font-size:clamp(16px, calc(2vw + 4px), 22px);}
   .app-title p{font-size:13px;}
-  .header-right{align-items:flex-start;width:100%;}
+  .app-title-wrap{padding-left:clamp(8px, 1.5vw, 18px);}
+  .header-right{align-items:flex-end;gap:clamp(6px, 1.2vw, 16px);flex-shrink:1;}
+  .sync-indicador{padding:clamp(4px, 0.8vw, 7px) clamp(7px, 1.4vw, 12px);font-size:clamp(10.5px, 1.1vw, 12.5px);gap:clamp(3px, 0.6vw, 6px);}
+  .sync-indicador .sync-icone{font-size:clamp(11px, 1.1vw, 13px);}
+  #btnMenuArquivo{padding:clamp(4px, 0.8vw, 7px) clamp(7px, 1.4vw, 11px);font-size:clamp(11px, 1.1vw, 13px);}
+  .filebar-info{font-size:clamp(8px, 0.7vw, 9px);gap:clamp(4px, 0.8vw, 8px);}
   .period-select{margin:8px 2px 0;flex-wrap:wrap;font-size:13px;}
   .period-select input[type="number"]{width:56px;}
   .tabbar{padding:0 10px;}
