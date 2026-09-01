@@ -1316,6 +1316,43 @@ tbody tr:hover{background:var(--navy-50);}
 .tx-row > .field.tx-narrow{flex:0 0 150px;}
 .tx-row > .field.tx-wide{flex:3;min-width:200px;}
 @media(max-width:520px){ .tx-row > .field{flex:1 1 100%;} }
+/* Modal de conta / modal "Editar datas e limite do cartão" (seções 3-10 do requisito "Contas, Cartões,
+   Contracheque, Pix e Lançamentos"): grid com proporções fixas por linha (ícone menor, chave Pix maior
+   etc.) em vez do tx-row flexível genérico acima — sempre com min-width:0 nos campos para nunca deixar um
+   campo isolado esticar a largura do modal, e colapsando para 1 coluna no mesmo breakpoint mobile já usado
+   por .tx-row. */
+.conta-grid-linha{display:grid;gap:12px;margin-bottom:10px;}
+.conta-grid-linha:last-child{margin-bottom:0;}
+.conta-grid-linha > .field{min-width:0;}
+.conta-grid-linha-1{grid-template-columns:0.5fr 1.5fr 1fr;}
+.conta-grid-linha-2{grid-template-columns:1.5fr 1.5fr;}
+.conta-grid-linha-pix1{grid-template-columns:0.5fr 1fr 1.5fr;}
+.conta-grid-linha-cartao1{grid-template-columns:0.5fr 0.5fr 1fr 1fr;}
+.conta-grid-linha-pix2,.conta-grid-linha-vinculo{grid-template-columns:1fr;}
+@media(max-width:640px){
+  .conta-grid-linha-1,.conta-grid-linha-2,.conta-grid-linha-pix1,.conta-grid-linha-cartao1{grid-template-columns:1fr;}
+}
+/* Seletor visual de Ícone da Conta (seção 3.1 do requisito): botão customizado (nunca um <select> nativo,
+   que não consegue exibir imagens) — mostra só a imagem do ícone atual, nunca o nome/sigla como texto no
+   lugar dela; ao abrir, lista cada ícone já existente na aplicação (ICONES_CONTA_PADRAO) com sua própria
+   imagem ao lado do nome. */
+.icone-conta-picker{position:relative;}
+.icone-conta-picker-btn{
+  width:100%;height:37px;display:flex;align-items:center;justify-content:center;gap:4px;
+  border:1px solid var(--line);border-radius:7px;background:#fff;cursor:pointer;padding:6px;
+}
+.icone-conta-picker-btn img,.icone-conta-picker-btn .icone-conta-picker-fallback{width:22px;height:22px;border-radius:5px;object-fit:contain;flex-shrink:0;}
+.icone-conta-picker-btn .icone-conta-picker-fallback{display:inline-flex;align-items:center;justify-content:center;font-size:14px;background:#eef1f6;}
+.icone-conta-picker-caret{font-size:10px;color:#8393ac;}
+.icone-conta-picker-lista{
+  position:absolute;top:calc(100% + 4px);left:0;z-index:20;background:#fff;border:1px solid var(--line);
+  border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.16);min-width:210px;max-height:260px;overflow-y:auto;padding:4px;
+}
+.icone-conta-picker-opcao{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;cursor:pointer;font-size:13px;}
+.icone-conta-picker-opcao:hover{background:#eef1f6;}
+.icone-conta-picker-opcao.selecionada{background:var(--navy-100);font-weight:700;}
+.icone-conta-picker-opcao img{width:24px;height:24px;border-radius:5px;object-fit:contain;flex-shrink:0;}
+.icone-conta-picker-auto{width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;}
 .field-section-label{
   font-size:11px;font-weight:700;color:var(--navy-800);text-transform:uppercase;letter-spacing:.4px;
   padding-bottom:6px;margin-bottom:10px;border-bottom:1px solid var(--line);
@@ -4467,7 +4504,6 @@ let UI = {
   faturaAtualModal: null, // { conta, filtros, busca, pagina, porPagina } — modal "Ver Fatura" (fatura digital da competência atual de um cartão), com filtros próprios do modal e paginação (mesmo motor genérico de Data por período + seleção múltipla da aba Registros — ver criarFiltrosPadrao)
   extratoContaModal: null, // { conta, filtros, busca, pagina, porPagina } — modal "Ver Extrato" (extrato digital de uma conta bancária), com filtros próprios do modal (mesmo motor genérico de Data por período + seleção múltipla da aba Registros — ver criarFiltrosPadrao)
   aportesModal: false, // true quando o modal "Ver detalhes" de Investimentos/Reserva de Emergência está aberto
-  editarSaldoInicialContaModal: null, // { conta } — editar o Saldo Anterior de uma conta na competência atual
   futurosContaModal: null, // { conta, filtros, busca, pagina, porPagina } — modal "Ver lançamentos futuros" do card de Contas (lançamentos com data > hoje), com filtros próprios do modal (mesmo motor genérico de Data por período + seleção múltipla da aba Registros — ver criarFiltrosPadrao)
   evolucaoReservaModal: null, // { conta } — modal "Evolução" do card de uma conta Reserva de Emergência (ver renderEvolucaoReservaModal), substitui "Ver lançamentos futuros" para esse tipo de conta
   historicoContrachequeModal: null, // { conta, pagina, porPagina } — modal "Histórico" do card de uma conta Contracheque (ver renderHistoricoContrachequeModal), substitui "Ver lançamentos futuros" para esse tipo de conta; paginação com o mesmo componente genérico usado nos demais modais (ver renderRodapePaginacaoGenerica)
@@ -4522,7 +4558,6 @@ const CAMADAS_MODAL = [
   'moverCategoriaModal',               // Configurações → Categorias
   'moverSubcategoriaModal',            // Configurações → Categorias
   'posicaoModal',                      // Configurações → Categorias
-  'editarSaldoInicialContaModal',      // painel Contas — editar saldo inicial de uma conta
   'editarSaldoInicialFluxoCaixaModal', // Fluxo de Caixa — editar saldos iniciais das contas
   'faturaEditModal',                   // painel Cartões — ajustar fechamento/vencimento de uma fatura
   'modalEmpateCartao',                 // painel Cartões — escolher manualmente o melhor cartão
@@ -7175,20 +7210,6 @@ function aplicarVinculoLimiteCartao(contaAtual, cartoesSelecionados, limiteTotal
       .forEach(c=>{ STATE.cardLimite[c] = { grupoLimiteId: null, limiteTotal: null }; });
   }
 }
-/* Atualiza só o VALOR do limite total de um cartão, preservando o vínculo de grupo já existente (nunca
-   desfaz nem cria um vínculo novo) — usado pelo modal "Editar datas e limite do cartão" (ovFaturaEditModal),
-   que só edita o valor em si, não a lista de cartões vinculados (essa continua exclusiva do modal de edição
-   da conta, ver aplicarVinculoLimiteCartao). Quando o cartão compartilha limite com outros (grupoLimiteId
-   definido), o valor é gravado no grupo (gruposLimiteCartao), refletindo automaticamente em todos os
-   cartões do grupo; senão, grava direto em cardLimite[conta].limiteTotal — nunca duplicando o dado. */
-function salvarLimiteTotalCartaoInline(conta, limiteTotalNovo){
-  const cfg = STATE.cardLimite[conta];
-  if(cfg?.grupoLimiteId){
-    STATE.gruposLimiteCartao[cfg.grupoLimiteId] = { ...(STATE.gruposLimiteCartao[cfg.grupoLimiteId]||{}), limiteTotal: limiteTotalNovo };
-  } else {
-    STATE.cardLimite[conta] = { ...(cfg||{}), grupoLimiteId: null, limiteTotal: limiteTotalNovo };
-  }
-}
 /* Todas as contas cadastradas que NÃO são cartão de crédito (Conta Corrente, Conta PJ, Poupança, Reserva
    de Emergência, Investimentos, Contracheque, e qualquer outro tipo cadastrado), na mesma ordem já usada
    em toda a aplicação (contasOrdenadas, por tipo e depois por nome). */
@@ -7505,6 +7526,15 @@ function calcularPrevisaoCredito(competencia){
     d.setUTCDate(d.getUTCDate()+1);
   }
 }
+/* Fonte única de verdade para o rótulo + data de crédito do Contracheque — usada tanto no card da conta
+   (renderPainelContasBancarias) quanto no modal de Contracheque Detalhado (.fatura-digital-head-info), para
+   que os dois nunca divirjam: com contracheque importado, a Data do Crédito real sempre prevalece; sem
+   importação, cai na Previsão de Crédito calculada (ver calcularPrevisaoCredito). */
+function infoCreditoContracheque(conta, ano, mes){
+  const dataCreditoCtq = dataCreditoContracheque(conta, ano, mes);
+  if(dataCreditoCtq) return { label: 'Data do Crédito', data: dataCreditoCtq };
+  return { label: 'Previsão de Crédito', data: calcularPrevisaoCredito(chaveMes(ano, mes)) };
+}
 /* Histórico de todas as competências de contracheque já importadas para uma conta (STATE.contrachequeResumos
    — a mesma fonte oficial usada em resumoContrachequeCompetencia), cada uma já com a Data do Crédito
    correspondente (ver dataCreditoContracheque). Mais recente primeiro. Nunca inventa competências: só
@@ -7605,8 +7635,8 @@ function renderExtratoContaModal(){
           </div>
           <div class="fatura-digital-head-info">
             ${tipo==='Contracheque' ? (()=>{
-              const dataCreditoCtq = dataCreditoContracheque(conta, ano, mes);
-              return `<span><b>Data do Crédito</b> ${dataCreditoCtq ? fmtData(dataCreditoCtq) : '—'}</span>`;
+              const infoCredito = infoCreditoContracheque(conta, ano, mes);
+              return `<span><b>${infoCredito.label}</b> ${fmtData(infoCredito.data)}</span>`;
             })() : ''}
             <span><b>Competência</b> ${MESES[mes-1]}/${ano}</span>
             <span><b>${det.qtdPeriodo}</b> lançamento${det.qtdPeriodo===1?'':'s'}</span>
@@ -11299,7 +11329,7 @@ function renderPainelContasBancarias(ano, mes){
         // no lugar do bloco financeiro padrão de conta bancária (que não faz sentido para este tipo).
         const ehContracheque = tipo==='Contracheque';
         const resumoCtq = ehContracheque ? resumoContrachequeCompetencia(c, ano, mes) : null;
-        const dataCreditoCtq = ehContracheque ? dataCreditoContracheque(c, ano, mes) : null;
+        const infoCreditoCtq = ehContracheque ? infoCreditoContracheque(c, ano, mes) : null;
         const s = ehContracheque ? null : calcSaldoConta(c, ano, mes);
         const extra = ehContracheque ? null : (STATE.contaExtra[c] || {});
         // Reserva de Emergência: o badge do responsável fica ao lado do NOME da conta (não abaixo, junto
@@ -11326,9 +11356,7 @@ function renderPainelContasBancarias(ano, mes){
           </div>
           ${ehContracheque ? `
           <div class="conta-financeira-saldo conta-financeira-saldo-bancaria">
-            ${dataCreditoCtq
-              ? `<span class="lbl">Data do Crédito</span><span class="val">${fmtData(dataCreditoCtq)}</span>`
-              : `<span class="lbl">Previsão de Crédito</span><span class="val">${fmtData(calcularPrevisaoCredito(chaveMes(ano, mes)))}</span>`}
+            <span class="lbl">${infoCreditoCtq.label}</span><span class="val">${fmtData(infoCreditoCtq.data)}</span>
           </div>
           <div class="conta-financeira-grid">
             <div><span class="lbl">Margem</span><span class="val">${fmtBRL(resumoCtq.margemConsignavel)}</span></div>
@@ -11362,34 +11390,7 @@ function renderPainelContasBancarias(ano, mes){
       }).join('')}
     </div>` : `<div class="empty-state"><div class="big">🏦</div>Nenhuma conta bancária cadastrada além dos cartões. Adicione em Configurações → Contas.</div>`}
   </div>
-  ${UI.editarSaldoInicialContaModal!==null ? renderEditarSaldoInicialContaModal() : ""}
   ${UI.futurosContaModal!==null ? renderFuturosContaModal() : ""}`;
-}
-/* ---------- Modal: editar o Saldo Inicial (Saldo Anterior) de UMA conta, na competência selecionada no
-   topo da aplicação. Fonte única com o modal do Fluxo de Caixa: os dois chamam aplicarSaldoAnteriorConta,
-   nunca duplicando ou divergindo o valor guardado. ---------- */
-function renderEditarSaldoInicialContaModal(){
-  const { conta } = UI.editarSaldoInicialContaModal;
-  const explicito = saldoAnteriorExplicito(conta, UI.ano, UI.mes);
-  const s = calcSaldoConta(conta, UI.ano, UI.mes);
-  return `
-  <div class="overlay" id="ovEditarSaldoInicialConta" ${attrZIndexModal('editarSaldoInicialContaModal')}>
-    <div class="modal" style="width:420px;">
-      <div class="modal-head"><h3>✏️ Saldo inicial — ${escapeHtml(conta)}</h3><button class="close-x" id="closeEditarSaldoInicialConta">✕</button></div>
-      <div class="modal-body">
-        <p class="hint" style="margin-top:0;">Saldo da conta no início de <b>${MESES[UI.mes-1]}/${UI.ano}</b> (dia 1º). Isso cria ou atualiza automaticamente um lançamento <b>"Saldo Anterior"</b> na aba Registros — nunca conta como receita ou despesa do período.</p>
-        <div class="field">
-          <label>Saldo Inicial (R$)</label>
-          <input type="text" inputmode="decimal" id="inpSaldoInicialConta" value="${fmtMoedaInput(explicito!==null ? explicito : s.saldoInicial)}">
-        </div>
-        ${explicito!==null ? `<button type="button" class="btn btn-ghost btn-sm" id="btnRemoverSaldoInicialConta">🗑️ Remover valor definido manualmente (voltar ao cálculo automático)</button>` : ''}
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" id="cancelEditarSaldoInicialConta">Cancelar</button>
-        <button class="btn btn-primary" id="salvarSaldoInicialConta">💾 Salvar</button>
-      </div>
-    </div>
-  </div>`;
 }
 
 /* ---------- Modais de fatura: cabeçalho compartilhado entre "Ver Fatura" e "Ver Próximas Faturas",
@@ -11711,14 +11712,21 @@ function renderModalEmpateCartao(){
    Título e textos deixaram de falar só em "datas" (seção 17-18 do requisito "Card de Contas e Modal de
    Ajuste de Cartões") desde que o campo de Limite total passou a viver aqui também. Datas (fechamento/
    vencimento) continuam valendo só para ESTA fatura/competência (via STATE.cardOverrides); o Limite total é
-   uma propriedade do cartão como um todo (STATE.cardLimite/gruposLimiteCartao — ver limiteTotalCartao/
-   salvarLimiteTotalCartaoInline), então uma alteração feita aqui vale para todas as faturas do cartão, não
-   só a exibida no momento — texto explicativo deixa essa diferença clara para não confundir o usuário. */
+   uma propriedade do cartão como um todo (STATE.cardLimite/gruposLimiteCartao — ver limiteTotalCartao),
+   então uma alteração feita aqui vale para todas as faturas do cartão, não só a exibida no momento — texto
+   explicativo deixa essa diferença clara para não confundir o usuário. Desde a seção 8 do requisito
+   "Contas, Cartões, Contracheque, Pix e Lançamentos", este modal também permite vincular/desvincular o
+   limite com outro(s) cartão(ões) — mesma UI e mesma função aplicarVinculoLimiteCartao já usadas no modal
+   de edição da conta (ver vinculoLimiteCartaoHtml), nunca uma lógica de gravação paralela. */
 function renderFaturaEditModal(){
   const m = UI.faturaEditModal;
+  const limiteCfgAtual = STATE.cardLimite[m.conta] || {};
+  const vinculoLimiteAtivo = m.vinculoLimite!==undefined ? m.vinculoLimite : !!limiteCfgAtual.grupoLimiteId;
+  const cartoesVinculadosAtuais = m.cartoesVinculados!==undefined ? m.cartoesVinculados : membrosGrupoLimite(limiteCfgAtual.grupoLimiteId).filter(c=>c!==m.conta);
+  const limiteTotalDisplay = m.limiteTotal!==undefined ? m.limiteTotal : fmtMoedaInput(limiteTotalCartao(m.conta));
   return `
   <div class="overlay" id="ovFaturaEditModal" ${attrZIndexModal('faturaEditModal')}>
-    <div class="modal" style="width:auto;min-width:340px;max-width:460px;">
+    <div class="modal" style="width:auto;min-width:340px;max-width:480px;">
       <div class="modal-head"><h3>✏️ Editar datas e limite do cartão</h3><button class="close-x" id="closeFaturaEditModal">✕</button></div>
       <div class="modal-body">
         <div class="fatura-digital-head">
@@ -11733,11 +11741,12 @@ function renderFaturaEditModal(){
         </div>
         <p class="hint" style="margin:10px 0 0;">As datas valem só para esta fatura (${competenciaLabel(m.competencia)}). Deixe em branco ou use "Restaurar padrão" para voltar a usar o dia fixo configurado na conta.</p>
         <div class="field" style="margin-top:14px;">
-          <label>Limite total do cartão (R$)</label>
-          <input type="text" inputmode="decimal" id="fFaturaLimiteTotal" value="${fmtMoedaInput(limiteTotalCartao(m.conta))}">
+          <label class="label-limite-total${vinculoLimiteAtivo?' tem-tag-compartilhado':''}">Limite total do cartão (R$)${vinculoLimiteAtivo?' <span class="label-tag-compartilhado">(compartilhado)</span>':''}</label>
+          <input type="text" inputmode="decimal" id="fFaturaLimiteTotal" value="${escapeHtml(limiteTotalDisplay)}">
         </div>
         <p class="hint" id="fFaturaLimiteTotalErro" style="display:none;margin:4px 0 0;color:var(--despesa);"></p>
         <p class="hint" style="margin:4px 0 0;">O limite total é do cartão como um todo — a alteração vale para todas as faturas, não só a desta competência.</p>
+        <div style="margin-top:10px;">${vinculoLimiteCartaoHtml(m.conta, vinculoLimiteAtivo, cartoesVinculadosAtuais)}</div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" id="btnRestaurarPadraoFatura">↺ Restaurar padrão</button>
@@ -13177,6 +13186,26 @@ function validarChavePix(tipo, valor){
   if(tipo==='Chave aleatória') return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
   return true; // sem tipo selecionado ainda: não bloqueia (o tipo é que fica pendente, não o valor)
 }
+/* Reconhecimento automático do tipo de uma Chave Pix já cadastrada (seção 5 do requisito): usado só quando
+   não há tipoChavePix salvo explicitamente junto da chave (dado anterior a este campo existir) — nesse
+   caso o tipo salvo é sempre a fonte prioritária (ver valorExtraTextModal), nunca sobrescrito por esta
+   detecção. Identifica pela estrutura do valor (com ou sem máscara), na ordem CPF/CNPJ (por quantidade de
+   dígitos) → E-mail → Telefone → Chave aleatória (UUID); retorna '' quando nada bate. */
+function detectarTipoChavePix(valor){
+  const v = String(valor||'').trim();
+  if(!v) return '';
+  if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) return 'Chave aleatória';
+  if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'E-mail';
+  // Parênteses (DDD) ou "+55"/"55" na frente só existem no formato de telefone; "/" só no de CNPJ — usados
+  // para desambiguar de CPF, que tem a mesma quantidade de dígitos (11) que um celular sem DDI.
+  if(/\(/.test(v) || /^\+?55\D/.test(v)) return 'Telefone';
+  if(/\//.test(v)) return 'CNPJ';
+  const digitos = somenteDigitos(v);
+  if(digitos.length===14) return 'CNPJ';
+  if(digitos.length===11) return 'CPF';
+  if(digitos.length===10) return 'Telefone';
+  return '';
+}
 function grupoCamposExtra(tipoConta){
   if(TIPOS_CONTA_BANCARIA.includes(tipoConta)) return 'bancaria';
   return null;
@@ -13188,6 +13217,50 @@ function valorExtraTextModal(t, campo){
   if(t.extra && t.extra[campo]!==undefined) return t.extra[campo];
   const salvo = (t.original && STATE.contaExtra[t.original]) || {};
   return salvo[campo]!==undefined ? salvo[campo] : '';
+}
+/* Tipo de chave Pix a exibir/selecionar já pré-preenchido no modal (seção 5 do requisito): a informação
+   salva explicitamente sempre prevalece (inclusive uma escolhida manualmente pelo usuário nesta sessão);
+   só cai na detecção automática por estrutura (detectarTipoChavePix) quando a chave já existe mas não tem
+   tipo salvo (dado de antes deste campo existir) — nunca exige o usuário selecionar de novo nesse caso. */
+function tipoChavePixAtual(t){
+  const salvo = valorExtraTextModal(t, 'tipoChavePix');
+  if(salvo) return salvo;
+  return detectarTipoChavePix(valorExtraTextModal(t, 'chavePix'));
+}
+/* Prévia visual do ícone selecionado no seletor customizado de Ícone da Conta (seção 3 do requisito
+   "Contas, Cartões, Contracheque, Pix e Lançamentos") — nunca texto no lugar da imagem. Mesma prioridade já
+   usada por logoInstituicaoCartaoHtml (upload > escolha manual > detecção automática pelo nome digitado),
+   só que a partir dos valores ainda não salvos do próprio modal em edição. */
+function iconeContaPreviewHtml(chave, uploadDataUrl, nomeConta){
+  if(chave==='upload' && uploadDataUrl) return `<img src="${uploadDataUrl}" alt="Ícone da conta">`;
+  if(chave && ICONES_CONTA_PADRAO[chave]) return `<img src="${ICONES_CONTA_PADRAO[chave].logo}" alt="${escapeHtml(ICONES_CONTA_PADRAO[chave].sigla)}">`;
+  const auto = identificarInstituicao(nomeConta||'');
+  if(auto && auto.logo) return `<img src="${auto.logo}" alt="${escapeHtml(auto.sigla)}">`;
+  return `<span class="icone-conta-picker-fallback">🏦</span>`;
+}
+/* Bloco "Vincular limite com outro cartão" (seção 8 do requisito): reaproveitado tanto no modal de edição
+   da conta quanto no modal "Editar datas e limite do cartão" — mesmos ids/classes nos dois (nunca ambos na
+   tela ao mesmo tempo), para que os dois modais leiam/gravem exatamente a mesma estrutura
+   (STATE.cardLimite/gruposLimiteCartao via aplicarVinculoLimiteCartao) sem duplicar UI nem lógica. */
+function vinculoLimiteCartaoHtml(contaAtual, vinculoAtivo, cartoesVinculadosAtuais){
+  const outrosCartoes = STATE.cartoes.filter(c=>c!==contaAtual);
+  return `
+  <div class="conta-grid-linha conta-grid-linha-vinculo">
+    <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:${outrosCartoes.length?'pointer':'not-allowed'};">
+      <input type="checkbox" id="fVinculoLimiteCartao" ${vinculoAtivo?'checked':''} ${outrosCartoes.length?'':'disabled'}>
+      Vincular limite com outro(s) cartão(ões)
+    </label>
+  </div>
+  ${vinculoAtivo ? `
+  <div style="margin-top:-2px;margin-bottom:10px;">
+    <div class="field-section-label" style="margin-top:0;">Selecione os cartões vinculados</div>
+    ${outrosCartoes.length ? outrosCartoes.map(c=>`
+      <label style="display:flex;align-items:center;gap:8px;font-size:14px;padding:4px 0;">
+        <input type="checkbox" class="fCartaoVinculado" data-cartao="${escapeHtml(c)}" ${cartoesVinculadosAtuais.includes(c)?'checked':''}>
+        ${escapeHtml(c)}
+      </label>`).join('') : `<p class="hint">Nenhum outro cartão cadastrado ainda.</p>`}
+    <p class="hint" style="margin:6px 0 0;">O limite total informado acima passa a ser compartilhado por todos os cartões marcados — não somado, um único limite comum para o grupo todo.</p>
+  </div>` : ''}`;
 }
 const TEXT_MODAL_INFO = {
   'conta-novo':   { titulo:'🏦 Nova conta', label:'Nome da conta', placeholder:'Ex.: Caixa Bruno', botao:'Adicionar', temTipoConta:true },
@@ -13238,19 +13311,67 @@ function renderTextModal(){
   // contas bancárias tradicionais (Corrente/PJ/Poupança/Reserva de Emergência) são compatíveis.
   const contaVinculadaAtual = t.contaVinculada!==undefined ? t.contaVinculada : (STATE.contaVinculada[t.original] || '');
   const opcoesContaVinculada = STATE.contas.filter(c=>c!==t.original && TIPOS_CONTA_BANCARIA.includes(STATE.contaTipos[c]));
+  const iconePickerAberto = !!t.iconePickerAberto;
+  const iconeAtualPreviewHtml = iconeContaPreviewHtml(iconeContaAtual, iconeContaUploadAtual, t.nome);
+  // Reconhecimento automático do tipo de Chave Pix (seção 5 do requisito): o tipo já pré-selecionado (salvo
+  // ou detectado) já entra aplicando a máscara correspondente no próprio valor exibido — nunca exige o
+  // usuário selecionar de novo o tipo de uma chave que a aplicação já consegue identificar sozinha.
+  const tipoChavePixAtualValor = tipoChavePixAtual(t);
+  const chavePixDisplay = aplicarMascaraChavePix(tipoChavePixAtualValor, valorExtraTextModal(t,'chavePix'));
+  // Rótulo do segundo campo da linha "Tipo de conta | ..." (seção 3.1/6/7 do requisito): Nome do banco para
+  // contas bancárias, ou a mesma Conta Vinculada/Associada usada por Contracheque e Cartão de Crédito.
+  const contaVinculadaLabel = tipoContaAtual==='Contracheque' ? 'Conta bancária que recebe o pagamento' : 'Conta associada';
+  // Saldo Inicial anexado ao modal de edição da conta (seção 9 do requisito): só para contas que NÃO sejam
+  // Contracheque (exceção explícita — preserva o fluxo próprio de importação do contracheque), reaproveita
+  // exatamente aplicarSaldoAnteriorConta/saldoAnteriorExplicito/calcSaldoConta, a mesma fonte única já usada
+  // pelo modal de saldo inicial do Fluxo de Caixa — nunca uma regra de cálculo paralela.
+  const mostrarSaldoInicial = !!t.comSaldoInicial && tipoContaAtual!=='Contracheque' && t.original;
+  let saldoInicialDisplay = '';
+  if(mostrarSaldoInicial){
+    if(t.saldoInicial!==undefined) saldoInicialDisplay = t.saldoInicial;
+    else{
+      const explicito = saldoAnteriorExplicito(t.original, t.saldoAno, t.saldoMes);
+      const s = calcSaldoConta(t.original, t.saldoAno, t.saldoMes);
+      saldoInicialDisplay = fmtMoedaInput(explicito!==null ? explicito : s.saldoInicial);
+    }
+  }
   return `
   <div class="overlay" id="ovTextModal" ${attrZIndexModal('textModal')}>
-    <div class="modal" style="width:420px;">
+    <div class="modal" style="width:${info.temTipoConta ? '640px' : '420px'};">
       <div class="modal-head"><h3>${info.titulo}</h3><button class="close-x" id="closeTextModal">✕</button></div>
       <div class="modal-body">
         <div class="tx-form">
+          ${!info.temTipoConta ? `<div class="field"><label>${info.label}</label><input type="text" id="fTextModalNome" placeholder="${info.placeholder}" value="${escapeHtml(t.nome)}"></div>` : ''}
           ${info.temTipoConta ? `
-          <div class="field"><label>Ícone da conta</label>
-            <select id="fTextModalIconeConta">
-              <option value="" ${!iconeContaAtual?'selected':''}>Automático (pelo nome da conta)</option>
-              ${Object.entries(ICONES_CONTA_PADRAO).map(([chave,ic])=>`<option value="${chave}" ${iconeContaAtual===chave?'selected':''}>${escapeHtml(ic.sigla)}</option>`).join('')}
-              <option value="upload" ${iconeContaAtual==='upload'?'selected':''}>+ Adicionar/Upload de ícone</option>
-            </select>
+          <div class="conta-grid-linha conta-grid-linha-1">
+            <div class="field"><label>Ícone da conta</label>
+              <div class="icone-conta-picker" id="fTextModalIconePicker">
+                <button type="button" class="icone-conta-picker-btn" id="fTextModalIconeContaBtn" aria-haspopup="listbox" aria-expanded="${iconePickerAberto?'true':'false'}" title="Escolher ícone da conta">
+                  ${iconeAtualPreviewHtml}<span class="icone-conta-picker-caret">▾</span>
+                </button>
+                <input type="hidden" id="fTextModalIconeConta" value="${escapeHtml(iconeContaAtual)}">
+                ${iconePickerAberto ? `
+                <div class="icone-conta-picker-lista" role="listbox" id="fTextModalIconeContaLista">
+                  <div class="icone-conta-picker-opcao ${!iconeContaAtual?'selecionada':''}" data-icone-opcao="">
+                    <span class="icone-conta-picker-auto">🔍</span><span>Automático (pelo nome da conta)</span>
+                  </div>
+                  ${Object.entries(ICONES_CONTA_PADRAO).map(([chave,ic])=>`
+                  <div class="icone-conta-picker-opcao ${iconeContaAtual===chave?'selecionada':''}" data-icone-opcao="${chave}">
+                    <img src="${ic.logo}" alt="${escapeHtml(ic.sigla)}"><span>${escapeHtml(ic.sigla)}</span>
+                  </div>`).join('')}
+                  <div class="icone-conta-picker-opcao ${iconeContaAtual==='upload'?'selecionada':''}" data-icone-opcao="upload">
+                    <span class="icone-conta-picker-auto">⬆️</span><span>+ Adicionar/Upload de ícone</span>
+                  </div>
+                </div>` : ''}
+              </div>
+            </div>
+            <div class="field"><label>${info.label}</label><input type="text" id="fTextModalNome" placeholder="${info.placeholder}" value="${escapeHtml(t.nome)}"></div>
+            <div class="field"><label>Responsável pela conta</label>
+              <select id="fTextModalResponsavel">
+                <option value="" ${!responsavelAtual?'selected':''}>Mais de um / não informar</option>
+                ${[...STATE.responsaveis].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(p=>`<option value="${escapeHtml(p)}" ${responsavelAtual===p?'selected':''}>${escapeHtml(p)}</option>`).join('')}
+              </select>
+            </div>
           </div>
           ${iconeContaAtual==='upload' ? `
           <div class="field" style="display:flex;align-items:center;gap:10px;">
@@ -13259,30 +13380,54 @@ function renderTextModal(){
               <input type="file" id="fTextModalIconeContaUpload" accept="image/*">
               <p class="hint" style="margin:4px 0 0;">A imagem precisa ter exatamente 64 × 64 pixels.</p>
             </div>
-          </div>` : ''}` : ''}
-          <div class="field"><label>${info.label}</label><input type="text" id="fTextModalNome" placeholder="${info.placeholder}" value="${escapeHtml(t.nome)}"></div>
-          ${info.temTipoConta ? `
-          <div>
-            <div class="field-section-label">Detalhes da conta</div>
-            <div class="tx-row">
-              <div class="field"><label>Tipo de conta</label>
-                <select id="fTextModalTipoConta" ${info.tipoContaFixo?'disabled':''}>
-                  ${TIPOS_CONTA.map(tp=>`<option value="${tp}" ${tipoContaAtual===tp?'selected':''}>${escapeHtml(rotuloTipoConta(tp))}</option>`).join('')}
-                </select>
-                ${info.tipoContaFixo ? `<input type="hidden" id="fTextModalTipoContaFixo" value="${info.tipoContaFixo}">` : ''}
-              </div>
-              <div class="field"><label>Responsável pela conta</label>
-                <select id="fTextModalResponsavel">
-                  <option value="" ${!responsavelAtual?'selected':''}>Mais de um / não informar</option>
-                  ${[...STATE.responsaveis].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(p=>`<option value="${escapeHtml(p)}" ${responsavelAtual===p?'selected':''}>${escapeHtml(p)}</option>`).join('')}
-                </select>
-              </div>
+          </div>` : ''}
+          <div class="conta-grid-linha conta-grid-linha-2">
+            <div class="field"><label>Tipo de conta</label>
+              <select id="fTextModalTipoConta" ${info.tipoContaFixo?'disabled':''}>
+                ${TIPOS_CONTA.map(tp=>`<option value="${tp}" ${tipoContaAtual===tp?'selected':''}>${escapeHtml(rotuloTipoConta(tp))}</option>`).join('')}
+              </select>
+              ${info.tipoContaFixo ? `<input type="hidden" id="fTextModalTipoContaFixo" value="${info.tipoContaFixo}">` : ''}
+            </div>
+            ${mostrarDadosBancarios ? `
+            <div class="field"><label>Nome do banco</label>
+              <input type="text" id="fTextModalExtra_banco" placeholder="Ex.: Banco do Brasil" value="${escapeHtml(valorExtraTextModal(t,'banco'))}">
+            </div>` : `
+            <div class="field"><label>${contaVinculadaLabel}</label>
+              <select id="fTextModalContaVinculada">
+                <option value="" ${!contaVinculadaAtual?'selected':''}>Selecione...</option>
+                ${opcoesContaVinculada.map(c=>`<option value="${escapeHtml(c)}" ${contaVinculadaAtual===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
+              </select>
+            </div>`}
+          </div>` : ''}
+          ${mostrarDadosBancarios ? `
+          <div class="conta-grid-linha conta-grid-linha-pix1">
+            <div class="field"><label>Agência</label>
+              <input type="text" id="fTextModalExtra_agencia" placeholder="Ex.: 1234-5" value="${escapeHtml(valorExtraTextModal(t,'agencia'))}">
+            </div>
+            <div class="field"><label>Nº conta</label>
+              <input type="text" id="fTextModalExtra_numeroConta" placeholder="Ex.: 12345-6" value="${escapeHtml(valorExtraTextModal(t,'numeroConta'))}">
+            </div>
+            <div class="field"><label>Tipo de chave Pix</label>
+              <select id="fTextModalExtra_tipoChavePix">
+                <option value="" ${!tipoChavePixAtualValor?'selected':''}>Selecione...</option>
+                ${PIX_TIPOS.map(op=>`<option value="${op}" ${tipoChavePixAtualValor===op?'selected':''}>${op}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="conta-grid-linha conta-grid-linha-pix2">
+            <div class="field"><label>Chave Pix</label>
+              <input type="text" id="fTextModalExtra_chavePix" placeholder="${placeholderChavePix(tipoChavePixAtualValor)}" value="${escapeHtml(chavePixDisplay)}">
             </div>
           </div>` : ''}
           ${mostrarConfigCartao ? `
           <div>
-            <div class="field-section-label">Configuração do cartão</div>
-            <div class="tx-row">
+            <div class="conta-grid-linha conta-grid-linha-cartao1">
+              <div class="field"><label>Dia de fechamento</label>
+                <input type="number" min="1" max="31" id="fTextModalFechamento" placeholder="Ex.: 20" value="${escapeHtml(String(fechamentoAtual))}">
+              </div>
+              <div class="field"><label>Dia de vencimento</label>
+                <input type="number" min="1" max="31" id="fTextModalVencimento" placeholder="Ex.: 10" value="${escapeHtml(String(vencimentoAtual))}">
+              </div>
               <div class="field"><label>Bandeira do cartão *</label>
                 <select id="fTextModalBandeira">
                   <option value="" ${!bandeiraSelectValor?'selected':''} disabled>Selecione...</option>
@@ -13290,89 +13435,26 @@ function renderTextModal(){
                   <option value="outra" ${bandeiraSelectValor==='outra'?'selected':''}>+ Outra</option>
                 </select>
               </div>
-              ${bandeiraSelectValor==='outra' ? `
-              <div class="field"><label>Nome da bandeira</label>
-                <input type="text" id="fTextModalBandeiraOutra" placeholder="Ex.: Hipercard" value="${escapeHtml(bandeiraEhOutra?bandeiraAtualRaw:'')}">
-              </div>` : ''}
-            </div>
-            <div class="tx-row" style="margin-top:10px;">
-              <div class="field"><label>Dia de fechamento</label>
-                <input type="number" min="1" max="31" id="fTextModalFechamento" placeholder="Ex.: 20" value="${escapeHtml(String(fechamentoAtual))}">
-              </div>
-              <div class="field"><label>Dia de vencimento</label>
-                <input type="number" min="1" max="31" id="fTextModalVencimento" placeholder="Ex.: 10" value="${escapeHtml(String(vencimentoAtual))}">
-              </div>
-            </div>
-            <p class="hint" style="margin:8px 0 0;">Com isso o app calcula automaticamente em qual fatura cada compra deve entrar.</p>
-            <div class="tx-row" style="margin-top:10px;">
               <div class="field"><label class="label-limite-total${vinculoLimiteAtivo?' tem-tag-compartilhado':''}">Limite total${vinculoLimiteAtivo?' <span class="label-tag-compartilhado">(compartilhado)</span>':''}</label>
                 <input type="text" inputmode="decimal" id="fTextModalLimiteTotal" placeholder="Ex.: 10000,00" value="${escapeHtml(limiteTotalDisplay)}">
               </div>
-              <div class="field"><label>Conta associada</label>
-                <select id="fTextModalContaVinculada">
-                  <option value="" ${!contaVinculadaAtual?'selected':''}>Selecione...</option>
-                  ${opcoesContaVinculada.map(c=>`<option value="${escapeHtml(c)}" ${contaVinculadaAtual===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
-                </select>
-              </div>
             </div>
-            <p class="hint" style="margin:4px 0 0;">O limite disponível (limite total − compras/faturas ainda em aberto) é calculado automaticamente e exibido na tabela de Cartões.</p>
-            <div class="tx-row" style="margin-top:10px;">
-              <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:${outrosCartoesParaVinculo.length?'pointer':'not-allowed'};">
-                <input type="checkbox" id="fTextModalVinculoLimite" ${vinculoLimiteAtivo?'checked':''} ${outrosCartoesParaVinculo.length?'':'disabled'}>
-                Vincular limite com outro(s) cartão(ões)
-              </label>
-            </div>
-            ${vinculoLimiteAtivo ? `
-            <div style="margin-top:8px;">
-              <div class="field-section-label" style="margin-top:0;">Selecione os cartões vinculados</div>
-              ${outrosCartoesParaVinculo.length ? outrosCartoesParaVinculo.map(c=>`
-                <label style="display:flex;align-items:center;gap:8px;font-size:14px;padding:4px 0;">
-                  <input type="checkbox" class="fTextModalCartaoVinculado" data-cartao="${escapeHtml(c)}" ${cartoesVinculadosAtuais.includes(c)?'checked':''}>
-                  ${escapeHtml(c)}
-                </label>`).join('') : `<p class="hint">Nenhum outro cartão cadastrado ainda.</p>`}
-              <p class="hint" style="margin:6px 0 0;">O limite total informado acima passa a ser compartilhado por todos os cartões marcados — não somado, um único limite comum para o grupo todo.</p>
+            ${bandeiraSelectValor==='outra' ? `
+            <div class="field" style="margin-bottom:10px;"><label>Nome da bandeira</label>
+              <input type="text" id="fTextModalBandeiraOutra" placeholder="Ex.: Hipercard" value="${escapeHtml(bandeiraEhOutra?bandeiraAtualRaw:'')}">
             </div>` : ''}
+            <p class="hint" style="margin:0 0 10px;">Com isso o app calcula automaticamente em qual fatura cada compra deve entrar. O limite disponível (limite total − compras/faturas ainda em aberto) é calculado automaticamente e exibido na tabela de Cartões.</p>
+            ${vinculoLimiteCartaoHtml(t.original, vinculoLimiteAtivo, cartoesVinculadosAtuais)}
           </div>` : ''}
-          ${mostrarDadosBancarios ? `
+          ${mostrarSaldoInicial ? `
           <div>
-            <div class="field-section-label">Dados bancários</div>
-            <div class="tx-row">
-              <div class="field tx-wide"><label>Nome do banco</label>
-                <input type="text" id="fTextModalExtra_banco" placeholder="Ex.: Banco do Brasil" value="${escapeHtml(valorExtraTextModal(t,'banco'))}">
-              </div>
+            <div class="field-section-label">Saldo inicial</div>
+            <p class="hint" style="margin-top:0;">Saldo da conta no início de <b>${MESES[t.saldoMes-1]}/${t.saldoAno}</b> (dia 1º). Isso cria ou atualiza automaticamente um lançamento <b>"Saldo Anterior"</b> na aba Registros — nunca conta como receita ou despesa do período.</p>
+            <div class="field">
+              <label>Saldo Inicial (R$)</label>
+              <input type="text" inputmode="decimal" id="fTextModalSaldoInicial" value="${escapeHtml(saldoInicialDisplay)}">
             </div>
-            <div class="tx-row" style="margin-top:10px;">
-              <div class="field"><label>Agência</label>
-                <input type="text" id="fTextModalExtra_agencia" placeholder="Ex.: 1234-5" value="${escapeHtml(valorExtraTextModal(t,'agencia'))}">
-              </div>
-              <div class="field"><label>Nº conta</label>
-                <input type="text" id="fTextModalExtra_numeroConta" placeholder="Ex.: 12345-6" value="${escapeHtml(valorExtraTextModal(t,'numeroConta'))}">
-              </div>
-            </div>
-            <div class="tx-row" style="margin-top:10px;">
-              <div class="field"><label>Tipo de chave Pix</label>
-                <select id="fTextModalExtra_tipoChavePix">
-                  <option value="" ${!valorExtraTextModal(t,'tipoChavePix')?'selected':''}>Selecione...</option>
-                  ${PIX_TIPOS.map(op=>`<option value="${op}" ${valorExtraTextModal(t,'tipoChavePix')===op?'selected':''}>${op}</option>`).join('')}
-                </select>
-              </div>
-              <div class="field"><label>Chave Pix</label>
-                <input type="text" id="fTextModalExtra_chavePix" placeholder="${placeholderChavePix(valorExtraTextModal(t,'tipoChavePix'))}" value="${escapeHtml(valorExtraTextModal(t,'chavePix'))}">
-              </div>
-            </div>
-          </div>` : ''}
-          ${mostrarContracheque ? `
-          <div>
-            <div class="field-section-label">Conta vinculada</div>
-            <div class="tx-row">
-              <div class="field tx-wide"><label>Conta bancária que recebe o pagamento</label>
-                <select id="fTextModalContaVinculada">
-                  <option value="" ${!contaVinculadaAtual?'selected':''}>Selecione...</option>
-                  ${opcoesContaVinculada.map(c=>`<option value="${escapeHtml(c)}" ${contaVinculadaAtual===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
-                </select>
-              </div>
-            </div>
-            <p class="hint" style="margin:8px 0 0;">Conta para onde vai o registro espelho do líquido do contracheque.</p>
+            ${saldoAnteriorExplicito(t.original, t.saldoAno, t.saldoMes)!==null && saldoInicialDisplay!=='' ? `<button type="button" class="btn btn-ghost btn-sm" id="btnRemoverSaldoInicialConta" style="margin-top:8px;">🗑️ Remover valor definido manualmente (voltar ao cálculo automático)</button>` : ''}
           </div>` : ''}
           ${info.nota ? `<div class="info-card" style="margin-top:0;"><span class="info-card-icon">ℹ️</span><span>${info.nota}</span></div>` : ''}
           ${info.temIconeGenero ? `
@@ -15837,24 +15919,20 @@ function bindEvents(){
     else UI.mapaCalorDiaModal.pagina = Number(v);
     render();
   }));
+  // Editar saldo inicial de uma conta (seção 9 do requisito "Contas, Cartões, Contracheque, Pix e
+  // Lançamentos"): desde esta seção, abre o mesmo modal de edição da conta (UI.textModal/renderTextModal),
+  // só que com o campo extra de Saldo Inicial anexado (t.comSaldoInicial) — nunca mais um modal à parte só
+  // com esse campo, reaproveitando toda a estrutura/validação já existente do modal principal (ver
+  // salvarSaldoInicialSeAplicavel, chamado de dentro do próprio saveTextModal). Exceção: contas do tipo
+  // Contracheque nunca mostram este botão no card (ver renderPainelContasBancarias), então nunca chegam
+  // aqui — preservado o fluxo específico já existente para elas.
   document.querySelectorAll('[data-editar-saldo-inicial-conta]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.editarSaldoInicialContaModal = { conta: b.dataset.editarSaldoInicialConta }; render();
-    const inp = document.getElementById('inpSaldoInicialConta');
+    const conta = b.dataset.editarSaldoInicialConta;
+    UI.textModal = { tipo:'conta-editar', nome:conta, original:conta, comSaldoInicial:true, saldoAno:UI.ano, saldoMes:UI.mes };
+    render();
+    const inp = document.getElementById('fTextModalSaldoInicial');
     if(inp){ inp.focus(); inp.select(); }
   }));
-  document.getElementById('closeEditarSaldoInicialConta')?.addEventListener('click', ()=>{ UI.editarSaldoInicialContaModal=null; render(); });
-  document.getElementById('cancelEditarSaldoInicialConta')?.addEventListener('click', ()=>{ UI.editarSaldoInicialContaModal=null; render(); });
-  document.getElementById('btnRemoverSaldoInicialConta')?.addEventListener('click', ()=>{
-    const { conta } = UI.editarSaldoInicialContaModal;
-    aplicarSaldoAnteriorConta(conta, UI.ano, UI.mes, null);
-    UI.editarSaldoInicialContaModal=null; scheduleSave(); render();
-  });
-  document.getElementById('salvarSaldoInicialConta')?.addEventListener('click', ()=>{
-    const { conta } = UI.editarSaldoInicialContaModal;
-    const valor = parseMoedaTexto(document.getElementById('inpSaldoInicialConta').value);
-    aplicarSaldoAnteriorConta(conta, UI.ano, UI.mes, valor);
-    UI.editarSaldoInicialContaModal=null; scheduleSave(); render();
-  });
   document.getElementById('btnEditarSaldoInicialFluxoCaixa')?.addEventListener('click', ()=>{
     UI.editarSaldoInicialFluxoCaixaModal = true; render();
   });
@@ -16254,7 +16332,14 @@ function bindEvents(){
     const key = `${conta}|${competencia}`;
     if(!fechamento && !vencimento){ delete STATE.cardOverrides[key]; }
     else { STATE.cardOverrides[key] = { fechamento, vencimento }; }
-    salvarLimiteTotalCartaoInline(conta, limiteTotalNovo);
+    // Vínculo de limite (seção 8 do requisito): mesma função aplicarVinculoLimiteCartao já usada pelo modal
+    // de edição da conta — nunca uma gravação de valor isolada, para os dois modais sempre refletirem o
+    // mesmo estado (STATE.cardLimite/gruposLimiteCartao) imediatamente um no outro.
+    const elVinculo = document.getElementById('fVinculoLimiteCartao');
+    const cartoesVinculadosSelecionados = elVinculo && elVinculo.checked
+      ? [...document.querySelectorAll('.fCartaoVinculado')].filter(el=>el.checked).map(el=>el.dataset.cartao)
+      : [];
+    aplicarVinculoLimiteCartao(conta, cartoesVinculadosSelecionados, limiteTotalNovo);
     UI.faturaEditModal=null; scheduleSave();
   });
 
@@ -16512,12 +16597,14 @@ function bindEvents(){
     if(bandAtual!==undefined) UI.textModal.bandeira = bandAtual;
     const limiteAtual = document.getElementById('fTextModalLimiteTotal')?.value;
     if(limiteAtual!==undefined) UI.textModal.limiteTotal = limiteAtual;
-    const vinculoEl = document.getElementById('fTextModalVinculoLimite');
+    const vinculoEl = document.getElementById('fVinculoLimiteCartao');
     if(vinculoEl) UI.textModal.vinculoLimite = vinculoEl.checked;
-    const cartoesVinculadosEls = document.querySelectorAll('.fTextModalCartaoVinculado');
+    const cartoesVinculadosEls = document.querySelectorAll('.fCartaoVinculado');
     if(cartoesVinculadosEls.length) UI.textModal.cartoesVinculados = [...cartoesVinculadosEls].filter(el=>el.checked).map(el=>el.dataset.cartao);
     const contaVinculadaEl = document.getElementById('fTextModalContaVinculada');
     if(contaVinculadaEl) UI.textModal.contaVinculada = contaVinculadaEl.value;
+    const saldoInicialEl = document.getElementById('fTextModalSaldoInicial');
+    if(saldoInicialEl) UI.textModal.saldoInicial = saldoInicialEl.value;
     UI.textModal.extra = UI.textModal.extra || {};
     document.querySelectorAll('[id^="fTextModalExtra_"]').forEach(el=>{ UI.textModal.extra[el.id.replace('fTextModalExtra_','')] = el.value; });
   }
@@ -16531,17 +16618,54 @@ function bindEvents(){
     UI.textModal.bandeira = e.target.value;
     render();
   });
-  document.getElementById('fTextModalVinculoLimite')?.addEventListener('change', e=>{
-    stashCamposCondicionaisTextModal();
-    UI.textModal.vinculoLimite = e.target.checked;
+  // Vincular limite com outro cartão (seção 8 do requisito): mesmo id/lógica reaproveitados pelo modal de
+  // edição da conta E pelo modal "Editar datas e limite do cartão" (ver renderFaturaEditModal/
+  // vinculoLimiteCartaoHtml) — nunca os dois ao mesmo tempo na tela, então um único listener decide qual
+  // dos dois objetos de UI atualizar.
+  document.getElementById('fVinculoLimiteCartao')?.addEventListener('change', e=>{
+    if(UI.textModal){ stashCamposCondicionaisTextModal(); UI.textModal.vinculoLimite = e.target.checked; }
+    else if(UI.faturaEditModal){
+      const elLimite = document.getElementById('fFaturaLimiteTotal');
+      if(elLimite) UI.faturaEditModal.limiteTotal = elLimite.value;
+      UI.faturaEditModal.vinculoLimite = e.target.checked;
+    }
     render();
+  });
+  // Remover o Saldo Inicial definido manualmente (seção 9 do requisito): só limpa o campo — a remoção em si
+  // (aplicarSaldoAnteriorConta com null) só acontece ao clicar Salvar, igual a qualquer outro campo deste
+  // modal, para nunca aplicar uma mudança isolada enquanto o resto do formulário ainda não foi confirmado.
+  document.getElementById('btnRemoverSaldoInicialConta')?.addEventListener('click', ()=>{
+    const inp = document.getElementById('fTextModalSaldoInicial');
+    if(inp) inp.value = '';
   });
   document.getElementById('fTextModalIconeConta')?.addEventListener('change', e=>{
     stashCamposCondicionaisTextModal();
     UI.textModal.iconeConta = e.target.value;
     if(e.target.value!=='upload') UI.textModal.iconeContaUpload = '';
+    UI.textModal.iconePickerAberto = false;
     render();
   });
+  // Seletor visual de ícone da conta (seção 3 do requisito): botão mostra a imagem do ícone atual (nunca
+  // texto no lugar dela — ver iconeContaPreviewHtml), clicar abre/fecha a lista com os ícones já existentes
+  // na aplicação (ICONES_CONTA_PADRAO, reaproveitados de INSTITUICOES_FINANCEIRAS); clicar numa opção grava
+  // no <input type="hidden"> e dispara 'change' nele para reusar exatamente a mesma gravação/re-render já
+  // usada pelo <select> anterior, sem duplicar lógica.
+  document.getElementById('fTextModalIconeContaBtn')?.addEventListener('click', e=>{
+    e.stopPropagation();
+    stashCamposCondicionaisTextModal();
+    UI.textModal.iconePickerAberto = !UI.textModal.iconePickerAberto;
+    render();
+  });
+  if(UI.textModal?.iconePickerAberto){
+    document.getElementById('fTextModalIconeContaLista')?.addEventListener('click', e=> e.stopPropagation());
+    document.querySelectorAll('#fTextModalIconeContaLista [data-icone-opcao]').forEach(el=> el.addEventListener('click', e=>{
+      e.stopPropagation();
+      const elIcone = document.getElementById('fTextModalIconeConta');
+      elIcone.value = el.dataset.iconeOpcao;
+      elIcone.dispatchEvent(new Event('change'));
+    }));
+    document.addEventListener('click', ()=>{ if(UI.textModal){ UI.textModal.iconePickerAberto = false; render(); } }, { once:true });
+  }
   // Upload de ícone externo da conta (seção 2 do requisito): só aceita imagens com EXATAMENTE 64×64px —
   // nunca redimensiona/recorta/converte, só rejeita com uma mensagem clara e mantém o que já estava salvo.
   document.getElementById('fTextModalIconeContaUpload')?.addEventListener('change', e=>{
@@ -16647,9 +16771,9 @@ function bindEvents(){
     function salvarLimiteCartao(nomeConta){
       const elLimite = document.getElementById('fTextModalLimiteTotal');
       const limiteTotalNovo = elLimite && elLimite.value.trim()!=='' ? parseMoedaTexto(elLimite.value) : 0;
-      const elVinculo = document.getElementById('fTextModalVinculoLimite');
+      const elVinculo = document.getElementById('fVinculoLimiteCartao');
       const cartoesVinculadosSelecionados = elVinculo && elVinculo.checked
-        ? [...document.querySelectorAll('.fTextModalCartaoVinculado')].filter(el=>el.checked).map(el=>el.dataset.cartao)
+        ? [...document.querySelectorAll('.fCartaoVinculado')].filter(el=>el.checked).map(el=>el.dataset.cartao)
         : [];
       aplicarVinculoLimiteCartao(nomeConta, cartoesVinculadosSelecionados, limiteTotalNovo);
     }
@@ -16706,7 +16830,16 @@ function bindEvents(){
           if(tipoConta==='Cartão de Crédito'){ salvarConfigCartao(nomeFinalConta); salvarBandeiraCartao(nomeFinalConta); salvarLimiteCartao(nomeFinalConta); } else { delete STATE.contaBandeira[nomeFinalConta]; delete STATE.cardLimite[nomeFinalConta]; }
           if(tipoConta==='Contracheque' || tipoConta==='Cartão de Crédito') salvarContaVinculada(nomeFinalConta); else delete STATE.contaVinculada[nomeFinalConta];
           salvarResponsavelConta(nomeFinalConta);
-          salvarDadosExtra(nomeFinalConta); }
+          salvarDadosExtra(nomeFinalConta);
+          // Saldo Inicial anexado a este modal (seção 9 do requisito) — só quando o campo está presente
+          // (contas que não sejam Contracheque, ver mostrarSaldoInicial) e reaproveitando exatamente
+          // aplicarSaldoAnteriorConta, a mesma função já usada pelo saldo inicial do Fluxo de Caixa.
+          const elSaldoInicial = document.getElementById('fTextModalSaldoInicial');
+          if(elSaldoInicial){
+            const textoSaldo = elSaldoInicial.value.trim();
+            aplicarSaldoAnteriorConta(nomeFinalConta, t.saldoAno, t.saldoMes, textoSaldo==='' ? null : parseMoedaTexto(textoSaldo));
+          }
+        }
         break;
       case 'meio-novo':
         if(STATE.meiosPagamento.includes(nome)){ alert('Já existe um meio de pagamento com esse nome.'); return; }
