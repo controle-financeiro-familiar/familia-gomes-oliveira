@@ -1846,7 +1846,12 @@ summary::marker{content:'';}
 .conta-financeira-saldo-bancaria > div:last-child{justify-content:flex-end;text-align:right;}
 .conta-financeira-saldo-bancaria .lbl{font-size:var(--conta-financeira-fonte-lbl, 11.5px);white-space:nowrap;min-width:0;}
 .conta-financeira-saldo-bancaria .val{font-family:inherit;font-weight:700;font-size:var(--conta-financeira-fonte-val, 13px);color:var(--ink);white-space:nowrap;min-width:0;}
-.conta-financeira-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;text-align:center;}
+/* Linhas com altura padronizada entre TODOS os cards de Contas (--conta-financeira-grid-linha1/-linha2,
+   calculadas em ajustarAlturaContaFinanceiraGrid): sem isso, a 1ª linha do card de Contracheque (Margem/
+   Líquido, só texto) ficava mais baixa que a de uma conta comum (Saldo inicial/Saldo líquido, que tem o
+   botão ✏️ de editar e o ícone de dica — ambos mais altos que uma linha só de texto), fazendo os dois tipos
+   de card não alinharem entre si mesmo com a mesma altura total (.conta-financeira-card height:250px). */
+.conta-financeira-grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:var(--conta-financeira-grid-linha1, auto) var(--conta-financeira-grid-linha2, auto);gap:8px;font-size:12px;text-align:center;}
 .conta-financeira-grid .lbl{display:block;color:#8393ac;font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;}
 .conta-financeira-grid .val{display:block;font-family:var(--mono);font-weight:700;font-size:13px;color:var(--ink);}
 .conta-financeira-grid .val.pos{color:var(--receita);}
@@ -8950,6 +8955,7 @@ function render(){
   requestAnimationFrame(ajustarAgrupamentoFiltros);
   requestAnimationFrame(ajustarFonteCartoesResumo);
   requestAnimationFrame(ajustarFonteContaFinanceiraSaldo);
+  requestAnimationFrame(ajustarAlturaContaFinanceiraGrid);
 }
 /* Item 20 do requisito: decide se a tabbar cabe numa única linha na largura atual — se não couber (mesmo
    acima do breakpoint fixo de 700px, ex.: janela do navegador estreitada), força bottom-nav via classe no
@@ -9030,6 +9036,27 @@ function ajustarFonteContaFinanceiraSaldo(){
     if(tamanhoVal<=9) break;
   }
 }
+/* Padroniza a altura da 1ª e da 2ª linha de .conta-financeira-grid entre TODOS os cards do painel de
+   Contas (--conta-financeira-grid-linha1/-linha2, ver CSS): mede a altura natural de cada linha em cada
+   card (grid-template-columns:1fr 1fr, então os filhos 0/1 são a 1ª linha e 2/3 são a 2ª) e aplica o maior
+   valor encontrado, globalmente, a todos os cards — assim a 1ª linha do Contracheque (Margem/Líquido, só
+   texto) fica com a mesma altura da 1ª linha de uma conta comum (Saldo inicial/Saldo líquido, mais alta por
+   causa do botão ✏️ e do ícone de dica), mesmo os dois sendo grids independentes. */
+function ajustarAlturaContaFinanceiraGrid(){
+  document.documentElement.style.removeProperty('--conta-financeira-grid-linha1');
+  document.documentElement.style.removeProperty('--conta-financeira-grid-linha2');
+  const grids = document.querySelectorAll('.conta-financeira-grid');
+  if(!grids.length) return;
+  let linha1 = 0, linha2 = 0;
+  grids.forEach(g=>{
+    const filhos = g.children;
+    if(filhos.length<4) return;
+    linha1 = Math.max(linha1, filhos[0].offsetHeight, filhos[1].offsetHeight);
+    linha2 = Math.max(linha2, filhos[2].offsetHeight, filhos[3].offsetHeight);
+  });
+  if(linha1>0) document.documentElement.style.setProperty('--conta-financeira-grid-linha1', linha1+'px');
+  if(linha2>0) document.documentElement.style.setProperty('--conta-financeira-grid-linha2', linha2+'px');
+}
 let filtrosAbaixoDoPiso = (typeof window!=='undefined' && window.innerWidth<=700);
 function ajustarAgrupamentoFiltros(){
   if(!UI.appIniciado) return;
@@ -9071,7 +9098,7 @@ function ajustarAgrupamentoFiltros(){
 let ajustarNavResponsivaTimer=null;
 window.addEventListener('resize', ()=>{
   clearTimeout(ajustarNavResponsivaTimer);
-  ajustarNavResponsivaTimer = setTimeout(()=>{ ajustarNavResponsiva(); ajustarAgrupamentoFiltros(); ajustarFonteCartoesResumo(); ajustarFonteContaFinanceiraSaldo(); }, 120);
+  ajustarNavResponsivaTimer = setTimeout(()=>{ ajustarNavResponsiva(); ajustarAgrupamentoFiltros(); ajustarFonteCartoesResumo(); ajustarFonteContaFinanceiraSaldo(); ajustarAlturaContaFinanceiraGrid(); }, 120);
 });
 /* Tela inicial: exibida sempre que a sessão está zerada (nenhum arquivo .cfg/.log conectado ainda) — ao
    abrir a aplicação, ou depois de desconectar/fechar a sessão. Modelo semelhante a softwares tradicionais
