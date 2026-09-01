@@ -1775,7 +1775,11 @@ summary::marker{content:'';}
   }
 }
 .aportes-tabela-itens td{padding:4px 10px;border-bottom:1px solid var(--line);}
-.contas-financeiras-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;}
+/* minmax da coluna cresce com --conta-financeira-saldo-min-width (ver ajustarLarguraContaFinanceiraSaldo)
+   para que o card sempre tenha espaço de sobra para o maior par Agência/Nº Conta entre todas as contas,
+   sem depender de truncamento no bloco .conta-financeira-saldo-bancaria. +40px = padding do card (8px×2) +
+   padding do bloco de saldo (12px×2). */
+.contas-financeiras-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(max(260px, calc(var(--conta-financeira-saldo-min-width, 0px) + 40px)),1fr));gap:14px;}
 /* Altura padronizada (seção 4 do requisito "Correções e ajustes — Contracheque, Reserva de Emergência e
    cards de Contas"): sem um valor fixo, cards em linhas diferentes do grid podiam ficar alguns pixels mais
    baixos/altos entre si (cada linha do CSS Grid só estica para acompanhar a própria linha, nunca as
@@ -1807,21 +1811,24 @@ summary::marker{content:'';}
 .conta-financeira-saldo.pos .val{color:var(--receita);}
 .conta-financeira-saldo.neg .val{color:var(--despesa);}
 /* Agência/Nº Conta no card de Contas (substitui o antigo "Saldo Atual (hoje)" — ver
-   renderPainelContasBancarias): dois blocos independentes (cada um com seu próprio .lbl/.val), lado a lado
-   — nunca um título único "Agência e nº conta" combinando os dois valores. É texto, não um valor monetário,
-   então usa fonte menor/não-mono e cada valor trunca com "…" em vez de quebrar linha — a altura do card é
-   fixa (.conta-financeira-card height:250px), então mesmo um número de agência/conta incomumente longo
-   nunca pode empurrar o conteúdo para fora do card (min-width:0 permite o texto encolher dentro do flex e a
-   ellipsis funcionar, tanto no bloco quanto no valor). */
-.conta-financeira-saldo-bancaria{gap:10px;}
-.conta-financeira-saldo-bancaria > div{display:flex;align-items:baseline;gap:5px;min-width:0;flex:1 1 0;}
-.conta-financeira-saldo-bancaria > div:last-child{justify-content:flex-end;text-align:right;}
-.conta-financeira-saldo-bancaria .val{font-family:inherit;font-weight:700;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+   renderPainelContasBancarias): dois blocos independentes (cada um com seu próprio .lbl/.val), lado a lado,
+   exibidos sempre por inteiro — nunca truncados com "…", nem um título único "Agência e nº conta"
+   combinando os dois valores. Cada bloco tem largura de conteúdo (max-content) e nunca quebra linha
+   internamente; a largura do bloco todo é padronizada entre todos os cards via a variável CSS
+   --conta-financeira-saldo-min-width, calculada em ajustarLarguraContaFinanceiraSaldo() a partir do maior
+   .conta-financeira-saldo-bancaria já renderizado (o grid .contas-financeiras-grid cresce junto, ver acima,
+   para que o card sempre tenha espaço de sobra). No mobile, quando não há largura suficiente para os dois
+   blocos lado a lado, cada um cai para sua própria linha (flex-wrap) — mas nunca quebra o texto dentro de
+   um bloco. */
+.conta-financeira-saldo-bancaria{gap:16px;justify-content:flex-start;width:max-content;max-width:100%;min-width:var(--conta-financeira-saldo-min-width, auto);}
+.conta-financeira-saldo-bancaria > div{display:flex;align-items:baseline;gap:5px;flex:0 0 auto;min-width:max-content;white-space:nowrap;}
+.conta-financeira-saldo-bancaria .lbl,
+.conta-financeira-saldo-bancaria .val{white-space:nowrap;overflow:visible;text-overflow:clip;min-width:max-content;}
+.conta-financeira-saldo-bancaria .val{font-family:inherit;font-weight:700;font-size:13px;color:var(--ink);}
 @media(max-width:700px){
-  /* Em telas estreitas o card ainda tem largura suficiente para os dois blocos lado a lado (o mesmo grid
-     2 colunas abaixo, Saldo inicial/líquido/Entradas/Saídas, já convive nessa largura) — só reduz o gap
-     para dar mais espaço ao texto antes de truncar. */
-  .conta-financeira-saldo-bancaria{gap:6px;}
+  /* Sem espaço para os dois blocos lado a lado numa tela estreita: em vez de truncar, cada bloco (que
+     nunca quebra seu próprio texto, graças ao white-space:nowrap acima) cai para a própria linha. */
+  .conta-financeira-saldo-bancaria{gap:6px;flex-wrap:wrap;width:100%;min-width:0;}
 }
 .conta-financeira-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;text-align:center;}
 .conta-financeira-grid .lbl{display:block;color:#8393ac;font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;}
@@ -8926,6 +8933,7 @@ function render(){
   requestAnimationFrame(ajustarNavResponsiva);
   requestAnimationFrame(ajustarAgrupamentoFiltros);
   requestAnimationFrame(ajustarFonteCartoesResumo);
+  requestAnimationFrame(ajustarLarguraContaFinanceiraSaldo);
 }
 /* Item 20 do requisito: decide se a tabbar cabe numa única linha na largura atual — se não couber (mesmo
    acima do breakpoint fixo de 700px, ex.: janela do navegador estreitada), força bottom-nav via classe no
@@ -8984,6 +8992,20 @@ function ajustarFonteCartoesResumo(){
     if(tamanho<=9) break;
   }
 }
+/* Padroniza a largura de Agência/Nº Conta (.conta-financeira-saldo-bancaria) entre todos os cards do
+   painel de Contas: mede o maior bloco já renderizado (scrollWidth, com o próprio conteúdo em
+   max-content/nowrap — nunca truncado, ver CSS) e aplica esse valor como --conta-financeira-saldo-min-width
+   global, que o grid .contas-financeiras-grid usa para alargar a coluna quando necessário (nenhum card fica
+   mais estreito do que o maior par Agência/Nº Conta exige). No mobile os blocos empilham (flex-wrap) em vez
+   de precisar de uma largura mínima uniforme, então a variável é dispensada nessa faixa. */
+function ajustarLarguraContaFinanceiraSaldo(){
+  document.documentElement.style.removeProperty('--conta-financeira-saldo-min-width');
+  if(window.innerWidth<=700) return;
+  const blocos = document.querySelectorAll('.conta-financeira-saldo-bancaria');
+  if(!blocos.length) return;
+  const maiorLargura = Array.from(blocos).reduce((maior, el)=>Math.max(maior, el.scrollWidth), 0);
+  document.documentElement.style.setProperty('--conta-financeira-saldo-min-width', maiorLargura+'px');
+}
 let filtrosAbaixoDoPiso = (typeof window!=='undefined' && window.innerWidth<=700);
 function ajustarAgrupamentoFiltros(){
   if(!UI.appIniciado) return;
@@ -9025,7 +9047,7 @@ function ajustarAgrupamentoFiltros(){
 let ajustarNavResponsivaTimer=null;
 window.addEventListener('resize', ()=>{
   clearTimeout(ajustarNavResponsivaTimer);
-  ajustarNavResponsivaTimer = setTimeout(()=>{ ajustarNavResponsiva(); ajustarAgrupamentoFiltros(); ajustarFonteCartoesResumo(); }, 120);
+  ajustarNavResponsivaTimer = setTimeout(()=>{ ajustarNavResponsiva(); ajustarAgrupamentoFiltros(); ajustarFonteCartoesResumo(); ajustarLarguraContaFinanceiraSaldo(); }, 120);
 });
 /* Tela inicial: exibida sempre que a sessão está zerada (nenhum arquivo .cfg/.log conectado ainda) — ao
    abrir a aplicação, ou depois de desconectar/fechar a sessão. Modelo semelhante a softwares tradicionais
