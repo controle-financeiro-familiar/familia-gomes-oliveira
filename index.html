@@ -1815,7 +1815,11 @@ summary::marker{content:'';}
   display:flex;flex-direction:column;gap:14px;transition:box-shadow .15s ease,transform .15s ease;
   height:250px;
 }
-.conta-financeira-card .btn-card-topo-direita{position:absolute;top:8px;right:24px;font-size:24px;}
+/* Ícone de Importar (📥) e, quando existir, o de Editar saldo inicial (✏️) ficam juntos no canto superior
+   direito do card — o de editar sempre à direita do de importar (ver renderPainelContasBancarias), em vez
+   de ficar dentro do próprio valor de "Saldo inicial" no grid abaixo. */
+.conta-financeira-card-topo-acoes{position:absolute;top:4px;right:4px;display:flex;align-items:center;}
+.conta-financeira-card-topo-acoes .icon-btn{font-size:24px;}
 .conta-financeira-acoes{display:flex;gap:8px;margin-top:auto;}
 .conta-financeira-acoes .btn{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;font-size:15px;}
 /* Botões de ação específicos da Reserva de Emergência (Movimentações/Evolução) e do Contracheque
@@ -1825,7 +1829,7 @@ summary::marker{content:'';}
 .conta-financeira-acoes .btn-acao-especial-icone{font-size:15px;}
 .conta-financeira-acoes .btn-acao-especial-texto{font-size:10px;}
 .contagem-futuros-btn{font-size:11px;font-weight:400;}
-.conta-financeira-card .cartao-col{padding-right:30px;}
+.conta-financeira-card .cartao-col{padding-right:62px;}
 .conta-financeira-card:hover{box-shadow:0 6px 16px rgba(16,64,141,.12);transform:translateY(-2px);}
 .conta-financeira-saldo{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:9px;background:var(--navy-50);width:100%;min-width:0;box-sizing:border-box;}
 .conta-financeira-saldo .lbl{font-size:11.5px;font-weight:700;color:#6a7a97;flex-shrink:0;}
@@ -1859,10 +1863,10 @@ summary::marker{content:'';}
 @media(max-width:700px){
   /* Item 22 do requisito de responsividade: ações do card de Contas com tamanho de toque adequado — no
      desktop o card já é compacto o bastante para não precisar disso, mas no mobile os botões "Ver
-     Extrato"/"Ver lançamentos futuros" (32px de altura), o "Importar" no canto (38px) e o ✏️ de editar
-     saldo inicial (23px) ficavam abaixo do mínimo recomendado de toque. */
+     Extrato"/"Ver lançamentos futuros" (32px de altura) e os ícones de Importar/Editar saldo inicial no
+     canto (38px) ficavam abaixo do mínimo recomendado de toque. */
   .conta-financeira-acoes .btn{}
-  .conta-financeira-card .btn-card-topo-direita{padding:10px;}
+  .conta-financeira-card-topo-acoes .icon-btn{padding:10px;}
   .conta-financeira-grid .icon-btn{min-width:var(--touch-min);}
 }
 .cartoes-resumo-item{
@@ -11240,7 +11244,10 @@ function renderPainelContasBancarias(ano, mes){
         // do badge de tipo, como nas demais contas) — pedido específico para este tipo de card.
         const ehReserva = tipo==='Reserva de Emergência';
         return `<div class="conta-financeira-card">
-          <button type="button" class="icon-btn btn-card-topo-direita no-print" data-importar-conta="${escapeHtml(c)}" title="Importar arquivo do banco" aria-label="Importar arquivo do banco">📥</button>
+          <div class="conta-financeira-card-topo-acoes no-print">
+            <button type="button" class="icon-btn" data-importar-conta="${escapeHtml(c)}" title="Importar arquivo do banco" aria-label="Importar arquivo do banco">📥</button>
+            ${!ehContracheque ? `<button type="button" class="icon-btn" data-editar-saldo-inicial-conta="${escapeHtml(c)}" title="Editar saldo inicial do período" aria-label="Editar saldo inicial do período">✏️</button>` : ''}
+          </div>
           <div class="cartao-col">
             <span class="faixa-cartao" style="background:${info.cor};"></span>
             ${logoInstituicaoCartaoHtml(c)}
@@ -11270,7 +11277,7 @@ function renderPainelContasBancarias(ano, mes){
             <div><span class="lbl">Nº Conta</span><span class="val" title="${escapeHtml(extra.numeroConta||'—')}">${escapeHtml(extra.numeroConta||'—')}</span></div>
           </div>
           <div class="conta-financeira-grid">
-            <div><span class="lbl">Saldo inicial</span><span class="val">${fmtBRL(s.saldoInicial)} <button type="button" class="icon-btn" data-editar-saldo-inicial-conta="${escapeHtml(c)}" title="Editar saldo inicial do período">✏️</button></span></div>
+            <div><span class="lbl">Saldo inicial</span><span class="val">${fmtBRL(s.saldoInicial)}</span></div>
             <div><span class="lbl">Saldo líquido<span class="hint" style="margin:0;font-weight:400;" title="Saldo inicial da competência + entradas − saídas já ocorridas até hoje — lançamentos com data futura só entram quando a data chegar."></span></span><span class="val ${classeSinalMoeda(s.saldoInicial+s.liquidoRealizado)}">${fmtBRL(s.saldoInicial+s.liquidoRealizado)}</span></div>
             <div><span class="lbl">Entradas</span><span class="val pos">${fmtBRL(s.entradasRealizadas)}</span></div>
             <div><span class="lbl">Saídas</span><span class="val neg">${fmtBRL(s.saidasRealizadas)}</span></div>
