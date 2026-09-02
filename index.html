@@ -7631,9 +7631,23 @@ function lancamentosFuturosConta(conta){
 }
 function resumoContasBancarias(ano, mes){
   const contas = contasBancarias();
+  // Os 3 cards-resumo (saldo líquido/entradas/saídas no período) consideram TODAS as contas bancárias
+  // EXCETO Contracheque — essa conta não representa dinheiro disponível em nenhuma instituição (é só o
+  // registro das rubricas do próprio holerite, cujo valor líquido já entra normalmente na conta bancária
+  // vinculada como um lançamento comum) — somá-la aqui contaria o mesmo valor em dobro. A contagem de
+  // contas (qtdContas) continua sobre TODAS as contas bancárias, sem essa exclusão (não é um total
+  // financeiro, só uma quantidade).
+  const contasParaTotais = contas.filter(c=> STATE.contaTipos[c]!=='Contracheque');
   let saldoTotal = 0, entradasTotal = 0, saidasTotal = 0;
-  const hoje = hojeISO();
-  contas.forEach(c=>{ const s = calcSaldoConta(c,ano,mes); saldoTotal += saldoContaAteData(c, hoje); entradasTotal += s.entradasRealizadas; saidasTotal += s.saidasRealizadas; });
+  contasParaTotais.forEach(c=>{
+    const s = calcSaldoConta(c, ano, mes);
+    // Saldo líquido do período = saldoInicial + liquidoRealizado, a MESMA fórmula já usada no card de cada
+    // conta individual (ver renderPainelContasBancarias) — nunca o saldo "até hoje" (saldoContaAteData),
+    // que ignora a competência navegada e sempre traz o saldo atual real, misturando meses diferentes.
+    saldoTotal += s.saldoInicial + s.liquidoRealizado;
+    entradasTotal += s.entradasRealizadas;
+    saidasTotal += s.saidasRealizadas;
+  });
   return { qtdContas: contas.length, saldoTotal, entradasTotal, saidasTotal };
 }
 /* Lançamentos do período com saldo acumulado — calculado em ordem cronológica (a partir do saldo inicial
@@ -11620,7 +11634,7 @@ function renderPainelContasBancarias(ano, mes){
   <div class="panel">
     <div class="cartoes-resumo-grid">
       <div class="cartoes-resumo-item"><span class="ico">🏦</span><div><div class="val">${resumo.qtdContas}</div><div class="lbl">conta${resumo.qtdContas===1?'':'s'}</div></div></div>
-      <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(resumo.saldoTotal)}</div><div class="lbl">saldo total</div></div></div>
+      <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(resumo.saldoTotal)}</div><div class="lbl">saldo líquido no período</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">📈</span><div><div class="val">${fmtBRL(resumo.entradasTotal)}</div><div class="lbl">entradas no período</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">📉</span><div><div class="val">${fmtBRL(resumo.saidasTotal)}</div><div class="lbl">saídas no período</div></div></div>
     </div>
