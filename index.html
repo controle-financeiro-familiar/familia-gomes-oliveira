@@ -3124,6 +3124,12 @@ let CATEGORIAS = [
   ['Resgates e Empréstimos Recebidos','Renda Familiar','Entradas Patrimoniais e Resgates','Receita','Variável'],
   ['Restituição do Imposto de Renda (IRPF)','Renda Familiar','Entradas Patrimoniais e Resgates','Receita','Variável'],
   ['Outras Receitas de Renda Familiar','Renda Familiar','Outros','Receita','Variável'],
+  // Grupo de fallback usado exclusivamente pela classificação automática (ver
+  // categoriaNaoIdentificada/corrigirLancamentosSemClassificacao) quando nenhuma regra existente consegue
+  // determinar com segurança a categoria de um lançamento — nunca deve ser escolhido manualmente como
+  // primeira opção normal, mas continua disponível para seleção/correção como qualquer outra subcategoria.
+  ['Outras Despesas de Não Identificado','Não Identificado','Outros','Despesa','Variável'],
+  ['Outras Receitas de Não Identificado','Não Identificado','Outros','Receita','Variável'],
 ];
 const CATEGORIAS_PADRAO_SNAPSHOT = CATEGORIAS.map(c=>[...c]); // cópia congelada dos padrões atuais, usada para migrar arquivos antigos
 
@@ -3344,14 +3350,14 @@ const GRUPO_COLORS = {
   "Educação":"#3F7D20","Lazer e Entretenimento":"#a5690a","Cuidados Pessoais":"#b0558f",
   "Filhos e Pets":"#6a8fc9","Caridade e Generosidade":"#c2578a","Economias":"#0f6f8a","Dívidas e Empréstimos":"#a83246",
   "Renda Familiar":"#1e8e5a","Tributos e Despesas Bancárias":"#7a5ea8","Transações":"#8393ac",
-  "Saldos e Ajustes":"#6b7280","Tecnologia e Eletrônicos":"#3b5bdb","Sem Grupo":"#9aa5b8"
+  "Saldos e Ajustes":"#6b7280","Tecnologia e Eletrônicos":"#3b5bdb","Sem Grupo":"#9aa5b8","Não Identificado":"#9aa5b8"
 };
 const GRUPO_ICONS = {
   "Moradia/Habitação":"🏠","Transporte":"🚗","Alimentação":"🍽️","Saúde":"🩺",
   "Educação":"🎓","Lazer e Entretenimento":"🎉","Cuidados Pessoais":"🧖",
   "Filhos e Pets":"🐾","Caridade e Generosidade":"🤝","Economias":"🪙","Dívidas e Empréstimos":"📉",
   "Renda Familiar":"💵","Tributos e Despesas Bancárias":"💸","Transações":"🔁",
-  "Saldos e Ajustes":"⚖️","Tecnologia e Eletrônicos":"💻","Sem Grupo":"❓"
+  "Saldos e Ajustes":"⚖️","Tecnologia e Eletrônicos":"💻","Sem Grupo":"❓","Não Identificado":"❓"
 };
 function iconeGrupo(grupo){ return GRUPO_ICONS[grupo] || "🗂️"; }
 
@@ -3967,12 +3973,35 @@ function corrigirCategoriasOrfas(){
    "[Tipo] - [Origem/Destino]" (usado pelos lançamentos novos, já corrigidos) sem inventar dado que não
    existe mais. A correção possível e honesta é apenas desfazer a categorização inválida (categoria/grupo/
    subgrupo voltam a null, como qualquer lançamento sem categoria sugerida), deixando para reclassificação
-   manual — nunca altera valor, data, competência, conta, tipo ou a própria descrição do lançamento. */
+   manual — nunca altera valor, data, competência, conta, tipo ou a própria descrição do lançamento. Depois
+   dela, corrigirLancamentosSemClassificacao (mais abaixo) já cobre esses registros nulados com a
+   subcategoria de fallback "Não Identificado" na próxima carga do arquivo. */
 function corrigirClassificacaoAportesReservaPicPay(){
   STATE.transactions.forEach(t=>{
     if(t.tipo==='Receita' && t.categoria==='Aportes na Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)' && t.descricao==='Aporte na Reserva de Emergência'){
       t.categoria = null; t.grupo = null; t.subgrupo = null;
     }
+  });
+}
+/* Rede de segurança final da classificação automática (grupo "Não Identificado" → categoria "Outros"):
+   depois que TODAS as demais correções/migrações já rodaram (ver ordem de chamada em loadCSVRegistros),
+   qualquer lançamento que ainda não tenha grupo/categoria/subgrupo definido — seja por nunca ter passado
+   por nenhuma regra de classificação, seja por ter sido esvaziado por alguma correção anterior (ex.:
+   categoria órfã sem remapeamento conhecido, ou corrigirClassificacaoAportesReservaPicPay acima) — recebe
+   a subcategoria de fallback correspondente ao seu próprio Tipo (ver categoriaNaoIdentificada), nunca ao
+   contrário. Só age quando categoria/grupo/subgrupo estão TODOS vazios: um lançamento que já tem qualquer
+   um desses três definidos — pelo usuário, por uma regra de classificação já estabelecida, ou por uma
+   classificação automática anterior — nunca é tocado aqui, então essa função é sempre idempotente e nunca
+   sobrescreve uma classificação (manual ou automática) já existente. Precisa de t.tipo definido
+   (Despesa/Receita) para decidir qual das duas subcategorias usar — um lançamento sem tipo é deixado como
+   está (não deveria acontecer: todo lançamento sempre tem tipo definido desde a criação/importação). */
+function corrigirLancamentosSemClassificacao(){
+  STATE.transactions.forEach(t=>{
+    if(t.categoria || t.grupo || t.subgrupo) return;
+    const nome = categoriaNaoIdentificada(t.tipo);
+    if(!nome) return;
+    const info = catInfo(nome);
+    t.categoria = nome; t.grupo = info.grupo; t.subgrupo = info.subgrupo; t.natureza = info.natureza;
   });
 }
 /* Rede de segurança geral: para um lançamento cuja subcategoria AINDA é válida no catálogo (não é um caso
@@ -4151,6 +4180,19 @@ function ehPagamentoDeFatura(desc, conta, valor){
 function catInfo(nome){
   const c = CATEGORIAS.find(c=>c[0]===nome);
   return c ? {grupo:c[1], subgrupo:c[2], tipo:c[3], natureza:c[4]} : {grupo:"", subgrupo:"", tipo:"", natureza:""};
+}
+/* Subcategoria de fallback do grupo "Não Identificado" (categoria "Outros") para quando NENHUMA regra de
+   classificação existente (explícita do parser, palavra-chave/histórico, rubrica de contracheque etc.)
+   consegue determinar com segurança a subcategoria de um lançamento — nunca deixa um lançamento sem
+   grupo/categoria/subcategoria só por falta de correspondência automática. Único ponto de decisão entre as
+   duas subcategorias (Despesa/Receita): sempre o Tipo do próprio lançamento, nunca criado ao contrário
+   (usado tanto na importação — ver buildParsedFromMap — quanto na migração de registros já existentes sem
+   classificação — ver corrigirLancamentosSemClassificacao). Retorna '' para qualquer tipo diferente de
+   Despesa/Receita (ex.: lançamento ainda sem tipo definido), quando não há como decidir qual das duas usar. */
+function categoriaNaoIdentificada(tipo){
+  if(tipo==='Despesa') return 'Outras Despesas de Não Identificado';
+  if(tipo==='Receita') return 'Outras Receitas de Não Identificado';
+  return '';
 }
 /* Resolve o tipo (Despesa/Receita) de uma subcategoria sugerida na importação de extratos quando o nome,
    sozinho, é ambíguo (caso de "Transferência" e "Pix", que agora existem uma vez para Despesa e uma para
@@ -4885,6 +4927,7 @@ function loadCSVRegistros(text){
   migrarNomesContasPadrao();
   aplicarResponsavelPadraoPorTipo();
   reconciliarPagamentosFatura(); // cria os espelhos de pagamento de fatura que ainda faltarem (ver função)
+  corrigirLancamentosSemClassificacao(); // por último: só sobra sem grupo/categoria quem nenhuma correção acima resolveu
 }
 /* Corrige, para compras já cadastradas antes da correção deste bug, a competência das parcelas futuras
    que tinham sido geradas somando meses à Data em vez de à competência da fatura. Para cada
@@ -13072,7 +13115,7 @@ function renderCategorias(){
 }
 function tiposPermitidosGrupo(grupo){
   if(grupo==='Renda Familiar') return ['Receita'];
-  if(grupo==='Transações' || grupo==='__novo__' || !grupo) return ['Despesa','Receita'];
+  if(grupo==='Transações' || grupo==='Não Identificado' || grupo==='__novo__' || !grupo) return ['Despesa','Receita'];
   return ['Despesa'];
 }
 function renderPosicaoModal(){
@@ -15375,6 +15418,11 @@ function buildParsedFromMap(){
     } else if(tipoConta==='Contracheque' && tipo==='Receita'){
       catSugerida = 'Salário TRT';
     }
+    // Fallback final "Não Identificado": só chega aqui depois de TODAS as regras de classificação acima
+    // (categoria explícita do parser, pagamento de fatura, TRNTYPE, rubrica de contracheque, sugestão por
+    // palavra-chave/histórico) terem sido avaliadas e nenhuma ter resultado numa subcategoria — nunca deixa
+    // o lançamento importado sem classificação (ver categoriaNaoIdentificada).
+    if(!catSugerida) catSugerida = categoriaNaoIdentificada(tipo);
     const responsavelPreset = catSugerida ? responsavelPredefinidoDaSubcategoria(catSugerida) : '';
     // Responsável automático da conta (seção 3 do requisito "Categorias e Importação Bancária"): quando o
     // lançamento é Receita do grupo Renda Familiar e a subcategoria sugerida NÃO já tem um responsável
