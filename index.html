@@ -1265,6 +1265,20 @@ tbody tr:hover{background:var(--navy-50);}
    dinheiro está mudando"), sem elemento/ícone à parte, então nenhuma outra regra visual é necessária aqui. */
 .th-ordenavel{ user-select:none; }
 .th-ordenavel:hover{ background:var(--navy-900); }
+/* Reordenação manual por drag-and-drop (Extrato/Lançamentos Futuros/Fatura/Próximas Faturas — ver
+   renderColunaArrastarLinha/aplicarOrdemManual). Coluna estreita e de largura fixa (nunca estica as
+   demais colunas de forma perceptível); ícone só visível/ativo nas linhas onde a reordenação está
+   disponível (a própria célula fica vazia nas demais, ver ehSaldoAnterior em renderExtratoContaModal). */
+.col-arrastar{ width:20px; padding-left:8px; padding-right:0; }
+.drag-handle{ cursor:grab; color:#8393ac; font-size:14px; line-height:1; user-select:none; display:inline-block; }
+.drag-handle:active{ cursor:grabbing; }
+/* Linha sendo arrastada: opacidade reduzida, sem re-renderizar nada (classe alternada direto no DOM
+   durante o arraste — só um `render()` completo no dragstart/drop, nunca a cada dragover, ver bindEvents). */
+tr.arrastando{ opacity:.4; }
+/* Linha de destino do arraste: uma borda de inserção acima/abaixo indica onde o item será solto, sem
+   mover nenhuma outra linha até o drop de fato acontecer (evita "pulos" na tabela durante o arraste). */
+tr.drag-over-cima{ box-shadow: inset 0 2px 0 0 var(--navy-900); }
+tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .barra-acoes-lote{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .barra-acoes-lote.vazia{ display:none; }
 .barra-acoes-lote-contagem{ font-weight:600; color:var(--navy-900); margin-right:4px;font-size:14px; }
@@ -3115,6 +3129,12 @@ let CATEGORIAS = [
   ['Resgates e Empréstimos Recebidos','Renda Familiar','Entradas Patrimoniais e Resgates','Receita','Variável'],
   ['Restituição do Imposto de Renda (IRPF)','Renda Familiar','Entradas Patrimoniais e Resgates','Receita','Variável'],
   ['Outras Receitas de Renda Familiar','Renda Familiar','Outros','Receita','Variável'],
+  // Grupo de fallback usado exclusivamente pela classificação automática (ver
+  // categoriaNaoIdentificada/corrigirLancamentosSemClassificacao) quando nenhuma regra existente consegue
+  // determinar com segurança a categoria de um lançamento — nunca deve ser escolhido manualmente como
+  // primeira opção normal, mas continua disponível para seleção/correção como qualquer outra subcategoria.
+  ['Outras Despesas de Não Identificado','Não Identificado','Outros','Despesa','Variável'],
+  ['Outras Receitas de Não Identificado','Não Identificado','Outros','Receita','Variável'],
 ];
 const CATEGORIAS_PADRAO_SNAPSHOT = CATEGORIAS.map(c=>[...c]); // cópia congelada dos padrões atuais, usada para migrar arquivos antigos
 
@@ -3335,14 +3355,14 @@ const GRUPO_COLORS = {
   "Educação":"#3F7D20","Lazer e Entretenimento":"#a5690a","Cuidados Pessoais":"#b0558f",
   "Filhos e Pets":"#6a8fc9","Caridade e Generosidade":"#c2578a","Economias":"#0f6f8a","Dívidas e Empréstimos":"#a83246",
   "Renda Familiar":"#1e8e5a","Tributos e Despesas Bancárias":"#7a5ea8","Transações":"#8393ac",
-  "Saldos e Ajustes":"#6b7280","Tecnologia e Eletrônicos":"#3b5bdb","Sem Grupo":"#9aa5b8"
+  "Saldos e Ajustes":"#6b7280","Tecnologia e Eletrônicos":"#3b5bdb","Sem Grupo":"#9aa5b8","Não Identificado":"#9aa5b8"
 };
 const GRUPO_ICONS = {
   "Moradia/Habitação":"🏠","Transporte":"🚗","Alimentação":"🍽️","Saúde":"🩺",
   "Educação":"🎓","Lazer e Entretenimento":"🎉","Cuidados Pessoais":"🧖",
   "Filhos e Pets":"🐾","Caridade e Generosidade":"🤝","Economias":"🪙","Dívidas e Empréstimos":"📉",
   "Renda Familiar":"💵","Tributos e Despesas Bancárias":"💸","Transações":"🔁",
-  "Saldos e Ajustes":"⚖️","Tecnologia e Eletrônicos":"💻","Sem Grupo":"❓"
+  "Saldos e Ajustes":"⚖️","Tecnologia e Eletrônicos":"💻","Sem Grupo":"❓","Não Identificado":"❓"
 };
 function iconeGrupo(grupo){ return GRUPO_ICONS[grupo] || "🗂️"; }
 
@@ -3944,6 +3964,51 @@ function corrigirCategoriasOrfas(){
     }
   });
 }
+/* Corrige lançamentos de Receita importados do extrato CSV da Reserva de Emergência (PicPay) ANTES da
+   correção de classificarLancamentoReservaEmergencia, que forçava a subcategoria "Aportes na Reserva de
+   Emergência" (Pix/transferência recebidos) também para Receita — essa subcategoria só existe cadastrada
+   corretamente como Despesa em CATEGORIAS (o "aporte" nela é sempre uma saída de outra conta para a
+   reserva); a entrada duplicada com o mesmo nome como Receita nunca é alcançada por catInfo/CATEGORIAS.find
+   (sempre resolve para a primeira, a de Despesa), deixando esses lançamentos com uma categoria
+   tecnicamente inválida para o próprio tipo. Identifica esses registros pela combinação exata
+   tipo=Receita + categoria="Aportes..." + a descrição fixa e genérica que só esse bug gerava
+   ("Aporte na Reserva de Emergência", sem o Tipo/Origem-Destino do lançamento original). O Tipo e a
+   Origem/Destino originais do arquivo importado nunca foram armazenados em nenhum campo do lançamento
+   (só usados para montar essa descrição fixa) — por isso é impossível reconstruir aqui o formato
+   "[Tipo] - [Origem/Destino]" (usado pelos lançamentos novos, já corrigidos) sem inventar dado que não
+   existe mais. A correção possível e honesta é apenas desfazer a categorização inválida (categoria/grupo/
+   subgrupo voltam a null, como qualquer lançamento sem categoria sugerida), deixando para reclassificação
+   manual — nunca altera valor, data, competência, conta, tipo ou a própria descrição do lançamento. Depois
+   dela, corrigirLancamentosSemClassificacao (mais abaixo) já cobre esses registros nulados com a
+   subcategoria de fallback "Não Identificado" na próxima carga do arquivo. */
+function corrigirClassificacaoAportesReservaPicPay(){
+  STATE.transactions.forEach(t=>{
+    if(t.tipo==='Receita' && t.categoria==='Aportes na Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)' && t.descricao==='Aporte na Reserva de Emergência'){
+      t.categoria = null; t.grupo = null; t.subgrupo = null;
+    }
+  });
+}
+/* Rede de segurança final da classificação automática (grupo "Não Identificado" → categoria "Outros"):
+   depois que TODAS as demais correções/migrações já rodaram (ver ordem de chamada em loadCSVRegistros),
+   qualquer lançamento que ainda não tenha grupo/categoria/subgrupo definido — seja por nunca ter passado
+   por nenhuma regra de classificação, seja por ter sido esvaziado por alguma correção anterior (ex.:
+   categoria órfã sem remapeamento conhecido, ou corrigirClassificacaoAportesReservaPicPay acima) — recebe
+   a subcategoria de fallback correspondente ao seu próprio Tipo (ver categoriaNaoIdentificada), nunca ao
+   contrário. Só age quando categoria/grupo/subgrupo estão TODOS vazios: um lançamento que já tem qualquer
+   um desses três definidos — pelo usuário, por uma regra de classificação já estabelecida, ou por uma
+   classificação automática anterior — nunca é tocado aqui, então essa função é sempre idempotente e nunca
+   sobrescreve uma classificação (manual ou automática) já existente. Precisa de t.tipo definido
+   (Despesa/Receita) para decidir qual das duas subcategorias usar — um lançamento sem tipo é deixado como
+   está (não deveria acontecer: todo lançamento sempre tem tipo definido desde a criação/importação). */
+function corrigirLancamentosSemClassificacao(){
+  STATE.transactions.forEach(t=>{
+    if(t.categoria || t.grupo || t.subgrupo) return;
+    const nome = categoriaNaoIdentificada(t.tipo);
+    if(!nome) return;
+    const info = catInfo(nome);
+    t.categoria = nome; t.grupo = info.grupo; t.subgrupo = info.subgrupo; t.natureza = info.natureza;
+  });
+}
 /* Rede de segurança geral: para um lançamento cuja subcategoria AINDA é válida no catálogo (não é um caso
    de corrigirCategoriasOrfas, que só trata nomes órfãos), ainda assim resincroniza grupo/subgrupo/natureza
    a partir do catálogo vivo sempre que estiverem desatualizados. Isso cobre o caso em que a classificação
@@ -4120,6 +4185,19 @@ function ehPagamentoDeFatura(desc, conta, valor){
 function catInfo(nome){
   const c = CATEGORIAS.find(c=>c[0]===nome);
   return c ? {grupo:c[1], subgrupo:c[2], tipo:c[3], natureza:c[4]} : {grupo:"", subgrupo:"", tipo:"", natureza:""};
+}
+/* Subcategoria de fallback do grupo "Não Identificado" (categoria "Outros") para quando NENHUMA regra de
+   classificação existente (explícita do parser, palavra-chave/histórico, rubrica de contracheque etc.)
+   consegue determinar com segurança a subcategoria de um lançamento — nunca deixa um lançamento sem
+   grupo/categoria/subcategoria só por falta de correspondência automática. Único ponto de decisão entre as
+   duas subcategorias (Despesa/Receita): sempre o Tipo do próprio lançamento, nunca criado ao contrário
+   (usado tanto na importação — ver buildParsedFromMap — quanto na migração de registros já existentes sem
+   classificação — ver corrigirLancamentosSemClassificacao). Retorna '' para qualquer tipo diferente de
+   Despesa/Receita (ex.: lançamento ainda sem tipo definido), quando não há como decidir qual das duas usar. */
+function categoriaNaoIdentificada(tipo){
+  if(tipo==='Despesa') return 'Outras Despesas de Não Identificado';
+  if(tipo==='Receita') return 'Outras Receitas de Não Identificado';
+  return '';
 }
 /* Resolve o tipo (Despesa/Receita) de uma subcategoria sugerida na importação de extratos quando o nome,
    sozinho, é ambíguo (caso de "Transferência" e "Pix", que agora existem uma vez para Despesa e uma para
@@ -4877,13 +4955,17 @@ async function aplicarSnapshotLocalPendente(){
 async function registrarUltimaContagemReg(n){ try{ await idbSetHandle('ultimaContagemReg', n); }catch(e){} }
 async function obterUltimaContagemReg(){ try{ return await idbGetHandle('ultimaContagemReg'); }catch(e){ return null; } }
 
-const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao'];
+const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao'];
 
 /* ---------- Arquivo de REGISTROS (só lançamentos) ---------- */
 function buildCSVRegistros(){
   const rows = [CSV_HEADER];
   STATE.transactions.forEach(t=>{
-    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '']);
+    // ordem_exibicao (última coluna): ordem manual definida por drag-and-drop no Extrato/Lançamentos
+    // Futuros/Fatura/Próximas Faturas (ver aplicarOrdemManual/persistirOrdemManual) — vazio para um
+    // lançamento que nunca foi reordenado manualmente, sincronizado pela mesma estratégia de persistência
+    // do arquivo de registros já usada por todos os demais campos, nunca um mecanismo à parte.
+    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '']);
   });
   return Papa.unparse(rows);
 }
@@ -4900,7 +4982,8 @@ function loadCSVRegistros(text){
         responsavel: r.responsavel||'', entreFamilia: r.entre_familia==='1',
         internacional: r.eh_cartao==='1', taxaConversao: (r.eh_cartao==='1' && r.dia_fechamento) ? parseFloat(String(r.dia_fechamento).replace(',','.')) : null,
         parcelaFutura: r.dia_vencimento==='1',
-        transferenciaInterna: r.status==='1', transferenciaVinculoId: r.tipo_conta||'', origemImportacao: r.origem_importacao==='1'
+        transferenciaInterna: r.status==='1', transferenciaVinculoId: r.tipo_conta||'', origemImportacao: r.origem_importacao==='1',
+        ordemExibicao: (r.ordem_exibicao!==undefined && r.ordem_exibicao!=='') ? Number(r.ordem_exibicao) : undefined,
       });
     }
   });
@@ -4910,6 +4993,7 @@ function loadCSVRegistros(text){
   removerParcelasFuturasEmprestimoContracheque();
   corrigirParcelasEmprestimos();
   corrigirCategoriasOrfas();
+  corrigirClassificacaoAportesReservaPicPay();
   corrigirSubgruposMovidos();
   corrigirGrupoRenomeadoSemSubstituto();
   corrigirClassificacaoDesatualizada();
@@ -4919,6 +5003,7 @@ function loadCSVRegistros(text){
   migrarNomesContasPadrao();
   aplicarResponsavelPadraoPorTipo();
   reconciliarPagamentosFatura(); // cria os espelhos de pagamento de fatura que ainda faltarem (ver função)
+  corrigirLancamentosSemClassificacao(); // por último: só sobra sem grupo/categoria quem nenhuma correção acima resolveu
 }
 /* Corrige, para compras já cadastradas antes da correção deste bug, a competência das parcelas futuras
    que tinham sido geradas somando meses à Data em vez de à competência da fatura. Para cada
@@ -7123,6 +7208,84 @@ function diagnosticoPagamentoFatura(conta, competencia){
   };
 }
 if(typeof window!=='undefined') window.diagnosticoPagamentoFatura = diagnosticoPagamentoFatura;
+/* ---------- Reordenação manual de registros (Extrato / Lançamentos Futuros / Fatura / Próximas
+   Faturas) ----------
+   A ordem manual (drag-and-drop) é persistida diretamente no próprio lançamento (STATE.transactions,
+   campo `ordemExibicao`) — reaproveita 100% a persistência/sincronização já existentes (scheduleSave,
+   OneDrive), sem nenhuma estrutura nova. Cada contexto (conta+período no Extrato/Futuros, conta+fatura
+   em Fatura/Próximas Faturas) já delimita naturalmente quais lançamentos competem pela mesma ordem —
+   nenhuma chave composta adicional é necessária, o filtro que já isola os itens de cada modal já basta. */
+/* Aplica a ordem manual (se houver) por cima da ordem padrão já calculada em `itens` (cronológica etc.):
+   um lançamento sem `ordemExibicao` mantém a posição relativa que já tinha na ordem padrão recebida
+   (Array.prototype.sort é estável), preenchendo naturalmente o requisito de compatibilidade com
+   registros existentes (seção 17 do requisito) sem exigir nenhuma migração. Só reordena de fato quando
+   ALGUM item do próprio contexto já tem ordem manual definida — caso contrário devolve `itens` como
+   veio, preservando 100% o comportamento anterior a esta funcionalidade. */
+function aplicarOrdemManual(itens){
+  const temOrdemManual = itens.some(t=>t.ordemExibicao!==undefined && t.ordemExibicao!==null);
+  if(!temOrdemManual) return itens;
+  return [...itens].sort((a,b)=>{
+    const oa = (a.ordemExibicao!==undefined && a.ordemExibicao!==null) ? a.ordemExibicao : Infinity;
+    const ob = (b.ordemExibicao!==undefined && b.ordemExibicao!==null) ? b.ordemExibicao : Infinity;
+    return oa - ob;
+  });
+}
+/* Grava a nova ordem manual definida por drag-and-drop — `idsNaOrdem` já é a ordem final exibida (após o
+   drop), do primeiro ao último. Só toca os lançamentos deste contexto (os únicos ids passados), nunca uma
+   sequência global entre contextos diferentes (seção 10 do requisito). Grava direto no objeto já presente
+   em STATE.transactions (nunca numa cópia), para persistir/sincronizar através dos mecanismos já
+   existentes sem nenhum código novo de persistência. */
+function persistirOrdemManual(idsNaOrdem){
+  idsNaOrdem.forEach((id, i)=>{
+    const t = STATE.transactions.find(x=>x.id===id);
+    if(t) t.ordemExibicao = i;
+  });
+}
+/* Ids de TODOS os lançamentos de um contexto de reordenação, na ordem atual de exibição — não só a página
+   exibida no momento (ver bindEvents/handler de drop), para o drop nunca perder a posição relativa de
+   itens de outras páginas/filtros que não estão visíveis durante o arraste. Sempre recalculado na hora a
+   partir das mesmas funções já usadas pelo render de cada modal (itensExtratoConta etc.), nunca cacheado —
+   mesmo princípio de "nada guardado, tudo recalculado" já usado no resto do app. Em Próximas Faturas, a
+   reordenação é restrita à mesma competência do item-alvo do drop (`algumId`) — nunca mistura a ordem de
+   competências diferentes (seção 10 do requisito). */
+function contextoOrdemArrasto(prefixo, algumId){
+  if(prefixo==='Extrato'){
+    const m = UI.extratoContaModal;
+    return itensExtratoConta(m.conta, UI.ano, UI.mes).itens.filter(t=>!ehSaldoAnterior(t)).map(t=>t.id);
+  }
+  if(prefixo==='Futuros'){
+    return lancamentosFuturosConta(UI.futurosContaModal.conta).map(t=>t.id);
+  }
+  if(prefixo==='Fatura'){
+    const m = UI.faturaAtualModal;
+    return itensFatura(m.conta, chaveMes(UI.ano, UI.mes)).itens.map(t=>t.id);
+  }
+  if(prefixo==='Projecao'){
+    const m = UI.projecaoFaturaModal;
+    const todos = itensFaturasFuturas(m.conta);
+    const alvo = todos.find(t=>t.id===algumId);
+    const competenciaAlvo = alvo ? alvo.competencia : null;
+    return todos.filter(t=>t.competencia===competenciaAlvo).map(t=>t.id);
+  }
+  return [];
+}
+/* Recalcula os saldos sequencialmente na ordem exata dos itens recebidos (manual ou automática — esta
+   função só soma, nunca decide a ordem), sempre a partir do Saldo Inicial do contexto (nunca alterado
+   pela reordenação, seção 7 do requisito) — nunca reaproveita um saldo já calculado antes. Mesma fórmula
+   já usada em itensExtratoConta/lancamentosFuturosConta antes desta funcionalidade existir (Receita soma,
+   Despesa subtrai; Saldo Anterior não soma de novo, seu efeito já está embutido no saldoInicial
+   recebido); usada pelos dois modais com saldo por linha (Extrato/Futuros) — Fatura/Próximas Faturas só
+   têm totais agregados, já independentes de ordem, então não precisam deste recálculo. */
+function recalcularSaldosSequenciais(itens, saldoInicial, campoSaldo){
+  let acumulado = saldoInicial;
+  return itens.map(t=>{
+    if(!ehSaldoAnterior(t)){
+      const efeito = t.tipo==='Receita' ? (Number(t.valor)||0) : (t.tipo==='Despesa' ? -(Number(t.valor)||0) : 0);
+      acumulado += efeito;
+    }
+    return { ...t, [campoSaldo]: acumulado };
+  });
+}
 /* Fatura atual de todos os cartões (> R$ 0,00) numa competência, usada no donut do Dashboard */
 function dadosFaturaAtualPorCartao(competencia){
   return cartoesOrdenados()
@@ -7135,10 +7298,10 @@ function dadosFaturaAtualPorCartao(competencia){
    faturaPorCompetencia (a mesma função de todo o resto do app) para nunca divergir do valor exibido na
    tabela principal. */
 function itensFatura(conta, competencia){
-  const itens = STATE.transactions
+  const itens = aplicarOrdemManual(STATE.transactions
     .filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia===competencia && !CATEGORIAS_FATURA.includes(t.categoria))
     .slice()
-    .sort((a,b)=> (b.data||"").localeCompare(a.data||""));
+    .sort((a,b)=> (b.data||"").localeCompare(a.data||"")));
   const totalParcelado = itens.filter(t=>t.tipo==='Despesa' && Number(t.totalParcelas)>1).reduce((s,t)=>s+(Number(t.valor)||0),0);
   const totalAvista = itens.filter(t=>t.tipo==='Despesa' && !(Number(t.totalParcelas)>1)).reduce((s,t)=>s+(Number(t.valor)||0),0);
   // Estornos são tratados como créditos em toda a aba Contas e Cartões — um único total, sem distinção.
@@ -7205,11 +7368,17 @@ function detalheSaldoParceladoEmAberto(conta, competenciaSelecionada){
    competência (mais recente primeiro) e, dentro dela, por Data (mais recente primeiro). */
 function itensFaturasFuturas(conta){
   const competenciaAtual = chaveMes(UI.ano, UI.mes);
-  return STATE.transactions
+  const itens = STATE.transactions
     .filter(t=> t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia && t.competencia>competenciaAtual
       && !CATEGORIAS_FATURA.includes(t.categoria))
     .slice()
     .sort((a,b)=> b.competencia.localeCompare(a.competencia) || (b.data||"").localeCompare(a.data||""));
+  // A ordem manual (seção 10 do requisito) é aplicada por competência: reordenar dentro de uma competência
+  // nunca deve misturar a posição de itens de outra (ver renderProjecaoFaturaModal, que já agrupa por
+  // competência) — agrupa antes de aplicar, preservando a ordem das próprias competências entre si.
+  const porCompetencia = new Map();
+  itens.forEach(t=>{ if(!porCompetencia.has(t.competencia)) porCompetencia.set(t.competencia, []); porCompetencia.get(t.competencia).push(t); });
+  return [...porCompetencia.values()].flatMap(grupo=>aplicarOrdemManual(grupo));
 }
 /* Indicadores consolidados da competência selecionada, para o painel-resumo no topo da aba Cartões de
    Crédito — tudo calculado dinamicamente a partir dos mesmos dados/regras já usados na tabela abaixo. */
@@ -7454,12 +7623,11 @@ function lancamentosFuturosConta(conta){
   const futuros = STATE.transactions
     .filter(t=> t.conta===conta && !ehSaldoAnterior(t) && t.data>hoje)
     .sort((a,b)=> a.data<b.data ? -1 : (a.data>b.data ? 1 : 0));
-  let acumulado = saldoContaAteData(conta, hoje);
-  return futuros.map(t=>{
-    const v = Number(t.valor)||0;
-    acumulado += (t.tipo==='Receita' ? v : (t.tipo==='Despesa' ? -v : 0));
-    return { ...t, saldoProjetado: acumulado };
-  });
+  // Ordem manual (drag-and-drop, seção 8.2 do requisito): quando o usuário já reordenou este contexto,
+  // ela prevalece sobre a ordem cronológica padrão acima — recalcularSaldosSequenciais soma na ordem
+  // recebida, nunca reaproveitando o saldoProjetado de uma passada anterior.
+  const ordenados = aplicarOrdemManual(futuros);
+  return recalcularSaldosSequenciais(ordenados, saldoContaAteData(conta, hoje), 'saldoProjetado');
 }
 function resumoContasBancarias(ano, mes){
   const contas = contasBancarias();
@@ -7483,19 +7651,30 @@ function itensExtratoConta(conta, ano, mes){
   const ordemTipo = (a,b)=> a.tipo==='Receita' && b.tipo==='Despesa' ? -1 : (a.tipo==='Despesa' && b.tipo==='Receita' ? 1 : 0);
   const itensPeriodo = STATE.transactions.filter(t=>t.conta===conta && t.data>=inicioISO && t.data<=fimISO && t.data<=hoje)
     .sort((a,b)=> a.data<b.data ? -1 : (a.data>b.data ? 1 : ordemTipo(a,b)));
-  let acumulado = s.saldoInicial;
-  const comAcumulado = itensPeriodo.map(t=>{
-    // O próprio lançamento de Saldo Anterior já está embutido em s.saldoInicial (ponto de partida) — não
-    // soma de novo o efeito dele aqui, ou o valor entraria duplicado no saldo acumulado exibido.
-    if(!ehSaldoAnterior(t)){
-      const efeito = t.tipo==='Receita' ? (Number(t.valor)||0) : (t.tipo==='Despesa' ? -(Number(t.valor)||0) : 0);
-      acumulado += efeito;
-    }
-    return { ...t, saldoAcumulado: acumulado };
-  });
-  // Exibição: data mais recente primeiro; dentro do mesmo dia, Receita antes de Despesa — não é um simples
-  // reverse do array cronológico, que inverteria também a ordem entre Receita/Despesa do mesmo dia.
-  comAcumulado.sort((a,b)=> a.data>b.data ? -1 : (a.data<b.data ? 1 : ordemTipo(a,b)));
+  // Ordem manual (drag-and-drop, seção 8.1 do requisito): quando o usuário já reordenou este período, a
+  // ordem escolhida por ele passa a ser a própria ordem de exibição (de cima para baixo, na sequência
+  // arrastada) — e o saldo acumulado é recalculado nessa mesma sequência, em vez do padrão
+  // "cronológico crescente por baixo dos panos, exibido invertido". Sem ordem manual, comportamento
+  // idêntico ao anterior a esta funcionalidade (nenhuma regressão).
+  const temOrdemManual = itensPeriodo.some(t=>t.ordemExibicao!==undefined && t.ordemExibicao!==null);
+  let comAcumulado;
+  if(temOrdemManual){
+    comAcumulado = recalcularSaldosSequenciais(aplicarOrdemManual(itensPeriodo), s.saldoInicial, 'saldoAcumulado');
+  } else {
+    let acumulado = s.saldoInicial;
+    comAcumulado = itensPeriodo.map(t=>{
+      // O próprio lançamento de Saldo Anterior já está embutido em s.saldoInicial (ponto de partida) — não
+      // soma de novo o efeito dele aqui, ou o valor entraria duplicado no saldo acumulado exibido.
+      if(!ehSaldoAnterior(t)){
+        const efeito = t.tipo==='Receita' ? (Number(t.valor)||0) : (t.tipo==='Despesa' ? -(Number(t.valor)||0) : 0);
+        acumulado += efeito;
+      }
+      return { ...t, saldoAcumulado: acumulado };
+    });
+    // Exibição: data mais recente primeiro; dentro do mesmo dia, Receita antes de Despesa — não é um simples
+    // reverse do array cronológico, que inverteria também a ordem entre Receita/Despesa do mesmo dia.
+    comAcumulado.sort((a,b)=> a.data>b.data ? -1 : (a.data<b.data ? 1 : ordemTipo(a,b)));
+  }
   const qtdPeriodo = itensPeriodo.filter(t=>!ehSaldoAnterior(t)).length;
   return {
     itens: comAcumulado,
@@ -7765,8 +7944,9 @@ function renderExtratoContaModal(){
         ${itensFiltrados.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Extrato', UI.extratoContaModal.selecionados, itensPagina.filter(t=>!ehSaldoAnterior(t)).map(t=>t.id), itensFiltrados.filter(t=>!ehSaldoAnterior(t)).map(t=>t.id))}</div>
         <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:14px;" data-ordenar-tabela="extrato"><table>
-          <thead><tr>${renderColunaSelecaoLoteHead('Extrato', itensPagina.filter(t=>!ehSaldoAnterior(t)).map(t=>t.id), UI.extratoContaModal.selecionados)}${thOrdenavel('extrato','data','Data')}${thOrdenavel('extrato','descricao','Descrição')}${thOrdenavel('extrato','grupo','Grupo')}${thOrdenavel('extrato','tipo','Tipo',{style:'text-align:center;'})}${thOrdenavel('extrato','valor','Valor',{style:'text-align:right;'})}${thOrdenavel('extrato','saldo','Saldo',{style:'text-align:right;'})}<th class="no-print col-acoes">Ações</th></tr></thead>
-          <tbody>${itensPagina.map(t=>`<tr>
+          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Extrato', itensPagina.filter(t=>!ehSaldoAnterior(t)).map(t=>t.id), UI.extratoContaModal.selecionados)}${thOrdenavel('extrato','data','Data')}${thOrdenavel('extrato','descricao','Descrição')}${thOrdenavel('extrato','grupo','Grupo')}${thOrdenavel('extrato','tipo','Tipo',{style:'text-align:center;'})}${thOrdenavel('extrato','valor','Valor',{style:'text-align:right;'})}${thOrdenavel('extrato','saldo','Saldo',{style:'text-align:right;'})}<th class="no-print col-acoes">Ações</th></tr></thead>
+          <tbody>${itensPagina.map(t=>`<tr ${ehSaldoAnterior(t) ? '' : `data-linha-arrastavel="Extrato" data-linha-id="${t.id}"`}>
+            ${ehSaldoAnterior(t) ? `<td class="no-print"></td>` : renderColunaArrastarLinha('Extrato', t.id)}
             ${ehSaldoAnterior(t) ? `<td class="no-print"></td>` : renderColunaSelecaoLoteLinha('Extrato', t.id, UI.extratoContaModal.selecionados)}
             <td style="white-space:nowrap;">${fmtData(t.data)}</td>
             <td>
@@ -7879,8 +8059,9 @@ function renderFuturosContaModal(){
         ${futurosFiltrados.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Futuros', UI.futurosContaModal.selecionados, futurosPagina.map(t=>t.id), futurosFiltrados.map(t=>t.id))}</div>
         <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:14px;" data-ordenar-tabela="futuros"><table>
-          <thead><tr>${renderColunaSelecaoLoteHead('Futuros', futurosPagina.map(t=>t.id), UI.futurosContaModal.selecionados)}${thOrdenavel('futuros','data','Data prevista')}${thOrdenavel('futuros','descricao','Descrição')}${thOrdenavel('futuros','tipo','Tipo',{style:'text-align:center;'})}${thOrdenavel('futuros','valor','Valor',{style:'text-align:right;'})}${thOrdenavel('futuros','saldo','Saldo projetado',{style:'text-align:right;'})}<th class="no-print col-acoes">Ações</th></tr></thead>
-          <tbody>${futurosPagina.map(t=>`<tr>
+          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Futuros', futurosPagina.map(t=>t.id), UI.futurosContaModal.selecionados)}${thOrdenavel('futuros','data','Data prevista')}${thOrdenavel('futuros','descricao','Descrição')}${thOrdenavel('futuros','tipo','Tipo',{style:'text-align:center;'})}${thOrdenavel('futuros','valor','Valor',{style:'text-align:right;'})}${thOrdenavel('futuros','saldo','Saldo projetado',{style:'text-align:right;'})}<th class="no-print col-acoes">Ações</th></tr></thead>
+          <tbody>${futurosPagina.map(t=>`<tr data-linha-arrastavel="Futuros" data-linha-id="${t.id}">
+            ${renderColunaArrastarLinha('Futuros', t.id)}
             ${renderColunaSelecaoLoteLinha('Futuros', t.id, UI.futurosContaModal.selecionados)}
             <td style="white-space:nowrap;">${fmtData(t.data)}</td>
             <td>
@@ -10677,6 +10858,18 @@ function renderColunaSelecaoLoteHead(prefixo, idsVisiveis, selecionados){
 function renderColunaSelecaoLoteLinha(prefixo, id, selecionados){
   return `<td class="no-print col-checkbox-lote"><input type="checkbox" class="chkLote${prefixo}" value="${escapeHtml(id)}" ${selecionados.has(id)?'checked':''}></td>`;
 }
+/* ---------- Reordenação manual por drag-and-drop (Extrato/Lançamentos Futuros/Fatura/Próximas
+   Faturas — ver aplicarOrdemManual/persistirOrdemManual/recalcularSaldosSequenciais) ----------
+   Cabeçalho/célula do "alça de arrastar" (⋮⋮), no mesmo padrão de coluna extra já usado pela seleção em
+   lote acima — reaproveitado pelos 4 modais via renderLinhaItemFatura e os templates de Extrato/Futuros,
+   nunca uma implementação própria por modal. Some do impresso (no-print) e não altera de forma perceptível
+   a largura das demais colunas (largura fixa e estreita). */
+function renderColunaArrastarHead(){
+  return `<th class="no-print col-arrastar"></th>`;
+}
+function renderColunaArrastarLinha(prefixo, id){
+  return `<td class="no-print col-arrastar"><span class="drag-handle" draggable="true" data-arrastar="${prefixo}" data-arrastar-id="${escapeHtml(id)}" title="Arrastar para reordenar">⋮⋮</span></td>`;
+}
 /* Barra de ações contextual: só aparece quando há pelo menos 1 lançamento selecionado. `todosIdsFiltrados`
    é a lista completa de ids que atendem ao filtro atual (não só a página exibida) — usada tanto para o
    link "selecionar todos os N encontrados" quanto para o próprio botão Editar em Lote saber o conjunto
@@ -11452,7 +11645,7 @@ function renderPainelContasBancarias(ano, mes){
         return `<div class="conta-financeira-card">
           <div class="conta-financeira-card-topo-acoes no-print">
             <button type="button" class="icon-btn" data-importar-conta="${escapeHtml(c)}" title="Importar arquivo do banco" aria-label="Importar arquivo do banco">📥</button>
-            ${!ehContracheque ? `<button type="button" class="icon-btn" data-editar-saldo-inicial-conta="${escapeHtml(c)}" title="Editar saldo inicial do período" aria-label="Editar saldo inicial do período">✏️</button>` : ''}
+            ${!ehContracheque ? `<button type="button" class="icon-btn" data-editar-saldo-inicial-conta="${escapeHtml(c)}" title="Editar saldo inicial do período" aria-label="Editar saldo inicial do período">✏️</button>` : `<button type="button" class="icon-btn" data-edit-conta="${escapeHtml(c)}" title="Editar conta" aria-label="Editar conta">✏️</button>`}
           </div>
           <div class="cartao-col">
             <span class="faixa-cartao" style="background:${info.cor};"></span>
@@ -11543,7 +11736,8 @@ function cabecalhoFaturaCartaoHtml(conta, mostrarLimite){
 function renderLinhaItemFatura(t, mostrarCompetencia, prefixoLote, selecionadosLote){
   const ehParcela = Number(t.totalParcelas)>1;
   const ehCredito = t.tipo==='Receita';
-  return `<tr>
+  return `<tr ${prefixoLote ? `data-linha-arrastavel="${prefixoLote}" data-linha-id="${t.id}"` : ''}>
+    ${prefixoLote ? renderColunaArrastarLinha(prefixoLote, t.id) : ''}
     ${prefixoLote ? renderColunaSelecaoLoteLinha(prefixoLote, t.id, selecionadosLote) : ''}
     ${mostrarCompetencia ? `<td style="white-space:nowrap;">${competenciaLabel(t.competencia)}</td>` : ''}
     <td style="white-space:nowrap;">${fmtData(t.data)}</td>
@@ -11650,7 +11844,7 @@ function renderFaturaAtualModal(){
         ${itensFiltrados.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Fatura', UI.faturaAtualModal.selecionados, itensPagina.map(t=>t.id), itensFiltrados.map(t=>t.id))}</div>
         <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:14px;" data-ordenar-tabela="fatura"><table>
-          <thead><tr>${renderColunaSelecaoLoteHead('Fatura', itensPagina.map(t=>t.id), UI.faturaAtualModal.selecionados)}${thOrdenavel('fatura','data','Data')}${thOrdenavel('fatura','descricao','Descrição')}${thOrdenavel('fatura','parcela','Parcela',{style:'text-align:center;'})}${thOrdenavel('fatura','valor','Valor',{style:'text-align:right;'})}<th class="no-print col-acoes-fatura">Ações</th></tr></thead>
+          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Fatura', itensPagina.map(t=>t.id), UI.faturaAtualModal.selecionados)}${thOrdenavel('fatura','data','Data')}${thOrdenavel('fatura','descricao','Descrição')}${thOrdenavel('fatura','parcela','Parcela',{style:'text-align:center;'})}${thOrdenavel('fatura','valor','Valor',{style:'text-align:right;'})}<th class="no-print col-acoes-fatura">Ações</th></tr></thead>
           <tbody>${itensPagina.map(t=>renderLinhaItemFatura(t, false, 'Fatura', UI.faturaAtualModal.selecionados)).join('')}</tbody>
         </table></div>
         ${renderCardsLancamentosModal(itensPagina, {
@@ -11781,7 +11975,7 @@ function renderProjecaoFaturaModal(){
         ${itens.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Projecao', UI.projecaoFaturaModal.selecionados, itensPagina.map(t=>t.id), itens.map(t=>t.id))}</div>
         <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:12px;" data-ordenar-tabela="projecao"><table>
-          <thead><tr>${renderColunaSelecaoLoteHead('Projecao', itensPagina.map(t=>t.id), UI.projecaoFaturaModal.selecionados)}${thOrdenavel('projecao','data','Data')}${thOrdenavel('projecao','descricao','Descrição')}${thOrdenavel('projecao','parcela','Parcela',{style:'text-align:center;'})}${thOrdenavel('projecao','valor','Valor',{style:'text-align:right;'})}<th class="no-print col-acoes-fatura">Ações</th></tr></thead>
+          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Projecao', itensPagina.map(t=>t.id), UI.projecaoFaturaModal.selecionados)}${thOrdenavel('projecao','data','Data')}${thOrdenavel('projecao','descricao','Descrição')}${thOrdenavel('projecao','parcela','Parcela',{style:'text-align:center;'})}${thOrdenavel('projecao','valor','Valor',{style:'text-align:right;'})}<th class="no-print col-acoes-fatura">Ações</th></tr></thead>
           <tbody>${(()=>{
             // Sem seleção de competência, os lançamentos de vários meses ficam misturados na mesma lista —
             // em vez de repetir a competência em cada linha (coluna removida), agrupamos com uma linha de
@@ -13052,7 +13246,7 @@ function renderCategorias(){
 }
 function tiposPermitidosGrupo(grupo){
   if(grupo==='Renda Familiar') return ['Receita'];
-  if(grupo==='Transações' || grupo==='__novo__' || !grupo) return ['Despesa','Receita'];
+  if(grupo==='Transações' || grupo==='Não Identificado' || grupo==='__novo__' || !grupo) return ['Despesa','Receita'];
   return ['Despesa'];
 }
 function renderPosicaoModal(){
@@ -14400,12 +14594,14 @@ function classificarLancamentoReservaEmergencia(tipoOriginal, origemDestino){
       tipo: 'Despesa'
     };
   }
+  /* Pix/transferência recebidos nesta conta são Receita, mas a subcategoria "Aportes na Reserva de
+     Emergência" só existe corretamente cadastrada como Despesa (ver CATEGORIAS) — catInfo() resolveria
+     sempre para essa definição de Despesa. Por isso não se força aqui nenhuma categoria: cai no mesmo
+     tratamento já usado para lançamentos sem classificação automática (descricaoFallback em
+     parseCSVReservaEmergencia), com tipo Receita inferido pelo sinal do valor e descrição
+     "[Tipo] - [Origem/Destino]". */
   if(tipoNorm==='pixrecebido' || tipoNorm==='transferenciarecebida'){
-    return {
-      descricao: 'Aporte na Reserva de Emergência',
-      categoria: 'Aportes na Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)',
-      tipo: 'Receita'
-    };
+    return null;
   }
   if(tipoNorm==='rendimentorecebido' || tipoNorm==='rendimentodeconta'){
     return {
@@ -14498,11 +14694,28 @@ function resolverNomeBanco(valor){
    <STMTTRN>, então aparecem uma única vez no arquivo, ao contrário das linhas de lançamento). Seção 14 do
    requisito. Formatos .xlsx/.csv não têm um padrão equivalente confiável entre bancos, então não são
    cobertos por esta extração automática. */
+/* Extrato Itaú: quando o arquivo não separa Agência (BRANCHID ausente/vazio), o próprio <ACCTID> traz
+   Agência+Conta concatenadas, sem separador — ex.: "4093099192" = agência 4093 + conta 099192 (correção
+   "Importação de Extrato Itaú — Agência e Conta"). Regra fixa: os 4 PRIMEIROS dígitos são sempre a
+   Agência, todo o restante é a Conta — nunca os últimos 4. Normaliza removendo qualquer caractere não
+   numérico antes (espaço, hífen etc., caso o formato varie), e trata o resultado como texto (nunca como
+   número), preservando zeros à esquerda da conta. Específico do parser Itaú — nunca aplicado aos demais
+   bancos, que continuam usando BRANCHID/ACCTID já separados normalmente (ver extrairDadosBancariosOFX). */
+function separarAgenciaContaItau(acctId){
+  const digitos = String(acctId||'').replace(/\D/g,'');
+  if(digitos.length<=4) return null; // sem dígitos suficientes para separar agência de conta
+  return { agencia: digitos.slice(0,4), numeroConta: digitos.slice(4) };
+}
 function extrairDadosBancariosOFX(text){
   const getTag = (tag)=>{ const m = text.match(new RegExp('<'+tag+'>([^<\\r\\n]+)','i')); return m ? m[1].trim() : ''; };
   const bankId = getTag('BANKID'), branchId = getTag('BRANCHID'), acctId = getTag('ACCTID');
   if(!bankId && !branchId && !acctId) return null;
-  return { banco: bankId ? resolverNomeBanco(bankId) : '', agencia: branchId || '', numeroConta: acctId || '' };
+  const banco = bankId ? resolverNomeBanco(bankId) : '';
+  if(banco==='Itaú' && !branchId && acctId){
+    const separado = separarAgenciaContaItau(acctId);
+    if(separado) return { banco, agencia: separado.agencia, numeroConta: separado.numeroConta };
+  }
+  return { banco, agencia: branchId || '', numeroConta: acctId || '' };
 }
 /* Preenche/atualiza os dados bancários (Banco/Agência/Nº conta) de uma conta bancária já cadastrada a
    partir do que foi encontrado no extrato importado (seções 14-19 do requisito). Nunca sobrescreve
@@ -15340,6 +15553,11 @@ function buildParsedFromMap(){
     } else if(tipoConta==='Contracheque' && tipo==='Receita'){
       catSugerida = 'Salário TRT';
     }
+    // Fallback final "Não Identificado": só chega aqui depois de TODAS as regras de classificação acima
+    // (categoria explícita do parser, pagamento de fatura, TRNTYPE, rubrica de contracheque, sugestão por
+    // palavra-chave/histórico) terem sido avaliadas e nenhuma ter resultado numa subcategoria — nunca deixa
+    // o lançamento importado sem classificação (ver categoriaNaoIdentificada).
+    if(!catSugerida) catSugerida = categoriaNaoIdentificada(tipo);
     const responsavelPreset = catSugerida ? responsavelPredefinidoDaSubcategoria(catSugerida) : '';
     // Responsável automático da conta (seção 3 do requisito "Categorias e Importação Bancária"): quando o
     // lançamento é Receita do grupo Renda Familiar e a subcategoria sugerida NÃO já tem um responsável
@@ -15774,6 +15992,56 @@ function bindEvents(){
     }
     UI.regSelecionados.delete(id); scheduleSave(); render();
   }));
+  // ---- Reordenação manual por drag-and-drop (Ver Extrato/Lançamentos futuros/Ver Fatura/Ver Próximas
+  // Faturas — ver aplicarOrdemManual/persistirOrdemManual/recalcularSaldosSequenciais). Handler genérico
+  // único, reaproveitado pelos 4 modais via o atributo data-linha-arrastavel="<prefixo>" já escrito em cada
+  // <tr> (ver renderColunaArrastarLinha/renderLinhaItemFatura) — nenhuma implementação própria por modal.
+  // Durante o arraste, só classes CSS são alternadas diretamente no DOM (nunca um render() por dragover,
+  // que reconstruiria a tabela inteira a cada pixel movido); um render() completo só acontece uma vez, no
+  // drop, depois de já persistida a nova ordem — reaproveitando o próprio bindEvents/render já existentes.
+  let arrastandoId = null, arrastandoPrefixo = null;
+  document.querySelectorAll('[data-arrastar]').forEach(handle=> handle.addEventListener('dragstart', e=>{
+    arrastandoPrefixo = handle.dataset.arrastar;
+    arrastandoId = handle.dataset.arrastarId;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', arrastandoId);
+    handle.closest('tr')?.classList.add('arrastando');
+  }));
+  document.querySelectorAll('[data-arrastar]').forEach(handle=> handle.addEventListener('dragend', ()=>{
+    handle.closest('tr')?.classList.remove('arrastando');
+    document.querySelectorAll('.drag-over-cima,.drag-over-baixo').forEach(el=> el.classList.remove('drag-over-cima','drag-over-baixo'));
+    arrastandoId = null; arrastandoPrefixo = null;
+  }));
+  document.querySelectorAll('tr[data-linha-arrastavel]').forEach(linha=>{
+    linha.addEventListener('dragover', e=>{
+      if(!arrastandoId || linha.dataset.linhaArrastavel!==arrastandoPrefixo) return;
+      e.preventDefault();
+      document.querySelectorAll('.drag-over-cima,.drag-over-baixo').forEach(el=>{ if(el!==linha) el.classList.remove('drag-over-cima','drag-over-baixo'); });
+      const meio = linha.getBoundingClientRect().top + linha.getBoundingClientRect().height/2;
+      const emCima = e.clientY < meio;
+      linha.classList.toggle('drag-over-cima', emCima);
+      linha.classList.toggle('drag-over-baixo', !emCima);
+    });
+    linha.addEventListener('drop', e=>{
+      if(!arrastandoId || linha.dataset.linhaArrastavel!==arrastandoPrefixo) return;
+      e.preventDefault();
+      const alvoId = linha.dataset.linhaId;
+      const antesDoAlvo = linha.classList.contains('drag-over-cima');
+      linha.classList.remove('drag-over-cima','drag-over-baixo');
+      if(alvoId===arrastandoId) return;
+      // Ordem completa do contexto (não só a página exibida — ver contextoOrdemArrasto), para nunca perder
+      // a posição relativa de itens em outras páginas/filtros que não estão visíveis durante o arraste.
+      const ids = contextoOrdemArrasto(arrastandoPrefixo, alvoId);
+      const idxOrigem = ids.indexOf(arrastandoId);
+      const idxAlvo = ids.indexOf(alvoId);
+      if(idxOrigem===-1 || idxAlvo===-1) return; // Projeção: fora do grupo da mesma competência do alvo
+      ids.splice(idxOrigem, 1);
+      const idxAlvoAjustado = ids.indexOf(alvoId);
+      ids.splice(antesDoAlvo ? idxAlvoAjustado : idxAlvoAjustado+1, 0, arrastandoId);
+      persistirOrdemManual(ids);
+      scheduleSave(); render();
+    });
+  });
   document.getElementById('closeConfirmDelParcela')?.addEventListener('click', ()=>{ UI.confirmDelParcela=null; render(); });
   document.getElementById('closeConfirmDelParcela2')?.addEventListener('click', ()=>{ UI.confirmDelParcela=null; render(); });
   document.querySelectorAll('[data-projecao-cartao]').forEach(b=> b.addEventListener('click', ()=>{
