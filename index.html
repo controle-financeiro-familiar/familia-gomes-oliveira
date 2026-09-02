@@ -1310,6 +1310,18 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .label-tag-compartilhado{text-transform:none;color:#8393ac;font-size:9.5px;font-weight:600;letter-spacing:normal;white-space:nowrap;}
 .field input, .field select{width:100%;border:1px solid var(--line);border-radius:7px;padding:8px 9px;font-size:13px;background:#fff;}
 .field input:focus,.field select:focus{outline:2px solid var(--navy-900);outline-offset:1px;}
+/* Modal de edição/criação de conta (renderTextModal, tipo "conta-novo"/"conta-editar" — ver
+   .modal-editor-conta): todo campo de input, select e botão do formulário/rodapé com altura fixa de 36px,
+   para os campos ficarem visualmente alinhados entre si independentemente do tipo (texto, número, select)
+   ou do padding próprio de cada botão. *{box-sizing:border-box} já existente garante que padding/borda
+   entram nesses 36px, sem precisar zerar nada. Não altera o ✕ de fechar do cabeçalho (controle de janela,
+   não um campo do formulário) nem nenhum outro modal — escopado só a esta classe. */
+.modal-editor-conta .modal-body input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]),
+.modal-editor-conta .modal-body select,
+.modal-editor-conta .modal-body button,
+.modal-editor-conta .modal-foot button{
+  height:36px;
+}
 /* Item 6 do requisito: no mobile (especialmente iOS Safari), um input/select focado com font-size menor
    que 16px dispara zoom automático da página — inclusive em modais que dão foco automático ao abrir (ex.:
    Saldo Inicial da Conta), o que deixava o modal "aberto com zoom" de forma inconsistente. 16px é o piso
@@ -13766,7 +13778,7 @@ function renderTextModal(){
   }
   return `
   <div class="overlay" id="ovTextModal" ${attrZIndexModal('textModal')}>
-    <div class="modal" style="width:${info.temTipoConta ? '640px' : '420px'};">
+    <div class="modal${info.temTipoConta ? ' modal-editor-conta' : ''}" style="width:${info.temTipoConta ? '640px' : '420px'};">
       <div class="modal-head"><h3>${info.titulo}</h3><button class="close-x" id="closeTextModal">✕</button></div>
       <div class="modal-body">
         <div class="tx-form">
