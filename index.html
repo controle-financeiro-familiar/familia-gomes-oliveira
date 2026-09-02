@@ -3943,6 +3943,94 @@ function migrarCompetenciaParaVencimento(){
     }
   });
 }
+/* Corrige/atribui retroativamente a Fatura/Competência de TODOS os lançamentos já cadastrados, reusando
+   exatamente as mesmas regras/funções já aplicadas a lançamentos novos ou importados (competenciaFatura,
+   incrementarCompetencia, competenciaDeData, aplicarTransferenciaInterna) — nunca uma lógica paralela.
+   Roda em todo carregamento do arquivo (idempotente: reaplicar não muda nada que já esteja correto), então
+   também corrige automaticamente qualquer divergência introduzida depois (edição do fechamento/vencimento
+   de um cartão vinculado a lançamentos antigos, por exemplo) — nunca cria, remove ou duplica nenhum
+   lançamento, só reescreve o campo competencia; todos os demais campos (valor, data, descrição, categoria,
+   conta etc.) permanecem intactos.
+
+   Regras por origem do lançamento:
+   1) Parcelamento de cartão de crédito (mesmo parcelamentoId, totalParcelas>1): a parcela de MENOR número
+      da cadeia é a referência — sua competencia é recalculada por competenciaFatura a partir da própria
+      Data (nunca da Data de outra parcela) — e as demais avançam a partir dela via
+      incrementarCompetencia(referência, nº da parcela − nº da referência), a mesma regra já usada por
+      sincronizarParcelasFuturas/corrigirCompetenciaParcelasFuturas.
+   2) Compra/despesa avulsa de cartão de crédito (fora de um parcelamento >1x): competencia =
+      competenciaFatura(data, conta).
+   3) Pagamento/recebimento da própria fatura (categorias em CATEGORIAS_FATURA): PROPOSITALMENTE não
+      recalculado. Um pagamento acontece perto do vencimento, quando o próximo ciclo já fechou —
+      reaplicar a fórmula de COMPRA a ele frequentemente resultaria na competência ERRADA (ver a auditoria
+      documentada em janelaPagamentoFatura/statusPagamentoFatura, que já ignoram t.competencia desses
+      lançamentos e decidem a fatura correta pela janela real de datas). Sobrescrever o campo aqui não
+      mudaria nenhum cálculo do app (que já ignora esse campo para pagamentos) e só arriscaria introduzir
+      um valor "válido" na aparência mas sem garantia de estar certo — mais seguro deixar como está.
+   4) Lançamento de conta do tipo Contracheque (rubrica do próprio holerite): a competência é a do período
+      do próprio contracheque (selecionado/lido do PDF na importação), não derivável de uma fórmula a
+      partir da Data — nunca recalculada aqui; só preenchida quando estiver vazia (melhor esforço: mês da
+      própria Data), já que esta correção não tem acesso ao PDF original para redescobrir o período.
+   5) Lançamento espelho de um contracheque na conta bancária vinculada (par ligado por
+      transferenciaVinculoId — ver aplicarTransferenciaInterna): a competência sempre segue a do lado que
+      está numa conta Contracheque — corrige qualquer divergência entre os dois lados do par, sem tocar em
+      nenhum outro campo de nenhum dos dois.
+   6) Contracheque replicado automaticamente para meses futuros (contrachequeProjecao, ver
+      gerarReplicacaoContracheque): competencia = competenciaDeData(data) — mesma regra já usada na
+      própria geração da réplica.
+   7) Qualquer outro lançamento (conta comum, não cartão e não Contracheque): a aplicação nunca usa
+      competencia para esse tipo — o agrupamento por mês usa sempre a própria Data (ver competenciaDeData
+      nos filtros/relatórios) — garante o campo vazio, a mesma convenção já usada por toda criação/
+      importação de lançamentos desse tipo. */
+function corrigirCompetenciaTransacoes(){
+  const porParcelamento = {};
+  STATE.transactions.forEach(t=>{
+    if(t.pgto==='Cartão de Crédito' && STATE.cartoes.includes(t.conta) && t.parcelamentoId && Number(t.totalParcelas)>1){
+      (porParcelamento[t.parcelamentoId] = porParcelamento[t.parcelamentoId] || []).push(t);
+    }
+  });
+  const jaCorrigidos = new Set();
+  Object.values(porParcelamento).forEach(grupo=>{
+    const ref = grupo.reduce((a,b)=> Number(b.parcelaAtual)<Number(a.parcelaAtual) ? b : a);
+    ref.competencia = competenciaFatura(ref.data, ref.conta);
+    jaCorrigidos.add(ref.id);
+    grupo.forEach(t=>{
+      if(t.id===ref.id) return;
+      t.competencia = incrementarCompetencia(ref.competencia, Number(t.parcelaAtual) - Number(ref.parcelaAtual));
+      jaCorrigidos.add(t.id);
+    });
+  });
+  // Consulta o lado Contracheque de um par vinculado sob demanda (nunca depende da ordem de
+  // STATE.transactions/de já ter sido processado nesta mesma passagem): o valor de um lançamento de conta
+  // Contracheque é sempre ou o que já está gravado (não vazio) ou competenciaDeData(sua própria Data) —
+  // exatamente a regra 4 abaixo, calculada aqui sem esperar a vez dele no forEach. transferenciaVinculoId
+  // é um ID de CORRELAÇÃO compartilhado pelos dois lados (não o id de um apontando para o outro — ver
+  // aplicarTransferenciaInterna), então o par é achado por igualdade de transferenciaVinculoId, nunca por
+  // STATE.transactions.find(x=>x.id===...).
+  const porVinculo = new Map();
+  STATE.transactions.forEach(t=>{
+    if(!t.transferenciaVinculoId) return;
+    if(!porVinculo.has(t.transferenciaVinculoId)) porVinculo.set(t.transferenciaVinculoId, []);
+    porVinculo.get(t.transferenciaVinculoId).push(t);
+  });
+  const ehContaContracheque = t => STATE.contaTipos[t.conta]==='Contracheque';
+  STATE.transactions.forEach(t=>{
+    if(jaCorrigidos.has(t.id)) return;
+    // Regra 3: pagamento/recebimento da própria fatura nunca é recalculado — independentemente de estar
+    // lançado na própria conta do cartão ou numa conta corrente comum usada para pagar (ver
+    // pagamentosCandidatosFatura, que reconhece as duas formas).
+    if(CATEGORIAS_FATURA.includes(t.categoria)) return;
+    if(t.pgto==='Cartão de Crédito' && STATE.cartoes.includes(t.conta)){
+      t.competencia = competenciaFatura(t.data, t.conta);
+      return;
+    }
+    if(t.contrachequeProjecao){ t.competencia = competenciaDeData(t.data); return; }
+    if(ehContaContracheque(t)){ if(!t.competencia) t.competencia = competenciaDeData(t.data); return; }
+    const par = t.transferenciaVinculoId ? (porVinculo.get(t.transferenciaVinculoId)||[]).find(x=>x.id!==t.id) : null;
+    if(par && ehContaContracheque(par)){ t.competencia = par.competencia || competenciaDeData(par.data); return; }
+    if(t.competencia) t.competencia = '';
+  });
+}
 function corrigirCategoriasOrfas(){
   const validas = new Set(CATEGORIAS.map(c=>c[0]));
   STATE.transactions.forEach(t=>{
@@ -5003,6 +5091,7 @@ function loadCSVRegistros(text){
   migrarNomesContasPadrao();
   aplicarResponsavelPadraoPorTipo();
   reconciliarPagamentosFatura(); // cria os espelhos de pagamento de fatura que ainda faltarem (ver função)
+  corrigirCompetenciaTransacoes(); // depois de reconciliarPagamentosFatura, para corrigir também os espelhos recém-criados
   corrigirLancamentosSemClassificacao(); // por último: só sobra sem grupo/categoria quem nenhuma correção acima resolveu
 }
 /* Corrige, para compras já cadastradas antes da correção deste bug, a competência das parcelas futuras
@@ -5238,6 +5327,7 @@ function loadCSVConfig(text){
   migrarNomesContasPadrao();
   aplicarResponsavelPadraoPorTipo();
   reconciliarPagamentosFatura(); // cartões/fechamentos podem ter chegado só agora — reconcilia de novo (idempotente)
+  corrigirCompetenciaTransacoes(); // idem — cardConfig/contaTipos podem ter chegado só agora com este arquivo
 }
 function mesclarLista(doArquivo, padrao){
   if(!doArquivo.length) return [...padrao];
