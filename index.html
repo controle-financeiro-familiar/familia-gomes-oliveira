@@ -1322,6 +1322,15 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .modal-editor-conta .modal-foot button{
   height:36px;
 }
+/* Mesmo tratamento acima, agora para os modais de lançamento (renderTxModal, renderNovaProjecaoModal,
+   renderDuplicarMesesEditarItemModal — ver .modal-editor-lancamento): campos de input/select e botões do
+   formulário/rodapé com altura fixa de 36px, escopado só a esses modais. */
+.modal-editor-lancamento .modal-body input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]),
+.modal-editor-lancamento .modal-body select,
+.modal-editor-lancamento .modal-body button,
+.modal-editor-lancamento .modal-foot button{
+  height:36px;
+}
 /* Item 6 do requisito: no mobile (especialmente iOS Safari), um input/select focado com font-size menor
    que 16px dispara zoom automático da página — inclusive em modais que dão foco automático ao abrir (ex.:
    Saldo Inicial da Conta), o que deixava o modal "aberto com zoom" de forma inconsistente. 16px é o piso
@@ -12725,7 +12734,7 @@ function renderNovaProjecaoModal(){
   const editando = !!m.editId;
   return `
   <div class="overlay" id="ovNovaProjecao" ${attrZIndexModal('novaProjecaoModal')}>
-    <div class="modal" style="width:480px;">
+    <div class="modal modal-editor-lancamento" style="width:480px;">
       <div class="modal-head"><h3>${editando ? '✏️ Editar' : '➕ Novo'} lançamento previsto</h3><button class="close-x" id="closeNovaProjecao">✕</button></div>
       <div class="modal-body">
         <div class="tx-form">
@@ -12923,7 +12932,7 @@ function renderDuplicarMesesEditarItemModal(){
   const item = UI.duplicarMesesEditarItem;
   return `
   <div class="overlay" id="ovDuplicarMesesEditarItem" ${attrZIndexModal('duplicarMesesEditarItem')}>
-    <div class="modal" style="width:320px;">
+    <div class="modal modal-editor-lancamento" style="width:320px;">
       <div class="modal-head"><h3>✏️ Editar lançamento #${item.index+1}</h3><button class="close-x" id="closeDuplicarMesesEditarItem">✕</button></div>
       <div class="modal-body">
         <div class="field"><label>Data</label><input type="date" id="fEditarOcorrenciaData" value="${item.data||''}"></div>
@@ -14226,7 +14235,7 @@ function renderTxModal(){
   const podeParcelar = (isCartao && tipoAtual==='Despesa') || tipoAtual==='Receita' || (grupoAtual==='Dívidas e Empréstimos' && tipoAtual==='Despesa');
   return `
   <div class="overlay" id="ovTx" ${attrZIndexModal('editingTx')}>
-    <div class="modal" style="width:640px;">
+    <div class="modal modal-editor-lancamento" style="width:640px;">
       <div class="modal-head"><h3>${t.id ? '✏️ Editar lançamento' : '➕ Novo lançamento'}</h3><button class="close-x" id="closeTx">✕</button></div>
       <div class="modal-body">
         <div class="tx-form">
