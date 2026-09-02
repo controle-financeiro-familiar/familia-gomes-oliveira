@@ -1343,8 +1343,8 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .conta-grid-linha{display:grid;gap:12px;margin-bottom:10px;}
 .conta-grid-linha:last-child{margin-bottom:0;}
 .conta-grid-linha > .field{min-width:0;}
-.conta-grid-linha-1{grid-template-columns:0.5fr 1.5fr 1fr;}
-.conta-grid-linha-2{grid-template-columns:1.5fr 1.5fr;}
+.conta-grid-linha-1{grid-template-columns:0.25fr 1.5fr 1.25fr;}
+.conta-grid-linha-2{grid-template-columns:1fr 2fr;}
 .conta-grid-linha-pix1{grid-template-columns:0.5fr 1fr 1.5fr;}
 .conta-grid-linha-cartao1{grid-template-columns:0.5fr 0.5fr 1fr 1fr;}
 .conta-grid-linha-pix2,.conta-grid-linha-vinculo{grid-template-columns:1fr;}
@@ -13669,7 +13669,7 @@ function renderTextModal(){
           ${!info.temTipoConta ? `<div class="field"><label>${info.label}</label><input type="text" id="fTextModalNome" placeholder="${info.placeholder}" value="${escapeHtml(t.nome)}"></div>` : ''}
           ${info.temTipoConta ? `
           <div class="conta-grid-linha conta-grid-linha-1">
-            <div class="field"><label>Ícone da conta</label>
+            <div class="field"><label>Ícone</label>
               <div class="icone-conta-picker" id="fTextModalIconePicker">
                 <button type="button" class="icone-conta-picker-btn" id="fTextModalIconeContaBtn" aria-haspopup="listbox" aria-expanded="${iconePickerAberto?'true':'false'}" title="Escolher ícone da conta">
                   ${iconeAtualPreviewHtml}<span class="icone-conta-picker-caret">▾</span>
@@ -13747,10 +13747,10 @@ function renderTextModal(){
           ${mostrarConfigCartao ? `
           <div>
             <div class="conta-grid-linha conta-grid-linha-cartao1">
-              <div class="field"><label>Dia de fechamento</label>
+              <div class="field"><label>Fechamento</label>
                 <input type="number" min="1" max="31" id="fTextModalFechamento" placeholder="Ex.: 20" value="${escapeHtml(String(fechamentoAtual))}">
               </div>
-              <div class="field"><label>Dia de vencimento</label>
+              <div class="field"><label>Vencimento</label>
                 <input type="number" min="1" max="31" id="fTextModalVencimento" placeholder="Ex.: 10" value="${escapeHtml(String(vencimentoAtual))}">
               </div>
               <div class="field"><label>Bandeira do cartão *</label>
