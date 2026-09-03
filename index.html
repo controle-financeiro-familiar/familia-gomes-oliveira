@@ -3105,6 +3105,15 @@ let CATEGORIAS = [
   // ehUsoReservaEmergencia/calcDashboard, que a excluem propositalmente do total de "economias/aportes").
   ['Uso da Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)','Economias','Reserva de Emergência e Liquidez','Despesa','Variável'],
   ['Aportes em Poupança','Economias','Reserva de Emergência e Liquidez','Despesa','Fixo'],
+  // BB Rende Fácil: investimento automático de saldo ocioso que o Banco do Brasil aplica/resgata sozinho,
+  // todo dia, dentro da própria conta corrente (ver detectarRendeFacilBB) — não é um novo aporte real nem
+  // uma retirada real (o dinheiro nunca muda de titularidade nem sai da conta), só circula automaticamente
+  // entre o "saldo à vista" e o investimento vinculado a ele. Fica em subgrupo próprio, separado de
+  // "Reserva de Emergência e Liquidez", para nunca ser confundido com um aporte/uso deliberado — e por isso
+  // NUNCA soma em economiasTotal/economiasAno (ver ehMovimentoRendeFacilBB), do mesmo jeito que "Uso da
+  // Reserva de Emergência" também não soma.
+  ['Aplicação Automática no BB Rende Fácil','Economias','Rende Fácil (Aplicação Automática de Saldo)','Despesa','Variável'],
+  ['Resgate Automático do BB Rende Fácil','Economias','Rende Fácil (Aplicação Automática de Saldo)','Receita','Variável'],
   ['Títulos Públicos (Tesouro IPCA+, Tesouro Prefixado)','Economias','Renda Fixa (Médio/Longo Prazo)','Despesa','Variável'],
   ['Títulos Privados (CDB, LCI, LCA, CRI, CRA, Debêntures)','Economias','Renda Fixa (Médio/Longo Prazo)','Despesa','Variável'],
   ['Ações de Empresas (Bolsa de Valores)','Economias','Renda Variável','Despesa','Variável'],
@@ -3371,6 +3380,8 @@ const CATEGORIAS_SEM_RESPONSAVEL_PREDEFINIDO = ["Entradas Patrimoniais e Resgate
 
 const GRUPOS = [...new Set(CATEGORIAS.map(c=>c[1]))];
 const CATEGORIAS_FATURA = ['Pagamento de Fatura de Cartão de Crédito','Recebimento por Pagamento de Fatura'];
+// Ver detectarRendeFacilBB (importação) e ehMovimentoRendeFacilBB (exclusão de economiasTotal/economiasAno).
+const CATEGORIAS_RENDE_FACIL_BB = ['Aplicação Automática no BB Rende Fácil','Resgate Automático do BB Rende Fácil'];
 const GRUPO_COLORS = {
   "Moradia/Habitação":"#10408D","Transporte":"#2E6F95","Alimentação":"#c98f00","Saúde":"#1e8e5a",
   "Educação":"#3F7D20","Lazer e Entretenimento":"#a5690a","Cuidados Pessoais":"#b0558f",
@@ -4290,6 +4301,24 @@ function ehPagamentoDeFaturaPorValor(conta, valor){
 }
 function ehPagamentoDeFatura(desc, conta, valor){
   return ehPagamentoDeFaturaPorTexto(desc) || ehPagamentoDeFaturaPorValor(conta, valor);
+}
+/* Reconhece a aplicação/resgate automático do "BB Rende Fácil" (investimento automático de saldo ocioso
+   que o Banco do Brasil aplica/resgata sozinho, todo dia, em contas correntes com esse recurso ativado) só
+   pela descrição do próprio extrato — cobre as grafias mais comuns do BB ("APLIC AUTOM RDFACIL", "APLICACAO
+   AUTOMATICA RENDE FACIL", "RESGATE AUTOMATICO RDFACIL" etc.), sempre via normalizarTexto (minúsculas, sem
+   acento, só [a-z0-9]) para não depender de abreviação/acentuação/caixa exatas do arquivo. Distingue
+   aplicação de resgate pela presença de "resg" no texto normalizado — na ausência dela, assume aplicação
+   (grafia mais comum e mais frequente no extrato). Usada em buildParsedFromMap (import) — sinal textual
+   definitivo, prevalece sobre sugestão por palavra-chave/sinal do valor, igual em espírito a
+   ehPagamentoDeFatura acima. Devolve null quando a descrição não bate com nenhum padrão conhecido, deixando
+   a linha para a classificação normal (sugestão por palavra-chave/sinal do valor). */
+function detectarRendeFacilBB(desc){
+  const norm = normalizarTexto(desc);
+  if(!norm.includes('rendefacil') && !norm.includes('rdfacil')) return null;
+  const ehResgate = norm.includes('resg');
+  return ehResgate
+    ? { categoria:'Resgate Automático do BB Rende Fácil', tipo:'Receita' }
+    : { categoria:'Aplicação Automática no BB Rende Fácil', tipo:'Despesa' };
 }
 function catInfo(nome){
   const c = CATEGORIAS.find(c=>c[0]===nome);
@@ -6323,7 +6352,7 @@ function calcDashboard(ano, mes){
       if(t.transferenciaInterna && t.tipo==='Receita' && ehContaPatrimonial(t.conta)) economiasTotal += v;
       return;
     }
-    if(t.grupo==="Economias"){ if(!ehUsoReservaEmergencia(t)) economiasTotal+=v; }
+    if(t.grupo==="Economias"){ if(!ehUsoReservaEmergencia(t) && !ehMovimentoRendeFacilBB(t)) economiasTotal+=v; }
     else if(CATEGORIAS_FATURA.includes(t.categoria)){ /* pagamento/recebimento de fatura não entra no orçamento, para não contar a compra 2x */ }
     else if(t.tipo==="Despesa"){ despesasTotal+=v; const chave=t.grupo||'Sem Grupo'; despesasPorGrupo[chave]=(despesasPorGrupo[chave]||0)+v; }
     else if(t.tipo==="Receita"){ receitasTotal+=v; }
@@ -6331,7 +6360,7 @@ function calcDashboard(ano, mes){
   const saldo = receitasTotal - despesasTotal;
   const poupanca = receitasTotal>0 ? (saldo/receitasTotal) : 0;
   const economiasAno = STATE.transactions.filter(t=>txInYear(t,ano) && (
-    (t.grupo==="Economias" && !t.entreFamilia && !ehUsoReservaEmergencia(t)) ||
+    (t.grupo==="Economias" && !t.entreFamilia && !ehUsoReservaEmergencia(t) && !ehMovimentoRendeFacilBB(t)) ||
     (t.entreFamilia && t.transferenciaInterna && t.tipo==='Receita' && ehContaPatrimonial(t.conta))
   )).reduce((s,t)=>s+(Number(t.valor)||0),0);
   return { despesasPorGrupo, receitasTotal, despesasTotal, saldo, poupanca, economiasTotal, economiasAno, txs };
@@ -6960,13 +6989,14 @@ function calcInteligenciaFinanceira(f){
 }
 /* Lista (não só o total) dos lançamentos considerados "aporte" em Investimentos/Reserva de Emergência —
    mesma regra usada acima para economiasTotal/economiasAno (grupo "Economias" fora de Transação Interna
-   entre Contas e fora de um "Uso da Reserva de Emergência", mais qualquer Transação Interna que seja uma
-   Receita numa conta patrimonial), aqui devolvendo os lançamentos individuais do ano, do mais recente
-   para o mais antigo, para o modal "Ver detalhes" do painel Economias. */
+   entre Contas e fora de um "Uso da Reserva de Emergência" ou de uma aplicação/resgate do BB Rende Fácil,
+   mais qualquer Transação Interna que seja uma Receita numa conta patrimonial), aqui devolvendo os
+   lançamentos individuais do ano, do mais recente para o mais antigo, para o modal "Ver detalhes" do
+   painel Economias. */
 function detalheAportes(ano){
   return STATE.transactions
     .filter(t=> txInYear(t,ano) && (
-      (t.grupo==="Economias" && !t.entreFamilia && !ehUsoReservaEmergencia(t)) ||
+      (t.grupo==="Economias" && !t.entreFamilia && !ehUsoReservaEmergencia(t) && !ehMovimentoRendeFacilBB(t)) ||
       (t.entreFamilia && t.transferenciaInterna && t.tipo==='Receita' && ehContaPatrimonial(t.conta))
     ))
     .sort((a,b)=> b.data.localeCompare(a.data));
@@ -8678,6 +8708,16 @@ function ehContaPatrimonial(conta){
    histórico em Registros continuam refletindo o lançamento normalmente. */
 function ehUsoReservaEmergencia(t){
   return t.grupo==='Economias' && t.categoria==='Uso da Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)';
+}
+/* Identifica um lançamento de aplicação OU resgate automático do BB Rende Fácil (ver detectarRendeFacilBB,
+   CATEGORIAS_RENDE_FACIL_BB) — usada em calcDashboard/detalheAportes para excluir os DOIS lados do total de
+   "economias/aportes". Diferente de um aporte/uso deliberado, o BB aplica e resgata o mesmo saldo sozinho
+   todo dia: contar a aplicação como uma nova economia (sem nunca subtrair o resgate, já que não existe um
+   "Receita" equivalente para "Uso da Reserva") infla economiasTotal/economiasAno sem nenhum dinheiro novo
+   ter sido guardado de fato. O saldo real da conta e o histórico em Registros continuam refletindo os dois
+   lançamentos normalmente, só não entram nesse total específico. */
+function ehMovimentoRendeFacilBB(t){
+  return t.grupo==='Economias' && CATEGORIAS_RENDE_FACIL_BB.includes(t.categoria);
 }
 function sincronizarParcelasFuturas(ref){
   if(!ref || !ref.parcelamentoId || !(Number(ref.totalParcelas)>1)) return;
@@ -15610,14 +15650,16 @@ function buildParsedFromMap(){
     }));
   }
   entries = entries.filter(e=>e.data && e.descricao);
-  // "BB Rende Fácil" / "Rende Fácil" (aplicação automática de saldo) não é um lançamento de fluxo de
-  // caixa real — é descartado silenciosamente aqui, antes de chegar à revisão, sem gerar nenhum aviso.
-  entries = entries.filter(e=> !normalizarTexto(e.descricao).includes('rendefacil'));
   UI.importParsed = entries.map(e=>{
     const conta = UI.importMap.contaDestino;
     const tipoConta = STATE.contaTipos[conta] || '';
     let catSugerida = sugerirCategoria(e.descricao);
     let tipo;
+    // "BB Rende Fácil" (aplicação/resgate automático de saldo ocioso, ver detectarRendeFacilBB): sinal
+    // textual definitivo, calculado uma única vez aqui e usado no primeiro ramo que se aplicar abaixo —
+    // igual em espírito ao pagamento de fatura, mas nunca prevalece sobre uma categoria explícita já
+    // determinada com certeza pelo próprio parser (ex.: extrato CSV da Reserva de Emergência).
+    const rendeFacilBB = e.categoriaExplicita ? null : detectarRendeFacilBB(e.descricao);
     if(e.categoriaExplicita){
       // Extrato CSV da Reserva de Emergência: a subcategoria já foi determinada com certeza a partir do
       // Tipo do próprio lançamento do extrato (ver classificarLancamentoReservaEmergencia) — prevalece
@@ -15625,6 +15667,9 @@ function buildParsedFromMap(){
       // aplica a essa conta).
       catSugerida = e.categoriaExplicita;
       tipo = e.tipoExplicito;
+    } else if(rendeFacilBB){
+      catSugerida = rendeFacilBB.categoria;
+      tipo = rendeFacilBB.tipo;
     } else if(ehPagamentoDeFatura(e.descricao, conta, e.valor)){
       // Sinal textual definitivo: o pagamento da fatura é sempre um crédito para o CARTÃO (Receita) e uma
       // saída da CONTA que efetua o pagamento (Despesa) — prevalece sobre a sugestão por palavra-chave e
