@@ -89,13 +89,13 @@ RDFACIL", normalizadas para não depender de acentuação/caixa/abreviação exa
 banco) e classifica cada lado numa subcategoria própria, dentro da mesma Conta Corrente onde
 ocorre:
 
-- **Aplicação Automática no BB Rende Fácil** (Despesa) — dinheiro saindo do saldo à vista para o
+- **Aplicação Automática do Saldo** (Despesa) — dinheiro saindo do saldo à vista para o
   investimento automático.
-- **Resgate Automático do BB Rende Fácil** (Receita) — dinheiro voltando do investimento para o
+- **Resgate Automático do Saldo** (Receita) — dinheiro voltando do investimento para o
   saldo à vista.
 
-Ambas ficam no grupo **Economias**, subgrupo **Rende Fácil (Aplicação Automática de Saldo)** —
-separado do subgrupo "Reserva de Emergência e Liquidez" usado pelos aportes/uso deliberados, para
+Ambas ficam no grupo **Economias**, subgrupo **Aplicação Automática de Saldo** —
+separado do subgrupo "Reserva de Emergência e Poupança" usado pelos aportes/uso deliberados, para
 nunca serem confundidas com uma decisão real de poupar ou resgatar patrimônio. Por não
 representarem uma economia nova nem um gasto real (o BB aplica e resgata o mesmo saldo sozinho,
 todo dia), nenhuma das duas soma no total de "Economias"/aportes do Dashboard e do painel
