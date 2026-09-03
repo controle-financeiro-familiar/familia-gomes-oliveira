@@ -2933,34 +2933,35 @@ const LOGO_APP = "assets/images/logo-app.png";
 
 /* [nome, grupo, subgrupo, tipo, natureza] — extraído do arquivo Categorias_e_subcategorias.ods do usuário */
 let CATEGORIAS = [
-  ['Aluguel ou Prestação do Financiamento','Moradia/Habitação','Custos Fixos Ocorrentes','Despesa','Fixo'],
+  ['Aluguel ou Financiamento de Imóvel','Moradia/Habitação','Custos Fixos Ocorrentes','Despesa','Fixo'],
   ['Condomínio','Moradia/Habitação','Custos Fixos Ocorrentes','Despesa','Fixo'],
-  ['IPTU (Imposto Predial e Territorial Urbano)','Moradia/Habitação','Custos Fixos Ocorrentes','Despesa','Fixo'],
-  ['Guarda-Móveis e Depósitos/Box (Espaço Complementar de Moradia)','Moradia/Habitação','Custos Fixos Ocorrentes','Despesa','Fixo'],
+  ['IPTU','Moradia/Habitação','Custos Fixos Ocorrentes','Despesa','Fixo'],
+  ['Guarda-Móveis e Depósitos/Box','Moradia/Habitação','Custos Fixos Ocorrentes','Despesa','Fixo'],
   ['Energia Elétrica','Moradia/Habitação','Contas de Consumo (Utilidades)','Despesa','Fixo'],
   ['Água e Esgoto','Moradia/Habitação','Contas de Consumo (Utilidades)','Despesa','Fixo'],
   ['Gás (Encanado ou Botijão)','Moradia/Habitação','Contas de Consumo (Utilidades)','Despesa','Fixo'],
   ['Internet e TV a Cabo','Moradia/Habitação','Contas de Consumo (Utilidades)','Despesa','Fixo'],
   ['Telefone Fixo e Celular','Moradia/Habitação','Contas de Consumo (Utilidades)','Despesa','Fixo'],
   ['Serviços de Faxina ou Diarista','Moradia/Habitação','Manutenção e Conservação','Despesa','Variável'],
-  ['Reformas e Pequenos Reparos (Pintura, Encanamento, Elétrica)','Moradia/Habitação','Manutenção e Conservação','Despesa','Variável'],
+  ['Reformas e Pequenos Reparos','Moradia/Habitação','Manutenção e Conservação','Despesa','Variável'],
   ['Manutenção de Eletrodomésticos','Moradia/Habitação','Manutenção e Conservação','Despesa','Variável'],
-  ['Frete e/ou Mudanças (Custos de Transição Residencial)','Moradia/Habitação','Manutenção e Conservação','Despesa','Variável'],
+  ['Envios, Fretes e Mudanças','Moradia/Habitação','Manutenção e Conservação','Despesa','Variável'],
   ['Seguro Residencial','Moradia/Habitação','Proteção e Segurança','Despesa','Fixo'],
-  ['Chaveiro e Cópias de Chaves','Moradia/Habitação','Proteção e Segurança','Despesa','Variável'],
+  ['Chaveiro','Moradia/Habitação','Proteção e Segurança','Despesa','Variável'],
+  ['Garantias Locatícias','Moradia/Habitação','Proteção e Segurança','Despesa','Variável'],
   ['Móveis e Eletrodomésticos Novos','Moradia/Habitação','Instalação e Decoração','Despesa','Variável'],
-  ['Itens de Decoração (Cortinas, Tapetes, Quadros)','Moradia/Habitação','Instalação e Decoração','Despesa','Variável'],
-  ['Utensílios de Cozinha e Enxoval (Cama, Mesa e Banho)','Moradia/Habitação','Instalação e Decoração','Despesa','Variável'],
+  ['Itens de Decoração','Moradia/Habitação','Instalação e Decoração','Despesa','Variável'],
+  ['Utensílios de Cozinha e Enxoval','Moradia/Habitação','Instalação e Decoração','Despesa','Variável'],
   ['Utensílios e Pequenos Equipamentos Domésticos','Moradia/Habitação','Instalação e Decoração','Despesa','Variável'],
   ['Resorts','Moradia/Habitação','Hospedagem e Estadia','Despesa','Variável'],
   ['Hotéis e Pousadas','Moradia/Habitação','Hospedagem e Estadia','Despesa','Variável'],
-  ['Aluguéis por Temporada (Airbnb, Booking)','Moradia/Habitação','Hospedagem e Estadia','Despesa','Variável'],
+  ['Aluguéis por Temporada','Moradia/Habitação','Hospedagem e Estadia','Despesa','Variável'],
   ['Outras Despesas de Moradia/Habitação','Moradia/Habitação','Outros','Despesa','Variável'],
-  ['Assinatura Mensal do Veículo (Mensalidade Recorrente)','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Fixo'],
+  ['Assinatura Mensal do Veículo','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Fixo'],
   ['Taxa de Adesão Inicial ou Caução','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
   ['Quilometragem Excedente','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
-  ['Aluguel Diário ou Semanal (Viagens ou Imprevistos)','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
-  ['Taxas e Coparticipações (Franquia de Seguro, Taxa de Combustível ou Limpeza)','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
+  ['Aluguel Diário ou Semanal','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
+  ['Taxas e Coparticipações','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
   ['Financiamento ou Consórcio do Veículo','Transporte','Veículo Próprio (Custos Fixos)','Despesa','Fixo'],
   ['Seguro Automotivo','Transporte','Veículo Próprio (Custos Fixos)','Despesa','Fixo'],
   ['IPVA e Licenciamento Anual','Transporte','Veículo Próprio (Custos Fixos)','Despesa','Fixo'],
@@ -2987,9 +2988,8 @@ let CATEGORIAS = [
   ['Restaurantes e Pizzarias','Alimentação','Refeições Fora de Casa','Despesa','Variável'],
   ['Lanchonetes e Fast-Food','Alimentação','Refeições Fora de Casa','Despesa','Variável'],
   ['Cafeterias, Docerias e Sorveterias','Alimentação','Refeições Fora de Casa','Despesa','Variável'],
-  ['Taxas de Entrega','Alimentação','Delivery e Praticidade','Despesa','Variável'],
   ['Marmitas e Refeições Prontas','Alimentação','Delivery e Praticidade','Despesa','Variável'],
-  ['Aplicativos de Entrega (iFood, Keeta, 99 Food)','Alimentação','Delivery e Praticidade','Despesa','Variável'],
+  ['Aplicativos de Entrega','Alimentação','Delivery e Praticidade','Despesa','Variável'],
   ['Outras Despesas de Alimentação','Alimentação','Outros','Despesa','Variável'],
   ['Seguro de Vida','Saúde','Proteção Familiar','Despesa','Fixo'],
   ['Plano de Saúde','Saúde','Proteção Familiar','Despesa','Fixo'],
@@ -3002,8 +3002,8 @@ let CATEGORIAS = [
   ['Sessões de Fisioterapia, Quiropraxia ou Acupuntura','Saúde','Consultas e Terapias (Particulares)','Despesa','Variável'],
   ['Vacinas e Imunizações','Saúde','Exames e Procedimentos','Despesa','Variável'],
   ['Exames de Laboratório e de Imagem','Saúde','Exames e Procedimentos','Despesa','Variável'],
-  ['Procedimentos Cirúrgicos ou Estéticos de Saúde','Saúde','Exames e Procedimentos','Despesa','Variável'],
-  ['Tratamentos Odontológicos (Obturação, Canal, Aparelho Ortodôntico)','Saúde','Exames e Procedimentos','Despesa','Variável'],
+  ['Procedimentos de Saúde','Saúde','Exames e Procedimentos','Despesa','Variável'],
+  ['Tratamentos Odontológicos','Saúde','Exames e Procedimentos','Despesa','Variável'],
   ['Óculos de Grau (Armação e Lentes)','Saúde','Cuidados Oculares e Equipamentos','Despesa','Variável'],
   ['Mensalidade da Academia ou Box de Crossfit','Saúde','Bem-Estar e Prevenção','Despesa','Fixo'],
   ['Pilates e Treinos Funcionais','Saúde','Bem-Estar e Prevenção','Despesa','Fixo'],
@@ -3030,11 +3030,12 @@ let CATEGORIAS = [
   ['Parques, Museus e Atrações','Lazer e Entretenimento','Eventos e Passeios','Despesa','Variável'],
   ['Atividades de Lazer e Diversão','Lazer e Entretenimento','Eventos e Passeios','Despesa','Variável'],
   ['Cruzeiros Marítimos','Lazer e Entretenimento','Eventos e Passeios','Despesa','Variável'],
+  ['Colônia de Férias','Lazer e Entretenimento','Eventos e Passeios','Despesa','Variável'],
   ['Livros de Lazer, Quadrinhos e Revistas','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
   ['Hobbies e Colecionáveis','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
   ['Equipamentos e Acessórios de Lazer','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
   ['Ensaios Fotográficos','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
-  ['Jogos e Loterias','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
+  ['Loterias (Jogos, Bolões)','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
   ['Outras Despesas de Lazer e Entretenimento','Lazer e Entretenimento','Outros','Despesa','Variável'],
   ['Celulares e Smartphones','Tecnologia e Eletrônicos','Equipamentos','Despesa','Variável'],
   ['Notebooks e Computadores','Tecnologia e Eletrônicos','Equipamentos','Despesa','Variável'],
@@ -3056,40 +3057,34 @@ let CATEGORIAS = [
   ['Manicure, Pedicure e/ou Podologia','Cuidados Pessoais','Serviços de Salão e Estética','Despesa','Variável'],
   ['Depilação e Sobrancelhas','Cuidados Pessoais','Serviços de Salão e Estética','Despesa','Variável'],
   ['Massagens Relaxantes','Cuidados Pessoais','Serviços de Salão e Estética','Despesa','Variável'],
-  ['Produtos de Higiene e Cosméticos','Cuidados Pessoais','Higiene e Beleza','Despesa','Variável'],
-  ['Maquiagem, Cremes e Hidratação','Cuidados Pessoais','Higiene e Beleza','Despesa','Variável'],
+  ['Produtos de Higiene','Cuidados Pessoais','Higiene e Beleza','Despesa','Variável'],
+  ['Maquiagem e Cosméticos','Cuidados Pessoais','Higiene e Beleza','Despesa','Variável'],
   ['Perfumes e Fragâncias','Cuidados Pessoais','Higiene e Beleza','Despesa','Variável'],
-  ['Roupas e Calçados','Cuidados Pessoais','Vestuário e Acessórios','Despesa','Variável'],
-  ['Acessórios (Joias, Bijuterias, Bolsas, Cintos, Relógios)','Cuidados Pessoais','Vestuário e Acessórios','Despesa','Variável'],
-  ['Ajustes de Alfaiataria ou Costura em Roupas Pessoais','Cuidados Pessoais','Vestuário e Acessórios','Despesa','Variável'],
+  ['Produtos de Beleza','Cuidados Pessoais','Higiene e Beleza','Despesa','Variável'],
   ['Outras Despesas de Cuidados Pessoais','Cuidados Pessoais','Outros','Despesa','Variável'],
-  ['Mesada ou Semanada','Filhos e Pets','Filhos','Despesa','Fixo'],
-  ['Documentação e Burocracias (RG, Passaporte, Vistos de Dependentes)','Filhos e Pets','Filhos','Despesa','Fixo'],
-  ['Colônia de Férias','Filhos e Pets','Filhos','Despesa','Variável'],
-  ['Saúde Pet','Filhos e Pets','Pets','Despesa','Variável'],
-  ['Acessórios','Filhos e Pets','Pets','Despesa','Variável'],
-  ['Alimentação','Filhos e Pets','Pets','Despesa','Fixo'],
-  ['Higiene e Estética','Filhos e Pets','Pets','Despesa','Variável'],
-  ['Serviços e Hospedagem','Filhos e Pets','Pets','Despesa','Variável'],
-  ['Outras Despesas de Filhos e Pets','Filhos e Pets','Outros','Despesa','Variável'],
-  ['Presentes de Aniversário e Datas Comemorativas','Caridade e Generosidade','Presentes','Despesa','Variável'],
-  ['Doações','Caridade e Generosidade','Doações e Contribuições','Despesa','Variável'],
-  ['Dízimos e Ofertas','Caridade e Generosidade','Doações e Contribuições','Despesa','Variável'],
-  ['Contribuições e Ajuda Financeira','Caridade e Generosidade','Doações e Contribuições','Despesa','Variável'],
-  ['Gorjetas e Gratificações','Caridade e Generosidade','Doações e Contribuições','Despesa','Variável'],
-  ['Outras Despesas de Caridade e Generosidade','Caridade e Generosidade','Outros','Despesa','Variável'],
-  ['Parcela de Empréstimo Pessoal (Bancos ou Fintechs)','Dívidas e Empréstimos','Parcelamentos e Financiamentos (Amortização)','Despesa','Fixo'],
-  ['Parcela de Empréstimo Consignado (Descontado em Folha)','Dívidas e Empréstimos','Parcelamentos e Financiamentos (Amortização)','Despesa','Fixo'],
+  ['Roupas e Calçados','Vestuário e Acessórios','Roupas e Calçados','Despesa','Variável'],
+  ['Acessórios (Joias, Bijuterias, Bolsas, Cintos, Relógios)','Vestuário e Acessórios','Acessórios (Joias, Bijuterias, Bolsas, Cintos, Relógios)','Despesa','Variável'],
+  ['Ajustes de Alfaiataria ou Costura em Roupas Pessoais','Vestuário e Acessórios','Ajustes de Alfaiataria ou Costura em Roupas Pessoais','Despesa','Variável'],
+  ['Saúde Pet','Pets','Pets','Despesa','Variável'],
+  ['Acessórios','Pets','Pets','Despesa','Variável'],
+  ['Ração e Petiscos Pet','Pets','Pets','Despesa','Fixo'],
+  ['Banho e Tosa Pet','Pets','Pets','Despesa','Variável'],
+  ['Outras Despesas de Pets','Pets','Outros','Despesa','Variável'],
+  ['Presentes e Mimos','Presentes e Contribuições','Presentes','Despesa','Variável'],
+  ['Doações e Rifas Beneficentes','Presentes e Contribuições','Doações e Contribuições','Despesa','Variável'],
+  ['Dízimos e Ofertas','Presentes e Contribuições','Doações e Contribuições','Despesa','Variável'],
+  ['Contribuições e Ajuda Financeira','Presentes e Contribuições','Doações e Contribuições','Despesa','Variável'],
+  ['Gorjetas e Gratificações','Presentes e Contribuições','Doações e Contribuições','Despesa','Variável'],
+  ['Mesada ou Semanada','Presentes e Contribuições','Doações e Contribuições','Despesa','Fixo'],
+  ['Outras Despesas de Caridade e Generosidade','Presentes e Contribuições','Outros','Despesa','Variável'],
+  ['Empréstimos (Pessoal e Consignado)','Dívidas e Empréstimos','Parcelamentos e Financiamentos (Amortização)','Despesa','Fixo'],
   ['Parcelamento de Faturas Anteriores (Renegociação de Cartão)','Dívidas e Empréstimos','Parcelamentos e Financiamentos (Amortização)','Despesa','Fixo'],
-  ['Quitação de Dívidas com Amigos ou Familiares','Dívidas e Empréstimos','Parcelamentos e Financiamentos (Amortização)','Despesa','Fixo'],
   ['Dinheiro Emprestado a Terceiros','Dívidas e Empréstimos','Empréstimos Concedidos','Despesa','Variável'],
   ['Outras Despesas de Dívidas e Empréstimos','Dívidas e Empréstimos','Outros','Despesa','Variável'],
-  ['Juros e Encargos de Cheque Especial (pelo Uso do Limite da Conta)','Tributos e Despesas Bancárias','Juros e Encargos Financeiros','Despesa','Variável'],
-  ['Juros e Encargos do Cartão de Crédito','Tributos e Despesas Bancárias','Juros e Encargos Financeiros','Despesa','Variável'],
-  ['Multas e Juros por Atraso de Contas (Luz, Água, Boletos em Geral)','Tributos e Despesas Bancárias','Juros e Encargos Financeiros','Despesa','Variável'],
-  ['Despesas de Negócios / PJ','Tributos e Despesas Bancárias','Impostos e Taxas','Despesa','Fixo'],
-  ['Anuidade de Cartão de Crédito','Tributos e Despesas Bancárias','Impostos e Taxas','Despesa','Fixo'],
-  ['Tarifas e Pacote de Serviços de Conta Corrente','Tributos e Despesas Bancárias','Impostos e Taxas','Despesa','Fixo'],
+  ['DAS - MEI','Tributos e Despesas Bancárias','Impostos, Taxas e Encargos Financeiros','Despesa','Fixo'],
+  ['Anuidade de Cartão de Crédito','Tributos e Despesas Bancárias','Impostos, Taxas e Encargos Financeiros','Despesa','Fixo'],
+  ['Tarifas e Pacote de Serviços de Conta Corrente','Tributos e Despesas Bancárias','Impostos, Taxas e Encargos Financeiros','Despesa','Fixo'],
+  ['Juros e Encargos Financeiros','Tributos e Despesas Bancárias','Impostos, Taxas e Encargos Financeiros','Despesa','Variável'],
   ['Imposto de Renda Retido na Fonte (IRRF)','Tributos e Despesas Bancárias','Descontos em Folha de Pagamento','Despesa','Fixo'],
   ['Contribuição Previdenciária (RPPS)','Tributos e Despesas Bancárias','Descontos em Folha de Pagamento','Despesa','Fixo'],
   ['Contribuições Associativas/Sindicais','Tributos e Despesas Bancárias','Descontos em Folha de Pagamento','Despesa','Fixo'],
@@ -3125,21 +3120,18 @@ let CATEGORIAS = [
   ['Taxas de Corretagem ou Custódia (se Houver)','Economias','Custos e Taxas de Investimento','Despesa','Variável'],
   ['Imposto de Renda sobre Ganhos de Capital (Retido ou via DARF)','Economias','Custos e Taxas de Investimento','Despesa','Variável'],
   ['Outras Despesas de Economias','Economias','Outros','Despesa','Variável'],
-  ['Pagamento de Fatura de Cartão de Crédito','Transações','Transferência entre Contas','Despesa','Variável'],
-  ['Recebimento por Pagamento de Fatura','Transações','Transferência entre Contas','Receita','Variável'],
-  ['Transferência','Transações','Transferência entre Contas','Receita','Variável'],
-  ['Transferência','Transações','Transferência entre Contas','Despesa','Variável'],
-  ['Pix','Transações','Transferência entre Contas','Receita','Variável'],
-  ['Pix','Transações','Transferência entre Contas','Despesa','Variável'],
+  ['Pagamento de Fatura de Cartão de Crédito','Transações','Transferências','Despesa','Variável'],
+  ['Recebimento por Pagamento de Fatura','Transações','Transferências','Receita','Variável'],
+  ['Transferências entre Contas (Próprias)','Transações','Transferências','Receita','Variável'],
+  ['Transferências entre Contas (Próprias)','Transações','Transferências','Despesa','Variável'],
+  ['Transferências para Terceiros','Transações','Transferências','Receita','Variável'],
+  ['Transferências para Terceiros','Transações','Transferências','Despesa','Variável'],
+  ['Transferências Recebidas','Transações','Transferências','Receita','Variável'],
+  ['Estorno e/ou Reembolso','Transações','Transferências','Receita','Variável'],
   ['Outras Receitas de Transações','Transações','Outros','Receita','Variável'],
   ['Outras Despesas de Transações','Transações','Outros','Despesa','Variável'],
-  ['Estorno e/ou Reembolso','Transações','Outros','Receita','Variável'],
   ['Saldo Inicial/Anterior','Saldos e Ajustes','Ajustes de Conciliação','Receita','Fixo'],
   ['Saldo Inicial/Anterior','Saldos e Ajustes','Ajustes de Conciliação','Despesa','Fixo'],
-  ['Ajuste de Centavos (Arredondamento)','Saldos e Ajustes','Ajustes de Conciliação','Receita','Variável'],
-  ['Ajuste de Centavos (Arredondamento)','Saldos e Ajustes','Ajustes de Conciliação','Despesa','Variável'],
-  ['Diferença de Conciliação Noturna','Saldos e Ajustes','Ajustes de Conciliação','Receita','Variável'],
-  ['Diferença de Conciliação Noturna','Saldos e Ajustes','Ajustes de Conciliação','Despesa','Variável'],
   ['Regularização de Saldo','Saldos e Ajustes','Ajustes de Conciliação','Receita','Variável'],
   ['Regularização de Saldo','Saldos e Ajustes','Ajustes de Conciliação','Despesa','Variável'],
   ['Bolsa Doutorado','Renda Familiar','Receitas de Bolsas e Pesquisa','Receita','Fixo'],
@@ -3385,14 +3377,14 @@ const CATEGORIAS_RENDE_FACIL_BB = ['Aplicação Automática do Saldo','Resgate A
 const GRUPO_COLORS = {
   "Moradia/Habitação":"#10408D","Transporte":"#2E6F95","Alimentação":"#c98f00","Saúde":"#1e8e5a",
   "Educação":"#3F7D20","Lazer e Entretenimento":"#a5690a","Cuidados Pessoais":"#b0558f",
-  "Filhos e Pets":"#6a8fc9","Caridade e Generosidade":"#c2578a","Economias":"#0f6f8a","Dívidas e Empréstimos":"#a83246",
+  "Vestuário e Acessórios":"#8a5fc2","Pets":"#6a8fc9","Presentes e Contribuições":"#c2578a","Economias":"#0f6f8a","Dívidas e Empréstimos":"#a83246",
   "Renda Familiar":"#1e8e5a","Tributos e Despesas Bancárias":"#7a5ea8","Transações":"#8393ac",
   "Saldos e Ajustes":"#6b7280","Tecnologia e Eletrônicos":"#3b5bdb","Sem Grupo":"#9aa5b8","Não Identificado":"#9aa5b8"
 };
 const GRUPO_ICONS = {
   "Moradia/Habitação":"🏠","Transporte":"🚗","Alimentação":"🍽️","Saúde":"🩺",
   "Educação":"🎓","Lazer e Entretenimento":"🎉","Cuidados Pessoais":"🧖",
-  "Filhos e Pets":"🐾","Caridade e Generosidade":"🤝","Economias":"🪙","Dívidas e Empréstimos":"📉",
+  "Vestuário e Acessórios":"👗","Pets":"🐾","Presentes e Contribuições":"🤝","Economias":"🪙","Dívidas e Empréstimos":"📉",
   "Renda Familiar":"💵","Tributos e Despesas Bancárias":"💸","Transações":"🔁",
   "Saldos e Ajustes":"⚖️","Tecnologia e Eletrônicos":"💻","Sem Grupo":"❓","Não Identificado":"❓"
 };
@@ -3864,6 +3856,63 @@ const CATEGORIAS_RENOMEADAS = {
   'Utensílios de cozinha e enxoval (cama, mesa e banho)': 'Utensílios de Cozinha e Enxoval (Cama, Mesa e Banho)',
   'Workshops, imersões, mentorias e treinamentos de curta duração': 'Treinamentos, Workshops e Palestras',
   'Óculos de grau (armação e lentes)': 'Óculos de Grau (Armação e Lentes)',
+  // ---- Reorganização de Grupos/Categorias/Subcategorias (FinUs): simplificação de nomenclatura — o
+  // identificador interno de cada classificação é preservado, só o nome muda. Cada entrada abaixo mapeia
+  // o nome ANTERIOR (imediatamente antes desta reformulação) para o nome ATUAL; a cadeia de resolução em
+  // corrigirCategoriasOrfas/sugerirCategoria segue até estabilizar, então nomes ainda mais antigos (acima)
+  // que já apontavam para um destes continuam resolvendo corretamente, sem precisar editá-los. ----
+  'Aluguel ou Prestação do Financiamento': 'Aluguel ou Financiamento de Imóvel',
+  'IPTU (Imposto Predial e Territorial Urbano)': 'IPTU',
+  'Guarda-Móveis e Depósitos/Box (Espaço Complementar de Moradia)': 'Guarda-Móveis e Depósitos/Box',
+  'Reformas e Pequenos Reparos (Pintura, Encanamento, Elétrica)': 'Reformas e Pequenos Reparos',
+  'Frete e/ou Mudanças (Custos de Transição Residencial)': 'Envios, Fretes e Mudanças',
+  'Chaveiro e Cópias de Chaves': 'Chaveiro',
+  'Itens de Decoração (Cortinas, Tapetes, Quadros)': 'Itens de Decoração',
+  'Utensílios de Cozinha e Enxoval (Cama, Mesa e Banho)': 'Utensílios de Cozinha e Enxoval',
+  'Aluguéis por Temporada (Airbnb, Booking)': 'Aluguéis por Temporada',
+  'Assinatura Mensal do Veículo (Mensalidade Recorrente)': 'Assinatura Mensal do Veículo',
+  'Aluguel Diário ou Semanal (Viagens ou Imprevistos)': 'Aluguel Diário ou Semanal',
+  'Taxas e Coparticipações (Franquia de Seguro, Taxa de Combustível ou Limpeza)': 'Taxas e Coparticipações',
+  'Aplicativos de Entrega (iFood, Keeta, 99 Food)': 'Aplicativos de Entrega',
+  'Procedimentos Cirúrgicos ou Estéticos de Saúde': 'Procedimentos de Saúde',
+  'Tratamentos Odontológicos (Obturação, Canal, Aparelho Ortodôntico)': 'Tratamentos Odontológicos',
+  'Jogos e Loterias': 'Loterias (Jogos, Bolões)',
+  'Produtos de Higiene e Cosméticos': 'Produtos de Higiene',
+  'Maquiagem, Cremes e Hidratação': 'Maquiagem e Cosméticos',
+  // "Alimentação" e "Higiene e Estética" abaixo são as subcategorias do (antigo) grupo Filhos e Pets
+  // (agora "Pets") — nomes comuns, mas únicos em todo o catálogo (nenhum outro c[0] os usa), então o
+  // remapeamento por nome não tem ambiguidade com o GRUPO "Alimentação" nem com nenhuma outra subcategoria.
+  'Alimentação': 'Ração e Petiscos Pet',
+  'Higiene e Estética': 'Banho e Tosa Pet',
+  'Outras Despesas de Filhos e Pets': 'Outras Despesas de Pets',
+  'Presentes de Aniversário e Datas Comemorativas': 'Presentes e Mimos',
+  'Doações': 'Doações e Rifas Beneficentes',
+  'Parcela de Empréstimo Pessoal (Bancos ou Fintechs)': 'Empréstimos (Pessoal e Consignado)',
+  'Despesas de Negócios / PJ': 'DAS - MEI',
+  'Transferência': 'Transferências entre Contas (Próprias)',
+  'Pix': 'Transferências para Terceiros',
+  // Exclusões (ver seção 4 do requisito): a subcategoria/categoria em si deixou de existir no catálogo,
+  // mas os lançamentos históricos NUNCA podem ficar sem classificação válida — cada uma é redirecionada
+  // para a classificação existente mais próxima, reaproveitando o mesmo mecanismo de remapeamento acima
+  // (corrigirCategoriasOrfas), em vez de um tratamento especial só para exclusões.
+  'Ajuste de Centavos (Arredondamento)': 'Regularização de Saldo',
+  'Diferença de Conciliação Noturna': 'Regularização de Saldo',
+  'Parcela de Empréstimo Consignado (Descontado em Folha)': 'Empréstimos (Pessoal e Consignado)',
+  'Quitação de Dívidas com Amigos ou Familiares': 'Outras Despesas de Dívidas e Empréstimos',
+  'Taxas de Entrega': 'Aplicativos de Entrega',
+  // As 3 subcategorias da extinta categoria "Juros e Encargos Financeiros" (grupo Tributos e Despesas
+  // Bancárias) convergem para a nova subcategoria de mesmo nome, agora dentro de "Impostos, Taxas e
+  // Encargos Financeiros" — mesmo conceito, só reclassificado um nível abaixo no catálogo.
+  'Juros e Encargos de Cheque Especial (pelo Uso do Limite da Conta)': 'Juros e Encargos Financeiros',
+  'Juros e Encargos do Cartão de Crédito': 'Juros e Encargos Financeiros',
+  'Multas e Juros por Atraso de Contas (Luz, Água, Boletos em Geral)': 'Juros e Encargos Financeiros',
+  'Serviços e Hospedagem': 'Outras Despesas de Pets',
+  // "Documentação e Burocracias" era a única subcategoria da extinta categoria "Filhos" sem um destino
+  // específico definido (Colônia de Férias e Mesada ou Semanada foram MOVIDAS, não excluídas — ver
+  // corrigirClassificacaoDesatualizada, que resincroniza grupo/subgrupo automaticamente para elas, já que
+  // o NOME das duas não mudou) — cai no fallback padrão do app para classificação sem correspondência
+  // clara (mesma subcategoria usada por categoriaNaoIdentificada/corrigirLancamentosSemClassificacao).
+  'Documentação e Burocracias (RG, Passaporte, Vistos de Dependentes)': 'Outras Despesas de Não Identificado',
 };
 /* Nomes antigos da classificação "Transferência Interna entre Contas", removida por completo do
    catálogo. Usado para limpar CATEGORIAS caso um arquivo de configuração antigo (configuracoes.cfg exportado
@@ -3937,14 +3986,15 @@ const NOMES_DESCONTINUADOS_DO_CATALOGO = [
    "Doações" é o único caso atual: migrou de Lazer e Entretenimento/Estilo de Vida para Caridade e
    Generosidade/Doações e Contribuições sem mudar de nome. */
 const SUBCATEGORIAS_QUE_MUDARAM_DE_LUGAR = ['Doações', 'Streaming de Vídeo', 'Streaming de Música'];
-/* "Dependentes e Pets" foi renomeado para "Filhos e Pets" — a grande maioria das subcategorias mudou de
-   nome junto (e por isso já é resincronizada normalmente via corrigirCategoriasOrfas), mas um lançamento
-   com uma subcategoria SEM substituto direto (ficou órfã, ver NOMES_DESCONTINUADOS_DO_CATALOGO) nunca
-   passa por esse recálculo — ficaria com o grupo antigo gravado para sempre, mesmo esse grupo não
-   existindo mais em lugar nenhum do catálogo. Esta correção garante que pelo menos o nome do GRUPO fique
-   consistente com o catálogo atual, mesmo quando a subcategoria específica não tem correspondente novo. */
+/* "Dependentes e Pets" foi renomeado para "Filhos e Pets" e, mais tarde, "Filhos e Pets" foi renomeado
+   para "Pets" — a grande maioria das subcategorias mudou de nome junto (e por isso já é resincronizada
+   normalmente via corrigirCategoriasOrfas), mas um lançamento com uma subcategoria SEM substituto direto
+   (ficou órfã, ver NOMES_DESCONTINUADOS_DO_CATALOGO) nunca passa por esse recálculo — ficaria com o grupo
+   antigo gravado para sempre, mesmo esse grupo não existindo mais em lugar nenhum do catálogo. Esta
+   correção garante que pelo menos o nome do GRUPO fique consistente com o catálogo atual (sempre o nome
+   MAIS RECENTE, "Pets"), mesmo quando a subcategoria específica não tem correspondente novo. */
 function corrigirGrupoRenomeadoSemSubstituto(){
-  STATE.transactions.forEach(t=>{ if(t.grupo==='Dependentes e Pets') t.grupo='Filhos e Pets'; });
+  STATE.transactions.forEach(t=>{ if(t.grupo==='Dependentes e Pets' || t.grupo==='Filhos e Pets') t.grupo='Pets'; });
 }
 function corrigirSubgruposMovidos(){
 
@@ -7319,7 +7369,7 @@ function reconciliarPagamentosFatura(){
       id: uid(), data: despesa.data,
       descricao: `Recebimento de pagamento de fatura (espelho automático de "${despesa.descricao}")`,
       valor: Number(despesa.valor)||0,
-      categoria: 'Recebimento por Pagamento de Fatura', grupo: 'Transações', subgrupo: 'Transferência entre Contas',
+      categoria: 'Recebimento por Pagamento de Fatura', grupo: 'Transações', subgrupo: 'Transferências',
       tipo: 'Receita', natureza: despesa.natureza || 'Variável',
       conta: cartao, pgto: 'Cartão de Crédito', competencia,
       parcelaAtual: null, totalParcelas: null, parcelamentoId: '',
@@ -8666,15 +8716,18 @@ function corrigirSentidoDescricaoTransferencias(){
 }
 function aplicarTransferenciaInterna(txPrincipal, contaOutraPonta){
   const vinculoId = txPrincipal.transferenciaVinculoId || uid();
-  const meioLabel = txPrincipal.pgto === 'Pix' ? 'Pix' : 'Transferência';
   function classificar(tipo){
     // O sentido da movimentação (envio/saída ou recebimento/entrada) é dado pelo próprio Tipo do
     // lançamento (Despesa = saída da conta de origem, Receita = entrada na conta de destino) — a
-    // subcategoria em si ("Pix" ou "Transferência") não representa mais o sentido, eliminando a
-    // duplicidade que existia entre "(Enviado)"/"(Recebido)".
+    // subcategoria em si não representa mais o sentido, eliminando a duplicidade que existia entre
+    // "(Enviado)"/"(Recebido)". Sempre "Transferências entre Contas (Próprias)", independentemente do
+    // meio de pagamento (Pix ou TED/Transferência): esta função só é chamada para movimentações ENTRE
+    // contas cadastradas na própria família (ver docstring da "Regra única de negócio" acima) — nunca
+    // para um Pix/TED a terceiros, que continua caindo em "Transferências para Terceiros" pela sugestão
+    // automática de categoria (sugerirCategoria) durante a importação, não por aqui.
     return {
-      tipo, grupo: 'Transações', subgrupo: 'Transferência entre Contas',
-      categoria: meioLabel,
+      tipo, grupo: 'Transações', subgrupo: 'Transferências',
+      categoria: 'Transferências entre Contas (Próprias)',
       natureza: 'Variável'
     };
   }
