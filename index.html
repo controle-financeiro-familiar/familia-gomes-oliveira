@@ -3089,31 +3089,31 @@ let CATEGORIAS = [
   ['Multas e Juros por Atraso de Contas (Luz, Água, Boletos em Geral)','Tributos e Despesas Bancárias','Juros e Encargos Financeiros','Despesa','Variável'],
   ['Despesas de Negócios / PJ','Tributos e Despesas Bancárias','Impostos e Taxas','Despesa','Fixo'],
   ['Anuidade de Cartão de Crédito','Tributos e Despesas Bancárias','Impostos e Taxas','Despesa','Fixo'],
-  ['Pacote de Serviços de Conta Corrente','Tributos e Despesas Bancárias','Impostos e Taxas','Despesa','Fixo'],
+  ['Tarifas e Pacote de Serviços de Conta Corrente','Tributos e Despesas Bancárias','Impostos e Taxas','Despesa','Fixo'],
   ['Imposto de Renda Retido na Fonte (IRRF)','Tributos e Despesas Bancárias','Descontos em Folha de Pagamento','Despesa','Fixo'],
   ['Contribuição Previdenciária (RPPS)','Tributos e Despesas Bancárias','Descontos em Folha de Pagamento','Despesa','Fixo'],
   ['Contribuições Associativas/Sindicais','Tributos e Despesas Bancárias','Descontos em Folha de Pagamento','Despesa','Fixo'],
   ['Outras Despesas de Tributos e Despesas Bancárias','Tributos e Despesas Bancárias','Outros','Despesa','Variável'],
-  ['Aportes na Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)','Economias','Reserva de Emergência e Liquidez','Despesa','Fixo'],
+  ['Aportes na Reserva de Emergência','Economias','Reserva de Emergência e Poupança','Despesa','Fixo'],
   // Mesma subcategoria acima, agora do lado Receita: usada quando o aporte é importado diretamente na
   // própria conta Reserva de Emergência (ex.: extrato CSV do PicPay — Pix/Transferência recebidos), onde o
   // dinheiro está ENTRANDO nessa conta. O lado Despesa continua servindo para quando o aporte é lançado
   // pela conta de origem que envia o dinheiro (ver aplicarTransferenciaInterna/importação manual).
-  ['Aportes na Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)','Economias','Reserva de Emergência e Liquidez','Receita','Fixo'],
+  ['Aportes na Reserva de Emergência','Economias','Reserva de Emergência e Poupança','Receita','Fixo'],
   // "Uso" é o oposto de "Aporte": dinheiro SAINDO da Reserva de Emergência para ser utilizado — representa
   // utilização de patrimônio já acumulado, não uma nova despesa corrente nem um novo aporte (ver
   // ehUsoReservaEmergencia/calcDashboard, que a excluem propositalmente do total de "economias/aportes").
-  ['Uso da Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)','Economias','Reserva de Emergência e Liquidez','Despesa','Variável'],
-  ['Aportes em Poupança','Economias','Reserva de Emergência e Liquidez','Despesa','Fixo'],
+  ['Uso da Reserva de Emergência','Economias','Reserva de Emergência e Poupança','Despesa','Variável'],
+  ['Aportes em Poupança','Economias','Reserva de Emergência e Poupança','Despesa','Fixo'],
   // BB Rende Fácil: investimento automático de saldo ocioso que o Banco do Brasil aplica/resgata sozinho,
   // todo dia, dentro da própria conta corrente (ver detectarRendeFacilBB) — não é um novo aporte real nem
   // uma retirada real (o dinheiro nunca muda de titularidade nem sai da conta), só circula automaticamente
   // entre o "saldo à vista" e o investimento vinculado a ele. Fica em subgrupo próprio, separado de
-  // "Reserva de Emergência e Liquidez", para nunca ser confundido com um aporte/uso deliberado — e por isso
+  // "Reserva de Emergência e Poupança", para nunca ser confundido com um aporte/uso deliberado — e por isso
   // NUNCA soma em economiasTotal/economiasAno (ver ehMovimentoRendeFacilBB), do mesmo jeito que "Uso da
   // Reserva de Emergência" também não soma.
-  ['Aplicação Automática no BB Rende Fácil','Economias','Rende Fácil (Aplicação Automática de Saldo)','Despesa','Variável'],
-  ['Resgate Automático do BB Rende Fácil','Economias','Rende Fácil (Aplicação Automática de Saldo)','Receita','Variável'],
+  ['Aplicação Automática do Saldo','Economias','Aplicação Automática de Saldo','Despesa','Variável'],
+  ['Resgate Automático do Saldo','Economias','Aplicação Automática de Saldo','Receita','Variável'],
   ['Títulos Públicos (Tesouro IPCA+, Tesouro Prefixado)','Economias','Renda Fixa (Médio/Longo Prazo)','Despesa','Variável'],
   ['Títulos Privados (CDB, LCI, LCA, CRI, CRA, Debêntures)','Economias','Renda Fixa (Médio/Longo Prazo)','Despesa','Variável'],
   ['Ações de Empresas (Bolsa de Valores)','Economias','Renda Variável','Despesa','Variável'],
@@ -3378,10 +3378,10 @@ const PROJECOES_DEFAULT = [
 const GRUPO_RENDA_FAMILIAR = "Renda Familiar";
 const CATEGORIAS_SEM_RESPONSAVEL_PREDEFINIDO = ["Entradas Patrimoniais e Resgates","Outros"];
 
-const GRUPOS = [...new Set(CATEGORIAS.map(c=>c[1]))];
+const GRUPOS = todosGrupos();
 const CATEGORIAS_FATURA = ['Pagamento de Fatura de Cartão de Crédito','Recebimento por Pagamento de Fatura'];
 // Ver detectarRendeFacilBB (importação) e ehMovimentoRendeFacilBB (exclusão de economiasTotal/economiasAno).
-const CATEGORIAS_RENDE_FACIL_BB = ['Aplicação Automática no BB Rende Fácil','Resgate Automático do BB Rende Fácil'];
+const CATEGORIAS_RENDE_FACIL_BB = ['Aplicação Automática do Saldo','Resgate Automático do Saldo'];
 const GRUPO_COLORS = {
   "Moradia/Habitação":"#10408D","Transporte":"#2E6F95","Alimentação":"#c98f00","Saúde":"#1e8e5a",
   "Educação":"#3F7D20","Lazer e Entretenimento":"#a5690a","Cuidados Pessoais":"#b0558f",
@@ -3709,6 +3709,15 @@ const CATEGORIAS_RENOMEADAS = {
   // cai no catch-all de despesas diversas do grupo.
   'Compra de brinquedos': 'Outras Despesas de Filhos e Pets',
   'Aportes na Reserva de Emergência (Tesouro Selic, CDBs de liquidez diária)': 'Aportes na Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)',
+  // Simplificação do nome (só a nomenclatura muda — mesma finalidade/comportamento nos dois tipos,
+  // Despesa e Receita): "(Tesouro Selic, CDBs de Liquidez Diária)" removido por ser redundante com a
+  // subcategoria "Renda Fixa (Médio/Longo Prazo)" já existente para esse tipo de investimento.
+  'Aportes na Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)': 'Aportes na Reserva de Emergência',
+  'Uso da Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)': 'Uso da Reserva de Emergência',
+  // BB Rende Fácil (ver detectarRendeFacilBB): nomes simplificados, sem a menção ao banco no meio do nome.
+  'Aplicação Automática no BB Rende Fácil': 'Aplicação Automática do Saldo',
+  'Resgate Automático do BB Rende Fácil': 'Resgate Automático do Saldo',
+  'Pacote de Serviços de Conta Corrente': 'Tarifas e Pacote de Serviços de Conta Corrente',
   'Apps de transporte (Uber, 99)': 'Táxi ou Apps de Transporte',
   'Armazenamento em Nuvem (iCloud, Google, Dropbox)': 'Assinaturas e Serviços Digitais',
   'Artigos de papelaria (cadernos, canetas, mochilas)': 'Papelaria e Material Escolar',
@@ -4103,7 +4112,7 @@ function corrigirCategoriasOrfas(){
    subcategoria de fallback "Não Identificado" na próxima carga do arquivo. */
 function corrigirClassificacaoAportesReservaPicPay(){
   STATE.transactions.forEach(t=>{
-    if(t.tipo==='Receita' && t.categoria==='Aportes na Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)' && t.descricao==='Aporte na Reserva de Emergência'){
+    if(t.tipo==='Receita' && t.categoria==='Aportes na Reserva de Emergência' && t.descricao==='Aporte na Reserva de Emergência'){
       t.categoria = null; t.grupo = null; t.subgrupo = null;
     }
   });
@@ -4317,8 +4326,8 @@ function detectarRendeFacilBB(desc){
   if(!norm.includes('rendefacil') && !norm.includes('rdfacil')) return null;
   const ehResgate = norm.includes('resg');
   return ehResgate
-    ? { categoria:'Resgate Automático do BB Rende Fácil', tipo:'Receita' }
-    : { categoria:'Aplicação Automática no BB Rende Fácil', tipo:'Despesa' };
+    ? { categoria:'Resgate Automático do Saldo', tipo:'Receita' }
+    : { categoria:'Aplicação Automática do Saldo', tipo:'Despesa' };
 }
 function catInfo(nome){
   const c = CATEGORIAS.find(c=>c[0]===nome);
@@ -4349,12 +4358,24 @@ function tipoParaCategoriaSugerida(nome, valor){
   const porSinal = valor<0 ? 'Despesa' : 'Receita';
   return matches.some(c=>c[3]===porSinal) ? porSinal : matches[0][3];
 }
-function gruposComTipo(tipo){ return [...new Set(CATEGORIAS.filter(c=>c[3]===tipo).map(c=>c[1]))]; }
+/* "Renda Familiar" deve SEMPRE aparecer por último em qualquer lista de grupos exibida na aplicação
+   (cadastro/edição, filtros, seletores, tabelas, modais etc.) — independentemente da posição em que o
+   grupo esteja no catálogo (CATEGORIAS) ou de reordenação manual (ver renderPosicaoModal) —, mesmo que
+   novos grupos sejam criados depois. Reordena só o necessário para mover "Renda Familiar" ao final,
+   preservando a ordem relativa entre todos os demais grupos (a mesma já usada hoje: ordem de primeira
+   aparição em CATEGORIAS, ou a ordem manual do usuário). Usada por todo ponto que produz uma lista de
+   grupos para exibição (gruposComTipo/todosGrupos abaixo, e os seletores de "mover para outro grupo" em
+   Configurações) — nunca precisa ser chamada de novo em cada tela individualmente. */
+function ordenarGruposComRendaFamiliarPorUltimo(lista){
+  if(!lista.includes('Renda Familiar')) return lista;
+  return [...lista.filter(g=>g!=='Renda Familiar'), 'Renda Familiar'];
+}
+function gruposComTipo(tipo){ return ordenarGruposComRendaFamiliarPorUltimo([...new Set(CATEGORIAS.filter(c=>c[3]===tipo).map(c=>c[1]))]); }
 function categoriasDoGrupo(grupo, tipo){ return [...new Set(CATEGORIAS.filter(c=>c[1]===grupo && c[3]===tipo).map(c=>c[2]))]; }
 /* Variantes independentes de tipo (Despesa/Receita) — usadas pela Edição em Lote, onde a seleção de
    lançamentos pode misturar despesas e receitas; o tipo final de cada lançamento é sempre derivado da
    categoria-folha escolhida (catInfo), nunca fixado antes. */
-function todosGrupos(){ return [...new Set(CATEGORIAS.map(c=>c[1]))]; }
+function todosGrupos(){ return ordenarGruposComRendaFamiliarPorUltimo([...new Set(CATEGORIAS.map(c=>c[1]))]); }
 function subgruposDoGrupo(grupo){ return [...new Set(CATEGORIAS.filter(c=>c[1]===grupo).map(c=>c[2]))]; }
 function categoriasDoSubgrupo(grupo, subgrupo){ return [...new Set(CATEGORIAS.filter(c=>c[1]===grupo && c[2]===subgrupo).map(c=>c[0]))]; }
 function subcategoriasDaCategoria(grupo, categoria, tipo){ return CATEGORIAS.filter(c=>c[1]===grupo && c[2]===categoria && c[3]===tipo).map(c=>c[0]); }
@@ -8707,7 +8728,7 @@ function ehContaPatrimonial(conta){
    isso permanece fora de despesasTotal, já que está no grupo "Economias"). O saldo real da conta e o
    histórico em Registros continuam refletindo o lançamento normalmente. */
 function ehUsoReservaEmergencia(t){
-  return t.grupo==='Economias' && t.categoria==='Uso da Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)';
+  return t.grupo==='Economias' && t.categoria==='Uso da Reserva de Emergência';
 }
 /* Identifica um lançamento de aplicação OU resgate automático do BB Rende Fácil (ver detectarRendeFacilBB,
    CATEGORIAS_RENDE_FACIL_BB) — usada em calcDashboard/detalheAportes para excluir os DOIS lados do total de
@@ -13418,7 +13439,7 @@ function renderPosicaoModal(){
   const m = UI.posicaoModal;
   let irmaos = [], label = '';
   if(m.nivel==='grupo'){
-    irmaos = [...new Set(CATEGORIAS.map(c=>c[1]))].filter(g=>g!==m.nome);
+    irmaos = todosGrupos().filter(g=>g!==m.nome);
     label = `Grupo <b>${escapeHtml(m.nome)}</b>`;
   } else if(m.nivel==='categoria'){
     irmaos = [...new Set(CATEGORIAS.filter(c=>c[1]===m.grupo).map(c=>c[2]))].filter(c=>c!==m.nome);
@@ -13456,7 +13477,7 @@ function renderPosicaoModal(){
 }
 function renderMoverCategoriaModal(){
   const m = UI.moverCategoriaModal;
-  const gruposExistentes = [...new Set(CATEGORIAS.map(c=>c[1]))].filter(g=>g!==m.grupo);
+  const gruposExistentes = todosGrupos().filter(g=>g!==m.grupo);
   const qtd = CATEGORIAS.filter(c=>c[1]===m.grupo && c[2]===m.categoria).length;
   return `
   <div class="overlay" id="ovMoverCategoria" ${attrZIndexModal('moverCategoriaModal')}>
@@ -13484,7 +13505,7 @@ function renderMoverCategoriaModal(){
    partir do grupo selecionado no momento). */
 function renderMoverSubcategoriaModal(){
   const m = UI.moverSubcategoriaModal;
-  const gruposExistentes = [...new Set(CATEGORIAS.map(c=>c[1]))];
+  const gruposExistentes = todosGrupos();
   const grupoDestino = m.grupoDestino || m.grupo;
   let categoriasDoGrupoDestino = [...new Set(CATEGORIAS.filter(c=>c[1]===grupoDestino).map(c=>c[2]))];
   if(grupoDestino===m.grupo) categoriasDoGrupoDestino = categoriasDoGrupoDestino.filter(c=>c!==m.categoria);
@@ -13520,7 +13541,7 @@ function renderMoverSubcategoriaModal(){
 function renderNovaSubcategoriaModal(){
   const f = UI.novaSubcategoria;
   const editando = !!f._editNomeOriginal;
-  const gruposExistentes = [...new Set(CATEGORIAS.map(c=>c[1]))];
+  const gruposExistentes = todosGrupos();
   const categoriasDoGrupo = [...new Set(CATEGORIAS.filter(c=>c[1]===f.grupo).map(c=>c[2]))];
   const permitidos = tiposPermitidosGrupo(f.grupo);
   const podeDespesa = permitidos.includes('Despesa'), podeReceita = permitidos.includes('Receita');
@@ -14755,7 +14776,7 @@ function classificarLancamentoReservaEmergencia(tipoOriginal, origemDestino){
   if(tipoNorm==='pixenviado'){
     return {
       descricao: origem ? `Pix enviado - ${origem}` : 'Pix enviado',
-      categoria: 'Uso da Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)',
+      categoria: 'Uso da Reserva de Emergência',
       tipo: 'Despesa'
     };
   }
