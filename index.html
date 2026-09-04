@@ -4376,21 +4376,26 @@ function ehPagamentoDeFatura(desc, conta, valor){
 }
 /* Reconhece a aplicação/resgate automático do "BB Rende Fácil" (investimento automático de saldo ocioso
    que o Banco do Brasil aplica/resgata sozinho, todo dia, em contas correntes com esse recurso ativado) só
-   pela descrição do próprio extrato — cobre as grafias mais comuns do BB ("APLIC AUTOM RDFACIL", "APLICACAO
+   pela DESCRIÇÃO do próprio extrato — cobre as grafias mais comuns do BB ("APLIC AUTOM RDFACIL", "APLICACAO
    AUTOMATICA RENDE FACIL", "RESGATE AUTOMATICO RDFACIL" etc.), sempre via normalizarTexto (minúsculas, sem
-   acento, só [a-z0-9]) para não depender de abreviação/acentuação/caixa exatas do arquivo. Distingue
-   aplicação de resgate pela presença de "resg" no texto normalizado — na ausência dela, assume aplicação
-   (grafia mais comum e mais frequente no extrato). Usada em buildParsedFromMap (import) — sinal textual
-   definitivo, prevalece sobre sugestão por palavra-chave/sinal do valor, igual em espírito a
+   acento, só [a-z0-9]) para não depender de abreviação/acentuação/caixa exatas do arquivo — mas a descrição
+   só serve para identificar QUE é um movimento do Rende Fácil, nunca para decidir a direção (aplicação ou
+   resgate): o Banco do Brasil não garante um texto que distinga as duas de forma confiável (algumas contas
+   recebem a mesma descrição genérica nos dois sentidos), então usar palavras como "resg" como critério fazia
+   TUDO cair no ramo de aplicação/Despesa sempre que a descrição não continha esse texto — o bug relatado de
+   "todo Rende Fácil vira Despesa". A direção agora vem exclusivamente do SINAL do valor original do arquivo
+   (antes de qualquer conversão para número absoluto): negativo = aplicação (saldo sai da conta) = Despesa;
+   sem sinal negativo = resgate (saldo volta para a conta) = Receita. Usada em buildParsedFromMap (import) —
+   sinal do valor definitivo, prevalece sobre sugestão por palavra-chave, igual em espírito a
    ehPagamentoDeFatura acima. Devolve null quando a descrição não bate com nenhum padrão conhecido, deixando
    a linha para a classificação normal (sugestão por palavra-chave/sinal do valor). */
-function detectarRendeFacilBB(desc){
+function detectarRendeFacilBB(desc, valor){
   const norm = normalizarTexto(desc);
   if(!norm.includes('rendefacil') && !norm.includes('rdfacil')) return null;
-  const ehResgate = norm.includes('resg');
-  return ehResgate
-    ? { categoria:'Resgate Automático do Saldo', tipo:'Receita' }
-    : { categoria:'Aplicação Automática do Saldo', tipo:'Despesa' };
+  const ehAplicacao = Number(valor)<0;
+  return ehAplicacao
+    ? { categoria:'Aplicação Automática do Saldo', tipo:'Despesa' }
+    : { categoria:'Resgate Automático do Saldo', tipo:'Receita' };
 }
 function catInfo(nome){
   const c = CATEGORIAS.find(c=>c[0]===nome);
@@ -7489,6 +7494,22 @@ function contextoOrdemArrasto(prefixo, algumId){
   }
   return [];
 }
+/* Compara duas datas (string aceita por `new Date`, tipicamente ISO AAAA-MM-DD, com ou sem horário) pelo
+   valor cronológico real — nunca como texto — para a ordenação padrão dos 4 modais de lançamentos (Extrato/
+   Futuros/Fatura/Próximas Faturas). Datas ISO zero-padded já comparam corretamente como texto, mas nunca
+   depender disso: um valor sem zero à esquerda (ex.: "2026-9-2" vs "2026-9-10") ordenaria errado como
+   string. Compara por timestamp (ano→mês→dia→hora→minuto→segundo, tudo embutido em getTime()), então
+   qualquer formato aceito por Date funciona igual. Data vazia/inválida nunca quebra a ordenação: sempre
+   tratada como "a mais antiga possível", ficando por último quando a ordem é ascendente (comportamento já
+   usado por valorOrdenavel, o mesmo motor da ordenação por clique no cabeçalho — aqui replicado só para a
+   ordem padrão, que roda antes/independente de qualquer clique). */
+function compararDataCronologica(dataA, dataB){
+  const ta = dataA ? new Date(dataA).getTime() : NaN;
+  const tb = dataB ? new Date(dataB).getTime() : NaN;
+  const va = isNaN(ta) ? -Infinity : ta;
+  const vb = isNaN(tb) ? -Infinity : tb;
+  return va - vb;
+}
 /* Recalcula os saldos sequencialmente na ordem exata dos itens recebidos (manual ou automática — esta
    função só soma, nunca decide a ordem), sempre a partir do Saldo Inicial do contexto (nunca alterado
    pela reordenação, seção 7 do requisito) — nunca reaproveita um saldo já calculado antes. Mesma fórmula
@@ -7521,7 +7542,7 @@ function itensFatura(conta, competencia){
   const itens = aplicarOrdemManual(STATE.transactions
     .filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia===competencia && !CATEGORIAS_FATURA.includes(t.categoria))
     .slice()
-    .sort((a,b)=> (a.data||"").localeCompare(b.data||"")));
+    .sort((a,b)=> compararDataCronologica(a.data, b.data) || (a.id||'').localeCompare(b.id||'')));
   const totalParcelado = itens.filter(t=>t.tipo==='Despesa' && Number(t.totalParcelas)>1).reduce((s,t)=>s+(Number(t.valor)||0),0);
   const totalAvista = itens.filter(t=>t.tipo==='Despesa' && !(Number(t.totalParcelas)>1)).reduce((s,t)=>s+(Number(t.valor)||0),0);
   // Estornos são tratados como créditos em toda a aba Contas e Cartões — um único total, sem distinção.
@@ -7592,7 +7613,7 @@ function itensFaturasFuturas(conta){
     .filter(t=> t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia && t.competencia>competenciaAtual
       && !CATEGORIAS_FATURA.includes(t.categoria))
     .slice()
-    .sort((a,b)=> a.competencia.localeCompare(b.competencia) || (a.data||"").localeCompare(b.data||""));
+    .sort((a,b)=> a.competencia.localeCompare(b.competencia) || compararDataCronologica(a.data, b.data) || (a.id||'').localeCompare(b.id||''));
   // A ordem manual (seção 10 do requisito) é aplicada por competência: reordenar dentro de uma competência
   // nunca deve misturar a posição de itens de outra (ver renderProjecaoFaturaModal, que já agrupa por
   // competência) — agrupa antes de aplicar, preservando a ordem das próprias competências entre si.
@@ -7843,7 +7864,7 @@ function lancamentosFuturosConta(conta){
   const hoje = hojeISO();
   const futuros = STATE.transactions
     .filter(t=> t.conta===conta && !ehSaldoAnterior(t) && t.data>hoje)
-    .sort((a,b)=> a.data<b.data ? -1 : (a.data>b.data ? 1 : 0));
+    .sort((a,b)=> compararDataCronologica(a.data, b.data) || (a.id||'').localeCompare(b.id||''));
   // Ordem manual (drag-and-drop, seção 8.2 do requisito): quando o usuário já reordenou este contexto,
   // ela prevalece sobre a ordem cronológica padrão acima — recalcularSaldosSequenciais soma na ordem
   // recebida, nunca reaproveitando o saldoProjetado de uma passada anterior.
@@ -7889,7 +7910,7 @@ function itensExtratoConta(conta, ano, mes){
   // entra antes de Despesa, o mesmo critério usado na ordem de exibição, para o saldo bater linha a linha.
   const ordemTipo = (a,b)=> a.tipo==='Receita' && b.tipo==='Despesa' ? -1 : (a.tipo==='Despesa' && b.tipo==='Receita' ? 1 : 0);
   const itensPeriodo = STATE.transactions.filter(t=>t.conta===conta && t.data>=inicioISO && t.data<=fimISO && t.data<=hoje)
-    .sort((a,b)=> a.data<b.data ? -1 : (a.data>b.data ? 1 : ordemTipo(a,b)));
+    .sort((a,b)=> compararDataCronologica(a.data, b.data) || ordemTipo(a,b) || (a.id||'').localeCompare(b.id||''));
   // Ordem manual (drag-and-drop, seção 8.1 do requisito): quando o usuário já reordenou este período, a
   // ordem escolhida por ele passa a ser a própria ordem de exibição (de cima para baixo, na sequência
   // arrastada) — e o saldo acumulado é recalculado nessa mesma sequência, em vez do padrão cronológico
@@ -15747,11 +15768,13 @@ function buildParsedFromMap(){
     const tipoConta = STATE.contaTipos[conta] || '';
     let catSugerida = sugerirCategoria(e.descricao);
     let tipo;
-    // "BB Rende Fácil" (aplicação/resgate automático de saldo ocioso, ver detectarRendeFacilBB): sinal
-    // textual definitivo, calculado uma única vez aqui e usado no primeiro ramo que se aplicar abaixo —
-    // igual em espírito ao pagamento de fatura, mas nunca prevalece sobre uma categoria explícita já
-    // determinada com certeza pelo próprio parser (ex.: extrato CSV da Reserva de Emergência).
-    const rendeFacilBB = e.categoriaExplicita ? null : detectarRendeFacilBB(e.descricao);
+    // "BB Rende Fácil" (aplicação/resgate automático de saldo ocioso, ver detectarRendeFacilBB): a
+    // descrição só identifica QUE é um movimento do Rende Fácil — a direção (aplicação/Despesa ou
+    // resgate/Receita) vem do sinal de e.valor (ainda com o sinal original do arquivo, antes da conversão
+    // para número absoluto no commit final), calculado uma única vez aqui e usado no primeiro ramo que se
+    // aplicar abaixo — igual em espírito ao pagamento de fatura, mas nunca prevalece sobre uma categoria
+    // explícita já determinada com certeza pelo próprio parser (ex.: extrato CSV da Reserva de Emergência).
+    const rendeFacilBB = e.categoriaExplicita ? null : detectarRendeFacilBB(e.descricao, e.valor);
     if(e.categoriaExplicita){
       // Extrato CSV da Reserva de Emergência: a subcategoria já foi determinada com certeza a partir do
       // Tipo do próprio lançamento do extrato (ver classificarLancamentoReservaEmergencia) — prevalece
@@ -16307,7 +16330,12 @@ function bindEvents(){
   document.getElementById('closeConfirmDelParcela')?.addEventListener('click', ()=>{ UI.confirmDelParcela=null; render(); });
   document.getElementById('closeConfirmDelParcela2')?.addEventListener('click', ()=>{ UI.confirmDelParcela=null; render(); });
   document.querySelectorAll('[data-projecao-cartao]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.projecaoFaturaModal = { conta: b.dataset.projecaoCartao, competenciaSelecionada: null, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() }; render();
+    UI.projecaoFaturaModal = { conta: b.dataset.projecaoCartao, competenciaSelecionada: null, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    // Toda abertura do modal sempre volta para a ordenação padrão (data crescente) — a aplicação não tem
+    // preferência persistente de ordenação, então uma ordenação por clique de uma sessão anterior deste
+    // mesmo modal nunca deve "vazar" para a próxima abertura (ver thOrdenavel/aplicarOrdenacaoClique).
+    UI.ordenacaoTabelas['projecao'] = { campo:null, dir:null };
+    render();
   }));
   document.getElementById('closeProjecaoFatura')?.addEventListener('click', ()=>{ UI.projecaoFaturaModal=null; render(); });
   document.getElementById('closeProjecaoFatura2')?.addEventListener('click', ()=>{ UI.projecaoFaturaModal=null; render(); });
@@ -16357,7 +16385,11 @@ function bindEvents(){
   });
   bindFiltrosMobileToggle('Projecao');
   document.querySelectorAll('[data-ver-fatura]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.faturaAtualModal = { conta: b.dataset.verFatura, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() }; render();
+    UI.faturaAtualModal = { conta: b.dataset.verFatura, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    // Sempre volta para a ordenação padrão (data crescente) a cada abertura — ver o mesmo comentário em
+    // Próximas Faturas acima.
+    UI.ordenacaoTabelas['fatura'] = { campo:null, dir:null };
+    render();
   }));
   document.getElementById('closeFaturaAtual')?.addEventListener('click', ()=>{ UI.faturaAtualModal=null; render(); });
   document.getElementById('closeFaturaAtual2')?.addEventListener('click', ()=>{ UI.faturaAtualModal=null; render(); });
@@ -16397,7 +16429,11 @@ function bindEvents(){
   });
   bindFiltrosMobileToggle('Fatura');
   document.querySelectorAll('[data-extrato-conta]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.extratoContaModal = { conta: b.dataset.extratoConta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() }; render();
+    UI.extratoContaModal = { conta: b.dataset.extratoConta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    // Sempre volta para a ordenação padrão (data crescente) a cada abertura — ver o mesmo comentário em
+    // Próximas Faturas acima.
+    UI.ordenacaoTabelas['extrato'] = { campo:null, dir:null };
+    render();
   }));
   document.getElementById('closeExtratoConta')?.addEventListener('click', ()=>{ UI.extratoContaModal=null; render(); });
   document.getElementById('closeExtratoConta2')?.addEventListener('click', ()=>{ UI.extratoContaModal=null; render(); });
@@ -16439,7 +16475,11 @@ function bindEvents(){
   });
   bindFiltrosMobileToggle('Extrato');
   document.querySelectorAll('[data-futuros-conta]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.futurosContaModal = { conta: b.dataset.futurosConta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() }; render();
+    UI.futurosContaModal = { conta: b.dataset.futurosConta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    // Sempre volta para a ordenação padrão (data crescente) a cada abertura — ver o mesmo comentário em
+    // Próximas Faturas acima.
+    UI.ordenacaoTabelas['futuros'] = { campo:null, dir:null };
+    render();
   }));
   document.getElementById('closeFuturosConta')?.addEventListener('click', ()=>{ UI.futurosContaModal=null; render(); });
   document.getElementById('closeFuturosConta2')?.addEventListener('click', ()=>{ UI.futurosContaModal=null; render(); });
@@ -16477,6 +16517,9 @@ function bindEvents(){
     UI.ano = ano; UI.mes = mes;
     UI.historicoContrachequeModal = null;
     UI.extratoContaModal = { conta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    // Sempre volta para a ordenação padrão (data crescente) a cada abertura — ver o mesmo comentário em
+    // Próximas Faturas acima.
+    UI.ordenacaoTabelas['extrato'] = { campo:null, dir:null };
     render();
   }));
   // Paginação de Lançamentos futuros — mesmo padrão da tabela de Registros (ver renderRodapePaginacaoGenerica).
