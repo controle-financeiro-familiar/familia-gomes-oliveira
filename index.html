@@ -12297,23 +12297,38 @@ function renderProjecaoFaturaModal(){
         ${itens.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Projecao', UI.projecaoFaturaModal.selecionados, itensPagina.map(t=>t.id), itens.map(t=>t.id))}</div>
         <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:12px;" data-ordenar-tabela="projecao"><table>
-          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Projecao', itensPagina.map(t=>t.id), UI.projecaoFaturaModal.selecionados)}${thOrdenavel('projecao','data','Data')}${thOrdenavel('projecao','descricao','Descrição')}${thOrdenavel('projecao','parcela','Parcela',{style:'text-align:center;'})}${thOrdenavel('projecao','valor','Valor',{style:'text-align:right;'})}<th class="no-print col-acoes-fatura">Ações</th></tr></thead>
+          ${(()=>{
+            // Colunas do cabeçalho num array — nunca uma contagem fixa à parte — para que o colspan da
+            // linha de agrupamento por competência (mais abaixo) nunca fique dessincronizado da quantidade
+            // real de colunas exibidas (ex.: se uma coluna for adicionada/removida aqui no futuro).
+            const colunasHead = [
+              renderColunaArrastarHead(),
+              renderColunaSelecaoLoteHead('Projecao', itensPagina.map(t=>t.id), UI.projecaoFaturaModal.selecionados),
+              thOrdenavel('projecao','data','Data'), thOrdenavel('projecao','descricao','Descrição'),
+              thOrdenavel('projecao','parcela','Parcela',{style:'text-align:center;'}), thOrdenavel('projecao','valor','Valor',{style:'text-align:right;'}),
+              `<th class="no-print col-acoes-fatura">Ações</th>`,
+            ];
+            const colspanGrupo = colunasHead.length;
+            return `<thead><tr>${colunasHead.join('')}</tr></thead>
           <tbody>${(()=>{
             // Sem seleção de competência, os lançamentos de vários meses ficam misturados na mesma lista —
             // em vez de repetir a competência em cada linha (coluna removida), agrupamos com uma linha de
             // cabeçalho por competência (a lista já vem ordenada por competência, então basta detectar a
             // troca de valor a cada item; cada página recomeça sua própria detecção, então a primeira linha
-            // de cada página sempre mostra o cabeçalho da competência em exibição).
+            // de cada página sempre mostra o cabeçalho da competência em exibição). O colspan cobre TODAS as
+            // colunas da tabela (colspanGrupo, calculado acima a partir do array de cabeçalho), nunca um
+            // número fixo, para a linha de agrupamento nunca ficar mais curta que a tabela.
             let ultimaCompetencia = null;
             return itensPagina.map(t=>{
               let cabecalho = '';
               if(!selecionada && t.competencia!==ultimaCompetencia){
                 ultimaCompetencia = t.competencia;
-                cabecalho = `<tr class="linha-grupo-competencia"><td colspan="6">${competenciaLabel(t.competencia)}</td></tr>`;
+                cabecalho = `<tr class="linha-grupo-competencia"><td colspan="${colspanGrupo}">${competenciaLabel(t.competencia)}</td></tr>`;
               }
               return cabecalho + renderLinhaItemFatura(t, false, 'Projecao', UI.projecaoFaturaModal.selecionados);
             }).join('');
-          })()}</tbody>
+          })()}</tbody>`;
+          })()}
         </table></div>
         ${renderCardsLancamentosModal(itensPagina, {
           tituloGrupo: selecionada ? null : (t=>competenciaLabel(t.competencia)),
@@ -18006,13 +18021,15 @@ function bindEvents(){
       const ehCartaoValido = pgto==='Cartão de Crédito' && STATE.cartoes.includes(conta);
       let competenciaFinal = '';
       if(ehCartaoValido){
-        if(UI.editingTx.id && UI.editingTx.competenciaFaturaManual){
-          // Edição de lançamento existente: respeita sempre a "Competência da Fatura" escolhida no campo
-          // dedicado do formulário — já vem pré-preenchida com a competência hoje associada ao lançamento,
-          // então só muda de fato quando o usuário seleciona outra fatura ali. Isso substitui, só para
-          // edição, a heurística abaixo baseada em "a Data ou a Conta mudou?" (que continua valendo para
-          // lançamentos NOVOS, que não têm esse campo). Data, valor e demais dados do lançamento não são
-          // afetados — só a competência muda.
+        // A "Competência da Fatura" só prevalece quando o usuário de fato a alterou no campo dedicado do
+        // formulário (valor diferente da competência original) — isso é o que move o lançamento de fatura
+        // sem tocar na data (ver texto de ajuda ao lado do campo). Se o campo não foi tocado (ainda igual à
+        // competência original), a Data continua sendo quem decide: mudar a Data (ou a Conta) de um
+        // lançamento existente precisa recalcular a fatura pela nova data, senão editar só a Data nunca
+        // moveria o lançamento de mês nenhum (a "Competência da Fatura" pré-preenchida sempre venceria).
+        const competenciaFaturaFoiAlterada = UI.editingTx.id && UI.editingTx.competenciaFaturaManual
+          && UI.editingTx.competenciaFaturaManual!==UI.editingTx._competenciaOriginal;
+        if(competenciaFaturaFoiAlterada){
           competenciaFinal = UI.editingTx.competenciaFaturaManual;
         } else {
           // Ao editar um lançamento já existente, preserva a competência já salva (ex.: detectada pelo nome
