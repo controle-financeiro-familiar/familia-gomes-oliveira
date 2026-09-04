@@ -7521,7 +7521,7 @@ function itensFatura(conta, competencia){
   const itens = aplicarOrdemManual(STATE.transactions
     .filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia===competencia && !CATEGORIAS_FATURA.includes(t.categoria))
     .slice()
-    .sort((a,b)=> (b.data||"").localeCompare(a.data||"")));
+    .sort((a,b)=> (a.data||"").localeCompare(b.data||"")));
   const totalParcelado = itens.filter(t=>t.tipo==='Despesa' && Number(t.totalParcelas)>1).reduce((s,t)=>s+(Number(t.valor)||0),0);
   const totalAvista = itens.filter(t=>t.tipo==='Despesa' && !(Number(t.totalParcelas)>1)).reduce((s,t)=>s+(Number(t.valor)||0),0);
   // Estornos são tratados como créditos em toda a aba Contas e Cartões — um único total, sem distinção.
@@ -7584,15 +7584,15 @@ function detalheSaldoParceladoEmAberto(conta, competenciaSelecionada){
 /* Todos os lançamentos (parcelados, à vista, estornos e créditos) das competências futuras de um cartão
    — mesmo critério de itensFatura (exclui só as categorias que representam o pagamento da própria
    fatura), mas somando as várias competências seguintes. Usada na lista do modal "Ver Próximas Faturas",
-   que deve refletir a fatura completa de cada mês futuro, não somente as parcelas em aberto. Ordenada por
-   competência (mais recente primeiro) e, dentro dela, por Data (mais recente primeiro). */
+   que deve refletir a fatura completa de cada mês futuro, não somente as parcelas em aberto. Ordenada
+   cronologicamente do mais antigo para o mais recente: por competência e, dentro dela, por Data. */
 function itensFaturasFuturas(conta){
   const competenciaAtual = chaveMes(UI.ano, UI.mes);
   const itens = STATE.transactions
     .filter(t=> t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia && t.competencia>competenciaAtual
       && !CATEGORIAS_FATURA.includes(t.categoria))
     .slice()
-    .sort((a,b)=> b.competencia.localeCompare(a.competencia) || (b.data||"").localeCompare(a.data||""));
+    .sort((a,b)=> a.competencia.localeCompare(b.competencia) || (a.data||"").localeCompare(b.data||""));
   // A ordem manual (seção 10 do requisito) é aplicada por competência: reordenar dentro de uma competência
   // nunca deve misturar a posição de itens de outra (ver renderProjecaoFaturaModal, que já agrupa por
   // competência) — agrupa antes de aplicar, preservando a ordem das próprias competências entre si.
@@ -7871,9 +7871,9 @@ function resumoContasBancarias(ano, mes){
   });
   return { qtdContas: contas.length, saldoTotal, entradasTotal, saidasTotal };
 }
-/* Lançamentos do período com saldo acumulado — calculado em ordem cronológica (a partir do saldo inicial
-   do período) e só depois invertido para exibição (mais recente primeiro), conforme pedido no modal de
-   extrato. Esse saldoAcumulado é só o ponto de partida "sem filtro/ordenação nenhuma" — quem chama
+/* Lançamentos do período com saldo acumulado — calculado e exibido em ordem cronológica (a partir do
+   saldo inicial do período), do mais antigo para o mais recente. Esse saldoAcumulado é só o ponto de
+   partida "sem filtro/ordenação nenhuma" — quem chama
    (renderExtratoContaModal) sempre recalcula de novo a partir do Saldo Inicial na sequência final
    efetivamente filtrada/ordenada (ver recalcularSaldosSequenciais lá), então filtros e ordenação por
    clique nunca herdam um saldo desatualizado calculado aqui. Tanto a lista quanto o saldo
@@ -7892,9 +7892,9 @@ function itensExtratoConta(conta, ano, mes){
     .sort((a,b)=> a.data<b.data ? -1 : (a.data>b.data ? 1 : ordemTipo(a,b)));
   // Ordem manual (drag-and-drop, seção 8.1 do requisito): quando o usuário já reordenou este período, a
   // ordem escolhida por ele passa a ser a própria ordem de exibição (de cima para baixo, na sequência
-  // arrastada) — e o saldo acumulado é recalculado nessa mesma sequência, em vez do padrão
-  // "cronológico crescente por baixo dos panos, exibido invertido". Sem ordem manual, comportamento
-  // idêntico ao anterior a esta funcionalidade (nenhuma regressão).
+  // arrastada) — e o saldo acumulado é recalculado nessa mesma sequência, em vez do padrão cronológico
+  // crescente. Sem ordem manual, a exibição é exatamente a ordem cronológica já calculada acima (mais
+  // antigo primeiro), sem nenhuma inversão.
   const temOrdemManual = itensPeriodo.some(t=>t.ordemExibicao!==undefined && t.ordemExibicao!==null);
   let comAcumulado;
   if(temOrdemManual){
@@ -7910,9 +7910,6 @@ function itensExtratoConta(conta, ano, mes){
       }
       return { ...t, saldoAcumulado: acumulado };
     });
-    // Exibição: data mais recente primeiro; dentro do mesmo dia, Receita antes de Despesa — não é um simples
-    // reverse do array cronológico, que inverteria também a ordem entre Receita/Despesa do mesmo dia.
-    comAcumulado.sort((a,b)=> a.data>b.data ? -1 : (a.data<b.data ? 1 : ordemTipo(a,b)));
   }
   const qtdPeriodo = itensPeriodo.filter(t=>!ehSaldoAnterior(t)).length;
   return {
