@@ -7873,10 +7873,14 @@ function resumoContasBancarias(ano, mes){
 }
 /* Lançamentos do período com saldo acumulado — calculado em ordem cronológica (a partir do saldo inicial
    do período) e só depois invertido para exibição (mais recente primeiro), conforme pedido no modal de
-   extrato. Tanto a lista quanto o saldo inicial/entradas/saídas/saldo final exibidos consideram somente
-   lançamentos com data <= hoje (data real do dispositivo) — lançamentos futuros do período (mesmo dentro
-   do mês/ano selecionado) não aparecem nem entram nesses totais, na mesma lógica de corte já usada no
-   Saldo Atual dos cards de Contas (ver saldoContaAteData/entradasRealizadas/saidasRealizadas). */
+   extrato. Esse saldoAcumulado é só o ponto de partida "sem filtro/ordenação nenhuma" — quem chama
+   (renderExtratoContaModal) sempre recalcula de novo a partir do Saldo Inicial na sequência final
+   efetivamente filtrada/ordenada (ver recalcularSaldosSequenciais lá), então filtros e ordenação por
+   clique nunca herdam um saldo desatualizado calculado aqui. Tanto a lista quanto o saldo
+   inicial/entradas/saídas/saldo final exibidos consideram somente lançamentos com data <= hoje (data real
+   do dispositivo) — lançamentos futuros do período (mesmo dentro do mês/ano selecionado) não aparecem nem
+   entram nesses totais, na mesma lógica de corte já usada no Saldo Atual dos cards de Contas (ver
+   saldoContaAteData/entradasRealizadas/saidasRealizadas). */
 function itensExtratoConta(conta, ano, mes){
   const inicioISO = `${ano}-${pad2(mes)}-01`, fimISO = `${ano}-${pad2(mes)}-31`;
   const hoje = hojeISO();
@@ -8100,15 +8104,23 @@ function renderExtratoContaModal(){
     {campo:'tipo', label:'Tipo', options:[{value:'Receita',label:'Receita'},{value:'Despesa',label:'Despesa'}]},
   ];
   const qtdAtivosExtrato = contarFiltrosPadraoAtivos(f, camposFiltroExtrato);
-  // Ordenação por clique no cabeçalho (item 7 do requisito): sobre todo o conjunto já filtrado, sempre
-  // antes da paginação abaixo. Cada saldoAcumulado já foi calculado por itensExtratoConta na ordem
-  // cronológica correta — reordenar aqui só muda a SEQUÊNCIA de exibição, nunca o valor de saldo de cada
-  // linha (mesma lógica de qualquer extrato: ordenar por Descrição, por exemplo, naturalmente "embaralha"
-  // a leitura do saldo acumulado linha a linha, sem alterar nenhum valor).
+  // Ordenação por clique no cabeçalho: sobre todo o conjunto já filtrado, sempre antes da paginação abaixo.
+  // O critério de comparação da coluna "Saldo" usa o saldoAcumulado cronológico calculado por
+  // itensExtratoConta só como CHAVE de ordenação (mantém as linhas na mesma posição relativa que teriam
+  // no extrato cronológico real) — o VALOR exibido de saldo é recalculado do zero logo abaixo, sempre a
+  // partir da sequência final efetivamente exibida.
   itensFiltrados = aplicarOrdenacaoClique(itensFiltrados, 'extrato', {
     data:{tipo:'data', valor:t=>t.data}, descricao:{tipo:'texto', valor:t=>t.descricao}, grupo:{tipo:'texto', valor:t=>t.grupo},
     tipo:{tipo:'texto', valor:t=>t.tipo}, valor:{tipo:'moeda', valor:t=>t.valor}, saldo:{tipo:'moeda', valor:t=>t.saldoAcumulado},
   });
+  // Recálculo final e obrigatório do saldo acumulado (regra "Saldo Inicial ± cada linha, sempre a partir
+  // da primeira linha atualmente exibida"): qualquer filtro e/ou ordenação por clique acima pode ter
+  // alterado a sequência de exibição em relação à ordem cronológica original calculada por
+  // itensExtratoConta — então o saldoAcumulado de CADA linha é recalculado do zero aqui, na ordem final
+  // (de cima para baixo) já filtrada e ordenada, sempre partindo do Saldo Inicial da conta, nunca
+  // reaproveitando um saldo calculado antes da filtragem/ordenação atual. Cobre igualmente inclusão,
+  // edição, exclusão e troca de Tipo/Valor de um lançamento, já que todas resultam num novo array aqui.
+  itensFiltrados = recalcularSaldosSequenciais(itensFiltrados, det.saldoInicial, 'saldoAcumulado');
   // Paginação da tabela — mesmo padrão/componente da tabela de Registros (ver
   // renderRodapePaginacaoGenerica), evita rolagem interna limitando a quantidade de linhas por página.
   const extPorPagina = UI.extratoContaModal.porPagina;
