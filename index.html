@@ -2020,6 +2020,12 @@ summary::marker{content:'';}
 .fatura-digital-head-top .btn-imprimir-fatura{flex-shrink:0;}
 .fatura-digital-head-info{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;font-size:12.5px;color:#4a5468;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);}
 .fatura-digital-head-info b{color:#8393ac;font-weight:700;margin-right:4px;}
+/* Botão "Restaurar ordenação padrão" (Extrato/Futuros/Fatura/Próximas Faturas — ver btnRestaurarOrdem*):
+   mesmo padrão de alinhamento à direita já usado por .conta-cabecalho-bancario/.limite-cartao-info-cabecalho
+   dentro de um flex row (margin-left:auto empurra para a extremidade oposta às informações, sem precisar de
+   um wrapper à parte) — nunca gruda no texto das informações, e quebra para a linha de baixo sozinho em
+   telas estreitas graças ao flex-wrap já existente em .fatura-digital-head-info, sem sobrepor nada. */
+.fatura-digital-head-info .btn-restaurar-ordem{margin-left:auto;flex-shrink:0;}
 /* Cabeçalho dos modais Ver Extrato/Lançamentos futuros/Ver Fatura/Ver Próximas Faturas: logo+nome+badges
    à esquerda, e Agência/Nº Conta (conta bancária) ou o bloco de limite (cartão) à direita, colados no
    botão Imprimir — mesma ideia de espaço reaproveitado do requisito de limite na tabela de Cartões. Em
@@ -8187,6 +8193,7 @@ function renderExtratoContaModal(){
             })() : ''}
             <span><b>Competência</b> ${MESES[mes-1]}/${ano}</span>
             <span><b>${det.qtdPeriodo}</b> lançamento${det.qtdPeriodo===1?'':'s'}</span>
+            ${temOrdemManualExtrato ? `<button type="button" class="btn btn-ghost btn-sm no-print btn-restaurar-ordem" id="btnRestaurarOrdemExtrato" title="Este extrato tem uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
           </div>
         </div>
         ${tipo==='Contracheque' ? (()=>{
@@ -8211,7 +8218,6 @@ function renderExtratoContaModal(){
         ${det.itens.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
           ${renderBotoesAcoesLancamentoModal(conta, itensFiltrados.length>0)}
-          ${temOrdemManualExtrato ? `<button type="button" class="btn btn-ghost btn-sm" id="btnRestaurarOrdemExtrato" title="Este extrato tem uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Extrato')?'agrupado':''}" id="btnFiltrosMobileExtrato" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosExtrato>0?` <span class="filtros-mobile-badge">${qtdAtivosExtrato}</span>`:''}</button>
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Extrato')?'agrupado':''} ${UI.filtrosMobileAberto==='Extrato'?'aberto-mobile':''}" data-prefixo-filtros="Extrato">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileExtrato" title="Fechar">✕</button></div>
@@ -8320,6 +8326,11 @@ function renderFuturosContaModal(){
             ${cabecalhoContaModalHtml(conta)}
             <div class="no-print"><button class="btn btn-ghost btn-sm no-print btn-imprimir-fatura" id="printFuturosConta">🖨️ Imprimir</button></div>
           </div>
+          <div class="fatura-digital-head-info">
+            <span><b>Hoje</b> ${fmtData(hojeISO())}</span>
+            <span><b>${futurosFiltrados.length}</b> lançamento${futurosFiltrados.length===1?'':'s'}</span>
+            ${temOrdemManualFuturos ? `<button type="button" class="btn btn-ghost btn-sm no-print btn-restaurar-ordem" id="btnRestaurarOrdemFuturos" title="Este modal tem uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
+          </div>
         </div>
         <p class="hint" style="margin-top:14px;">Estes lançamentos têm data posterior a hoje (${fmtData(hojeISO())}) e por isso <b>ainda não entram no Saldo Atual</b> da conta — cada um só passa a valer no dia em que efetivamente ocorrer.</p>
         <div class="cartoes-resumo-grid">
@@ -8330,7 +8341,6 @@ function renderFuturosContaModal(){
         ${futuros.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
           ${renderBotoesAcoesLancamentoModal(conta, futurosFiltrados.length>0)}
-          ${temOrdemManualFuturos ? `<button type="button" class="btn btn-ghost btn-sm" id="btnRestaurarOrdemFuturos" title="Este modal tem uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Futuros')?'agrupado':''}" id="btnFiltrosMobileFuturos" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosFuturos>0?` <span class="filtros-mobile-badge">${qtdAtivosFuturos}</span>`:''}</button>
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Futuros')?'agrupado':''} ${UI.filtrosMobileAberto==='Futuros'?'aberto-mobile':''}" data-prefixo-filtros="Futuros">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileFuturos" title="Fechar">✕</button></div>
@@ -12121,6 +12131,7 @@ function renderFaturaAtualModal(){
             <span><b>Vencimento</b> ${venc||'—'}</span>
             <span><b>Status</b> <span class="status-pill-novo ${stFatura.chave}" style="padding:2px 9px;font-size:11px;" title="${escapeHtml(tituloStatusFatura(stFatura))}">${stFatura.emoji} ${stFatura.label}${stFatura.chave==='paga' ? ` · ${stFatura.pagamento==='parcial'?'Parcialmente':'Totalmente'}` : (stFatura.chave==='fechada-sem-lancamentos' ? ' · Sem lançamentos' : '')}</span></span>
             <span><b>${itensFiltrados.length}</b> lançamento${itensFiltrados.length===1?'':'s'}</span>
+            ${temOrdemManualFatura ? `<button type="button" class="btn btn-ghost btn-sm no-print btn-restaurar-ordem" id="btnRestaurarOrdemFatura" title="Esta fatura tem uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
           </div>
         </div>
         <div class="cartoes-resumo-grid">
@@ -12132,7 +12143,6 @@ function renderFaturaAtualModal(){
         ${det.itens.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
           ${renderBotoesAcoesLancamentoModal(conta, itensFiltrados.length>0)}
-          ${temOrdemManualFatura ? `<button type="button" class="btn btn-ghost btn-sm" id="btnRestaurarOrdemFatura" title="Esta fatura tem uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Fatura')?'agrupado':''}" id="btnFiltrosMobileFatura" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosFatura>0?` <span class="filtros-mobile-badge">${qtdAtivosFatura}</span>`:''}</button>
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Fatura')?'agrupado':''} ${UI.filtrosMobileAberto==='Fatura'?'aberto-mobile':''}" data-prefixo-filtros="Fatura">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileFatura" title="Fechar">✕</button></div>
@@ -12239,13 +12249,16 @@ function renderProjecaoFaturaModal(){
             ${cabecalhoFaturaCartaoHtml(conta)}
             <button class="btn btn-ghost btn-sm no-print btn-imprimir-fatura" id="printProjecaoFatura">🖨️ Imprimir</button>
           </div>
-          ${selecionada ? `
+          ${selecionada || temOrdemManualProjecao ? `
           <div class="fatura-digital-head-info">
+            ${selecionada ? `
             <span><b>Competência</b> ${competenciaLabel(selecionada)}</span>
             <span><b>Fechamento</b> ${fechamentoLabel(selecionada, conta)||'—'}</span>
             <span><b>Vencimento</b> ${vencimentoLabel(selecionada, conta)||'—'}</span>
             <span><b>Status</b> ${(()=>{ const stSel = statusDetalhadoFatura(conta, selecionada); return `<span class="status-pill-novo ${stSel.chave}" style="padding:2px 9px;font-size:11px;" title="${escapeHtml(tituloStatusFatura(stSel))}">${stSel.emoji} ${stSel.label}${stSel.chave==='paga' ? ` · ${stSel.pagamento==='parcial'?'Parcialmente':'Totalmente'}` : (stSel.chave==='fechada-sem-lancamentos' ? ' · Sem lançamentos' : '')}</span>`; })()}</span>
+            ` : ''}
             <span><b>${itens.length}</b> lançamento${itens.length===1?'':'s'}</span>
+            ${temOrdemManualProjecao ? `<button type="button" class="btn btn-ghost btn-sm no-print btn-restaurar-ordem" id="btnRestaurarOrdemProjecao" title="Estas próximas faturas têm uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
           </div>` : ''}
         </div>
         ${selecionada ? `
@@ -12268,7 +12281,6 @@ function renderProjecaoFaturaModal(){
         ${itensBase.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
           ${renderBotoesAcoesLancamentoModal(conta, itens.length>0)}
-          ${temOrdemManualProjecao ? `<button type="button" class="btn btn-ghost btn-sm" id="btnRestaurarOrdemProjecao" title="Estas próximas faturas têm uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Projecao')?'agrupado':''}" id="btnFiltrosMobileProjecao" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosProjecao>0?` <span class="filtros-mobile-badge">${qtdAtivosProjecao}</span>`:''}</button>
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Projecao')?'agrupado':''} ${UI.filtrosMobileAberto==='Projecao'?'aberto-mobile':''}" data-prefixo-filtros="Projecao">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileProjecao" title="Fechar">✕</button></div>
