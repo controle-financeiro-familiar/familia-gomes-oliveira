@@ -1260,6 +1260,11 @@ tbody tr:hover{background:var(--navy-50);}
 /* Seleção em lote (checkbox por linha + barra de ações contextual) — usada em Ver Fatura, Ver Próximas
    Faturas, Ver Extrato e Ver Lançamentos futuros. */
 .col-checkbox-lote{ width:1%; text-align:center; padding-left:10px; padding-right:2px; }
+/* Ordenação por clique no cabeçalho (motor único — ver thOrdenavel/cicloOrdenacaoClique): th-ordenavel só
+   marca o cursor; a seta ▲/▼ já vem como texto dentro do próprio rótulo (mesmo padrão da tabela "Onde o
+   dinheiro está mudando"), sem elemento/ícone à parte, então nenhuma outra regra visual é necessária aqui. */
+.th-ordenavel{ user-select:none; }
+.th-ordenavel:hover{ background:var(--navy-900); }
 /* Reordenação manual por drag-and-drop (Extrato/Lançamentos Futuros/Fatura/Próximas Faturas — ver
    renderColunaArrastarLinha/aplicarOrdemManual). Coluna estreita e de largura fixa (nunca estica as
    demais colunas de forma perceptível); ícone só visível/ativo nas linhas onde a reordenação está
@@ -1305,6 +1310,27 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .label-tag-compartilhado{text-transform:none;color:#8393ac;font-size:9.5px;font-weight:600;letter-spacing:normal;white-space:nowrap;}
 .field input, .field select{width:100%;border:1px solid var(--line);border-radius:7px;padding:8px 9px;font-size:13px;background:#fff;}
 .field input:focus,.field select:focus{outline:2px solid var(--navy-900);outline-offset:1px;}
+/* Modal de edição/criação de conta (renderTextModal, tipo "conta-novo"/"conta-editar" — ver
+   .modal-editor-conta): todo campo de input, select e botão do formulário/rodapé com altura fixa de 36px,
+   para os campos ficarem visualmente alinhados entre si independentemente do tipo (texto, número, select)
+   ou do padding próprio de cada botão. *{box-sizing:border-box} já existente garante que padding/borda
+   entram nesses 36px, sem precisar zerar nada. Não altera o ✕ de fechar do cabeçalho (controle de janela,
+   não um campo do formulário) nem nenhum outro modal — escopado só a esta classe. */
+.modal-editor-conta .modal-body input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]),
+.modal-editor-conta .modal-body select,
+.modal-editor-conta .modal-body button,
+.modal-editor-conta .modal-foot button{
+  height:36px;
+}
+/* Mesmo tratamento acima, agora para os modais de lançamento (renderTxModal, renderNovaProjecaoModal,
+   renderDuplicarMesesEditarItemModal — ver .modal-editor-lancamento): campos de input/select e botões do
+   formulário/rodapé com altura fixa de 36px, escopado só a esses modais. */
+.modal-editor-lancamento .modal-body input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]),
+.modal-editor-lancamento .modal-body select,
+.modal-editor-lancamento .modal-body button,
+.modal-editor-lancamento .modal-foot button{
+  height:36px;
+}
 /* Item 6 do requisito: no mobile (especialmente iOS Safari), um input/select focado com font-size menor
    que 16px dispara zoom automático da página — inclusive em modais que dão foco automático ao abrir (ex.:
    Saldo Inicial da Conta), o que deixava o modal "aberto com zoom" de forma inconsistente. 16px é o piso
@@ -1338,8 +1364,8 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .conta-grid-linha{display:grid;gap:12px;margin-bottom:10px;}
 .conta-grid-linha:last-child{margin-bottom:0;}
 .conta-grid-linha > .field{min-width:0;}
-.conta-grid-linha-1{grid-template-columns:0.5fr 1.5fr 1fr;}
-.conta-grid-linha-2{grid-template-columns:1.5fr 1.5fr;}
+.conta-grid-linha-1{grid-template-columns:0.25fr 1.5fr 1.25fr;}
+.conta-grid-linha-2{grid-template-columns:1fr 2fr;}
 .conta-grid-linha-pix1{grid-template-columns:0.5fr 1fr 1.5fr;}
 .conta-grid-linha-cartao1{grid-template-columns:0.5fr 0.5fr 1fr 1fr;}
 .conta-grid-linha-pix2,.conta-grid-linha-vinculo{grid-template-columns:1fr;}
@@ -2907,34 +2933,63 @@ const LOGO_APP = "assets/images/logo-app.png";
 
 /* [nome, grupo, subgrupo, tipo, natureza] — extraído do arquivo Categorias_e_subcategorias.ods do usuário */
 let CATEGORIAS = [
-  ['Aluguel ou Prestação do Financiamento','Moradia/Habitação','Custos Fixos Ocorrentes','Despesa','Fixo'],
+  ['PJ CISM-BR','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
+  ['Outros Serviços PJ','Renda Familiar','Renda de Trabalho e Serviços','Receita','Variável'],
+  ['Salário TRT','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
+  ['Assistência Saúde','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
+  ['Auxílio Alimentação','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
+  ['Assistência Pré-Escolar','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
+  ['Bolsa Anvisa','Renda Familiar','Receitas de Bolsas e Pesquisa','Receita','Fixo'],
+  ['Bolsa Doutorado','Renda Familiar','Receitas de Bolsas e Pesquisa','Receita','Fixo'],
+  ['Aluguel Garagem','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
+  ['Arrendamento Fazenda','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
+  ['Aluguel Apto Ribeirão Preto','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
+  ['Rendimento de Conta Corrente / Liquidez Diária','Renda Familiar','Rendimentos e Ganhos de Capital','Receita','Variável'],
+  ['Rendimento de Poupança (Correção Monetária / Juros)','Renda Familiar','Rendimentos e Ganhos de Capital','Receita','Variável'],
+  ['Rendimento de Investimentos (Dividendos / Juros)','Renda Familiar','Rendimentos e Ganhos de Capital','Receita','Variável'],
+  ['Resgates e Empréstimos Recebidos','Renda Familiar','Entradas Patrimoniais e Resgates','Receita','Variável'],
+  ['Restituição do Imposto de Renda (IRPF)','Renda Familiar','Entradas Patrimoniais e Resgates','Receita','Variável'],
+  ['Outras Receitas de Renda Familiar','Renda Familiar','Outros','Receita','Variável'],
+  ['Aluguel ou Financiamento de Imóvel','Moradia/Habitação','Custos Fixos Ocorrentes','Despesa','Fixo'],
   ['Condomínio','Moradia/Habitação','Custos Fixos Ocorrentes','Despesa','Fixo'],
-  ['IPTU (Imposto Predial e Territorial Urbano)','Moradia/Habitação','Custos Fixos Ocorrentes','Despesa','Fixo'],
-  ['Guarda-Móveis e Depósitos/Box (Espaço Complementar de Moradia)','Moradia/Habitação','Custos Fixos Ocorrentes','Despesa','Fixo'],
-  ['Energia Elétrica','Moradia/Habitação','Contas de Consumo (Utilidades)','Despesa','Fixo'],
-  ['Água e Esgoto','Moradia/Habitação','Contas de Consumo (Utilidades)','Despesa','Fixo'],
-  ['Gás (Encanado ou Botijão)','Moradia/Habitação','Contas de Consumo (Utilidades)','Despesa','Fixo'],
+  ['IPTU','Moradia/Habitação','Custos Fixos Ocorrentes','Despesa','Fixo'],
+  ['Guarda-Móveis e Depósitos/Box','Moradia/Habitação','Custos Fixos Ocorrentes','Despesa','Fixo'],
+  ['Energia Elétrica','Moradia/Habitação','Contas de Consumo (Utilidades)','Despesa','Variável'],
+  ['Água e Esgoto','Moradia/Habitação','Contas de Consumo (Utilidades)','Despesa','Variável'],
+  ['Gás (Encanado ou Botijão)','Moradia/Habitação','Contas de Consumo (Utilidades)','Despesa','Variável'],
   ['Internet e TV a Cabo','Moradia/Habitação','Contas de Consumo (Utilidades)','Despesa','Fixo'],
   ['Telefone Fixo e Celular','Moradia/Habitação','Contas de Consumo (Utilidades)','Despesa','Fixo'],
-  ['Serviços de Faxina ou Diarista','Moradia/Habitação','Manutenção e Conservação','Despesa','Variável'],
-  ['Reformas e Pequenos Reparos (Pintura, Encanamento, Elétrica)','Moradia/Habitação','Manutenção e Conservação','Despesa','Variável'],
+  ['Envios, Fretes e Mudanças','Moradia/Habitação','Manutenção e Conservação','Despesa','Variável'],
+  ['Serviços de Faxina ou Diarista','Moradia/Habitação','Manutenção e Conservação','Despesa','Fixo'],
+  ['Reformas e Pequenos Reparos','Moradia/Habitação','Manutenção e Conservação','Despesa','Variável'],
   ['Manutenção de Eletrodomésticos','Moradia/Habitação','Manutenção e Conservação','Despesa','Variável'],
-  ['Frete e/ou Mudanças (Custos de Transição Residencial)','Moradia/Habitação','Manutenção e Conservação','Despesa','Variável'],
+  ['Chaveiro','Moradia/Habitação','Proteção e Segurança','Despesa','Variável'],
   ['Seguro Residencial','Moradia/Habitação','Proteção e Segurança','Despesa','Fixo'],
-  ['Chaveiro e Cópias de Chaves','Moradia/Habitação','Proteção e Segurança','Despesa','Variável'],
+  ['Garantias Locatícias','Moradia/Habitação','Proteção e Segurança','Despesa','Fixo'],
+  ['Itens de Decoração','Moradia/Habitação','Instalação e Decoração','Despesa','Variável'],
+  ['Utensílios de Cozinha e Enxoval','Moradia/Habitação','Instalação e Decoração','Despesa','Variável'],
   ['Móveis e Eletrodomésticos Novos','Moradia/Habitação','Instalação e Decoração','Despesa','Variável'],
-  ['Itens de Decoração (Cortinas, Tapetes, Quadros)','Moradia/Habitação','Instalação e Decoração','Despesa','Variável'],
-  ['Utensílios de Cozinha e Enxoval (Cama, Mesa e Banho)','Moradia/Habitação','Instalação e Decoração','Despesa','Variável'],
   ['Utensílios e Pequenos Equipamentos Domésticos','Moradia/Habitação','Instalação e Decoração','Despesa','Variável'],
   ['Resorts','Moradia/Habitação','Hospedagem e Estadia','Despesa','Variável'],
   ['Hotéis e Pousadas','Moradia/Habitação','Hospedagem e Estadia','Despesa','Variável'],
-  ['Aluguéis por Temporada (Airbnb, Booking)','Moradia/Habitação','Hospedagem e Estadia','Despesa','Variável'],
+  ['Aluguéis por Temporada','Moradia/Habitação','Hospedagem e Estadia','Despesa','Variável'],
   ['Outras Despesas de Moradia/Habitação','Moradia/Habitação','Outros','Despesa','Variável'],
-  ['Assinatura Mensal do Veículo (Mensalidade Recorrente)','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Fixo'],
+  ['Padaria e Frios','Alimentação','Supermercado e Compras para Casa','Despesa','Variável'],
+  ['Mercearia e Conveniência','Alimentação','Supermercado e Compras para Casa','Despesa','Variável'],
+  ['Feira, Hortifrúti e Açougue','Alimentação','Supermercado e Compras para Casa','Despesa','Variável'],
+  ['Supermercado e Atacarejo','Alimentação','Supermercado e Compras para Casa','Despesa','Variável'],
+  ['Bares e Bebidas','Alimentação','Refeições Fora de Casa','Despesa','Variável'],
+  ['Restaurantes e Pizzarias','Alimentação','Refeições Fora de Casa','Despesa','Variável'],
+  ['Lanchonetes e Fast-Food','Alimentação','Refeições Fora de Casa','Despesa','Variável'],
+  ['Cafeterias, Docerias e Sorveterias','Alimentação','Refeições Fora de Casa','Despesa','Variável'],
+  ['Aplicativos de Entrega','Alimentação','Delivery e Praticidade','Despesa','Variável'],
+  ['Marmitas e Refeições Prontas','Alimentação','Delivery e Praticidade','Despesa','Variável'],
+  ['Outras Despesas de Alimentação','Alimentação','Outros','Despesa','Variável'],
+  ['Assinatura Mensal do Veículo','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Fixo'],
+  ['Aluguel Diário ou Semanal','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
   ['Taxa de Adesão Inicial ou Caução','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
   ['Quilometragem Excedente','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
-  ['Aluguel Diário ou Semanal (Viagens ou Imprevistos)','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
-  ['Taxas e Coparticipações (Franquia de Seguro, Taxa de Combustível ou Limpeza)','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
+  ['Taxas e Coparticipações','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
   ['Financiamento ou Consórcio do Veículo','Transporte','Veículo Próprio (Custos Fixos)','Despesa','Fixo'],
   ['Seguro Automotivo','Transporte','Veículo Próprio (Custos Fixos)','Despesa','Fixo'],
   ['IPVA e Licenciamento Anual','Transporte','Veículo Próprio (Custos Fixos)','Despesa','Fixo'],
@@ -2949,37 +3004,24 @@ let CATEGORIAS = [
   ['Recarga de Bilhete Único ou Passagem Avulsa (Metrô/Trem/Ônibus)','Transporte','Utilização Diária e Viagem','Despesa','Variável'],
   ['Passagens Aéreas ou Rodoviárias','Transporte','Utilização Diária e Viagem','Despesa','Variável'],
   ['Aluguel de Bicicletas ou Patinetes Elétricos','Transporte','Utilização Diária e Viagem','Despesa','Variável'],
-  ['Multas de Trânsito (Incluindo Taxa de Processamento da Locadora)','Transporte','Multas e Documentação','Despesa','Variável'],
-  ['Taxas do Detran (Renovação de CNH, Transferência)','Transporte','Multas e Documentação','Despesa','Variável'],
   ['Serviços de Despachante','Transporte','Multas e Documentação','Despesa','Variável'],
+  ['Taxas do Detran (Renovação de CNH, Transferência)','Transporte','Multas e Documentação','Despesa','Variável'],
+  ['Multas de Trânsito (Incluindo Taxa de Processamento da Locadora)','Transporte','Multas e Documentação','Despesa','Variável'],
   ['Outras Despesas de Transporte','Transporte','Outros','Despesa','Variável'],
-  ['Supermercado e Atacarejo','Alimentação','Supermercado e Compras para Casa','Despesa','Variável'],
-  ['Mercearia e Conveniência','Alimentação','Supermercado e Compras para Casa','Despesa','Variável'],
-  ['Feira, Hortifrúti e Açougue','Alimentação','Supermercado e Compras para Casa','Despesa','Variável'],
-  ['Padaria e Frios','Alimentação','Supermercado e Compras para Casa','Despesa','Variável'],
-  ['Bares e Bebidas','Alimentação','Refeições Fora de Casa','Despesa','Variável'],
-  ['Restaurantes e Pizzarias','Alimentação','Refeições Fora de Casa','Despesa','Variável'],
-  ['Lanchonetes e Fast-Food','Alimentação','Refeições Fora de Casa','Despesa','Variável'],
-  ['Cafeterias, Docerias e Sorveterias','Alimentação','Refeições Fora de Casa','Despesa','Variável'],
-  ['Taxas de Entrega','Alimentação','Delivery e Praticidade','Despesa','Variável'],
-  ['Marmitas e Refeições Prontas','Alimentação','Delivery e Praticidade','Despesa','Variável'],
-  ['Aplicativos de Entrega (iFood, Keeta, 99 Food)','Alimentação','Delivery e Praticidade','Despesa','Variável'],
-  ['Outras Despesas de Alimentação','Alimentação','Outros','Despesa','Variável'],
   ['Seguro de Vida','Saúde','Proteção Familiar','Despesa','Fixo'],
   ['Plano de Saúde','Saúde','Proteção Familiar','Despesa','Fixo'],
   ['Plano Odontológico','Saúde','Proteção Familiar','Despesa','Fixo'],
-  ['Taxas de Coparticipação de Consultas ou Exames','Saúde','Proteção Familiar','Despesa','Fixo'],
-  ['Medicamentos (Contínuos, Manipulados e Gerais)','Saúde','Medicamentos e Farmácia','Despesa','Variável'],
+  ['Taxas de Coparticipação de Consultas ou Exames','Saúde','Proteção Familiar','Despesa','Variável'],
   ['Equipamentos e Dispositivos de Saúde','Saúde','Medicamentos e Farmácia','Despesa','Variável'],
+  ['Medicamentos (Contínuos, Manipulados e Gerais)','Saúde','Medicamentos e Farmácia','Despesa','Variável'],
   ['Consultas Médicas Particulares (Reembolsáveis ou Não)','Saúde','Consultas e Terapias (Particulares)','Despesa','Variável'],
   ['Sessões de Psicoterapia ou Psicologia','Saúde','Consultas e Terapias (Particulares)','Despesa','Variável'],
   ['Sessões de Fisioterapia, Quiropraxia ou Acupuntura','Saúde','Consultas e Terapias (Particulares)','Despesa','Variável'],
   ['Vacinas e Imunizações','Saúde','Exames e Procedimentos','Despesa','Variável'],
+  ['Procedimentos de Saúde','Saúde','Exames e Procedimentos','Despesa','Variável'],
+  ['Tratamentos Odontológicos','Saúde','Exames e Procedimentos','Despesa','Variável'],
   ['Exames de Laboratório e de Imagem','Saúde','Exames e Procedimentos','Despesa','Variável'],
-  ['Procedimentos Cirúrgicos ou Estéticos de Saúde','Saúde','Exames e Procedimentos','Despesa','Variável'],
-  ['Tratamentos Odontológicos (Obturação, Canal, Aparelho Ortodôntico)','Saúde','Exames e Procedimentos','Despesa','Variável'],
-  ['Óculos de Grau (Armação e Lentes)','Saúde','Cuidados Oculares e Equipamentos','Despesa','Variável'],
-  ['Mensalidade da Academia ou Box de Crossfit','Saúde','Bem-Estar e Prevenção','Despesa','Fixo'],
+  ['Mensalidade de Academia','Saúde','Bem-Estar e Prevenção','Despesa','Fixo'],
   ['Pilates e Treinos Funcionais','Saúde','Bem-Estar e Prevenção','Despesa','Fixo'],
   ['Avaliação Física e Exames para Prática Esportiva','Saúde','Bem-Estar e Prevenção','Despesa','Fixo'],
   ['Outras Despesas de Saúde','Saúde','Outros','Despesa','Variável'],
@@ -2987,9 +3029,9 @@ let CATEGORIAS = [
   ['Faculdade e Pós-Graduação','Educação','Ensino e Mensalidades','Despesa','Fixo'],
   ['Cursos Técnicos e Profissionalizantes','Educação','Ensino e Mensalidades','Despesa','Fixo'],
   ['Curso de Idiomas','Educação','Cursos e Desenvolvimento Profissional','Despesa','Fixo'],
-  ['Treinamentos, Workshops e Palestras','Educação','Cursos e Desenvolvimento Profissional','Despesa','Fixo'],
   ['Congressos e Eventos','Educação','Cursos e Desenvolvimento Profissional','Despesa','Variável'],
   ['Certificações Profissionais','Educação','Cursos e Desenvolvimento Profissional','Despesa','Variável'],
+  ['Treinamentos, Workshops e Palestras','Educação','Cursos e Desenvolvimento Profissional','Despesa','Variável'],
   ['Livros Didáticos e Apostilas','Educação','Materiais e Recursos Educacionais','Despesa','Variável'],
   ['Papelaria e Material Escolar','Educação','Materiais e Recursos Educacionais','Despesa','Variável'],
   ['Softwares e Ferramentas Educacionais','Educação','Materiais e Recursos Educacionais','Despesa','Variável'],
@@ -2999,21 +3041,44 @@ let CATEGORIAS = [
   ['Outras Despesas de Educação','Educação','Outros','Despesa','Variável'],
   ['Streaming de Vídeo','Lazer e Entretenimento','Assinaturas de Entretenimento','Despesa','Fixo'],
   ['Streaming de Música','Lazer e Entretenimento','Assinaturas de Entretenimento','Despesa','Fixo'],
+  ['Livros de Lazer, Quadrinhos e Revistas','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
+  ['Hobbies e Colecionáveis','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
+  ['Equipamentos e Acessórios de Lazer','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
+  ['Ensaios Fotográficos','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
+  ['Loterias (Jogos, Bolões)','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
   ['Cinema e Teatro','Lazer e Entretenimento','Eventos e Passeios','Despesa','Variável'],
   ['Shows e Eventos','Lazer e Entretenimento','Eventos e Passeios','Despesa','Variável'],
   ['Parques, Museus e Atrações','Lazer e Entretenimento','Eventos e Passeios','Despesa','Variável'],
   ['Atividades de Lazer e Diversão','Lazer e Entretenimento','Eventos e Passeios','Despesa','Variável'],
   ['Cruzeiros Marítimos','Lazer e Entretenimento','Eventos e Passeios','Despesa','Variável'],
-  ['Livros de Lazer, Quadrinhos e Revistas','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
-  ['Hobbies e Colecionáveis','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
-  ['Equipamentos e Acessórios de Lazer','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
-  ['Ensaios Fotográficos','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
-  ['Jogos e Loterias','Lazer e Entretenimento','Hobbies e Passatempos','Despesa','Variável'],
+  ['Colônia de Férias','Lazer e Entretenimento','Eventos e Passeios','Despesa','Variável'],
   ['Outras Despesas de Lazer e Entretenimento','Lazer e Entretenimento','Outros','Despesa','Variável'],
+  ['Cabelo e Barbearia','Cuidados Pessoais','Serviços de Salão e Estética','Despesa','Variável'],
+  ['Manicure, Pedicure e/ou Podologia','Cuidados Pessoais','Serviços de Salão e Estética','Despesa','Variável'],
+  ['Depilação e Sobrancelhas','Cuidados Pessoais','Serviços de Salão e Estética','Despesa','Variável'],
+  ['Massagens Relaxantes','Cuidados Pessoais','Serviços de Salão e Estética','Despesa','Variável'],
+  ['Produtos de Higiene','Cuidados Pessoais','Higiene e Beleza','Despesa','Variável'],
+  ['Produtos de Beleza','Cuidados Pessoais','Higiene e Beleza','Despesa','Variável'],
+  ['Perfumes e Fragâncias','Cuidados Pessoais','Higiene e Beleza','Despesa','Variável'],
+  ['Maquiagem e Cosméticos','Cuidados Pessoais','Higiene e Beleza','Despesa','Variável'],
+  ['Outras Despesas de Cuidados Pessoais','Cuidados Pessoais','Outros','Despesa','Variável'],
+  ['Roupas e Calçados','Vestuário e Acessórios','Vestuário em Geral','Despesa','Variável'],
+  ['Aluguel de Roupas e Trajes','Vestuário e Acessórios','Vestuário em Geral','Despesa','Variável'],
+  ['Bolsas e Malas','Vestuário e Acessórios','Acessórios e Marroquinaria','Despesa','Variável'],
+  ['Acessórios Diversos','Vestuário e Acessórios','Acessórios e Marroquinaria','Despesa','Variável'],
+  ['Acessórios de Cabeça','Vestuário e Acessórios','Acessórios e Marroquinaria','Despesa','Variável'],
+  ['Óculos (de sol e de grau)','Vestuário e Acessórios','Acessórios e Marroquinaria','Despesa','Variável'],
+  ['Joias e Semijoias','Vestuário e Acessórios','Joias e Bijuterias','Despesa','Variável'],
+  ['Bijuterias','Vestuário e Acessórios','Joias e Bijuterias','Despesa','Variável'],
+  ['Relógios','Vestuário e Acessórios','Joias e Bijuterias','Despesa','Variável'],
+  ['Sapateiro','Vestuário e Acessórios','Cuidados, Ajustes e Manutenção','Despesa','Variável'],
+  ['Serviços de Costura','Vestuário e Acessórios','Cuidados, Ajustes e Manutenção','Despesa','Variável'],
+  ['Lavanderia e Tinturaria','Vestuário e Acessórios','Cuidados, Ajustes e Manutenção','Despesa','Variável'],
+  ['Outras Despesas de Vestuário e Acessórios','Vestuário e Acessórios','Outros','Despesa','Variável'],
   ['Celulares e Smartphones','Tecnologia e Eletrônicos','Equipamentos','Despesa','Variável'],
   ['Notebooks e Computadores','Tecnologia e Eletrônicos','Equipamentos','Despesa','Variável'],
-  ['Impressoras e Multifuncionais','Tecnologia e Eletrônicos','Equipamentos','Despesa','Variável'],
   ['Tablets e E-Readers','Tecnologia e Eletrônicos','Equipamentos','Despesa','Variável'],
+  ['Impressoras e Multifuncionais','Tecnologia e Eletrônicos','Equipamentos','Despesa','Variável'],
   ['Monitores e TVs','Tecnologia e Eletrônicos','Equipamentos','Despesa','Variável'],
   ['Equipamentos de Áudio e Vídeo','Tecnologia e Eletrônicos','Equipamentos','Despesa','Variável'],
   ['Outros Equipamentos Eletrônicos','Tecnologia e Eletrônicos','Equipamentos','Despesa','Variável'],
@@ -3026,59 +3091,44 @@ let CATEGORIAS = [
   ['Serviços de Tecnologia','Tecnologia e Eletrônicos','Software e Serviços Digitais','Despesa','Variável'],
   ['Manutenção e Assistência Técnica','Tecnologia e Eletrônicos','Software e Serviços Digitais','Despesa','Variável'],
   ['Outras Despesas de Tecnologia e Eletrônicos','Tecnologia e Eletrônicos','Outros','Despesa','Variável'],
-  ['Cabelo e Barbearia','Cuidados Pessoais','Serviços de Salão e Estética','Despesa','Variável'],
-  ['Manicure, Pedicure e/ou Podologia','Cuidados Pessoais','Serviços de Salão e Estética','Despesa','Variável'],
-  ['Depilação e Sobrancelhas','Cuidados Pessoais','Serviços de Salão e Estética','Despesa','Variável'],
-  ['Massagens Relaxantes','Cuidados Pessoais','Serviços de Salão e Estética','Despesa','Variável'],
-  ['Produtos de Higiene e Cosméticos','Cuidados Pessoais','Higiene e Beleza','Despesa','Variável'],
-  ['Maquiagem, Cremes e Hidratação','Cuidados Pessoais','Higiene e Beleza','Despesa','Variável'],
-  ['Perfumes e Fragâncias','Cuidados Pessoais','Higiene e Beleza','Despesa','Variável'],
-  ['Roupas e Calçados','Cuidados Pessoais','Vestuário e Acessórios','Despesa','Variável'],
-  ['Acessórios (Joias, Bijuterias, Bolsas, Cintos, Relógios)','Cuidados Pessoais','Vestuário e Acessórios','Despesa','Variável'],
-  ['Ajustes de Alfaiataria ou Costura em Roupas Pessoais','Cuidados Pessoais','Vestuário e Acessórios','Despesa','Variável'],
-  ['Outras Despesas de Cuidados Pessoais','Cuidados Pessoais','Outros','Despesa','Variável'],
-  ['Mesada ou Semanada','Filhos e Pets','Filhos','Despesa','Fixo'],
-  ['Documentação e Burocracias (RG, Passaporte, Vistos de Dependentes)','Filhos e Pets','Filhos','Despesa','Fixo'],
-  ['Colônia de Férias','Filhos e Pets','Filhos','Despesa','Variável'],
-  ['Saúde Pet','Filhos e Pets','Pets','Despesa','Variável'],
-  ['Acessórios','Filhos e Pets','Pets','Despesa','Variável'],
-  ['Alimentação','Filhos e Pets','Pets','Despesa','Fixo'],
-  ['Higiene e Estética','Filhos e Pets','Pets','Despesa','Variável'],
-  ['Serviços e Hospedagem','Filhos e Pets','Pets','Despesa','Variável'],
-  ['Outras Despesas de Filhos e Pets','Filhos e Pets','Outros','Despesa','Variável'],
-  ['Presentes de Aniversário e Datas Comemorativas','Caridade e Generosidade','Presentes','Despesa','Variável'],
-  ['Doações','Caridade e Generosidade','Doações e Contribuições','Despesa','Variável'],
-  ['Dízimos e Ofertas','Caridade e Generosidade','Doações e Contribuições','Despesa','Variável'],
-  ['Contribuições e Ajuda Financeira','Caridade e Generosidade','Doações e Contribuições','Despesa','Variável'],
-  ['Gorjetas e Gratificações','Caridade e Generosidade','Doações e Contribuições','Despesa','Variável'],
-  ['Outras Despesas de Caridade e Generosidade','Caridade e Generosidade','Outros','Despesa','Variável'],
-  ['Parcela de Empréstimo Pessoal (Bancos ou Fintechs)','Dívidas e Empréstimos','Parcelamentos e Financiamentos (Amortização)','Despesa','Fixo'],
-  ['Parcela de Empréstimo Consignado (Descontado em Folha)','Dívidas e Empréstimos','Parcelamentos e Financiamentos (Amortização)','Despesa','Fixo'],
-  ['Parcelamento de Faturas Anteriores (Renegociação de Cartão)','Dívidas e Empréstimos','Parcelamentos e Financiamentos (Amortização)','Despesa','Fixo'],
-  ['Quitação de Dívidas com Amigos ou Familiares','Dívidas e Empréstimos','Parcelamentos e Financiamentos (Amortização)','Despesa','Fixo'],
+  ['Presentes e Mimos','Presentes e Contribuições','Presentes','Despesa','Variável'],
+  ['Mesada ou Semanada','Presentes e Contribuições','Doações e Contribuições','Despesa','Fixo'],
+  ['Doações e Rifas Beneficentes','Presentes e Contribuições','Doações e Contribuições','Despesa','Variável'],
+  ['Contribuições e Ajuda Financeira','Presentes e Contribuições','Doações e Contribuições','Despesa','Variável'],
+  ['Gorjetas e Gratificações','Presentes e Contribuições','Doações e Contribuições','Despesa','Variável'],
+  ['Dízimos e Ofertas','Presentes e Contribuições','Doações e Contribuições','Despesa','Variável'],
+  ['Outras Despesas de Presentes e Contribuições','Presentes e Contribuições','Outros','Despesa','Variável'],
+  ['Medicamentos Pet','Pets','Saúde Pet','Despesa','Variável'],
+  ['Consultas e Exames Pet','Pets','Saúde Pet','Despesa','Variável'],
+  ['Prevenção e Vacinas Pet','Pets','Saúde Pet','Despesa','Variável'],
+  ['Procedimentos e Cirurgias Pet','Pets','Saúde Pet','Despesa','Variável'],
+  ['Brinquedos Pet','Pets','Brinquedos e Acessórios Pet','Despesa','Variável'],
+  ['Acessórios Pet','Pets','Brinquedos e Acessórios Pet','Despesa','Variável'],
+  ['Ração e Petiscos Pet','Pets','Alimentação Pet','Despesa','Variável'],
+  ['Suplementação Pet','Pets','Alimentação Pet','Despesa','Variável'],
+  ['Banho e Tosa Pet','Pets','Higiene e Estética Pet','Despesa','Variável'],
+  ['Produtos de Higiene Pet','Pets','Higiene e Estética Pet','Despesa','Variável'],
+  ['Outras Despesas de Pets','Pets','Outros','Despesa','Variável'],
+  ['Empréstimos (Pessoal e Consignado)','Dívidas e Empréstimos','Parcelamentos e Financiamentos (Amortização)','Despesa','Variável'],
+  ['Parcelamento de Faturas Anteriores (Renegociação de Cartão)','Dívidas e Empréstimos','Parcelamentos e Financiamentos (Amortização)','Despesa','Variável'],
   ['Dinheiro Emprestado a Terceiros','Dívidas e Empréstimos','Empréstimos Concedidos','Despesa','Variável'],
   ['Outras Despesas de Dívidas e Empréstimos','Dívidas e Empréstimos','Outros','Despesa','Variável'],
-  ['Juros e Encargos de Cheque Especial (pelo Uso do Limite da Conta)','Tributos e Despesas Bancárias','Juros e Encargos Financeiros','Despesa','Variável'],
-  ['Juros e Encargos do Cartão de Crédito','Tributos e Despesas Bancárias','Juros e Encargos Financeiros','Despesa','Variável'],
-  ['Multas e Juros por Atraso de Contas (Luz, Água, Boletos em Geral)','Tributos e Despesas Bancárias','Juros e Encargos Financeiros','Despesa','Variável'],
-  ['Despesas de Negócios / PJ','Tributos e Despesas Bancárias','Impostos e Taxas','Despesa','Fixo'],
-  ['Anuidade de Cartão de Crédito','Tributos e Despesas Bancárias','Impostos e Taxas','Despesa','Fixo'],
-  ['Pacote de Serviços de Conta Corrente','Tributos e Despesas Bancárias','Impostos e Taxas','Despesa','Fixo'],
-  ['Imposto de Renda Retido na Fonte (IRRF)','Tributos e Despesas Bancárias','Descontos em Folha de Pagamento','Despesa','Fixo'],
-  ['Contribuição Previdenciária (RPPS)','Tributos e Despesas Bancárias','Descontos em Folha de Pagamento','Despesa','Fixo'],
+  ['DAS - MEI','Tributos e Despesas Bancárias','Impostos, Taxas e Encargos Financeiros','Despesa','Fixo'],
+  ['Juros e Encargos Financeiros','Tributos e Despesas Bancárias','Impostos, Taxas e Encargos Financeiros','Despesa','Variável'],
+  ['Anuidade de Cartão de Crédito','Tributos e Despesas Bancárias','Impostos, Taxas e Encargos Financeiros','Despesa','Fixo'],
+  ['Tarifas e Pacote de Serviços de Conta Corrente','Tributos e Despesas Bancárias','Impostos, Taxas e Encargos Financeiros','Despesa','Variável'],
+  ['Contribuição Previdenciária (RPPS)','Tributos e Despesas Bancárias','Descontos em Folha de Pagamento','Despesa','Variável'],
   ['Contribuições Associativas/Sindicais','Tributos e Despesas Bancárias','Descontos em Folha de Pagamento','Despesa','Fixo'],
+  ['Imposto de Renda Retido na Fonte (IRRF)','Tributos e Despesas Bancárias','Descontos em Folha de Pagamento','Despesa','Variável'],
   ['Outras Despesas de Tributos e Despesas Bancárias','Tributos e Despesas Bancárias','Outros','Despesa','Variável'],
-  ['Aportes na Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)','Economias','Reserva de Emergência e Liquidez','Despesa','Fixo'],
-  // Mesma subcategoria acima, agora do lado Receita: usada quando o aporte é importado diretamente na
-  // própria conta Reserva de Emergência (ex.: extrato CSV do PicPay — Pix/Transferência recebidos), onde o
-  // dinheiro está ENTRANDO nessa conta. O lado Despesa continua servindo para quando o aporte é lançado
-  // pela conta de origem que envia o dinheiro (ver aplicarTransferenciaInterna/importação manual).
-  ['Aportes na Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)','Economias','Reserva de Emergência e Liquidez','Receita','Fixo'],
-  // "Uso" é o oposto de "Aporte": dinheiro SAINDO da Reserva de Emergência para ser utilizado — representa
-  // utilização de patrimônio já acumulado, não uma nova despesa corrente nem um novo aporte (ver
-  // ehUsoReservaEmergencia/calcDashboard, que a excluem propositalmente do total de "economias/aportes").
-  ['Uso da Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)','Economias','Reserva de Emergência e Liquidez','Despesa','Variável'],
-  ['Aportes em Poupança','Economias','Reserva de Emergência e Liquidez','Despesa','Fixo'],
+  ['Resgate Automático do Saldo','Economias','Aplicação Automática de Saldo','Receita','Variável'],
+  ['Aplicação Automática do Saldo','Economias','Aplicação Automática de Saldo','Despesa','Variável'],
+  ['Aportes na Reserva de Emergência','Economias','Reserva de Emergência e Poupança','Receita','Variável'],
+  ['Aportes na Reserva de Emergência','Economias','Reserva de Emergência e Poupança','Despesa','Variável'],
+  ['Uso da Reserva de Emergência','Economias','Reserva de Emergência e Poupança','Despesa','Variável'],
+  ['Aportes em Poupança','Economias','Reserva de Emergência e Poupança','Receita','Variável'],
+  ['Aportes em Poupança','Economias','Reserva de Emergência e Poupança','Despesa','Variável'],
+  ['Uso da Poupança','Economias','Reserva de Emergência e Poupança','Despesa','Variável'],
   ['Títulos Públicos (Tesouro IPCA+, Tesouro Prefixado)','Economias','Renda Fixa (Médio/Longo Prazo)','Despesa','Variável'],
   ['Títulos Privados (CDB, LCI, LCA, CRI, CRA, Debêntures)','Economias','Renda Fixa (Médio/Longo Prazo)','Despesa','Variável'],
   ['Ações de Empresas (Bolsa de Valores)','Economias','Renda Variável','Despesa','Variável'],
@@ -3090,40 +3140,22 @@ let CATEGORIAS = [
   ['Taxas de Corretagem ou Custódia (se Houver)','Economias','Custos e Taxas de Investimento','Despesa','Variável'],
   ['Imposto de Renda sobre Ganhos de Capital (Retido ou via DARF)','Economias','Custos e Taxas de Investimento','Despesa','Variável'],
   ['Outras Despesas de Economias','Economias','Outros','Despesa','Variável'],
-  ['Pagamento de Fatura de Cartão de Crédito','Transações','Transferência entre Contas','Despesa','Variável'],
-  ['Recebimento por Pagamento de Fatura','Transações','Transferência entre Contas','Receita','Variável'],
-  ['Transferência','Transações','Transferência entre Contas','Receita','Variável'],
-  ['Transferência','Transações','Transferência entre Contas','Despesa','Variável'],
-  ['Pix','Transações','Transferência entre Contas','Receita','Variável'],
-  ['Pix','Transações','Transferência entre Contas','Despesa','Variável'],
+  ['Recebimento por Pagamento de Fatura','Transações','Transferências','Receita','Variável'],
+  ['Pagamento de Fatura de Cartão de Crédito','Transações','Transferências','Despesa','Variável'],
+  ['Transferências entre Contas (Próprias)','Transações','Transferências','Receita','Variável'],
+  ['Transferências entre Contas (Próprias)','Transações','Transferências','Despesa','Variável'],
+  ['Transferências para Terceiros','Transações','Transferências','Despesa','Variável'],
+  ['Transferências Recebidas','Transações','Transferências','Receita','Variável'],
+  ['Estorno ou Reembolso','Transações','Transferências','Receita','Variável'],
+  ['Estorno ou Reembolso','Transações','Transferências','Despesa','Variável'],
+  ['Saldo Inicial/Anterior','Transações','Ajustes de Saldo','Receita','Fixo'],
+  ['Saldo Inicial/Anterior','Transações','Ajustes de Saldo','Despesa','Fixo'],
+  ['Regularização de Saldo','Transações','Ajustes de Saldo','Receita','Variável'],
+  ['Regularização de Saldo','Transações','Ajustes de Saldo','Despesa','Variável'],
   ['Outras Receitas de Transações','Transações','Outros','Receita','Variável'],
   ['Outras Despesas de Transações','Transações','Outros','Despesa','Variável'],
-  ['Estorno e/ou Reembolso','Transações','Outros','Receita','Variável'],
-  ['Saldo Inicial/Anterior','Saldos e Ajustes','Ajustes de Conciliação','Receita','Fixo'],
-  ['Saldo Inicial/Anterior','Saldos e Ajustes','Ajustes de Conciliação','Despesa','Fixo'],
-  ['Ajuste de Centavos (Arredondamento)','Saldos e Ajustes','Ajustes de Conciliação','Receita','Variável'],
-  ['Ajuste de Centavos (Arredondamento)','Saldos e Ajustes','Ajustes de Conciliação','Despesa','Variável'],
-  ['Diferença de Conciliação Noturna','Saldos e Ajustes','Ajustes de Conciliação','Receita','Variável'],
-  ['Diferença de Conciliação Noturna','Saldos e Ajustes','Ajustes de Conciliação','Despesa','Variável'],
-  ['Regularização de Saldo','Saldos e Ajustes','Ajustes de Conciliação','Receita','Variável'],
-  ['Regularização de Saldo','Saldos e Ajustes','Ajustes de Conciliação','Despesa','Variável'],
-  ['Bolsa Doutorado','Renda Familiar','Receitas de Bolsas e Pesquisa','Receita','Fixo'],
-  ['Bolsa Anvisa','Renda Familiar','Receitas de Bolsas e Pesquisa','Receita','Fixo'],
-  ['PJ CISM-BR','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
-  ['Outros Serviços PJ','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
-  ['Salário TRT','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
-  ['Assistência Saúde','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
-  ['Assistência Pré-Escolar','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
-  ['Auxílio Alimentação','Renda Familiar','Renda de Trabalho e Serviços','Receita','Fixo'],
-  ['Aluguel Garagem','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
-  ['Aluguel Apto Ribeirão Preto','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
-  ['Arrendamento Fazenda','Renda Familiar','Rendimentos de Bens e Imóveis','Receita','Fixo'],
-  ['Rendimento de Conta Corrente / Liquidez Diária','Renda Familiar','Rendimentos e Ganhos de Capital','Receita','Variável'],
-  ['Rendimento de Investimentos (Dividendos / Juros)','Renda Familiar','Rendimentos e Ganhos de Capital','Receita','Variável'],
-  ['Rendimento de Poupança (Correção Monetária / Juros)','Renda Familiar','Rendimentos e Ganhos de Capital','Receita','Variável'],
-  ['Resgates e Empréstimos Recebidos','Renda Familiar','Entradas Patrimoniais e Resgates','Receita','Variável'],
-  ['Restituição do Imposto de Renda (IRPF)','Renda Familiar','Entradas Patrimoniais e Resgates','Receita','Variável'],
-  ['Outras Receitas de Renda Familiar','Renda Familiar','Outros','Receita','Variável'],
+  ['Outras Receitas de Não Identificado','Não Identificado','Outros','Receita','Variável'],
+  ['Outras Despesas de Não Identificado','Não Identificado','Outros','Despesa','Variável'],
 ];
 const CATEGORIAS_PADRAO_SNAPSHOT = CATEGORIAS.map(c=>[...c]); // cópia congelada dos padrões atuais, usada para migrar arquivos antigos
 
@@ -3337,21 +3369,23 @@ const PROJECOES_DEFAULT = [
 const GRUPO_RENDA_FAMILIAR = "Renda Familiar";
 const CATEGORIAS_SEM_RESPONSAVEL_PREDEFINIDO = ["Entradas Patrimoniais e Resgates","Outros"];
 
-const GRUPOS = [...new Set(CATEGORIAS.map(c=>c[1]))];
+const GRUPOS = todosGrupos();
 const CATEGORIAS_FATURA = ['Pagamento de Fatura de Cartão de Crédito','Recebimento por Pagamento de Fatura'];
+// Ver detectarRendeFacilBB (importação) e ehMovimentoRendeFacilBB (exclusão de economiasTotal/economiasAno).
+const CATEGORIAS_RENDE_FACIL_BB = ['Aplicação Automática do Saldo','Resgate Automático do Saldo'];
 const GRUPO_COLORS = {
   "Moradia/Habitação":"#10408D","Transporte":"#2E6F95","Alimentação":"#c98f00","Saúde":"#1e8e5a",
   "Educação":"#3F7D20","Lazer e Entretenimento":"#a5690a","Cuidados Pessoais":"#b0558f",
-  "Filhos e Pets":"#6a8fc9","Caridade e Generosidade":"#c2578a","Economias":"#0f6f8a","Dívidas e Empréstimos":"#a83246",
+  "Vestuário e Acessórios":"#8a5fc2","Pets":"#6a8fc9","Presentes e Contribuições":"#c2578a","Economias":"#0f6f8a","Dívidas e Empréstimos":"#a83246",
   "Renda Familiar":"#1e8e5a","Tributos e Despesas Bancárias":"#7a5ea8","Transações":"#8393ac",
-  "Saldos e Ajustes":"#6b7280","Tecnologia e Eletrônicos":"#3b5bdb","Sem Grupo":"#9aa5b8"
+  "Tecnologia e Eletrônicos":"#3b5bdb","Sem Grupo":"#9aa5b8","Não Identificado":"#9aa5b8"
 };
 const GRUPO_ICONS = {
   "Moradia/Habitação":"🏠","Transporte":"🚗","Alimentação":"🍽️","Saúde":"🩺",
   "Educação":"🎓","Lazer e Entretenimento":"🎉","Cuidados Pessoais":"🧖",
-  "Filhos e Pets":"🐾","Caridade e Generosidade":"🤝","Economias":"🪙","Dívidas e Empréstimos":"📉",
-  "Renda Familiar":"💵","Tributos e Despesas Bancárias":"💸","Transações":"🔁",
-  "Saldos e Ajustes":"⚖️","Tecnologia e Eletrônicos":"💻","Sem Grupo":"❓"
+  "Vestuário e Acessórios":"👕","Pets":"🐾","Presentes e Contribuições":"🎁","Economias":"🪙","Dívidas e Empréstimos":"📉",
+  "Renda Familiar":"💵","Tributos e Despesas Bancárias":"💸","Transações":"⇄",
+  "Tecnologia e Eletrônicos":"💻","Não Identificado":"❓"
 };
 function iconeGrupo(grupo){ return GRUPO_ICONS[grupo] || "🗂️"; }
 
@@ -3666,6 +3700,15 @@ const CATEGORIAS_RENOMEADAS = {
   // cai no catch-all de despesas diversas do grupo.
   'Compra de brinquedos': 'Outras Despesas de Filhos e Pets',
   'Aportes na Reserva de Emergência (Tesouro Selic, CDBs de liquidez diária)': 'Aportes na Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)',
+  // Simplificação do nome (só a nomenclatura muda — mesma finalidade/comportamento nos dois tipos,
+  // Despesa e Receita): "(Tesouro Selic, CDBs de Liquidez Diária)" removido por ser redundante com a
+  // subcategoria "Renda Fixa (Médio/Longo Prazo)" já existente para esse tipo de investimento.
+  'Aportes na Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)': 'Aportes na Reserva de Emergência',
+  'Uso da Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)': 'Uso da Reserva de Emergência',
+  // BB Rende Fácil (ver detectarRendeFacilBB): nomes simplificados, sem a menção ao banco no meio do nome.
+  'Aplicação Automática no BB Rende Fácil': 'Aplicação Automática do Saldo',
+  'Resgate Automático do BB Rende Fácil': 'Resgate Automático do Saldo',
+  'Pacote de Serviços de Conta Corrente': 'Tarifas e Pacote de Serviços de Conta Corrente',
   'Apps de transporte (Uber, 99)': 'Táxi ou Apps de Transporte',
   'Armazenamento em Nuvem (iCloud, Google, Dropbox)': 'Assinaturas e Serviços Digitais',
   'Artigos de papelaria (cadernos, canetas, mochilas)': 'Papelaria e Material Escolar',
@@ -3812,6 +3855,77 @@ const CATEGORIAS_RENOMEADAS = {
   'Utensílios de cozinha e enxoval (cama, mesa e banho)': 'Utensílios de Cozinha e Enxoval (Cama, Mesa e Banho)',
   'Workshops, imersões, mentorias e treinamentos de curta duração': 'Treinamentos, Workshops e Palestras',
   'Óculos de grau (armação e lentes)': 'Óculos de Grau (Armação e Lentes)',
+  // ---- Reorganização de Grupos/Categorias/Subcategorias (FinUs): simplificação de nomenclatura — o
+  // identificador interno de cada classificação é preservado, só o nome muda. Cada entrada abaixo mapeia
+  // o nome ANTERIOR (imediatamente antes desta reformulação) para o nome ATUAL; a cadeia de resolução em
+  // corrigirCategoriasOrfas/sugerirCategoria segue até estabilizar, então nomes ainda mais antigos (acima)
+  // que já apontavam para um destes continuam resolvendo corretamente, sem precisar editá-los. ----
+  'Aluguel ou Prestação do Financiamento': 'Aluguel ou Financiamento de Imóvel',
+  'IPTU (Imposto Predial e Territorial Urbano)': 'IPTU',
+  'Guarda-Móveis e Depósitos/Box (Espaço Complementar de Moradia)': 'Guarda-Móveis e Depósitos/Box',
+  'Reformas e Pequenos Reparos (Pintura, Encanamento, Elétrica)': 'Reformas e Pequenos Reparos',
+  'Frete e/ou Mudanças (Custos de Transição Residencial)': 'Envios, Fretes e Mudanças',
+  'Chaveiro e Cópias de Chaves': 'Chaveiro',
+  'Itens de Decoração (Cortinas, Tapetes, Quadros)': 'Itens de Decoração',
+  'Utensílios de Cozinha e Enxoval (Cama, Mesa e Banho)': 'Utensílios de Cozinha e Enxoval',
+  'Aluguéis por Temporada (Airbnb, Booking)': 'Aluguéis por Temporada',
+  'Assinatura Mensal do Veículo (Mensalidade Recorrente)': 'Assinatura Mensal do Veículo',
+  'Aluguel Diário ou Semanal (Viagens ou Imprevistos)': 'Aluguel Diário ou Semanal',
+  'Taxas e Coparticipações (Franquia de Seguro, Taxa de Combustível ou Limpeza)': 'Taxas e Coparticipações',
+  'Aplicativos de Entrega (iFood, Keeta, 99 Food)': 'Aplicativos de Entrega',
+  'Procedimentos Cirúrgicos ou Estéticos de Saúde': 'Procedimentos de Saúde',
+  'Tratamentos Odontológicos (Obturação, Canal, Aparelho Ortodôntico)': 'Tratamentos Odontológicos',
+  'Jogos e Loterias': 'Loterias (Jogos, Bolões)',
+  'Produtos de Higiene e Cosméticos': 'Produtos de Higiene',
+  'Maquiagem, Cremes e Hidratação': 'Maquiagem e Cosméticos',
+  // "Alimentação" e "Higiene e Estética" abaixo são as subcategorias do (antigo) grupo Filhos e Pets
+  // (agora "Pets") — nomes comuns, mas únicos em todo o catálogo (nenhum outro c[0] os usa), então o
+  // remapeamento por nome não tem ambiguidade com o GRUPO "Alimentação" nem com nenhuma outra subcategoria.
+  'Alimentação': 'Ração e Petiscos Pet',
+  'Higiene e Estética': 'Banho e Tosa Pet',
+  'Outras Despesas de Filhos e Pets': 'Outras Despesas de Pets',
+  'Presentes de Aniversário e Datas Comemorativas': 'Presentes e Mimos',
+  'Doações': 'Doações e Rifas Beneficentes',
+  'Parcela de Empréstimo Pessoal (Bancos ou Fintechs)': 'Empréstimos (Pessoal e Consignado)',
+  'Despesas de Negócios / PJ': 'DAS - MEI',
+  'Transferência': 'Transferências entre Contas (Próprias)',
+  'Pix': 'Transferências para Terceiros',
+  // Exclusões (ver seção 4 do requisito): a subcategoria/categoria em si deixou de existir no catálogo,
+  // mas os lançamentos históricos NUNCA podem ficar sem classificação válida — cada uma é redirecionada
+  // para a classificação existente mais próxima, reaproveitando o mesmo mecanismo de remapeamento acima
+  // (corrigirCategoriasOrfas), em vez de um tratamento especial só para exclusões.
+  'Ajuste de Centavos (Arredondamento)': 'Regularização de Saldo',
+  'Diferença de Conciliação Noturna': 'Regularização de Saldo',
+  'Parcela de Empréstimo Consignado (Descontado em Folha)': 'Empréstimos (Pessoal e Consignado)',
+  'Quitação de Dívidas com Amigos ou Familiares': 'Outras Despesas de Dívidas e Empréstimos',
+  'Taxas de Entrega': 'Aplicativos de Entrega',
+  // As 3 subcategorias da extinta categoria "Juros e Encargos Financeiros" (grupo Tributos e Despesas
+  // Bancárias) convergem para a nova subcategoria de mesmo nome, agora dentro de "Impostos, Taxas e
+  // Encargos Financeiros" — mesmo conceito, só reclassificado um nível abaixo no catálogo.
+  'Juros e Encargos de Cheque Especial (pelo Uso do Limite da Conta)': 'Juros e Encargos Financeiros',
+  'Juros e Encargos do Cartão de Crédito': 'Juros e Encargos Financeiros',
+  'Multas e Juros por Atraso de Contas (Luz, Água, Boletos em Geral)': 'Juros e Encargos Financeiros',
+  'Serviços e Hospedagem': 'Outras Despesas de Pets',
+  // "Documentação e Burocracias" era a única subcategoria da extinta categoria "Filhos" sem um destino
+  // específico definido (Colônia de Férias e Mesada ou Semanada foram MOVIDAS, não excluídas — ver
+  // corrigirClassificacaoDesatualizada, que resincroniza grupo/subgrupo automaticamente para elas, já que
+  // o NOME das duas não mudou) — cai no fallback padrão do app para classificação sem correspondência
+  // clara (mesma subcategoria usada por categoriaNaoIdentificada/corrigirLancamentosSemClassificacao).
+  'Documentação e Burocracias (RG, Passaporte, Vistos de Dependentes)': 'Outras Despesas de Não Identificado',
+  // ---- Nova estrutura de classificação (planilha oficial FinUs): pontes para nomes que a planilha não
+  // reproduz mais, garantindo que a cadeia de resolução acima (que já apontava para eles) continue até um
+  // nome válido no catálogo atual, em vez de parar num destino que deixou de existir. ----
+  'Acessórios (Joias, Bijuterias, Bolsas, Cintos, Relógios)': 'Outras Despesas de Vestuário e Acessórios',
+  'Ajustes de Alfaiataria ou Costura em Roupas Pessoais': 'Serviços de Costura',
+  'Alimentação Escolar': 'Outras Despesas de Educação',
+  'Skincare, Cremes e Hidratação': 'Produtos de Beleza',
+  'Mensalidade da Academia ou Box de Crossfit': 'Mensalidade de Academia',
+  'Passagens de Ônibus Interestadual ou Aviões': 'Passagens Aéreas ou Rodoviárias',
+  'Saúde Pet': 'Outras Despesas de Pets',
+  'Óculos de Grau (Armação e Lentes)': 'Óculos (de sol e de grau)',
+  'Acessórios': 'Acessórios Pet',
+  'Estorno e/ou Reembolso': 'Estorno ou Reembolso',
+  'Outras Despesas de Caridade e Generosidade': 'Outras Despesas de Presentes e Contribuições',
 };
 /* Nomes antigos da classificação "Transferência Interna entre Contas", removida por completo do
    catálogo. Usado para limpar CATEGORIAS caso um arquivo de configuração antigo (configuracoes.cfg exportado
@@ -3885,14 +3999,15 @@ const NOMES_DESCONTINUADOS_DO_CATALOGO = [
    "Doações" é o único caso atual: migrou de Lazer e Entretenimento/Estilo de Vida para Caridade e
    Generosidade/Doações e Contribuições sem mudar de nome. */
 const SUBCATEGORIAS_QUE_MUDARAM_DE_LUGAR = ['Doações', 'Streaming de Vídeo', 'Streaming de Música'];
-/* "Dependentes e Pets" foi renomeado para "Filhos e Pets" — a grande maioria das subcategorias mudou de
-   nome junto (e por isso já é resincronizada normalmente via corrigirCategoriasOrfas), mas um lançamento
-   com uma subcategoria SEM substituto direto (ficou órfã, ver NOMES_DESCONTINUADOS_DO_CATALOGO) nunca
-   passa por esse recálculo — ficaria com o grupo antigo gravado para sempre, mesmo esse grupo não
-   existindo mais em lugar nenhum do catálogo. Esta correção garante que pelo menos o nome do GRUPO fique
-   consistente com o catálogo atual, mesmo quando a subcategoria específica não tem correspondente novo. */
+/* "Dependentes e Pets" foi renomeado para "Filhos e Pets" e, mais tarde, "Filhos e Pets" foi renomeado
+   para "Pets" — a grande maioria das subcategorias mudou de nome junto (e por isso já é resincronizada
+   normalmente via corrigirCategoriasOrfas), mas um lançamento com uma subcategoria SEM substituto direto
+   (ficou órfã, ver NOMES_DESCONTINUADOS_DO_CATALOGO) nunca passa por esse recálculo — ficaria com o grupo
+   antigo gravado para sempre, mesmo esse grupo não existindo mais em lugar nenhum do catálogo. Esta
+   correção garante que pelo menos o nome do GRUPO fique consistente com o catálogo atual (sempre o nome
+   MAIS RECENTE, "Pets"), mesmo quando a subcategoria específica não tem correspondente novo. */
 function corrigirGrupoRenomeadoSemSubstituto(){
-  STATE.transactions.forEach(t=>{ if(t.grupo==='Dependentes e Pets') t.grupo='Filhos e Pets'; });
+  STATE.transactions.forEach(t=>{ if(t.grupo==='Dependentes e Pets' || t.grupo==='Filhos e Pets') t.grupo='Pets'; });
 }
 function corrigirSubgruposMovidos(){
 
@@ -3932,6 +4047,94 @@ function migrarCompetenciaParaVencimento(){
     }
   });
 }
+/* Corrige/atribui retroativamente a Fatura/Competência de TODOS os lançamentos já cadastrados, reusando
+   exatamente as mesmas regras/funções já aplicadas a lançamentos novos ou importados (competenciaFatura,
+   incrementarCompetencia, competenciaDeData, aplicarTransferenciaInterna) — nunca uma lógica paralela.
+   Roda em todo carregamento do arquivo (idempotente: reaplicar não muda nada que já esteja correto), então
+   também corrige automaticamente qualquer divergência introduzida depois (edição do fechamento/vencimento
+   de um cartão vinculado a lançamentos antigos, por exemplo) — nunca cria, remove ou duplica nenhum
+   lançamento, só reescreve o campo competencia; todos os demais campos (valor, data, descrição, categoria,
+   conta etc.) permanecem intactos.
+
+   Regras por origem do lançamento:
+   1) Parcelamento de cartão de crédito (mesmo parcelamentoId, totalParcelas>1): a parcela de MENOR número
+      da cadeia é a referência — sua competencia é recalculada por competenciaFatura a partir da própria
+      Data (nunca da Data de outra parcela) — e as demais avançam a partir dela via
+      incrementarCompetencia(referência, nº da parcela − nº da referência), a mesma regra já usada por
+      sincronizarParcelasFuturas/corrigirCompetenciaParcelasFuturas.
+   2) Compra/despesa avulsa de cartão de crédito (fora de um parcelamento >1x): competencia =
+      competenciaFatura(data, conta).
+   3) Pagamento/recebimento da própria fatura (categorias em CATEGORIAS_FATURA): PROPOSITALMENTE não
+      recalculado. Um pagamento acontece perto do vencimento, quando o próximo ciclo já fechou —
+      reaplicar a fórmula de COMPRA a ele frequentemente resultaria na competência ERRADA (ver a auditoria
+      documentada em janelaPagamentoFatura/statusPagamentoFatura, que já ignoram t.competencia desses
+      lançamentos e decidem a fatura correta pela janela real de datas). Sobrescrever o campo aqui não
+      mudaria nenhum cálculo do app (que já ignora esse campo para pagamentos) e só arriscaria introduzir
+      um valor "válido" na aparência mas sem garantia de estar certo — mais seguro deixar como está.
+   4) Lançamento de conta do tipo Contracheque (rubrica do próprio holerite): a competência é a do período
+      do próprio contracheque (selecionado/lido do PDF na importação), não derivável de uma fórmula a
+      partir da Data — nunca recalculada aqui; só preenchida quando estiver vazia (melhor esforço: mês da
+      própria Data), já que esta correção não tem acesso ao PDF original para redescobrir o período.
+   5) Lançamento espelho de um contracheque na conta bancária vinculada (par ligado por
+      transferenciaVinculoId — ver aplicarTransferenciaInterna): a competência sempre segue a do lado que
+      está numa conta Contracheque — corrige qualquer divergência entre os dois lados do par, sem tocar em
+      nenhum outro campo de nenhum dos dois.
+   6) Contracheque replicado automaticamente para meses futuros (contrachequeProjecao, ver
+      gerarReplicacaoContracheque): competencia = competenciaDeData(data) — mesma regra já usada na
+      própria geração da réplica.
+   7) Qualquer outro lançamento (conta comum, não cartão e não Contracheque): a aplicação nunca usa
+      competencia para esse tipo — o agrupamento por mês usa sempre a própria Data (ver competenciaDeData
+      nos filtros/relatórios) — garante o campo vazio, a mesma convenção já usada por toda criação/
+      importação de lançamentos desse tipo. */
+function corrigirCompetenciaTransacoes(){
+  const porParcelamento = {};
+  STATE.transactions.forEach(t=>{
+    if(t.pgto==='Cartão de Crédito' && STATE.cartoes.includes(t.conta) && t.parcelamentoId && Number(t.totalParcelas)>1){
+      (porParcelamento[t.parcelamentoId] = porParcelamento[t.parcelamentoId] || []).push(t);
+    }
+  });
+  const jaCorrigidos = new Set();
+  Object.values(porParcelamento).forEach(grupo=>{
+    const ref = grupo.reduce((a,b)=> Number(b.parcelaAtual)<Number(a.parcelaAtual) ? b : a);
+    ref.competencia = competenciaFatura(ref.data, ref.conta);
+    jaCorrigidos.add(ref.id);
+    grupo.forEach(t=>{
+      if(t.id===ref.id) return;
+      t.competencia = incrementarCompetencia(ref.competencia, Number(t.parcelaAtual) - Number(ref.parcelaAtual));
+      jaCorrigidos.add(t.id);
+    });
+  });
+  // Consulta o lado Contracheque de um par vinculado sob demanda (nunca depende da ordem de
+  // STATE.transactions/de já ter sido processado nesta mesma passagem): o valor de um lançamento de conta
+  // Contracheque é sempre ou o que já está gravado (não vazio) ou competenciaDeData(sua própria Data) —
+  // exatamente a regra 4 abaixo, calculada aqui sem esperar a vez dele no forEach. transferenciaVinculoId
+  // é um ID de CORRELAÇÃO compartilhado pelos dois lados (não o id de um apontando para o outro — ver
+  // aplicarTransferenciaInterna), então o par é achado por igualdade de transferenciaVinculoId, nunca por
+  // STATE.transactions.find(x=>x.id===...).
+  const porVinculo = new Map();
+  STATE.transactions.forEach(t=>{
+    if(!t.transferenciaVinculoId) return;
+    if(!porVinculo.has(t.transferenciaVinculoId)) porVinculo.set(t.transferenciaVinculoId, []);
+    porVinculo.get(t.transferenciaVinculoId).push(t);
+  });
+  const ehContaContracheque = t => STATE.contaTipos[t.conta]==='Contracheque';
+  STATE.transactions.forEach(t=>{
+    if(jaCorrigidos.has(t.id)) return;
+    // Regra 3: pagamento/recebimento da própria fatura nunca é recalculado — independentemente de estar
+    // lançado na própria conta do cartão ou numa conta corrente comum usada para pagar (ver
+    // pagamentosCandidatosFatura, que reconhece as duas formas).
+    if(CATEGORIAS_FATURA.includes(t.categoria)) return;
+    if(t.pgto==='Cartão de Crédito' && STATE.cartoes.includes(t.conta)){
+      t.competencia = competenciaFatura(t.data, t.conta);
+      return;
+    }
+    if(t.contrachequeProjecao){ t.competencia = competenciaDeData(t.data); return; }
+    if(ehContaContracheque(t)){ if(!t.competencia) t.competencia = competenciaDeData(t.data); return; }
+    const par = t.transferenciaVinculoId ? (porVinculo.get(t.transferenciaVinculoId)||[]).find(x=>x.id!==t.id) : null;
+    if(par && ehContaContracheque(par)){ t.competencia = par.competencia || competenciaDeData(par.data); return; }
+    if(t.competencia) t.competencia = '';
+  });
+}
 function corrigirCategoriasOrfas(){
   const validas = new Set(CATEGORIAS.map(c=>c[0]));
   STATE.transactions.forEach(t=>{
@@ -3967,12 +4170,35 @@ function corrigirCategoriasOrfas(){
    "[Tipo] - [Origem/Destino]" (usado pelos lançamentos novos, já corrigidos) sem inventar dado que não
    existe mais. A correção possível e honesta é apenas desfazer a categorização inválida (categoria/grupo/
    subgrupo voltam a null, como qualquer lançamento sem categoria sugerida), deixando para reclassificação
-   manual — nunca altera valor, data, competência, conta, tipo ou a própria descrição do lançamento. */
+   manual — nunca altera valor, data, competência, conta, tipo ou a própria descrição do lançamento. Depois
+   dela, corrigirLancamentosSemClassificacao (mais abaixo) já cobre esses registros nulados com a
+   subcategoria de fallback "Não Identificado" na próxima carga do arquivo. */
 function corrigirClassificacaoAportesReservaPicPay(){
   STATE.transactions.forEach(t=>{
-    if(t.tipo==='Receita' && t.categoria==='Aportes na Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)' && t.descricao==='Aporte na Reserva de Emergência'){
+    if(t.tipo==='Receita' && t.categoria==='Aportes na Reserva de Emergência' && t.descricao==='Aporte na Reserva de Emergência'){
       t.categoria = null; t.grupo = null; t.subgrupo = null;
     }
+  });
+}
+/* Rede de segurança final da classificação automática (grupo "Não Identificado" → categoria "Outros"):
+   depois que TODAS as demais correções/migrações já rodaram (ver ordem de chamada em loadCSVRegistros),
+   qualquer lançamento que ainda não tenha grupo/categoria/subgrupo definido — seja por nunca ter passado
+   por nenhuma regra de classificação, seja por ter sido esvaziado por alguma correção anterior (ex.:
+   categoria órfã sem remapeamento conhecido, ou corrigirClassificacaoAportesReservaPicPay acima) — recebe
+   a subcategoria de fallback correspondente ao seu próprio Tipo (ver categoriaNaoIdentificada), nunca ao
+   contrário. Só age quando categoria/grupo/subgrupo estão TODOS vazios: um lançamento que já tem qualquer
+   um desses três definidos — pelo usuário, por uma regra de classificação já estabelecida, ou por uma
+   classificação automática anterior — nunca é tocado aqui, então essa função é sempre idempotente e nunca
+   sobrescreve uma classificação (manual ou automática) já existente. Precisa de t.tipo definido
+   (Despesa/Receita) para decidir qual das duas subcategorias usar — um lançamento sem tipo é deixado como
+   está (não deveria acontecer: todo lançamento sempre tem tipo definido desde a criação/importação). */
+function corrigirLancamentosSemClassificacao(){
+  STATE.transactions.forEach(t=>{
+    if(t.categoria || t.grupo || t.subgrupo) return;
+    const nome = categoriaNaoIdentificada(t.tipo);
+    if(!nome) return;
+    const info = catInfo(nome);
+    t.categoria = nome; t.grupo = info.grupo; t.subgrupo = info.subgrupo; t.natureza = info.natureza;
   });
 }
 /* Rede de segurança geral: para um lançamento cuja subcategoria AINDA é válida no catálogo (não é um caso
@@ -4023,37 +4249,37 @@ function cartoesOrdenadosPorVencimento(){
 
 /* Palavras-chave para sugestão automática de categoria na importação */
 const SUGESTOES = {
-  "supermercado":"Atacarejos e/ou Super/Hipermercados","atacad":"Atacarejos e/ou Super/Hipermercados","hiperm":"Atacarejos e/ou Super/Hipermercados",
-  "mercearia":"Mercearias e/ou minimercados de bairro","mercadinho":"Mercearias e/ou minimercados de bairro",
-  "feira":"Frutas, legumes e verduras (hortifrúti ou feira livre)","hortifruti":"Frutas, legumes e verduras (hortifrúti ou feira livre)",
-  "acougue":"Açougue, peixaria e frios","padaria":"Padaria (pães, leite e itens de café da manhã diários)",
-  "restaurante":"Restaurantes (almoço de trabalho ou jantares de fim de semana)",
-  "lanchonete":"Fast-food, lanchonetes e pastelarias","pastelaria":"Fast-food, lanchonetes e pastelarias","mcdonald":"Fast-food, lanchonetes e pastelarias","burger":"Fast-food, lanchonetes e pastelarias",
-  "cafeteria":"Cafeterias, docerias e sorveterias","sorveteria":"Cafeterias, docerias e sorveterias","starbucks":"Cafeterias, docerias e sorveterias",
-  "bar ":"Bares, botecos e gastos com bebidas em saídas","boteco":"Bares, botecos e gastos com bebidas em saídas",
-  "ifood":"Aplicativos de entrega (iFood, Rappi, Uber Eats)","rappi":"Aplicativos de entrega (iFood, Rappi, Uber Eats)","ubereats":"Aplicativos de entrega (iFood, Rappi, Uber Eats)",
+  "supermercado":"Supermercado e Atacarejo","atacad":"Supermercado e Atacarejo","hiperm":"Supermercado e Atacarejo",
+  "mercearia":"Mercearia e Conveniência","mercadinho":"Mercearia e Conveniência",
+  "feira":"Feira, Hortifrúti e Açougue","hortifruti":"Feira, Hortifrúti e Açougue",
+  "acougue":"Feira, Hortifrúti e Açougue","padaria":"Padaria e Frios",
+  "restaurante":"Restaurantes e Pizzarias",
+  "lanchonete":"Lanchonetes e Fast-Food","pastelaria":"Lanchonetes e Fast-Food","mcdonald":"Lanchonetes e Fast-Food","burger":"Lanchonetes e Fast-Food",
+  "cafeteria":"Cafeterias, Docerias e Sorveterias","sorveteria":"Cafeterias, Docerias e Sorveterias","starbucks":"Cafeterias, Docerias e Sorveterias",
+  "bar ":"Bares e Bebidas","boteco":"Bares e Bebidas",
+  "ifood":"Aplicativos de Entrega","rappi":"Aplicativos de Entrega","ubereats":"Aplicativos de Entrega",
   "farmacia":"Medicamentos (Contínuos, Manipulados e Gerais)","drogaria":"Medicamentos (Contínuos, Manipulados e Gerais)","drogasil":"Medicamentos (Contínuos, Manipulados e Gerais)",
   "posto":"Combustível (Gasolina, Etanol, Diesel, GNV)","combustivel":"Combustível (Gasolina, Etanol, Diesel, GNV)","ipiranga":"Combustível (Gasolina, Etanol, Diesel, GNV)","shell":"Combustível (Gasolina, Etanol, Diesel, GNV)",
-  "uber":"Táxi ou Apps de transporte","99app":"Táxi ou Apps de transporte","taxi":"Táxi ou Apps de transporte",
-  "netflix":"Streaming de vídeo (Netflix, Max, Disney+, Prime Video)","disney":"Streaming de vídeo (Netflix, Max, Disney+, Prime Video)","hbo":"Streaming de vídeo (Netflix, Max, Disney+, Prime Video)",
-  "spotify":"Streaming de áudio (Spotify, Deezer, Apple Music)","deezer":"Streaming de áudio (Spotify, Deezer, Apple Music)",
-  "condominio":"Condomínio","aluguel":"Aluguel ou Prestação do Financiamento",
-  "energia":"Conta de energia elétrica","eletropaulo":"Conta de energia elétrica","cemig":"Conta de energia elétrica",
-  "sabesp":"Conta de água e esgoto",
-  "vivo":"Telefone fixo e celular","claro":"Telefone fixo e celular","internet":"Internet e TV a cabo",
+  "uber":"Táxi ou Apps de Transporte","99app":"Táxi ou Apps de Transporte","taxi":"Táxi ou Apps de Transporte",
+  "netflix":"Streaming de Vídeo","disney":"Streaming de Vídeo","hbo":"Streaming de Vídeo",
+  "spotify":"Streaming de Música","deezer":"Streaming de Música",
+  "condominio":"Condomínio","aluguel":"Aluguel ou Financiamento de Imóvel",
+  "energia":"Energia Elétrica","eletropaulo":"Energia Elétrica","cemig":"Energia Elétrica",
+  "sabesp":"Água e Esgoto",
+  "vivo":"Telefone Fixo e Celular","claro":"Telefone Fixo e Celular","internet":"Internet e TV a Cabo",
   "salario":"Salário TRT","folha de pagamento":"Salário TRT",
-  "pet":"Ração (seca e úmida) e petiscos","veterinari":"Plano de saúde pet ou consultas veterinárias particulares",
-  "academia":"Mensalidade da academia ou box de Crossfit","gympass":"Mensalidade da academia ou box de Crossfit","smartfit":"Mensalidade da academia ou box de Crossfit",
-  "estacionamento":"Estacionamentos (mensalistas ou avulsos)","pedagio":"Pedágios",
-  "seguro auto":"Seguro automotivo","ipva":"IPVA e Licenciamento anual",
+  "pet":"Ração e Petiscos Pet","veterinari":"Consultas e Exames Pet",
+  "academia":"Mensalidade de Academia","gympass":"Mensalidade de Academia","smartfit":"Mensalidade de Academia",
+  "estacionamento":"Pedágios e Estacionamentos","pedagio":"Pedágios e Estacionamentos",
+  "seguro auto":"Seguro Automotivo","ipva":"IPVA e Licenciamento Anual",
   "pgto debito conta":"Recebimento por Pagamento de Fatura","pagamento de fatura":"Recebimento por Pagamento de Fatura","pagto fatura":"Recebimento por Pagamento de Fatura","pgto fatura":"Recebimento por Pagamento de Fatura",
-  "desc automatico":"Estorno e/ou Reembolso","estorno":"Estorno e/ou Reembolso","reembolso":"Estorno e/ou Reembolso",
+  "desc automatico":"Estorno ou Reembolso","estorno":"Estorno ou Reembolso","reembolso":"Estorno ou Reembolso",
   "anuidade":"Anuidade de Cartão de Crédito",
   /* Rubricas de desconto e crédito do contracheque TRT (Demonstrativo de Pagamento) — usadas só como
      reserva quando o código da rubrica não é reconhecido (o código tem prioridade, ver
      RUBRICA_TRT_CODIGO_CATEGORIA em buildParsedFromMap). */
   "abas - 15":"Plano de Saúde","anajustra":"Contribuições Associativas/Sindicais",
-  "empréstimos":"Parcela de empréstimo pessoal (bancos ou fintechs)","emprestimos":"Parcela de empréstimo pessoal (bancos ou fintechs)",
+  "empréstimos":"Empréstimos (Pessoal e Consignado)","emprestimos":"Empréstimos (Pessoal e Consignado)",
   "contribuição rpps":"Contribuição Previdenciária (RPPS)","contribuicao rpps":"Contribuição Previdenciária (RPPS)",
   "imposto de renda":"Imposto de Renda Retido na Fonte (IRRF)",
 };
@@ -4148,15 +4374,48 @@ function ehPagamentoDeFaturaPorValor(conta, valor){
 function ehPagamentoDeFatura(desc, conta, valor){
   return ehPagamentoDeFaturaPorTexto(desc) || ehPagamentoDeFaturaPorValor(conta, valor);
 }
+/* Reconhece a aplicação/resgate automático do "BB Rende Fácil" (investimento automático de saldo ocioso
+   que o Banco do Brasil aplica/resgata sozinho, todo dia, em contas correntes com esse recurso ativado) só
+   pela descrição do próprio extrato — cobre as grafias mais comuns do BB ("APLIC AUTOM RDFACIL", "APLICACAO
+   AUTOMATICA RENDE FACIL", "RESGATE AUTOMATICO RDFACIL" etc.), sempre via normalizarTexto (minúsculas, sem
+   acento, só [a-z0-9]) para não depender de abreviação/acentuação/caixa exatas do arquivo. Distingue
+   aplicação de resgate pela presença de "resg" no texto normalizado — na ausência dela, assume aplicação
+   (grafia mais comum e mais frequente no extrato). Usada em buildParsedFromMap (import) — sinal textual
+   definitivo, prevalece sobre sugestão por palavra-chave/sinal do valor, igual em espírito a
+   ehPagamentoDeFatura acima. Devolve null quando a descrição não bate com nenhum padrão conhecido, deixando
+   a linha para a classificação normal (sugestão por palavra-chave/sinal do valor). */
+function detectarRendeFacilBB(desc){
+  const norm = normalizarTexto(desc);
+  if(!norm.includes('rendefacil') && !norm.includes('rdfacil')) return null;
+  const ehResgate = norm.includes('resg');
+  return ehResgate
+    ? { categoria:'Resgate Automático do Saldo', tipo:'Receita' }
+    : { categoria:'Aplicação Automática do Saldo', tipo:'Despesa' };
+}
 function catInfo(nome){
   const c = CATEGORIAS.find(c=>c[0]===nome);
   return c ? {grupo:c[1], subgrupo:c[2], tipo:c[3], natureza:c[4]} : {grupo:"", subgrupo:"", tipo:"", natureza:""};
 }
+/* Subcategoria de fallback do grupo "Não Identificado" (categoria "Outros") para quando NENHUMA regra de
+   classificação existente (explícita do parser, palavra-chave/histórico, rubrica de contracheque etc.)
+   consegue determinar com segurança a subcategoria de um lançamento — nunca deixa um lançamento sem
+   grupo/categoria/subcategoria só por falta de correspondência automática. Único ponto de decisão entre as
+   duas subcategorias (Despesa/Receita): sempre o Tipo do próprio lançamento, nunca criado ao contrário
+   (usado tanto na importação — ver buildParsedFromMap — quanto na migração de registros já existentes sem
+   classificação — ver corrigirLancamentosSemClassificacao). Retorna '' para qualquer tipo diferente de
+   Despesa/Receita (ex.: lançamento ainda sem tipo definido), quando não há como decidir qual das duas usar. */
+function categoriaNaoIdentificada(tipo){
+  if(tipo==='Despesa') return 'Outras Despesas de Não Identificado';
+  if(tipo==='Receita') return 'Outras Receitas de Não Identificado';
+  return '';
+}
 /* Resolve o tipo (Despesa/Receita) de uma subcategoria sugerida na importação de extratos quando o nome,
-   sozinho, é ambíguo (caso de "Transferência" e "Pix", que agora existem uma vez para Despesa e uma para
-   Receita) — usa o sinal do valor para desambiguar, na mesma convenção já usada em todo o fluxo de
-   importação (valor negativo = saída/Despesa, positivo = entrada/Receita). Para subcategorias com nome
-   único (a grande maioria), o resultado é idêntico ao de catInfo(nome).tipo. */
+   sozinho, é ambíguo (caso de "Transferências entre Contas (Próprias)", "Aportes na Reserva de
+   Emergência", "Aportes em Poupança", "Estorno ou Reembolso", "Saldo Inicial/Anterior" e "Regularização
+   de Saldo" — todas existem, na estrutura oficial, uma vez para Despesa e uma para Receita) — usa o sinal
+   do valor para desambiguar, na mesma convenção já usada em todo o fluxo de importação (valor negativo =
+   saída/Despesa, positivo = entrada/Receita). Para subcategorias com nome único (a grande maioria), o
+   resultado é idêntico ao de catInfo(nome).tipo. */
 function tipoParaCategoriaSugerida(nome, valor){
   const matches = CATEGORIAS.filter(c=>c[0]===nome);
   if(matches.length===0) return '';
@@ -4164,6 +4423,11 @@ function tipoParaCategoriaSugerida(nome, valor){
   const porSinal = valor<0 ? 'Despesa' : 'Receita';
   return matches.some(c=>c[3]===porSinal) ? porSinal : matches[0][3];
 }
+/* A ordem de exibição de Grupo/Categoria/Subcategoria em toda a aplicação é SEMPRE a ordem de primeira
+   aparição em CATEGORIAS (que por sua vez reproduz exatamente a ordem da planilha oficial de estrutura de
+   classificação, linha a linha) — nunca alfabética nem qualquer outro critério automático. Nenhum grupo
+   recebe tratamento especial de posição (nem "por último", nem "primeiro"): a posição de cada um é
+   inteiramente determinada por onde ele aparece pela primeira vez no catálogo. */
 function gruposComTipo(tipo){ return [...new Set(CATEGORIAS.filter(c=>c[3]===tipo).map(c=>c[1]))]; }
 function categoriasDoGrupo(grupo, tipo){ return [...new Set(CATEGORIAS.filter(c=>c[1]===grupo && c[3]===tipo).map(c=>c[2]))]; }
 /* Variantes independentes de tipo (Despesa/Receita) — usadas pela Edição em Lote, onde a seleção de
@@ -4173,6 +4437,77 @@ function todosGrupos(){ return [...new Set(CATEGORIAS.map(c=>c[1]))]; }
 function subgruposDoGrupo(grupo){ return [...new Set(CATEGORIAS.filter(c=>c[1]===grupo).map(c=>c[2]))]; }
 function categoriasDoSubgrupo(grupo, subgrupo){ return [...new Set(CATEGORIAS.filter(c=>c[1]===grupo && c[2]===subgrupo).map(c=>c[0]))]; }
 function subcategoriasDaCategoria(grupo, categoria, tipo){ return CATEGORIAS.filter(c=>c[1]===grupo && c[2]===categoria && c[3]===tipo).map(c=>c[0]); }
+/* ===================== Ordenação por clique no cabeçalho (motor único, reutilizado por TODAS as tabelas
+   ordenáveis do app) =====================
+   Estado: um objeto { campo: string|null, dir: 'asc'|'desc'|null } por tabela, guardado em
+   UI.ordenacaoTabelas[idTabela] (ver estadoOrdenacaoTabela). campo/dir nulos = "ordenação original" (a
+   sequência natural dos registros antes de qualquer clique do usuário) — nunca reordena nada nesse estado.
+
+   Ciclo de 3 estados por cabeçalho (item 2 do requisito): 1º clique → crescente; 2º clique (mesma coluna)
+   → decrescente; 3º clique (mesma coluna) → volta à ordenação original; 4º clique reinicia o ciclo.
+   Clicar numa coluna DIFERENTE da ativa sempre reinicia essa nova coluna em crescente e descarta o estado
+   da anterior (item 3) — nunca duas colunas "ativas" ao mesmo tempo. */
+function estadoOrdenacaoTabela(idTabela){
+  if(!UI.ordenacaoTabelas[idTabela]) UI.ordenacaoTabelas[idTabela] = { campo:null, dir:null };
+  return UI.ordenacaoTabelas[idTabela];
+}
+function cicloOrdenacaoClique(idTabela, campo){
+  const estado = estadoOrdenacaoTabela(idTabela);
+  if(estado.campo!==campo){ estado.campo = campo; estado.dir = 'asc'; }
+  else if(estado.dir==='asc'){ estado.dir = 'desc'; }
+  else { estado.campo = null; estado.dir = null; }
+}
+/* Normaliza um valor bruto de coluna para algo comparável, de acordo com o tipo real do conteúdo (item 6):
+   texto (string, comparado por localeCompare pt-BR), numero/moeda/percentual (sempre o valor numérico real,
+   nunca o texto formatado — quem chama já deve passar o número, não "R$ 1.234,56"/"12%"), ou data (qualquer
+   formato aceito por parseDataTexto/Date, comparado cronologicamente). Vazio/nulo/indefinido/NaN sempre
+   normaliza para null e, por convenção única em toda a aplicação, é sempre ordenado por último,
+   independentemente da direção crescente/decrescente (item 6: "aplicar comportamento consistente em todas
+   as tabelas" para valores vazios/nulos). */
+function valorOrdenavel(valor, tipo){
+  if(valor===null || valor===undefined || valor==='') return null;
+  if(tipo==='data'){
+    const iso = /^\d{4}-\d{2}-\d{2}/.test(valor) ? valor : (typeof parseDataTexto==='function' ? parseDataTexto(valor) : valor);
+    const t = new Date(iso).getTime();
+    return isNaN(t) ? null : t;
+  }
+  if(tipo==='numero' || tipo==='moeda' || tipo==='percentual'){
+    const n = Number(valor);
+    return isNaN(n) ? null : n;
+  }
+  return String(valor);
+}
+function compararOrdenavel(valorA, valorB, tipo, dir){
+  const va = valorOrdenavel(valorA, tipo), vb = valorOrdenavel(valorB, tipo);
+  if(va===null && vb===null) return 0;
+  if(va===null) return 1;
+  if(vb===null) return -1;
+  const mult = dir==='desc' ? -1 : 1;
+  if(typeof va==='string') return va.localeCompare(vb, 'pt-BR') * mult;
+  return (va - vb) * mult;
+}
+/* Aplica a ordenação por clique (se alguma estiver ativa para idTabela) sobre a lista COMPLETA de itens —
+   sempre antes de qualquer paginação (item 7), nunca sobre a página já recortada. `colunas` é um mapa
+   { campo: { tipo, valor: item=>valorBruto } } com uma entrada por cabeçalho ordenável da tabela. Quando não
+   há ordenação ativa (estado original) retorna os itens na MESMA sequência recebida, sem clonar/alterar
+   nada — preserva integralmente qualquer ordenação manual (drag-and-drop) ou natural já aplicada por quem
+   chamou (item 5: as duas funcionalidades convivem, nunca uma sobrescreve a outra). */
+function aplicarOrdenacaoClique(itens, idTabela, colunas){
+  const estado = estadoOrdenacaoTabela(idTabela);
+  const def = estado.campo && colunas[estado.campo];
+  if(!def) return itens;
+  return [...itens].sort((a,b)=> compararOrdenavel(def.valor(a), def.valor(b), def.tipo, estado.dir));
+}
+/* Cabeçalho <th> clicável padrão: mesmo texto do rótulo + seta ▲/▼ quando a coluna é a ativa (nunca quando
+   não é — "sem ordenação" fica sem nenhum indicador, igual ao padrão já usado na tabela "Onde o dinheiro
+   está mudando"), cursor:pointer e o data-attribute que o handler delegado em bindEvents (data-ordenar-th,
+   dentro de um container com data-ordenar-tabela) usa para disparar cicloOrdenacaoClique. `attrsExtra` é
+   para atributos adicionais já usados por cada tabela (ex.: text-align, title, colspan). */
+function thOrdenavel(idTabela, campo, rotulo, attrsExtra){
+  const estado = estadoOrdenacaoTabela(idTabela);
+  const seta = estado.campo===campo ? (estado.dir==='asc'?' ▲':' ▼') : '';
+  return `<th data-ordenar-th="${campo}" class="th-ordenavel" style="cursor:pointer;${attrsExtra&&attrsExtra.style?attrsExtra.style:''}" ${attrsExtra&&attrsExtra.extra?attrsExtra.extra:''}>${rotulo}${seta}</th>`;
+}
 /* Uma subcategoria do grupo Renda Familiar pode ter um responsável pré-definido no cadastro (aba
    Configurações), exceto as categorias "Entradas Patrimoniais e Resgates" e "Outros", em que o
    responsável continua variando e sendo informado manualmente em cada lançamento. */
@@ -4497,7 +4832,7 @@ let UI = {
   editingTx: null,
   edicaoLoteModal: null, // { origemPrefixo, ids, campos:{categoria,competencia,data,valor,descricao}, valores:{...} } — modal de Edição em Lote (ver abrirEdicaoLote)
   intelFiltros: null, // { periodoMeses, horizonte, conta, grupo, categoria, tipo, aberto } — filtros da aba Inteligência Financeira (ver intelFiltrosPadrao/renderInteligencia); criado sob demanda na primeira renderização da aba
-  intelOrdenacao: { campo:'ordemNatural', dir:'asc' }, // ordenação da tabela "Onde o dinheiro está mudando?" — padrão inicial é sempre a ordem de primeira aparição em CATEGORIAS (ver gruposAnalise/ordemNatural); interações do usuário nos cabeçalhos continuam funcionando normalmente por cima desse padrão
+  ordenacaoTabelas: {}, // ordenação por clique no cabeçalho, por tabela — { [idTabela]: {campo,dir} } (ver estadoOrdenacaoTabela/cicloOrdenacaoClique); ausente/campo=null = ordenação original, antes de qualquer clique
   intelCenarioParams: null, // { conservador:{receita,despesa}, otimista:{receita,despesa} } — ajustes percentuais editáveis dos cenários (seção 9); null = usa os padrões (ver CENARIO_PADRAO)
   intelDrill: { grupo:null, subgrupo:null, categoria:null }, // navegação Grupo→Categoria→Subcategoria→Lançamentos da seção 11 (ver renderDrillIntel)
   novoTipo: "Despesa",
@@ -4885,6 +5220,8 @@ function loadCSVRegistros(text){
   migrarNomesContasPadrao();
   aplicarResponsavelPadraoPorTipo();
   reconciliarPagamentosFatura(); // cria os espelhos de pagamento de fatura que ainda faltarem (ver função)
+  corrigirCompetenciaTransacoes(); // depois de reconciliarPagamentosFatura, para corrigir também os espelhos recém-criados
+  corrigirLancamentosSemClassificacao(); // por último: só sobra sem grupo/categoria quem nenhuma correção acima resolveu
 }
 /* Corrige, para compras já cadastradas antes da correção deste bug, a competência das parcelas futuras
    que tinham sido geradas somando meses à Data em vez de à competência da fatura. Para cada
@@ -5119,6 +5456,7 @@ function loadCSVConfig(text){
   migrarNomesContasPadrao();
   aplicarResponsavelPadraoPorTipo();
   reconciliarPagamentosFatura(); // cartões/fechamentos podem ter chegado só agora — reconcilia de novo (idempotente)
+  corrigirCompetenciaTransacoes(); // idem — cardConfig/contaTipos podem ter chegado só agora com este arquivo
 }
 function mesclarLista(doArquivo, padrao){
   if(!doArquivo.length) return [...padrao];
@@ -6068,12 +6406,12 @@ function txInYear(tx, ano){ const d = new Date(tx.data+"T00:00:00"); return d.ge
 
 /* Mesma classificação de "despesa do orçamento familiar" usada dentro de calcDashboard (o predicado abaixo
    espelha exatamente as mesmas exclusões, na mesma ordem de prioridade) — evita divergir do que já é
-   somado em despesasTotal/despesasPorGrupo: exclui ajustes de conciliação (Saldos e Ajustes), transferências
+   somado em despesasTotal/despesasPorGrupo: exclui ajustes de conciliação (Transações/Ajustes de Saldo), transferências
    internas entre contas da família, qualquer lançamento do grupo Economias (aporte ou uso da reserva) e
    pagamentos de fatura (já contados na compra original). Reaproveitado pelo mapa de calor de despesas do
    Painel Financeiro, para nunca mostrar um total diferente do resto do painel. */
 function ehDespesaOrcamento(t){
-  if(t.grupo==='Saldos e Ajustes') return false;
+  if(t.subgrupo==='Ajustes de Saldo') return false;
   if(t.entreFamilia) return false;
   if(t.grupo==='Economias') return false;
   if(CATEGORIAS_FATURA.includes(t.categoria)) return false;
@@ -6085,7 +6423,7 @@ function calcDashboard(ano, mes){
   let receitasTotal=0, despesasTotal=0, economiasTotal=0;
   txs.forEach(t=>{
     const v = Number(t.valor)||0;
-    if(t.grupo==='Saldos e Ajustes') return; // ajustes de conciliação (saldo inicial, arredondamento, regularizações etc.) não são receita/despesa do orçamento familiar
+    if(t.subgrupo==='Ajustes de Saldo') return; // ajustes de conciliação (saldo inicial, regularizações etc.) não são receita/despesa do orçamento familiar
     if(t.entreFamilia){
       // Transação Interna entre Contas não conta no orçamento familiar — mas um aporte (Receita) numa
       // conta patrimonial (Reserva de Emergência/Poupança) continua refletido no painel de Investimentos,
@@ -6093,7 +6431,7 @@ function calcDashboard(ano, mes){
       if(t.transferenciaInterna && t.tipo==='Receita' && ehContaPatrimonial(t.conta)) economiasTotal += v;
       return;
     }
-    if(t.grupo==="Economias"){ if(!ehUsoReservaEmergencia(t)) economiasTotal+=v; }
+    if(t.grupo==="Economias"){ if(!ehUsoReservaEmergencia(t) && !ehMovimentoRendeFacilBB(t)) economiasTotal+=v; }
     else if(CATEGORIAS_FATURA.includes(t.categoria)){ /* pagamento/recebimento de fatura não entra no orçamento, para não contar a compra 2x */ }
     else if(t.tipo==="Despesa"){ despesasTotal+=v; const chave=t.grupo||'Sem Grupo'; despesasPorGrupo[chave]=(despesasPorGrupo[chave]||0)+v; }
     else if(t.tipo==="Receita"){ receitasTotal+=v; }
@@ -6101,7 +6439,7 @@ function calcDashboard(ano, mes){
   const saldo = receitasTotal - despesasTotal;
   const poupanca = receitasTotal>0 ? (saldo/receitasTotal) : 0;
   const economiasAno = STATE.transactions.filter(t=>txInYear(t,ano) && (
-    (t.grupo==="Economias" && !t.entreFamilia && !ehUsoReservaEmergencia(t)) ||
+    (t.grupo==="Economias" && !t.entreFamilia && !ehUsoReservaEmergencia(t) && !ehMovimentoRendeFacilBB(t)) ||
     (t.entreFamilia && t.transferenciaInterna && t.tipo==='Receita' && ehContaPatrimonial(t.conta))
   )).reduce((s,t)=>s+(Number(t.valor)||0),0);
   return { despesasPorGrupo, receitasTotal, despesasTotal, saldo, poupanca, economiasTotal, economiasAno, txs };
@@ -6194,7 +6532,7 @@ function calcMesIntel(ano, mes, f){
   let receitas=0, despesas=0;
   txs.forEach(t=>{
     const v = Number(t.valor)||0;
-    if(t.grupo==='Saldos e Ajustes') return;
+    if(t.subgrupo==='Ajustes de Saldo') return;
     if(t.entreFamilia) return; // transferência interna nunca é receita/despesa corrente
     if(t.grupo==='Economias') return; // aporte/uso de patrimônio, não consumo corrente (ver seção 6 do pedido)
     if(CATEGORIAS_FATURA.includes(t.categoria)) return;
@@ -6208,11 +6546,11 @@ function calcMesIntel(ano, mes, f){
 /* ---------- Navegação Grupo → Categoria → Subcategoria → Lançamentos (seção 15) ----------
    Sempre sobre o MÊS ATUAL selecionado no topo da aplicação (UI.ano/UI.mes) — é o valor "Atual" exibido
    na tabela "Onde o dinheiro está mudando?" que está sendo detalhado. Mesma exclusão de calcMesIntel
-   (Saldos e Ajustes, Transação Interna, Economias, pagamento/recebimento de fatura), para os totais de
+   (Ajustes de Saldo, Transação Interna, Economias, pagamento/recebimento de fatura), para os totais de
    cada nível baterem exatamente com o valor "Atual" já mostrado na tabela agregada. */
 function txsDrillIntelBase(f){
   return STATE.transactions.filter(t=> txInPeriod(t,UI.ano,UI.mes) && txPassaFiltrosIntel(t,f)
-    && t.grupo!=='Saldos e Ajustes' && !t.entreFamilia && t.grupo!=='Economias' && !CATEGORIAS_FATURA.includes(t.categoria)
+    && t.subgrupo!=='Ajustes de Saldo' && !t.entreFamilia && t.grupo!=='Economias' && !CATEGORIAS_FATURA.includes(t.categoria)
     && t.tipo==='Despesa');
 }
 function subgruposComValorNoMes(grupo, f){
@@ -6399,7 +6737,7 @@ function itensConhecidosMes(ano, mes, f){
   STATE.transactions.forEach(t=>{
     if(!txInPeriod(t,ano,mes) || t.data<=hoje) return;
     if(!txPassaFiltrosIntel(t,f)) return;
-    if(t.grupo==='Saldos e Ajustes' || t.entreFamilia || t.grupo==='Economias' || CATEGORIAS_FATURA.includes(t.categoria)) return;
+    if(t.subgrupo==='Ajustes de Saldo' || t.entreFamilia || t.grupo==='Economias' || CATEGORIAS_FATURA.includes(t.categoria)) return;
     const v = Number(t.valor)||0;
     if(t.tipo==='Despesa') despesas+=v; else if(t.tipo==='Receita') receitas+=v;
   });
@@ -6730,13 +7068,14 @@ function calcInteligenciaFinanceira(f){
 }
 /* Lista (não só o total) dos lançamentos considerados "aporte" em Investimentos/Reserva de Emergência —
    mesma regra usada acima para economiasTotal/economiasAno (grupo "Economias" fora de Transação Interna
-   entre Contas e fora de um "Uso da Reserva de Emergência", mais qualquer Transação Interna que seja uma
-   Receita numa conta patrimonial), aqui devolvendo os lançamentos individuais do ano, do mais recente
-   para o mais antigo, para o modal "Ver detalhes" do painel Economias. */
+   entre Contas e fora de um "Uso da Reserva de Emergência" ou de uma aplicação/resgate do BB Rende Fácil,
+   mais qualquer Transação Interna que seja uma Receita numa conta patrimonial), aqui devolvendo os
+   lançamentos individuais do ano, do mais recente para o mais antigo, para o modal "Ver detalhes" do
+   painel Economias. */
 function detalheAportes(ano){
   return STATE.transactions
     .filter(t=> txInYear(t,ano) && (
-      (t.grupo==="Economias" && !t.entreFamilia && !ehUsoReservaEmergencia(t)) ||
+      (t.grupo==="Economias" && !t.entreFamilia && !ehUsoReservaEmergencia(t) && !ehMovimentoRendeFacilBB(t)) ||
       (t.entreFamilia && t.transferenciaInterna && t.tipo==='Receita' && ehContaPatrimonial(t.conta))
     ))
     .sort((a,b)=> b.data.localeCompare(a.data));
@@ -7038,7 +7377,7 @@ function reconciliarPagamentosFatura(){
       id: uid(), data: despesa.data,
       descricao: `Recebimento de pagamento de fatura (espelho automático de "${despesa.descricao}")`,
       valor: Number(despesa.valor)||0,
-      categoria: 'Recebimento por Pagamento de Fatura', grupo: 'Transações', subgrupo: 'Transferência entre Contas',
+      categoria: 'Recebimento por Pagamento de Fatura', grupo: 'Transações', subgrupo: 'Transferências',
       tipo: 'Receita', natureza: despesa.natureza || 'Variável',
       conta: cartao, pgto: 'Cartão de Crédito', competencia,
       parcelaAtual: null, totalParcelas: null, parcelamentoId: '',
@@ -7341,10 +7680,11 @@ function aplicarVinculoLimiteCartao(contaAtual, cartoesSelecionados, limiteTotal
    em toda a aplicação (contasOrdenadas, por tipo e depois por nome). */
 function contasBancarias(){ return contasOrdenadas().filter(c=>!STATE.cartoes.includes(c)); }
 /* Identifica um lançamento de Saldo Anterior — marcador técnico da posição de uma conta no início de uma
-   competência (ver classificação "Saldo Anterior" em CATEGORIAS, grupo "Saldos e Ajustes"). Detectado
+   competência (ver classificação "Saldo Anterior" em CATEGORIAS, categoria "Ajustes de Saldo" do grupo
+   "Transações"). Detectado
    pela própria classificação (não precisa de um campo extra no lançamento nem de coluna nova no CSV: a
    categoria já é o identificador único e persistente). */
-function ehSaldoAnterior(t){ return t.grupo==='Saldos e Ajustes' && t.categoria==='Saldo Inicial/Anterior'; }
+function ehSaldoAnterior(t){ return t.subgrupo==='Ajustes de Saldo' && t.categoria==='Saldo Inicial/Anterior'; }
 /* Cria ou atualiza (nunca duplica) o lançamento de Saldo Anterior de uma conta para o dia 1 de uma
    competência — fonte única usada tanto pelo botão ✏️ do painel Contas quanto pelo modal de Saldo Inicial
    do Fluxo de Caixa. Usa o sinal do valor para decidir Receita/Despesa (mesma convenção já usada em toda
@@ -7368,7 +7708,7 @@ function aplicarSaldoAnteriorConta(conta, ano, mes, valor){
   } else {
     STATE.transactions.push({
       id: uid(), data: dataDia1, descricao, valor: abs, tipo,
-      categoria: 'Saldo Inicial/Anterior', grupo: 'Saldos e Ajustes', subgrupo: 'Ajustes de Conciliação', natureza: 'Fixo',
+      categoria: 'Saldo Inicial/Anterior', grupo: 'Transações', subgrupo: 'Ajustes de Saldo', natureza: 'Fixo',
       conta, pgto: '', competencia: '', parcelaAtual: null, totalParcelas: null, parcelamentoId: '',
       responsavel: '', entreFamilia: false
     });
@@ -7512,9 +7852,23 @@ function lancamentosFuturosConta(conta){
 }
 function resumoContasBancarias(ano, mes){
   const contas = contasBancarias();
+  // Os 3 cards-resumo (saldo líquido/entradas/saídas no período) consideram TODAS as contas bancárias
+  // EXCETO Contracheque — essa conta não representa dinheiro disponível em nenhuma instituição (é só o
+  // registro das rubricas do próprio holerite, cujo valor líquido já entra normalmente na conta bancária
+  // vinculada como um lançamento comum) — somá-la aqui contaria o mesmo valor em dobro. A contagem de
+  // contas (qtdContas) continua sobre TODAS as contas bancárias, sem essa exclusão (não é um total
+  // financeiro, só uma quantidade).
+  const contasParaTotais = contas.filter(c=> STATE.contaTipos[c]!=='Contracheque');
   let saldoTotal = 0, entradasTotal = 0, saidasTotal = 0;
-  const hoje = hojeISO();
-  contas.forEach(c=>{ const s = calcSaldoConta(c,ano,mes); saldoTotal += saldoContaAteData(c, hoje); entradasTotal += s.entradasRealizadas; saidasTotal += s.saidasRealizadas; });
+  contasParaTotais.forEach(c=>{
+    const s = calcSaldoConta(c, ano, mes);
+    // Saldo líquido do período = saldoInicial + liquidoRealizado, a MESMA fórmula já usada no card de cada
+    // conta individual (ver renderPainelContasBancarias) — nunca o saldo "até hoje" (saldoContaAteData),
+    // que ignora a competência navegada e sempre traz o saldo atual real, misturando meses diferentes.
+    saldoTotal += s.saldoInicial + s.liquidoRealizado;
+    entradasTotal += s.entradasRealizadas;
+    saidasTotal += s.saidasRealizadas;
+  });
   return { qtdContas: contas.length, saldoTotal, entradasTotal, saidasTotal };
 }
 /* Lançamentos do período com saldo acumulado — calculado em ordem cronológica (a partir do saldo inicial
@@ -7746,6 +8100,15 @@ function renderExtratoContaModal(){
     {campo:'tipo', label:'Tipo', options:[{value:'Receita',label:'Receita'},{value:'Despesa',label:'Despesa'}]},
   ];
   const qtdAtivosExtrato = contarFiltrosPadraoAtivos(f, camposFiltroExtrato);
+  // Ordenação por clique no cabeçalho (item 7 do requisito): sobre todo o conjunto já filtrado, sempre
+  // antes da paginação abaixo. Cada saldoAcumulado já foi calculado por itensExtratoConta na ordem
+  // cronológica correta — reordenar aqui só muda a SEQUÊNCIA de exibição, nunca o valor de saldo de cada
+  // linha (mesma lógica de qualquer extrato: ordenar por Descrição, por exemplo, naturalmente "embaralha"
+  // a leitura do saldo acumulado linha a linha, sem alterar nenhum valor).
+  itensFiltrados = aplicarOrdenacaoClique(itensFiltrados, 'extrato', {
+    data:{tipo:'data', valor:t=>t.data}, descricao:{tipo:'texto', valor:t=>t.descricao}, grupo:{tipo:'texto', valor:t=>t.grupo},
+    tipo:{tipo:'texto', valor:t=>t.tipo}, valor:{tipo:'moeda', valor:t=>t.valor}, saldo:{tipo:'moeda', valor:t=>t.saldoAcumulado},
+  });
   // Paginação da tabela — mesmo padrão/componente da tabela de Registros (ver
   // renderRodapePaginacaoGenerica), evita rolagem interna limitando a quantidade de linhas por página.
   const extPorPagina = UI.extratoContaModal.porPagina;
@@ -7815,8 +8178,8 @@ function renderExtratoContaModal(){
         ${renderChipsFiltrosAtivos(f, 'Extrato', camposFiltroExtrato, 'btnLimparFiltrosExtrato')}
         ${itensFiltrados.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Extrato', UI.extratoContaModal.selecionados, itensPagina.filter(t=>!ehSaldoAnterior(t)).map(t=>t.id), itensFiltrados.filter(t=>!ehSaldoAnterior(t)).map(t=>t.id))}</div>
-        <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:14px;"><table>
-          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Extrato', itensPagina.filter(t=>!ehSaldoAnterior(t)).map(t=>t.id), UI.extratoContaModal.selecionados)}<th>Data</th><th>Descrição</th><th>Grupo</th><th style="text-align:center;">Tipo</th><th style="text-align:right;">Valor</th><th style="text-align:right;">Saldo</th><th class="no-print col-acoes">Ações</th></tr></thead>
+        <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:14px;" data-ordenar-tabela="extrato"><table>
+          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Extrato', itensPagina.filter(t=>!ehSaldoAnterior(t)).map(t=>t.id), UI.extratoContaModal.selecionados)}${thOrdenavel('extrato','data','Data')}${thOrdenavel('extrato','descricao','Descrição')}${thOrdenavel('extrato','grupo','Grupo')}${thOrdenavel('extrato','tipo','Tipo',{style:'text-align:center;'})}${thOrdenavel('extrato','valor','Valor',{style:'text-align:right;'})}${thOrdenavel('extrato','saldo','Saldo',{style:'text-align:right;'})}<th class="no-print col-acoes">Ações</th></tr></thead>
           <tbody>${itensPagina.map(t=>`<tr ${ehSaldoAnterior(t) ? '' : `data-linha-arrastavel="Extrato" data-linha-id="${t.id}"`}>
             ${ehSaldoAnterior(t) ? `<td class="no-print"></td>` : renderColunaArrastarLinha('Extrato', t.id)}
             ${ehSaldoAnterior(t) ? `<td class="no-print"></td>` : renderColunaSelecaoLoteLinha('Extrato', t.id, UI.extratoContaModal.selecionados)}
@@ -7880,6 +8243,11 @@ function renderFuturosContaModal(){
     {campo:'tipo', label:'Tipo', options:[{value:'Receita',label:'Receita'},{value:'Despesa',label:'Despesa'}]},
   ];
   const qtdAtivosFuturos = contarFiltrosPadraoAtivos(f, camposFiltroFuturos);
+  // Ordenação por clique no cabeçalho: sobre todo o conjunto já filtrado, sempre antes da paginação abaixo.
+  futurosFiltrados = aplicarOrdenacaoClique(futurosFiltrados, 'futuros', {
+    data:{tipo:'data', valor:t=>t.data}, descricao:{tipo:'texto', valor:t=>t.descricao},
+    tipo:{tipo:'texto', valor:t=>t.tipo}, valor:{tipo:'moeda', valor:t=>t.valor}, saldo:{tipo:'moeda', valor:t=>t.saldoProjetado},
+  });
   // Paginação da tabela — mesmo componente/padrão usado no modal Ver Extrato e na tabela de Registros
   // (ver renderRodapePaginacaoGenerica).
   const futPorPagina = UI.futurosContaModal.porPagina;
@@ -7925,8 +8293,8 @@ function renderFuturosContaModal(){
         ${renderChipsFiltrosAtivos(f, 'Futuros', camposFiltroFuturos, 'btnLimparFiltrosFuturos')}
         ${futurosFiltrados.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Futuros', UI.futurosContaModal.selecionados, futurosPagina.map(t=>t.id), futurosFiltrados.map(t=>t.id))}</div>
-        <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:14px;"><table>
-          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Futuros', futurosPagina.map(t=>t.id), UI.futurosContaModal.selecionados)}<th>Data prevista</th><th>Descrição</th><th style="text-align:center;">Tipo</th><th style="text-align:right;">Valor</th><th style="text-align:right;">Saldo projetado</th><th class="no-print col-acoes">Ações</th></tr></thead>
+        <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:14px;" data-ordenar-tabela="futuros"><table>
+          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Futuros', futurosPagina.map(t=>t.id), UI.futurosContaModal.selecionados)}${thOrdenavel('futuros','data','Data prevista')}${thOrdenavel('futuros','descricao','Descrição')}${thOrdenavel('futuros','tipo','Tipo',{style:'text-align:center;'})}${thOrdenavel('futuros','valor','Valor',{style:'text-align:right;'})}${thOrdenavel('futuros','saldo','Saldo projetado',{style:'text-align:right;'})}<th class="no-print col-acoes">Ações</th></tr></thead>
           <tbody>${futurosPagina.map(t=>`<tr data-linha-arrastavel="Futuros" data-linha-id="${t.id}">
             ${renderColunaArrastarLinha('Futuros', t.id)}
             ${renderColunaSelecaoLoteLinha('Futuros', t.id, UI.futurosContaModal.selecionados)}
@@ -7965,7 +8333,10 @@ function renderFuturosContaModal(){
    Movimentações/Contracheque), permitindo comparar e abrir os detalhes de qualquer uma delas. ---------- */
 function renderHistoricoContrachequeModal(){
   const conta = UI.historicoContrachequeModal.conta;
-  const historico = historicoContrachequeConta(conta);
+  const historico = aplicarOrdenacaoClique(historicoContrachequeConta(conta), 'historicoContracheque', {
+    competencia:{tipo:'texto', valor:h=>h.competencia}, margemConsignavel:{tipo:'moeda', valor:h=>h.margemConsignavel}, bruto:{tipo:'moeda', valor:h=>h.bruto},
+    descontos:{tipo:'moeda', valor:h=>h.descontos}, liquido:{tipo:'moeda', valor:h=>h.liquido}, dataCredito:{tipo:'data', valor:h=>h.dataCredito},
+  });
   // Paginação própria deste modal (seção 3 do requisito): opções de quantidade por página diferentes do
   // padrão usado no restante da aplicação (5/10/25/50/100) — aqui 3/6/12/18/24, com 12 como padrão inicial,
   // já que o volume típico de competências de um contracheque é bem menor que o de uma tabela de
@@ -7988,10 +8359,10 @@ function renderHistoricoContrachequeModal(){
       <div class="modal-body">
         ${cabecalhoContaModalHtml(conta)}
         ${historico.length ? `
-        <div class="table-wrap table-wrap-registros" style="margin-top:14px;"><table>
+        <div class="table-wrap table-wrap-registros" style="margin-top:14px;" data-ordenar-tabela="historicoContracheque"><table>
           <thead><tr>
-            <th>Competência</th><th style="text-align:right;">Margem Consignável</th><th style="text-align:right;">Bruto</th>
-            <th style="text-align:right;">Descontos</th><th style="text-align:right;">Líquido</th><th>Data do Crédito</th><th class="no-print"></th>
+            ${thOrdenavel('historicoContracheque','competencia','Competência')}${thOrdenavel('historicoContracheque','margemConsignavel','Margem Consignável',{style:'text-align:right;'})}${thOrdenavel('historicoContracheque','bruto','Bruto',{style:'text-align:right;'})}
+            ${thOrdenavel('historicoContracheque','descontos','Descontos',{style:'text-align:right;'})}${thOrdenavel('historicoContracheque','liquido','Líquido',{style:'text-align:right;'})}${thOrdenavel('historicoContracheque','dataCredito','Data do Crédito')}<th class="no-print"></th>
           </tr></thead>
           <tbody>
             ${historicoPagina.map(h=>`<tr>
@@ -8038,13 +8409,16 @@ function renderEvolucaoReservaModal(){
           ${temRendimentos ? `<div class="cartoes-resumo-item"><span class="ico">🌱</span><div><div class="val">${fmtBRL(totalRendimentos)}</div><div class="lbl">rendimentos nos últimos 12 meses</div></div></div>` : ''}
         </div>
         <div class="chart-box" style="height:260px;margin-top:14px;"><canvas id="chartEvolucaoReserva"></canvas></div>
-        <div class="table-wrap table-wrap-registros" style="margin-top:14px;"><table>
+        <div class="table-wrap table-wrap-registros" style="margin-top:14px;" data-ordenar-tabela="evolucaoReserva"><table>
           <thead><tr>
-            <th>Competência</th><th style="text-align:right;">Saldo</th><th style="text-align:right;">Aportes</th>
-            <th style="text-align:right;">Resgates</th>${temRendimentos ? '<th style="text-align:right;">Rendimentos</th>' : ''}
+            ${thOrdenavel('evolucaoReserva','competencia','Competência')}${thOrdenavel('evolucaoReserva','saldo','Saldo',{style:'text-align:right;'})}${thOrdenavel('evolucaoReserva','aportes','Aportes',{style:'text-align:right;'})}
+            ${thOrdenavel('evolucaoReserva','resgates','Resgates',{style:'text-align:right;'})}${temRendimentos ? thOrdenavel('evolucaoReserva','rendimentos','Rendimentos',{style:'text-align:right;'}) : ''}
           </tr></thead>
           <tbody>
-            ${serie.slice().reverse().map(m=>`<tr>
+            ${aplicarOrdenacaoClique(serie.slice().reverse(), 'evolucaoReserva', {
+              competencia:{tipo:'texto', valor:m=>m.competencia}, saldo:{tipo:'moeda', valor:m=>m.saldoFinal}, aportes:{tipo:'moeda', valor:m=>m.aportes},
+              resgates:{tipo:'moeda', valor:m=>m.resgates}, rendimentos:{tipo:'moeda', valor:m=>m.rendimentos},
+            }).map(m=>`<tr>
               <td>${competenciaLabel(m.competencia)}</td>
               <td style="text-align:right;">${fmtBRL(m.saldoFinal)}</td>
               <td style="text-align:right;" class="${m.aportes>0?'val-cell pos':''}">${m.aportes>0?fmtBRL(m.aportes):'—'}</td>
@@ -8351,15 +8725,18 @@ function corrigirSentidoDescricaoTransferencias(){
 }
 function aplicarTransferenciaInterna(txPrincipal, contaOutraPonta){
   const vinculoId = txPrincipal.transferenciaVinculoId || uid();
-  const meioLabel = txPrincipal.pgto === 'Pix' ? 'Pix' : 'Transferência';
   function classificar(tipo){
     // O sentido da movimentação (envio/saída ou recebimento/entrada) é dado pelo próprio Tipo do
     // lançamento (Despesa = saída da conta de origem, Receita = entrada na conta de destino) — a
-    // subcategoria em si ("Pix" ou "Transferência") não representa mais o sentido, eliminando a
-    // duplicidade que existia entre "(Enviado)"/"(Recebido)".
+    // subcategoria em si não representa mais o sentido, eliminando a duplicidade que existia entre
+    // "(Enviado)"/"(Recebido)". Sempre "Transferências entre Contas (Próprias)", independentemente do
+    // meio de pagamento (Pix ou TED/Transferência): esta função só é chamada para movimentações ENTRE
+    // contas cadastradas na própria família (ver docstring da "Regra única de negócio" acima) — nunca
+    // para um Pix/TED a terceiros, que continua caindo em "Transferências para Terceiros" pela sugestão
+    // automática de categoria (sugerirCategoria) durante a importação, não por aqui.
     return {
-      tipo, grupo: 'Transações', subgrupo: 'Transferência entre Contas',
-      categoria: meioLabel,
+      tipo, grupo: 'Transações', subgrupo: 'Transferências',
+      categoria: 'Transferências entre Contas (Próprias)',
       natureza: 'Variável'
     };
   }
@@ -8413,7 +8790,17 @@ function ehContaPatrimonial(conta){
    isso permanece fora de despesasTotal, já que está no grupo "Economias"). O saldo real da conta e o
    histórico em Registros continuam refletindo o lançamento normalmente. */
 function ehUsoReservaEmergencia(t){
-  return t.grupo==='Economias' && t.categoria==='Uso da Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)';
+  return t.grupo==='Economias' && t.categoria==='Uso da Reserva de Emergência';
+}
+/* Identifica um lançamento de aplicação OU resgate automático do BB Rende Fácil (ver detectarRendeFacilBB,
+   CATEGORIAS_RENDE_FACIL_BB) — usada em calcDashboard/detalheAportes para excluir os DOIS lados do total de
+   "economias/aportes". Diferente de um aporte/uso deliberado, o BB aplica e resgata o mesmo saldo sozinho
+   todo dia: contar a aplicação como uma nova economia (sem nunca subtrair o resgate, já que não existe um
+   "Receita" equivalente para "Uso da Reserva") infla economiasTotal/economiasAno sem nenhum dinheiro novo
+   ter sido guardado de fato. O saldo real da conta e o histórico em Registros continuam refletindo os dois
+   lançamentos normalmente, só não entram nesse total específico. */
+function ehMovimentoRendeFacilBB(t){
+  return t.grupo==='Economias' && CATEGORIAS_RENDE_FACIL_BB.includes(t.categoria);
 }
 function sincronizarParcelasFuturas(ref){
   if(!ref || !ref.parcelamentoId || !(Number(ref.totalParcelas)>1)) return;
@@ -9881,6 +10268,10 @@ function renderMapaCalorDiaModal(){
   ];
   const filtrosAtivos = camposFiltroMapaCalor.some(c=>f[c.campo].size>0) || !!fBusca.trim();
   const qtdAtivosMapaCalor = camposFiltroMapaCalor.filter(c=>f[c.campo].size>0).length;
+  itensFiltrados = aplicarOrdenacaoClique(itensFiltrados, 'mapaCalorDia', {
+    descricao:{tipo:'texto', valor:t=>t.descricao}, grupo:{tipo:'texto', valor:t=>t.grupo}, categoria:{tipo:'texto', valor:t=>t.categoria},
+    conta:{tipo:'texto', valor:t=>t.conta}, valor:{tipo:'moeda', valor:t=>t.valor},
+  });
   const idsFiltrados = itensFiltrados.map(t=>t.id);
   // Paginação — mesmo componente/lógica já usados em Ver Extrato/Lançamentos futuros (ver
   // renderRodapePaginacaoGenerica), 10 por página por padrão; trocar de página não fecha o modal nem
@@ -9920,8 +10311,8 @@ function renderMapaCalorDiaModal(){
         ${renderChipsFiltrosAtivos(f, 'MapaCalor', camposFiltroMapaCalor, 'btnLimparFiltrosMapaCalor')}
         ${itensFiltrados.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('MapaCalor', UI.mapaCalorDiaModal.selecionados, idsPagina, idsFiltrados)}</div>
-        <div class="table-wrap table-wrap-registros reg-tabela-principal" style="margin-top:14px;"><table>
-          <thead><tr>${renderColunaSelecaoLoteHead('MapaCalor', idsPagina, UI.mapaCalorDiaModal.selecionados)}<th>Descrição</th><th>Grupo</th><th>Categoria</th><th>Conta</th><th style="text-align:right;">Valor</th><th class="no-print col-acoes">Ações</th></tr></thead>
+        <div class="table-wrap table-wrap-registros reg-tabela-principal" style="margin-top:14px;" data-ordenar-tabela="mapaCalorDia"><table>
+          <thead><tr>${renderColunaSelecaoLoteHead('MapaCalor', idsPagina, UI.mapaCalorDiaModal.selecionados)}${thOrdenavel('mapaCalorDia','descricao','Descrição')}${thOrdenavel('mapaCalorDia','grupo','Grupo')}${thOrdenavel('mapaCalorDia','categoria','Categoria')}${thOrdenavel('mapaCalorDia','conta','Conta')}${thOrdenavel('mapaCalorDia','valor','Valor',{style:'text-align:right;'})}<th class="no-print col-acoes">Ações</th></tr></thead>
           <tbody>${itensPagina.map(t=>`<tr>
             ${renderColunaSelecaoLoteLinha('MapaCalor', t.id, UI.mapaCalorDiaModal.selecionados)}
             <td>
@@ -11085,6 +11476,14 @@ function renderRegistros(){
     const f = UI.regFiltro.toLowerCase();
     list = list.filter(t=> (t.descricao||"").toLowerCase().includes(f));
   }
+  // Ordenação por clique no cabeçalho (item 7 do requisito): aplicada sobre TODO o conjunto já filtrado,
+  // sempre antes da paginação abaixo — na ordenação original (sem clique), aplicarOrdenacaoClique devolve
+  // `list` como está, preservando o critério padrão Data desc → Tipo → Fatura calculado acima.
+  list = aplicarOrdenacaoClique(list, 'registros', {
+    data:{tipo:'data', valor:t=>t.data}, descricao:{tipo:'texto', valor:t=>t.descricao},
+    grupo:{tipo:'texto', valor:t=>t.grupo}, natureza:{tipo:'texto', valor:t=>t.natureza}, tipo:{tipo:'texto', valor:t=>t.tipo},
+    conta:{tipo:'texto', valor:t=>t.conta}, fatura:{tipo:'texto', valor:t=>t.competencia}, valor:{tipo:'moeda', valor:t=>t.valor},
+  });
   const todasTransacoes = STATE.transactions;
   const contasUsadas = [...new Set(todasTransacoes.map(t=>t.conta))].filter(Boolean).sort(compararContasComContrachequePorUltimo);
   const gruposUsados = [...new Set(todasTransacoes.map(t=>t.grupo))].filter(Boolean).sort((a,b)=>a.localeCompare(b,'pt-BR'));
@@ -11170,8 +11569,8 @@ function renderRegistros(){
     <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Reg', UI.regSelecionados, pageList.map(t=>t.id), list.map(t=>t.id))}</div>
     ${list.length===0 ? `<div class="empty-state"><div class="big">🗒️</div>Nenhum lançamento encontrado com esses filtros.</div>
     <div class="registros-rodape registros-rodape-vazio">${rodapePaginacao}</div>` : `
-    <div class="table-wrap table-wrap-registros reg-tabela-principal"><table class="tabela-registros">
-      <thead><tr>${renderColunaSelecaoLoteHead('Reg', pageList.map(t=>t.id), UI.regSelecionados)}<th>Data</th><th>Descrição</th><th>Grupo</th><th>Natureza</th><th>Tipo</th><th>Conta</th><th>Fatura/Competência</th><th style="text-align:right;">Valor</th><th class="col-acoes">Ações</th></tr></thead>
+    <div class="table-wrap table-wrap-registros reg-tabela-principal" data-ordenar-tabela="registros"><table class="tabela-registros">
+      <thead><tr>${renderColunaSelecaoLoteHead('Reg', pageList.map(t=>t.id), UI.regSelecionados)}${thOrdenavel('registros','data','Data')}${thOrdenavel('registros','descricao','Descrição')}${thOrdenavel('registros','grupo','Grupo')}${thOrdenavel('registros','natureza','Natureza')}${thOrdenavel('registros','tipo','Tipo')}${thOrdenavel('registros','conta','Conta')}${thOrdenavel('registros','fatura','Fatura/Competência')}${thOrdenavel('registros','valor','Valor',{style:'text-align:right;'})}<th class="col-acoes">Ações</th></tr></thead>
       <tbody>
         ${pageList.map(t=>`
           <tr>
@@ -11355,19 +11754,25 @@ function renderCartoes(){
       <div class="cartoes-resumo-item"><span class="ico">🟡</span><div><div class="val">${resumo.pendentes}</div><div class="lbl">pendente${resumo.pendentes===1?'':'s'}</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(resumo.saldoParceladoTotal)}</div><div class="lbl">parcelado em aberto</div></div></div>
     </div>
-    <div class="table-wrap table-wrap-cartoes" style="overflow-x:auto;"><table class="tabela-cartoes" style="table-layout:fixed;width:100%;">
+    <div class="table-wrap table-wrap-cartoes" style="overflow-x:auto;" data-ordenar-tabela="cartoes"><table class="tabela-cartoes" style="table-layout:fixed;width:100%;">
       <thead><tr>
-        <th style="text-align:left;width:${pct(chCartao)}%;">Cartão</th>
+        ${thOrdenavel('cartoes','cartao','Cartão',{style:`text-align:left;width:${pct(chCartao)}%;`})}
         <th style="text-align:center;width:${pct(chLimite)}%;">Limite</th>
         <th style="text-align:center;width:${pct(chAcoes)}%;">Ações</th>
-        <th style="text-align:right;width:${pct(chValor)}%;">Valor da fatura</th>
-        <th style="text-align:center;width:${pct(chData)}%;">Fechamento</th>
-        <th style="text-align:center;width:${pct(chData)}%;">Vencimento</th>
+        ${thOrdenavel('cartoes','valorFatura','Valor da fatura',{style:`text-align:right;width:${pct(chValor)}%;`})}
+        ${thOrdenavel('cartoes','fechamento','Fechamento',{style:`text-align:center;width:${pct(chData)}%;`})}
+        ${thOrdenavel('cartoes','vencimento','Vencimento',{style:`text-align:center;width:${pct(chData)}%;`})}
         <th style="text-align:center;width:${pct(chStatus)}%;">Status</th>
-        <th style="text-align:right;width:${pct(chSaldo)}%;">Saldo parcelado em aberto</th>
+        ${thOrdenavel('cartoes','saldoParcelado','Saldo parcelado em aberto',{style:`text-align:right;width:${pct(chSaldo)}%;`})}
       </tr></thead>
       <tbody>
-      ${cartoesOrdenadosPorVencimento().map(c=>{
+      ${aplicarOrdenacaoClique(cartoesOrdenadosPorVencimento(), 'cartoes', {
+        cartao:{tipo:'texto', valor:c=>c},
+        valorFatura:{tipo:'moeda', valor:c=>faturaPorCompetencia(c,competencia)},
+        fechamento:{tipo:'data', valor:c=>(faturaOverride(c,competencia)&&faturaOverride(c,competencia).fechamento)||fechamentoDataCalculada(competencia,c)},
+        vencimento:{tipo:'data', valor:c=>(faturaOverride(c,competencia)&&faturaOverride(c,competencia).vencimento)||vencimentoDataCalculada(competencia,c)},
+        saldoParcelado:{tipo:'moeda', valor:c=>detalheSaldoParceladoEmAberto(c,competencia).valor},
+      }).map(c=>{
         const v = faturaPorCompetencia(c,competencia);
         const venc = vencimentoLabel(competencia, c);
         const fech = fechamentoLabel(competencia, c);
@@ -11463,7 +11868,7 @@ function renderPainelContasBancarias(ano, mes){
   <div class="panel">
     <div class="cartoes-resumo-grid">
       <div class="cartoes-resumo-item"><span class="ico">🏦</span><div><div class="val">${resumo.qtdContas}</div><div class="lbl">conta${resumo.qtdContas===1?'':'s'}</div></div></div>
-      <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(resumo.saldoTotal)}</div><div class="lbl">saldo total</div></div></div>
+      <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(resumo.saldoTotal)}</div><div class="lbl">saldo líquido no período</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">📈</span><div><div class="val">${fmtBRL(resumo.entradasTotal)}</div><div class="lbl">entradas no período</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">📉</span><div><div class="val">${fmtBRL(resumo.saidasTotal)}</div><div class="lbl">saídas no período</div></div></div>
     </div>
@@ -11629,6 +12034,11 @@ function renderFaturaAtualModal(){
     {campo:'parcela', label:'Parcela', options:[{value:'parcelado',label:'Parcelado'},{value:'avista',label:'À vista'}]},
   ];
   const qtdAtivosFatura = contarFiltrosPadraoAtivos(f, camposFiltroFatura);
+  // Ordenação por clique no cabeçalho: sobre todo o conjunto já filtrado, sempre antes da paginação abaixo.
+  itensFiltrados = aplicarOrdenacaoClique(itensFiltrados, 'fatura', {
+    data:{tipo:'data', valor:t=>t.data}, descricao:{tipo:'texto', valor:t=>t.descricao},
+    parcela:{tipo:'numero', valor:t=>Number(t.totalParcelas)>1?t.parcelaAtual:null}, valor:{tipo:'moeda', valor:t=>t.valor},
+  });
   // Paginação da tabela — mesmo padrão/componente da tabela de Registros/Ver Extrato/Lançamentos futuros
   // (ver renderRodapePaginacaoGenerica), evita rolagem interna limitando a quantidade de linhas por página.
   const fatPorPagina = UI.faturaAtualModal.porPagina;
@@ -11681,8 +12091,8 @@ function renderFaturaAtualModal(){
         ${renderChipsFiltrosAtivos(f, 'Fatura', camposFiltroFatura, 'btnLimparFiltrosFatura')}
         ${itensFiltrados.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Fatura', UI.faturaAtualModal.selecionados, itensPagina.map(t=>t.id), itensFiltrados.map(t=>t.id))}</div>
-        <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:14px;"><table>
-          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Fatura', itensPagina.map(t=>t.id), UI.faturaAtualModal.selecionados)}<th>Data</th><th>Descrição</th><th style="text-align:center;">Parcela</th><th style="text-align:right;">Valor</th><th class="no-print col-acoes-fatura">Ações</th></tr></thead>
+        <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:14px;" data-ordenar-tabela="fatura"><table>
+          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Fatura', itensPagina.map(t=>t.id), UI.faturaAtualModal.selecionados)}${thOrdenavel('fatura','data','Data')}${thOrdenavel('fatura','descricao','Descrição')}${thOrdenavel('fatura','parcela','Parcela',{style:'text-align:center;'})}${thOrdenavel('fatura','valor','Valor',{style:'text-align:right;'})}<th class="no-print col-acoes-fatura">Ações</th></tr></thead>
           <tbody>${itensPagina.map(t=>renderLinhaItemFatura(t, false, 'Fatura', UI.faturaAtualModal.selecionados)).join('')}</tbody>
         </table></div>
         ${renderCardsLancamentosModal(itensPagina, {
@@ -11733,6 +12143,14 @@ function renderProjecaoFaturaModal(){
     {campo:'parcela', label:'Parcela', options:[{value:'parcelado',label:'Parcelado'},{value:'avista',label:'À vista'}]},
   ];
   const qtdAtivosProjecao = contarFiltrosPadraoAtivos(f, camposFiltroProjecao);
+  // Ordenação por clique no cabeçalho: sobre todo o conjunto já filtrado, sempre antes da paginação abaixo.
+  // Sem competência selecionada, os itens vêm agrupados visualmente por competência (cabeçalho de grupo
+  // detectado por troca de valor, ver mais abaixo) — ordenar por outra coluna é permitido normalmente
+  // (item 4: aplicado a todas as tabelas sem exceção), só deixa de coincidir com o agrupamento por mês.
+  itens = aplicarOrdenacaoClique(itens, 'projecao', {
+    data:{tipo:'data', valor:t=>t.data}, descricao:{tipo:'texto', valor:t=>t.descricao},
+    parcela:{tipo:'numero', valor:t=>Number(t.totalParcelas)>1?t.parcelaAtual:null}, valor:{tipo:'moeda', valor:t=>t.valor},
+  });
   // Na impressão com uma competência selecionada, o resumo mostrado é o mesmo conjunto de cards do modal
   // "Ver Fatura" (valor total, parceladas, à vista, créditos), recalculado a partir dos itens já filtrados
   // acima (não apenas qtd/qtdParcelas).
@@ -11804,8 +12222,8 @@ function renderProjecaoFaturaModal(){
         ${renderChipsFiltrosAtivos(f, 'Projecao', camposFiltroProjecao, 'btnLimparFiltrosProjecao')}
         ${itens.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Projecao', UI.projecaoFaturaModal.selecionados, itensPagina.map(t=>t.id), itens.map(t=>t.id))}</div>
-        <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:12px;"><table>
-          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Projecao', itensPagina.map(t=>t.id), UI.projecaoFaturaModal.selecionados)}<th>Data</th><th>Descrição</th><th style="text-align:center;">Parcela</th><th style="text-align:right;">Valor</th><th class="no-print col-acoes-fatura">Ações</th></tr></thead>
+        <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:12px;" data-ordenar-tabela="projecao"><table>
+          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Projecao', itensPagina.map(t=>t.id), UI.projecaoFaturaModal.selecionados)}${thOrdenavel('projecao','data','Data')}${thOrdenavel('projecao','descricao','Descrição')}${thOrdenavel('projecao','parcela','Parcela',{style:'text-align:center;'})}${thOrdenavel('projecao','valor','Valor',{style:'text-align:right;'})}<th class="no-print col-acoes-fatura">Ações</th></tr></thead>
           <tbody>${(()=>{
             // Sem seleção de competência, os lançamentos de vários meses ficam misturados na mesma lista —
             // em vez de repetir a competência em cada linha (coluna removida), agrupamos com uma linha de
@@ -12023,10 +12441,10 @@ function renderEditarSaldoInicialFluxoCaixaModal(){
       <div class="modal-head"><h3>✏️ Saldo Inicial — Fluxo de Caixa</h3><button class="close-x" id="closeEditarSaldoInicialFluxoCaixa">✕</button></div>
       <div class="modal-body">
         <p class="hint" style="margin-top:0;">O Saldo Inicial do Fluxo de Caixa é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança em <b>${MESES[UI.mes-1]}/${UI.ano}</b>. Edite cada conta abaixo — o total não pode ser alterado diretamente.</p>
-        ${contas.length ? `<table style="width:100%;">
-          <thead><tr><th style="text-align:left;">Conta</th><th style="text-align:right;">Saldo Inicial</th></tr></thead>
+        ${contas.length ? `<table style="width:100%;" data-ordenar-tabela="saldoInicialFC">
+          <thead><tr>${thOrdenavel('saldoInicialFC','conta','Conta')}${thOrdenavel('saldoInicialFC','valor','Saldo Inicial',{style:'text-align:right;'})}</tr></thead>
           <tbody>
-            ${valores.map(v=>`<tr>
+            ${aplicarOrdenacaoClique(valores, 'saldoInicialFC', { conta:{tipo:'texto', valor:v=>v.conta}, valor:{tipo:'moeda', valor:v=>v.valor} }).map(v=>`<tr>
               <td>${escapeHtml(v.conta)} <span class="hint">(${escapeHtml(STATE.contaTipos[v.conta]||'')})</span></td>
               <td style="text-align:right;"><input type="text" inputmode="decimal" class="inp-saldo-inicial-fc" data-conta="${escapeHtml(v.conta)}" value="${fmtMoedaInput(v.valor)}" style="width:130px;text-align:right;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-family:var(--mono);"></td>
             </tr>`).join('')}
@@ -12273,23 +12691,19 @@ function renderInteligencia(){
   <div class="panel">
     <h2>Onde o dinheiro está mudando?</h2>
     <p class="hint" style="margin-top:-6px;">Clique numa linha para detalhar até os lançamentos que originaram o valor.</p>
-    <div class="table-wrap" style="max-height:none;"><table class="tabela-cards-mobile">
+    <div class="table-wrap" style="max-height:none;" data-ordenar-tabela="intelGrupos"><table class="tabela-cards-mobile">
       <thead><tr>
-        <th data-sort-intel="grupo" style="cursor:pointer;">Grupo ${UI.intelOrdenacao.campo==='grupo'?(UI.intelOrdenacao.dir==='asc'?'▲':'▼'):''}</th>
-        <th data-sort-intel="atual" style="text-align:right;cursor:pointer;">Atual ${UI.intelOrdenacao.campo==='atual'?(UI.intelOrdenacao.dir==='asc'?'▲':'▼'):''}</th>
-        <th data-sort-intel="mediaHist" style="text-align:right;cursor:pointer;">Média Histórica ${UI.intelOrdenacao.campo==='mediaHist'?(UI.intelOrdenacao.dir==='asc'?'▲':'▼'):''}</th>
-        <th data-sort-intel="ordemTendencia" style="text-align:center;cursor:pointer;" title="Direção do comportamento ao longo do histórico (trajetória) — diferente de Variação, que compara só a Projeção com o Atual.">Tendência ${UI.intelOrdenacao.campo==='ordemTendencia'?(UI.intelOrdenacao.dir==='asc'?'▲':'▼'):''}</th>
-        <th data-sort-intel="projecao" style="text-align:right;cursor:pointer;">Projeção ${UI.intelOrdenacao.campo==='projecao'?(UI.intelOrdenacao.dir==='asc'?'▲':'▼'):''}</th>
-        <th data-sort-intel="variacao" style="text-align:right;cursor:pointer;">Variação ${UI.intelOrdenacao.campo==='variacao'?(UI.intelOrdenacao.dir==='asc'?'▲':'▼'):''}</th>
+        ${thOrdenavel('intelGrupos','grupo','Grupo')}
+        ${thOrdenavel('intelGrupos','atual','Atual',{style:'text-align:right;'})}
+        ${thOrdenavel('intelGrupos','mediaHist','Média Histórica',{style:'text-align:right;'})}
+        ${thOrdenavel('intelGrupos','ordemTendencia','Tendência',{style:'text-align:center;', extra:'title="Direção do comportamento ao longo do histórico (trajetória) — diferente de Variação, que compara só a Projeção com o Atual."'})}
+        ${thOrdenavel('intelGrupos','projecao','Projeção',{style:'text-align:right;'})}
+        ${thOrdenavel('intelGrupos','variacao','Variação',{style:'text-align:right;'})}
       </tr></thead>
       <tbody>
-        ${[...ctx.gruposAnalise].sort((a,b)=>{
-          const dir = UI.intelOrdenacao.dir==='asc'?1:-1;
-          const campo = UI.intelOrdenacao.campo;
-          const va = campo==='grupo' ? a.grupo : a[campo];
-          const vb = campo==='grupo' ? b.grupo : b[campo];
-          if(typeof va==='string') return va.localeCompare(vb,'pt-BR')*dir;
-          return (va-vb)*dir;
+        ${aplicarOrdenacaoClique(ctx.gruposAnalise, 'intelGrupos', {
+          grupo:{tipo:'texto', valor:g=>g.grupo}, atual:{tipo:'moeda', valor:g=>g.atual}, mediaHist:{tipo:'moeda', valor:g=>g.mediaHist},
+          ordemTendencia:{tipo:'numero', valor:g=>g.ordemTendencia}, projecao:{tipo:'moeda', valor:g=>g.projecao}, variacao:{tipo:'percentual', valor:g=>g.variacao},
         }).map(g=>`<tr class="linha-drill-intel" data-drill-grupo="${escapeHtml(g.grupo)}" style="cursor:pointer;${UI.intelDrill.grupo===g.grupo?'background:var(--navy-50,#eef2f9);':''}">
           <td data-label="Grupo">${UI.intelDrill.grupo===g.grupo?'➖':'➕'} ${iconeGrupo(g.grupo)} ${escapeHtml(g.grupo)}</td>
           <td data-label="Atual" style="text-align:right;">${fmtBRL(g.atual)}</td>
@@ -12443,7 +12857,7 @@ function renderNovaProjecaoModal(){
   const editando = !!m.editId;
   return `
   <div class="overlay" id="ovNovaProjecao" ${attrZIndexModal('novaProjecaoModal')}>
-    <div class="modal" style="width:480px;">
+    <div class="modal modal-editor-lancamento" style="width:480px;">
       <div class="modal-head"><h3>${editando ? '✏️ Editar' : '➕ Novo'} lançamento previsto</h3><button class="close-x" id="closeNovaProjecao">✕</button></div>
       <div class="modal-body">
         <div class="tx-form">
@@ -12641,7 +13055,7 @@ function renderDuplicarMesesEditarItemModal(){
   const item = UI.duplicarMesesEditarItem;
   return `
   <div class="overlay" id="ovDuplicarMesesEditarItem" ${attrZIndexModal('duplicarMesesEditarItem')}>
-    <div class="modal" style="width:320px;">
+    <div class="modal modal-editor-lancamento" style="width:320px;">
       <div class="modal-head"><h3>✏️ Editar lançamento #${item.index+1}</h3><button class="close-x" id="closeDuplicarMesesEditarItem">✕</button></div>
       <div class="modal-body">
         <div class="field"><label>Data</label><input type="date" id="fEditarOcorrenciaData" value="${item.data||''}"></div>
@@ -12695,10 +13109,15 @@ function renderMetas(){
     </div>
     ${r.lista.length===0 ? `<div class="empty-state"><div class="big">🎯</div>Nenhuma meta cadastrada para este mês. Use "+ Nova meta" para começar.</div>` : `
     <div class="chart-box" style="height:${alturaBarra}px;margin-top:14px;"><canvas id="chartMetas"></canvas></div>
-    <div class="table-wrap" style="margin-top:16px;"><table class="tabela-cards-mobile">
-      <thead><tr><th>Grupo</th><th>Categoria</th><th>Subcategoria</th><th style="text-align:right;">Meta</th><th style="text-align:right;">Gasto</th><th style="text-align:right;">Saldo</th><th>% Utilizado</th><th>Período</th><th>Situação</th><th class="col-acoes">Ações</th></tr></thead>
+    <div class="table-wrap" style="margin-top:16px;" data-ordenar-tabela="metas"><table class="tabela-cards-mobile">
+      <thead><tr>${thOrdenavel('metas','grupo','Grupo')}${thOrdenavel('metas','categoria','Categoria')}${thOrdenavel('metas','subcategoria','Subcategoria')}${thOrdenavel('metas','valor','Meta',{style:'text-align:right;'})}${thOrdenavel('metas','gasto','Gasto',{style:'text-align:right;'})}${thOrdenavel('metas','saldo','Saldo',{style:'text-align:right;'})}${thOrdenavel('metas','pct','% Utilizado')}${thOrdenavel('metas','recorrencia','Período')}${thOrdenavel('metas','situacao','Situação')}<th class="col-acoes">Ações</th></tr></thead>
       <tbody>
-      ${r.lista.map(m=>{
+      ${aplicarOrdenacaoClique(r.lista, 'metas', {
+        grupo:{tipo:'texto', valor:m=>m.grupo}, categoria:{tipo:'texto', valor:m=>m.categoria}, subcategoria:{tipo:'texto', valor:m=>m.subcategoria},
+        valor:{tipo:'moeda', valor:m=>m.valor}, gasto:{tipo:'moeda', valor:m=>m.gasto}, saldo:{tipo:'moeda', valor:m=>m.saldo},
+        pct:{tipo:'percentual', valor:m=>m.pct}, recorrencia:{tipo:'texto', valor:m=>RECORRENCIA_LABEL[m.recorrencia]},
+        situacao:{tipo:'texto', valor:m=>SITUACAO_META_INFO[m.situacao].label},
+      }).map(m=>{
         const info = SITUACAO_META_INFO[m.situacao];
         return `<tr>
           <td data-label="Nome/Grupo">${iconeGrupo(m.grupo)} ${escapeHtml(m.grupo)}</td>
@@ -12796,10 +13215,13 @@ function renderHistoricoMetaPanel(competencia){
          comparável (Meta x Gasto x Diferença x Situação) de cada um dos 12 meses do gráfico acima — antes
          só existia o gráfico, sem o dado mês a mês; usa tabela-cards-mobile (mesmo padrão genérico já
          usado em Cartões/Metas), então no mobile vira uma lista de cards, mantendo a tabela no desktop. -->
-    <div class="table-wrap" style="margin-top:16px;"><table class="tabela-cards-mobile">
-      <thead><tr><th>Mês</th><th style="text-align:right;">Meta</th><th style="text-align:right;">Gasto</th><th style="text-align:right;">Diferença</th><th>Situação</th></tr></thead>
+    <div class="table-wrap" style="margin-top:16px;" data-ordenar-tabela="historicoMeta"><table class="tabela-cards-mobile">
+      <thead><tr>${thOrdenavel('historicoMeta','competencia','Mês')}${thOrdenavel('historicoMeta','meta','Meta',{style:'text-align:right;'})}${thOrdenavel('historicoMeta','gasto','Gasto',{style:'text-align:right;'})}${thOrdenavel('historicoMeta','diferenca','Diferença',{style:'text-align:right;'})}${thOrdenavel('historicoMeta','situacao','Situação')}</tr></thead>
       <tbody>
-      ${[...h.historico].reverse().map(x=>{
+      ${aplicarOrdenacaoClique([...h.historico].reverse(), 'historicoMeta', {
+        competencia:{tipo:'texto', valor:x=>x.competencia}, meta:{tipo:'moeda', valor:x=>x.meta}, gasto:{tipo:'moeda', valor:x=>x.gasto},
+        diferenca:{tipo:'moeda', valor:x=>x.meta-x.gasto}, situacao:{tipo:'texto', valor:x=>SITUACAO_META_INFO[situacaoMeta(x.gasto,x.meta)].label},
+      }).map(x=>{
         const diferenca = x.meta - x.gasto;
         const situ = situacaoMeta(x.gasto, x.meta);
         const info = SITUACAO_META_INFO[situ];
@@ -13072,14 +13494,14 @@ function renderCategorias(){
 }
 function tiposPermitidosGrupo(grupo){
   if(grupo==='Renda Familiar') return ['Receita'];
-  if(grupo==='Transações' || grupo==='__novo__' || !grupo) return ['Despesa','Receita'];
+  if(grupo==='Transações' || grupo==='Não Identificado' || grupo==='__novo__' || !grupo) return ['Despesa','Receita'];
   return ['Despesa'];
 }
 function renderPosicaoModal(){
   const m = UI.posicaoModal;
   let irmaos = [], label = '';
   if(m.nivel==='grupo'){
-    irmaos = [...new Set(CATEGORIAS.map(c=>c[1]))].filter(g=>g!==m.nome);
+    irmaos = todosGrupos().filter(g=>g!==m.nome);
     label = `Grupo <b>${escapeHtml(m.nome)}</b>`;
   } else if(m.nivel==='categoria'){
     irmaos = [...new Set(CATEGORIAS.filter(c=>c[1]===m.grupo).map(c=>c[2]))].filter(c=>c!==m.nome);
@@ -13117,7 +13539,7 @@ function renderPosicaoModal(){
 }
 function renderMoverCategoriaModal(){
   const m = UI.moverCategoriaModal;
-  const gruposExistentes = [...new Set(CATEGORIAS.map(c=>c[1]))].filter(g=>g!==m.grupo);
+  const gruposExistentes = todosGrupos().filter(g=>g!==m.grupo);
   const qtd = CATEGORIAS.filter(c=>c[1]===m.grupo && c[2]===m.categoria).length;
   return `
   <div class="overlay" id="ovMoverCategoria" ${attrZIndexModal('moverCategoriaModal')}>
@@ -13145,7 +13567,7 @@ function renderMoverCategoriaModal(){
    partir do grupo selecionado no momento). */
 function renderMoverSubcategoriaModal(){
   const m = UI.moverSubcategoriaModal;
-  const gruposExistentes = [...new Set(CATEGORIAS.map(c=>c[1]))];
+  const gruposExistentes = todosGrupos();
   const grupoDestino = m.grupoDestino || m.grupo;
   let categoriasDoGrupoDestino = [...new Set(CATEGORIAS.filter(c=>c[1]===grupoDestino).map(c=>c[2]))];
   if(grupoDestino===m.grupo) categoriasDoGrupoDestino = categoriasDoGrupoDestino.filter(c=>c!==m.categoria);
@@ -13181,7 +13603,7 @@ function renderMoverSubcategoriaModal(){
 function renderNovaSubcategoriaModal(){
   const f = UI.novaSubcategoria;
   const editando = !!f._editNomeOriginal;
-  const gruposExistentes = [...new Set(CATEGORIAS.map(c=>c[1]))];
+  const gruposExistentes = todosGrupos();
   const categoriasDoGrupo = [...new Set(CATEGORIAS.filter(c=>c[1]===f.grupo).map(c=>c[2]))];
   const permitidos = tiposPermitidosGrupo(f.grupo);
   const podeDespesa = permitidos.includes('Despesa'), podeReceita = permitidos.includes('Receita');
@@ -13488,14 +13910,14 @@ function renderTextModal(){
   }
   return `
   <div class="overlay" id="ovTextModal" ${attrZIndexModal('textModal')}>
-    <div class="modal" style="width:${info.temTipoConta ? '640px' : '420px'};">
+    <div class="modal${info.temTipoConta ? ' modal-editor-conta' : ''}" style="width:${info.temTipoConta ? '640px' : '420px'};">
       <div class="modal-head"><h3>${info.titulo}</h3><button class="close-x" id="closeTextModal">✕</button></div>
       <div class="modal-body">
         <div class="tx-form">
           ${!info.temTipoConta ? `<div class="field"><label>${info.label}</label><input type="text" id="fTextModalNome" placeholder="${info.placeholder}" value="${escapeHtml(t.nome)}"></div>` : ''}
           ${info.temTipoConta ? `
           <div class="conta-grid-linha conta-grid-linha-1">
-            <div class="field"><label>Ícone da conta</label>
+            <div class="field"><label>Ícone</label>
               <div class="icone-conta-picker" id="fTextModalIconePicker">
                 <button type="button" class="icone-conta-picker-btn" id="fTextModalIconeContaBtn" aria-haspopup="listbox" aria-expanded="${iconePickerAberto?'true':'false'}" title="Escolher ícone da conta">
                   ${iconeAtualPreviewHtml}<span class="icone-conta-picker-caret">▾</span>
@@ -13573,10 +13995,10 @@ function renderTextModal(){
           ${mostrarConfigCartao ? `
           <div>
             <div class="conta-grid-linha conta-grid-linha-cartao1">
-              <div class="field"><label>Dia de fechamento</label>
+              <div class="field"><label>Fechamento</label>
                 <input type="number" min="1" max="31" id="fTextModalFechamento" placeholder="Ex.: 20" value="${escapeHtml(String(fechamentoAtual))}">
               </div>
-              <div class="field"><label>Dia de vencimento</label>
+              <div class="field"><label>Vencimento</label>
                 <input type="number" min="1" max="31" id="fTextModalVencimento" placeholder="Ex.: 10" value="${escapeHtml(String(vencimentoAtual))}">
               </div>
               <div class="field"><label>Bandeira do cartão *</label>
@@ -13711,7 +14133,11 @@ function renderBackupModal(){
           const tiposUsados = (m.backups||[]).length ? Array.from(new Set(m.backups.map(b=>b.tipo))).sort((a,b)=> (BACKUP_TIPO_INFO[a]?.label||a).localeCompare(BACKUP_TIPO_INFO[b]?.label||b,'pt-BR')) : [];
           const camposFiltroBackup = [{campo:'tipo', label:'Tipo', options: tiposUsados.map(t=>({value:t, label:`${BACKUP_TIPO_INFO[t]?.icone?BACKUP_TIPO_INFO[t].icone+' ':''}${BACKUP_TIPO_INFO[t]?.label||t}`}))}];
           const qtdAtivosBackup = contarFiltrosPadraoAtivos(f, camposFiltroBackup);
-          const backupsFiltrados = backupsFiltradosAtuais(m);
+          const backupsFiltrados = aplicarOrdenacaoClique(backupsFiltradosAtuais(m), 'backups', {
+            criadoEm:{tipo:'data', valor:b=>b.criadoEm}, tipo:{tipo:'texto', valor:b=>BACKUP_TIPO_INFO[b.tipo]?.label||b.tipo}, nome:{tipo:'texto', valor:b=>b.nome},
+            tamanho:{tipo:'numero', valor:b=>b.tamanho}, qtdTransacoes:{tipo:'numero', valor:b=>b.qtdTransacoes},
+            integridade:{tipo:'texto', valor:b=> b.integro ? (b.semMetadados?'Sem checksum':'Válido') : 'Inválido'},
+          });
           return `
         <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0;">
           ${nivelAcessoPasta!=='leitura' ? `<button type="button" class="btn btn-primary btn-sm" id="btnCriarBackupAgoraModal" ${bloqueado?'disabled':''}>🗄️ Criar backup agora</button>` : `<span></span>`}
@@ -13748,10 +14174,10 @@ function renderBackupModal(){
           <input type="checkbox" id="chkSelecionarTodosBackupMobile" ${nomesVisiveis.length>0 && nomesVisiveis.every(n=>sel.has(n))?'checked':''} data-indet-lote="${sel.size>0 && !nomesVisiveis.every(n=>sel.has(n))}" ${bloqueado?'disabled':''}>
           Selecionar todos (${nomesVisiveis.length})
         </label>` : ''}
-        <div class="table-wrap"><table class="tabela-cards-mobile">
+        <div class="table-wrap" data-ordenar-tabela="backups"><table class="tabela-cards-mobile">
           <thead><tr>
             ${podeExcluir ? `<th style="width:1%;"><input type="checkbox" id="chkSelecionarTodosBackup" ${nomesVisiveis.length>0 && nomesVisiveis.every(n=>sel.has(n))?'checked':''} ${bloqueado?'disabled':''}></th>` : ''}
-            <th>Data/Hora</th><th>Tipo</th><th>Arquivo</th><th style="text-align:right;">Tamanho</th><th style="text-align:right;">Registros</th><th style="text-align:center;">Integridade</th><th class="col-acoes">Ações</th></tr></thead>
+            ${thOrdenavel('backups','criadoEm','Data/Hora')}${thOrdenavel('backups','tipo','Tipo')}${thOrdenavel('backups','nome','Arquivo')}${thOrdenavel('backups','tamanho','Tamanho',{style:'text-align:right;'})}${thOrdenavel('backups','qtdTransacoes','Registros',{style:'text-align:right;'})}${thOrdenavel('backups','integridade','Integridade',{style:'text-align:center;'})}<th class="col-acoes">Ações</th></tr></thead>
           <tbody>
             ${backupsFiltrados.map(b=>`<tr>
               ${podeExcluir ? `<td data-label="" class="backup-linha-checkbox"><input type="checkbox" class="chk-selecionar-backup" data-backup-nome="${escapeHtml(b.nome)}" ${sel.has(b.nome)?'checked':''} ${bloqueado?'disabled':''}></td>` : ''}
@@ -13932,7 +14358,7 @@ function renderTxModal(){
   const podeParcelar = (isCartao && tipoAtual==='Despesa') || tipoAtual==='Receita' || (grupoAtual==='Dívidas e Empréstimos' && tipoAtual==='Despesa');
   return `
   <div class="overlay" id="ovTx" ${attrZIndexModal('editingTx')}>
-    <div class="modal" style="width:640px;">
+    <div class="modal modal-editor-lancamento" style="width:640px;">
       <div class="modal-head"><h3>${t.id ? '✏️ Editar lançamento' : '➕ Novo lançamento'}</h3><button class="close-x" id="closeTx">✕</button></div>
       <div class="modal-body">
         <div class="tx-form">
@@ -14412,16 +14838,16 @@ function classificarLancamentoReservaEmergencia(tipoOriginal, origemDestino){
   if(tipoNorm==='pixenviado'){
     return {
       descricao: origem ? `Pix enviado - ${origem}` : 'Pix enviado',
-      categoria: 'Uso da Reserva de Emergência (Tesouro Selic, CDBs de Liquidez Diária)',
+      categoria: 'Uso da Reserva de Emergência',
       tipo: 'Despesa'
     };
   }
-  /* Pix/transferência recebidos nesta conta são Receita, mas a subcategoria "Aportes na Reserva de
-     Emergência" só existe corretamente cadastrada como Despesa (ver CATEGORIAS) — catInfo() resolveria
-     sempre para essa definição de Despesa. Por isso não se força aqui nenhuma categoria: cai no mesmo
-     tratamento já usado para lançamentos sem classificação automática (descricaoFallback em
+  /* Pix/transferência recebidos nesta conta são Receita. Não se força aqui nenhuma categoria — cai no
+     mesmo tratamento já usado para lançamentos sem classificação automática (descricaoFallback em
      parseCSVReservaEmergencia), com tipo Receita inferido pelo sinal do valor e descrição
-     "[Tipo] - [Origem/Destino]". */
+     "[Tipo] - [Origem/Destino]" — comportamento mantido tal como está por não ser exigido nenhum ajuste
+     aqui pela nova estrutura (a subcategoria "Aportes na Reserva de Emergência" já existe corretamente
+     também como Receita na planilha oficial, mas forçar essa classificação automática não foi pedido). */
   if(tipoNorm==='pixrecebido' || tipoNorm==='transferenciarecebida'){
     return null;
   }
@@ -14791,7 +15217,7 @@ const RUBRICA_TRT_CODIGO_CATEGORIA = {
   '1':'Salário TRT', '10':'Salário TRT', '31':'Salário TRT', '36':'Salário TRT', '60':'Salário TRT',
   '200701':'Assistência Saúde', '740':'Assistência Pré-Escolar', '771':'Auxílio Alimentação',
   '297011':'Plano de Saúde', '299033':'Plano de Saúde', '97061':'Contribuições Associativas/Sindicais',
-  '97204':'Parcela de Empréstimo Pessoal (Bancos ou Fintechs)', '97213':'Parcela de Empréstimo Pessoal (Bancos ou Fintechs)',
+  '97204':'Empréstimos (Pessoal e Consignado)', '97213':'Empréstimos (Pessoal e Consignado)',
   '99504':'Contribuição Previdenciária (RPPS)', '99700':'Imposto de Renda Retido na Fonte (IRRF)'
 };
 /* ---- Fatura do cartão Personnalité Black (Itaú) ----
@@ -15307,14 +15733,16 @@ function buildParsedFromMap(){
     }));
   }
   entries = entries.filter(e=>e.data && e.descricao);
-  // "BB Rende Fácil" / "Rende Fácil" (aplicação automática de saldo) não é um lançamento de fluxo de
-  // caixa real — é descartado silenciosamente aqui, antes de chegar à revisão, sem gerar nenhum aviso.
-  entries = entries.filter(e=> !normalizarTexto(e.descricao).includes('rendefacil'));
   UI.importParsed = entries.map(e=>{
     const conta = UI.importMap.contaDestino;
     const tipoConta = STATE.contaTipos[conta] || '';
     let catSugerida = sugerirCategoria(e.descricao);
     let tipo;
+    // "BB Rende Fácil" (aplicação/resgate automático de saldo ocioso, ver detectarRendeFacilBB): sinal
+    // textual definitivo, calculado uma única vez aqui e usado no primeiro ramo que se aplicar abaixo —
+    // igual em espírito ao pagamento de fatura, mas nunca prevalece sobre uma categoria explícita já
+    // determinada com certeza pelo próprio parser (ex.: extrato CSV da Reserva de Emergência).
+    const rendeFacilBB = e.categoriaExplicita ? null : detectarRendeFacilBB(e.descricao);
     if(e.categoriaExplicita){
       // Extrato CSV da Reserva de Emergência: a subcategoria já foi determinada com certeza a partir do
       // Tipo do próprio lançamento do extrato (ver classificarLancamentoReservaEmergencia) — prevalece
@@ -15322,6 +15750,9 @@ function buildParsedFromMap(){
       // aplica a essa conta).
       catSugerida = e.categoriaExplicita;
       tipo = e.tipoExplicito;
+    } else if(rendeFacilBB){
+      catSugerida = rendeFacilBB.categoria;
+      tipo = rendeFacilBB.tipo;
     } else if(ehPagamentoDeFatura(e.descricao, conta, e.valor)){
       // Sinal textual definitivo: o pagamento da fatura é sempre um crédito para o CARTÃO (Receita) e uma
       // saída da CONTA que efetua o pagamento (Despesa) — prevalece sobre a sugestão por palavra-chave e
@@ -15340,11 +15771,11 @@ function buildParsedFromMap(){
       // parciais, antecipados ou feitos em mais de uma parcela (ex.: "PGTO. CASH AG.", sem "fatura" no
       // texto e sem bater sozinho com nenhum total). Ainda tenta reconhecer pelo texto se é especificamente
       // o pagamento da fatura (categoria com vínculo automático de reconciliação) — senão cai no crédito
-      // genérico "Estorno e/ou Reembolso", mas sempre como Receita, para nunca inflar o valor da fatura.
+      // genérico "Estorno ou Reembolso", mas sempre como Receita, para nunca inflar o valor da fatura.
       tipo = 'Receita';
       const pareceTextoDePagamento = /pgto|pagto|pagamento/.test(normalizarTexto(e.descricao));
       catSugerida = pareceTextoDePagamento ? 'Recebimento por Pagamento de Fatura'
-        : ((catSugerida && CATEGORIAS.some(c=>c[0]===catSugerida && c[3]==='Receita')) ? catSugerida : 'Estorno e/ou Reembolso');
+        : ((catSugerida && CATEGORIAS.some(c=>c[0]===catSugerida && c[3]==='Receita')) ? catSugerida : 'Estorno ou Reembolso');
     } else if(e.tipoExplicito){
       // O parser já sabe se é Despesa ou Receita (ex.: fatura de cartão, onde valor negativo é
       // estorno/crédito) — uma sugestão de categoria por palavra-chave que implique o tipo contrário é
@@ -15375,6 +15806,11 @@ function buildParsedFromMap(){
     } else if(tipoConta==='Contracheque' && tipo==='Receita'){
       catSugerida = 'Salário TRT';
     }
+    // Fallback final "Não Identificado": só chega aqui depois de TODAS as regras de classificação acima
+    // (categoria explícita do parser, pagamento de fatura, TRNTYPE, rubrica de contracheque, sugestão por
+    // palavra-chave/histórico) terem sido avaliadas e nenhuma ter resultado numa subcategoria — nunca deixa
+    // o lançamento importado sem classificação (ver categoriaNaoIdentificada).
+    if(!catSugerida) catSugerida = categoriaNaoIdentificada(tipo);
     const responsavelPreset = catSugerida ? responsavelPredefinidoDaSubcategoria(catSugerida) : '';
     // Responsável automático da conta (seção 3 do requisito "Categorias e Importação Bancária"): quando o
     // lançamento é Receita do grupo Renda Familiar e a subcategoria sugerida NÃO já tem um responsável
@@ -15427,6 +15863,18 @@ function buildParsedFromMap(){
 
 /* ===================== EVENTOS ===================== */
 function bindEvents(){
+  // Ordenação por clique no cabeçalho (item 4/8 do requisito): um único handler delegado, genérico para
+  // TODA tabela ordenável do app — qualquer container com data-ordenar-tabela="idTabela" e cabeçalhos
+  // th[data-ordenar-th="campo"] dentro dele (gerados por thOrdenavel) já funciona, sem precisar de nenhum
+  // binding específico por tabela. bindEvents já roda de novo a cada render(), então basta reconsultar o
+  // DOM atual a cada chamada — igual a todo o resto do app.
+  document.querySelectorAll('[data-ordenar-tabela]').forEach(container=>{
+    const idTabela = container.dataset.ordenarTabela;
+    container.querySelectorAll('[data-ordenar-th]').forEach(th=> th.addEventListener('click', ()=>{
+      cicloOrdenacaoClique(idTabela, th.dataset.ordenarTh);
+      render();
+    }));
+  });
   document.getElementById('selMes')?.addEventListener('change', e=>{ UI.mes = Number(e.target.value); render(); });
   document.getElementById('inpAno')?.addEventListener('change', e=>{ const v = Number(e.target.value); if(v) UI.ano = v; render(); });
   document.getElementById('btnAnoAnterior')?.addEventListener('click', ()=>{ UI.ano -= 1; render(); });
@@ -15604,12 +16052,6 @@ function bindEvents(){
     document.getElementById('btnRestaurarFiltrosIntel')?.addEventListener('click', ()=>{ UI.intelFiltros = intelFiltrosPadrao(); render(); });
     bindFiltrosMobileToggle('Intel');
     bindChipsFiltrosAtivos(f, 'Intel', ()=>render());
-    document.querySelectorAll('[data-sort-intel]').forEach(th=> th.addEventListener('click', ()=>{
-      const campo = th.dataset.sortIntel;
-      if(UI.intelOrdenacao.campo===campo) UI.intelOrdenacao.dir = UI.intelOrdenacao.dir==='asc'?'desc':'asc';
-      else UI.intelOrdenacao = { campo, dir:'desc' };
-      render();
-    }));
     // Navegação Grupo→Categoria→Subcategoria→Lançamentos (seção 15) — cada nível só pode ter uma opção
     // aberta por vez; abrir um grupo diferente ou uma subcategoria diferente fecha automaticamente o que
     // estava aberto abaixo dele, para o detalhamento nunca ficar "preso" num caminho antigo.

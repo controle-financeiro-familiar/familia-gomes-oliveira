@@ -77,3 +77,28 @@ morando só no OneDrive do proprietário; ninguém mais tem uma cópia própria.
 6. Um arquivo `auditoria.log` (JSON Lines) registra operações críticas (criação/restauração/
    exclusão de backup, conflitos de gravação) com usuário, data/hora e resultado — não substitui
    `registros.log`, que continua sendo o único arquivo de dados financeiros.
+
+## BB Rende Fácil (aplicação/resgate automático de saldo)
+
+O Banco do Brasil aplica e resgata automaticamente, todo dia, o saldo ocioso de algumas contas
+correntes num investimento vinculado chamado "Rende Fácil" — o dinheiro nunca muda de titularidade
+nem sai da conta, só circula entre o "saldo à vista" e esse investimento automático. A aplicação
+reconhece essas linhas na importação de extrato (`detectarRendeFacilBB`, em `index.html`) pela
+própria descrição do lançamento (grafias como "APLIC AUTOM RDFACIL" ou "RESGATE AUTOMATICO
+RDFACIL", normalizadas para não depender de acentuação/caixa/abreviação exatas do arquivo do
+banco) e classifica cada lado numa subcategoria própria, dentro da mesma Conta Corrente onde
+ocorre:
+
+- **Aplicação Automática do Saldo** (Despesa) — dinheiro saindo do saldo à vista para o
+  investimento automático.
+- **Resgate Automático do Saldo** (Receita) — dinheiro voltando do investimento para o
+  saldo à vista.
+
+Ambas ficam no grupo **Economias**, subgrupo **Aplicação Automática de Saldo** —
+separado do subgrupo "Reserva de Emergência e Poupança" usado pelos aportes/uso deliberados, para
+nunca serem confundidas com uma decisão real de poupar ou resgatar patrimônio. Por não
+representarem uma economia nova nem um gasto real (o BB aplica e resgata o mesmo saldo sozinho,
+todo dia), nenhuma das duas soma no total de "Economias"/aportes do Dashboard e do painel
+Investimentos (`ehMovimentoRendeFacilBB`, usada em `calcDashboard`/`detalheAportes`) — aparecem
+normalmente nos Registros e no extrato da conta, só ficam fora desse total específico, do mesmo
+jeito que "Uso da Reserva de Emergência" também fica.
