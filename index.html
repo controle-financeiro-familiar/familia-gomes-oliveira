@@ -7466,6 +7466,18 @@ function persistirOrdemManual(idsNaOrdem){
     if(t) t.ordemExibicao = i;
   });
 }
+/* Desfaz a ordem manual de um contexto (arrastar-e-soltar), voltando a exibição para a ordenação padrão
+   por data — uma vez definida, a ordem manual persiste indefinidamente (mesmo depois de fechar/reabrir o
+   modal, ver aplicarOrdemManual/seção 10 do requisito de reordenação), e sem este botão a única forma de
+   reverter seria arrastar cada linha de volta manualmente uma por uma. `itens` é a lista completa (sem
+   filtro/paginação) já usada pelo próprio render do modal, então sempre limpa exatamente o mesmo conjunto
+   que a ordem manual afeta — nunca mistura com o de outro contexto (conta/período diferente). */
+function restaurarOrdemPadrao(itens){
+  itens.forEach(t=>{
+    const tx = STATE.transactions.find(x=>x.id===t.id);
+    if(tx) delete tx.ordemExibicao;
+  });
+}
 /* Ids de TODOS os lançamentos de um contexto de reordenação, na ordem atual de exibição — não só a página
    exibida no momento (ver bindEvents/handler de drop), para o drop nunca perder a posição relativa de
    itens de outras páginas/filtros que não estão visíveis durante o arraste. Sempre recalculado na hora a
@@ -8122,6 +8134,12 @@ function renderExtratoContaModal(){
     {campo:'tipo', label:'Tipo', options:[{value:'Receita',label:'Receita'},{value:'Despesa',label:'Despesa'}]},
   ];
   const qtdAtivosExtrato = contarFiltrosPadraoAtivos(f, camposFiltroExtrato);
+  // Uma vez definida, a ordem manual (arrastar-e-soltar) persiste indefinidamente — inclusive depois de
+  // fechar e reabrir o modal — e sempre prevalece sobre a ordenação padrão por data (ver
+  // itensExtratoConta/aplicarOrdemManual). Sem este aviso+botão, a única forma de o usuário perceber por
+  // que a ordem não está mais crescente por data (ou de reverter) seria arrastar cada linha de volta uma
+  // por uma.
+  const temOrdemManualExtrato = det.itens.some(t=>t.ordemExibicao!==undefined && t.ordemExibicao!==null);
   // Ordenação por clique no cabeçalho: sobre todo o conjunto já filtrado, sempre antes da paginação abaixo.
   // O critério de comparação da coluna "Saldo" usa o saldoAcumulado cronológico calculado por
   // itensExtratoConta só como CHAVE de ordenação (mantém as linhas na mesma posição relativa que teriam
@@ -8193,6 +8211,7 @@ function renderExtratoContaModal(){
         ${det.itens.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
           ${renderBotoesAcoesLancamentoModal(conta, itensFiltrados.length>0)}
+          ${temOrdemManualExtrato ? `<button type="button" class="btn btn-ghost btn-sm" id="btnRestaurarOrdemExtrato" title="Este extrato tem uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Extrato')?'agrupado':''}" id="btnFiltrosMobileExtrato" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosExtrato>0?` <span class="filtros-mobile-badge">${qtdAtivosExtrato}</span>`:''}</button>
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Extrato')?'agrupado':''} ${UI.filtrosMobileAberto==='Extrato'?'aberto-mobile':''}" data-prefixo-filtros="Extrato">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileExtrato" title="Fechar">✕</button></div>
@@ -8273,6 +8292,9 @@ function renderFuturosContaModal(){
     {campo:'tipo', label:'Tipo', options:[{value:'Receita',label:'Receita'},{value:'Despesa',label:'Despesa'}]},
   ];
   const qtdAtivosFuturos = contarFiltrosPadraoAtivos(f, camposFiltroFuturos);
+  // Ver o mesmo comentário em renderExtratoContaModal — ordem manual persiste indefinidamente e prevalece
+  // sobre a ordenação padrão por data.
+  const temOrdemManualFuturos = futuros.some(t=>t.ordemExibicao!==undefined && t.ordemExibicao!==null);
   // Ordenação por clique no cabeçalho: sobre todo o conjunto já filtrado, sempre antes da paginação abaixo.
   futurosFiltrados = aplicarOrdenacaoClique(futurosFiltrados, 'futuros', {
     data:{tipo:'data', valor:t=>t.data}, descricao:{tipo:'texto', valor:t=>t.descricao},
@@ -8308,6 +8330,7 @@ function renderFuturosContaModal(){
         ${futuros.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
           ${renderBotoesAcoesLancamentoModal(conta, futurosFiltrados.length>0)}
+          ${temOrdemManualFuturos ? `<button type="button" class="btn btn-ghost btn-sm" id="btnRestaurarOrdemFuturos" title="Este modal tem uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Futuros')?'agrupado':''}" id="btnFiltrosMobileFuturos" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosFuturos>0?` <span class="filtros-mobile-badge">${qtdAtivosFuturos}</span>`:''}</button>
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Futuros')?'agrupado':''} ${UI.filtrosMobileAberto==='Futuros'?'aberto-mobile':''}" data-prefixo-filtros="Futuros">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileFuturos" title="Fechar">✕</button></div>
@@ -12064,6 +12087,9 @@ function renderFaturaAtualModal(){
     {campo:'parcela', label:'Parcela', options:[{value:'parcelado',label:'Parcelado'},{value:'avista',label:'À vista'}]},
   ];
   const qtdAtivosFatura = contarFiltrosPadraoAtivos(f, camposFiltroFatura);
+  // Ver o mesmo comentário em renderExtratoContaModal — ordem manual persiste indefinidamente e prevalece
+  // sobre a ordenação padrão por data.
+  const temOrdemManualFatura = det.itens.some(t=>t.ordemExibicao!==undefined && t.ordemExibicao!==null);
   // Ordenação por clique no cabeçalho: sobre todo o conjunto já filtrado, sempre antes da paginação abaixo.
   itensFiltrados = aplicarOrdenacaoClique(itensFiltrados, 'fatura', {
     data:{tipo:'data', valor:t=>t.data}, descricao:{tipo:'texto', valor:t=>t.descricao},
@@ -12106,6 +12132,7 @@ function renderFaturaAtualModal(){
         ${det.itens.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
           ${renderBotoesAcoesLancamentoModal(conta, itensFiltrados.length>0)}
+          ${temOrdemManualFatura ? `<button type="button" class="btn btn-ghost btn-sm" id="btnRestaurarOrdemFatura" title="Esta fatura tem uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Fatura')?'agrupado':''}" id="btnFiltrosMobileFatura" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosFatura>0?` <span class="filtros-mobile-badge">${qtdAtivosFatura}</span>`:''}</button>
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Fatura')?'agrupado':''} ${UI.filtrosMobileAberto==='Fatura'?'aberto-mobile':''}" data-prefixo-filtros="Fatura">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileFatura" title="Fechar">✕</button></div>
@@ -12173,6 +12200,10 @@ function renderProjecaoFaturaModal(){
     {campo:'parcela', label:'Parcela', options:[{value:'parcelado',label:'Parcelado'},{value:'avista',label:'À vista'}]},
   ];
   const qtdAtivosProjecao = contarFiltrosPadraoAtivos(f, camposFiltroProjecao);
+  // Ver o mesmo comentário em renderExtratoContaModal — ordem manual persiste indefinidamente e prevalece
+  // sobre a ordenação padrão por data. Verificado sobre TODAS as competências (não só a selecionada), já
+  // que o botão de restaurar reseta o modal inteiro de uma vez.
+  const temOrdemManualProjecao = itensFaturasFuturas(conta).some(t=>t.ordemExibicao!==undefined && t.ordemExibicao!==null);
   // Ordenação por clique no cabeçalho: sobre todo o conjunto já filtrado, sempre antes da paginação abaixo.
   // Sem competência selecionada, os itens vêm agrupados visualmente por competência (cabeçalho de grupo
   // detectado por troca de valor, ver mais abaixo) — ordenar por outra coluna é permitido normalmente
@@ -12237,6 +12268,7 @@ function renderProjecaoFaturaModal(){
         ${itensBase.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
           ${renderBotoesAcoesLancamentoModal(conta, itens.length>0)}
+          ${temOrdemManualProjecao ? `<button type="button" class="btn btn-ghost btn-sm" id="btnRestaurarOrdemProjecao" title="Estas próximas faturas têm uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Projecao')?'agrupado':''}" id="btnFiltrosMobileProjecao" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosProjecao>0?` <span class="filtros-mobile-badge">${qtdAtivosProjecao}</span>`:''}</button>
           <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Projecao')?'agrupado':''} ${UI.filtrosMobileAberto==='Projecao'?'aberto-mobile':''}" data-prefixo-filtros="Projecao">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileProjecao" title="Fechar">✕</button></div>
@@ -16368,6 +16400,10 @@ function bindEvents(){
   function aplicarBuscaProjecaoFatura(){ UI.projecaoFaturaModal.busca = document.getElementById('projecaoBusca')?.value || ''; UI.projecaoFaturaModal.pagina = 1; render(); }
   document.getElementById('btnBuscarProjecao')?.addEventListener('click', aplicarBuscaProjecaoFatura);
   document.getElementById('projecaoBusca')?.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); aplicarBuscaProjecaoFatura(); } });
+  document.getElementById('btnRestaurarOrdemProjecao')?.addEventListener('click', ()=>{
+    restaurarOrdemPadrao(itensFaturasFuturas(UI.projecaoFaturaModal.conta));
+    scheduleSave(); render();
+  });
   // Filtros da Projeção (Data por período + seleção múltipla de Tipo/Parcela), mesmo motor genérico da
   // aba Registros — ver bindFiltrosPadrao.
   if(UI.projecaoFaturaModal){
@@ -16412,6 +16448,10 @@ function bindEvents(){
   function aplicarBuscaFaturaAtual(){ UI.faturaAtualModal.busca = document.getElementById('faturaBusca')?.value || ''; UI.faturaAtualModal.pagina = 1; render(); }
   document.getElementById('btnBuscarFatura')?.addEventListener('click', aplicarBuscaFaturaAtual);
   document.getElementById('faturaBusca')?.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); aplicarBuscaFaturaAtual(); } });
+  document.getElementById('btnRestaurarOrdemFatura')?.addEventListener('click', ()=>{
+    restaurarOrdemPadrao(itensFatura(UI.faturaAtualModal.conta, chaveMes(UI.ano, UI.mes)).itens);
+    scheduleSave(); render();
+  });
   // Filtros da Fatura (Data por período + seleção múltipla de Tipo/Parcela), mesmo motor genérico da aba
   // Registros — ver bindFiltrosPadrao.
   if(UI.faturaAtualModal){
@@ -16456,6 +16496,10 @@ function bindEvents(){
   function aplicarBuscaExtratoConta(){ UI.extratoContaModal.busca = document.getElementById('extratoBusca')?.value || ''; UI.extratoContaModal.pagina = 1; render(); }
   document.getElementById('btnBuscarExtrato')?.addEventListener('click', aplicarBuscaExtratoConta);
   document.getElementById('extratoBusca')?.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); aplicarBuscaExtratoConta(); } });
+  document.getElementById('btnRestaurarOrdemExtrato')?.addEventListener('click', ()=>{
+    restaurarOrdemPadrao(itensExtratoConta(UI.extratoContaModal.conta, UI.ano, UI.mes).itens);
+    scheduleSave(); render();
+  });
   // Filtros do Extrato (Data por período + seleção múltipla de Grupo/Tipo), mesmo motor genérico da aba
   // Registros — ver bindFiltrosPadrao.
   if(UI.extratoContaModal){
@@ -16541,6 +16585,10 @@ function bindEvents(){
   function aplicarBuscaFuturosConta(){ UI.futurosContaModal.busca = document.getElementById('futurosBusca')?.value || ''; UI.futurosContaModal.pagina = 1; render(); }
   document.getElementById('btnBuscarFuturos')?.addEventListener('click', aplicarBuscaFuturosConta);
   document.getElementById('futurosBusca')?.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); aplicarBuscaFuturosConta(); } });
+  document.getElementById('btnRestaurarOrdemFuturos')?.addEventListener('click', ()=>{
+    restaurarOrdemPadrao(lancamentosFuturosConta(UI.futurosContaModal.conta));
+    scheduleSave(); render();
+  });
   // Filtros de Lançamentos futuros (Data por período + seleção múltipla de Tipo), mesmo motor genérico da
   // aba Registros — ver bindFiltrosPadrao.
   if(UI.futurosContaModal){
