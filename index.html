@@ -12214,14 +12214,11 @@ function renderProjecaoFaturaModal(){
   // sobre a ordenação padrão por data. Verificado sobre TODAS as competências (não só a selecionada), já
   // que o botão de restaurar reseta o modal inteiro de uma vez.
   const temOrdemManualProjecao = itensFaturasFuturas(conta).some(t=>t.ordemExibicao!==undefined && t.ordemExibicao!==null);
-  // Ordenação por clique no cabeçalho: sobre todo o conjunto já filtrado, sempre antes da paginação abaixo.
-  // Sem competência selecionada, os itens vêm agrupados visualmente por competência (cabeçalho de grupo
-  // detectado por troca de valor, ver mais abaixo) — ordenar por outra coluna é permitido normalmente
-  // (item 4: aplicado a todas as tabelas sem exceção), só deixa de coincidir com o agrupamento por mês.
-  itens = aplicarOrdenacaoClique(itens, 'projecao', {
-    data:{tipo:'data', valor:t=>t.data}, descricao:{tipo:'texto', valor:t=>t.descricao},
-    parcela:{tipo:'numero', valor:t=>Number(t.totalParcelas)>1?t.parcelaAtual:null}, valor:{tipo:'moeda', valor:t=>t.valor},
-  });
+  // Ordenação por clique no cabeçalho fica desabilitada neste modal (ao contrário de Extrato/Futuros/
+  // Fatura): sem competência selecionada os itens vêm agrupados visualmente por competência (cabeçalho de
+  // grupo detectado por troca de valor, ver mais abaixo), e permitir ordenar por outra coluna quebraria
+  // esse agrupamento — por isso a lista mantém sempre a ordenação padrão (cronológica) ou manual (drag-and-
+  // drop), nunca a por clique.
   // Na impressão com uma competência selecionada, o resumo mostrado é o mesmo conjunto de cards do modal
   // "Ver Fatura" (valor total, parceladas, à vista, créditos), recalculado a partir dos itens já filtrados
   // acima (não apenas qtd/qtdParcelas).
@@ -12296,16 +12293,18 @@ function renderProjecaoFaturaModal(){
         ${renderChipsFiltrosAtivos(f, 'Projecao', camposFiltroProjecao, 'btnLimparFiltrosProjecao')}
         ${itens.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Projecao', UI.projecaoFaturaModal.selecionados, itensPagina.map(t=>t.id), itens.map(t=>t.id))}</div>
-        <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:12px;" data-ordenar-tabela="projecao"><table>
+        <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:12px;"><table>
           ${(()=>{
             // Colunas do cabeçalho num array — nunca uma contagem fixa à parte — para que o colspan da
             // linha de agrupamento por competência (mais abaixo) nunca fique dessincronizado da quantidade
             // real de colunas exibidas (ex.: se uma coluna for adicionada/removida aqui no futuro).
+            // Cabeçalhos fixos (não clicáveis) — ver comentário acima sobre a ordenação por clique estar
+            // desabilitada neste modal, ao contrário de Extrato/Futuros/Fatura.
             const colunasHead = [
               renderColunaArrastarHead(),
               renderColunaSelecaoLoteHead('Projecao', itensPagina.map(t=>t.id), UI.projecaoFaturaModal.selecionados),
-              thOrdenavel('projecao','data','Data'), thOrdenavel('projecao','descricao','Descrição'),
-              thOrdenavel('projecao','parcela','Parcela',{style:'text-align:center;'}), thOrdenavel('projecao','valor','Valor',{style:'text-align:right;'}),
+              `<th>Data</th>`, `<th>Descrição</th>`,
+              `<th style="text-align:center;">Parcela</th>`, `<th style="text-align:right;">Valor</th>`,
               `<th class="no-print col-acoes-fatura">Ações</th>`,
             ];
             const colspanGrupo = colunasHead.length;
@@ -16390,10 +16389,6 @@ function bindEvents(){
   document.getElementById('closeConfirmDelParcela2')?.addEventListener('click', ()=>{ UI.confirmDelParcela=null; render(); });
   document.querySelectorAll('[data-projecao-cartao]').forEach(b=> b.addEventListener('click', ()=>{
     UI.projecaoFaturaModal = { conta: b.dataset.projecaoCartao, competenciaSelecionada: null, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
-    // Toda abertura do modal sempre volta para a ordenação padrão (data crescente) — a aplicação não tem
-    // preferência persistente de ordenação, então uma ordenação por clique de uma sessão anterior deste
-    // mesmo modal nunca deve "vazar" para a próxima abertura (ver thOrdenavel/aplicarOrdenacaoClique).
-    UI.ordenacaoTabelas['projecao'] = { campo:null, dir:null };
     render();
   }));
   document.getElementById('closeProjecaoFatura')?.addEventListener('click', ()=>{ UI.projecaoFaturaModal=null; render(); });
