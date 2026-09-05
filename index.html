@@ -1265,8 +1265,9 @@ tbody tr:hover{background:var(--navy-50);}
    dinheiro está mudando"), sem elemento/ícone à parte, então nenhuma outra regra visual é necessária aqui. */
 .th-ordenavel{ user-select:none; }
 .th-ordenavel:hover{ background:var(--navy-900); }
-/* Reordenação manual por drag-and-drop (Extrato/Lançamentos Futuros/Fatura/Próximas Faturas — ver
-   renderColunaArrastarLinha/aplicarOrdemManual). Coluna estreita e de largura fixa (nunca estica as
+/* Reordenação manual por drag-and-drop (Extrato/Lançamentos Futuros/Fatura — ver
+   renderColunaArrastarLinha/aplicarOrdemManual; Próximas Faturas não usa mais esta coluna, ver
+   renderLinhaItemFatura/permitirArrastar). Coluna estreita e de largura fixa (nunca estica as
    demais colunas de forma perceptível); ícone só visível/ativo nas linhas onde a reordenação está
    disponível (a própria célula fica vazia nas demais, ver ehSaldoAnterior em renderExtratoContaModal). */
 .col-arrastar{ width:20px; padding-left:8px; padding-right:0; }
@@ -11169,10 +11170,11 @@ function renderColunaSelecaoLoteHead(prefixo, idsVisiveis, selecionados){
 function renderColunaSelecaoLoteLinha(prefixo, id, selecionados){
   return `<td class="no-print col-checkbox-lote"><input type="checkbox" class="chkLote${prefixo}" value="${escapeHtml(id)}" ${selecionados.has(id)?'checked':''}></td>`;
 }
-/* ---------- Reordenação manual por drag-and-drop (Extrato/Lançamentos Futuros/Fatura/Próximas
-   Faturas — ver aplicarOrdemManual/persistirOrdemManual/recalcularSaldosSequenciais) ----------
+/* ---------- Reordenação manual por drag-and-drop (Extrato/Lançamentos Futuros/Fatura — ver
+   aplicarOrdemManual/persistirOrdemManual/recalcularSaldosSequenciais; Próximas Faturas não oferece mais
+   esta coluna, ver renderLinhaItemFatura/permitirArrastar) ----------
    Cabeçalho/célula do "alça de arrastar" (⋮⋮), no mesmo padrão de coluna extra já usado pela seleção em
-   lote acima — reaproveitado pelos 4 modais via renderLinhaItemFatura e os templates de Extrato/Futuros,
+   lote acima — reaproveitado pelos 3 modais via renderLinhaItemFatura e os templates de Extrato/Futuros,
    nunca uma implementação própria por modal. Some do impresso (no-print) e não altera de forma perceptível
    a largura das demais colunas (largura fixa e estreita). */
 function renderColunaArrastarHead(){
@@ -12043,12 +12045,16 @@ function cabecalhoFaturaCartaoHtml(conta, mostrarLimite){
    handlers globais já usados na aba Registros e nos modais "Ver Extrato"/"Lançamentos futuros" do painel
    Contas (ver bindEvents) — cada item aqui é o próprio registro de STATE.transactions (ver itensFatura/
    itensFaturasFuturas), então os mesmos handlers atuam diretamente sobre o lançamento original, sem
-   nenhuma cópia ou lógica paralela. */
-function renderLinhaItemFatura(t, mostrarCompetencia, prefixoLote, selecionadosLote){
+   nenhuma cópia ou lógica paralela.
+   `permitirArrastar` (default true) desliga só a reordenação manual por drag-and-drop, mantendo a coluna
+   de seleção em lote (`prefixoLote`) normalmente — usado por "Ver Próximas Faturas", onde os itens vêm
+   agrupados por competência (ver renderProjecaoFaturaModal) e arrastar entre grupos não faz sentido. */
+function renderLinhaItemFatura(t, mostrarCompetencia, prefixoLote, selecionadosLote, permitirArrastar){
+  if(permitirArrastar===undefined) permitirArrastar = true;
   const ehParcela = Number(t.totalParcelas)>1;
   const ehCredito = t.tipo==='Receita';
-  return `<tr ${prefixoLote ? `data-linha-arrastavel="${prefixoLote}" data-linha-id="${t.id}"` : ''}>
-    ${prefixoLote ? renderColunaArrastarLinha(prefixoLote, t.id) : ''}
+  return `<tr ${prefixoLote && permitirArrastar ? `data-linha-arrastavel="${prefixoLote}" data-linha-id="${t.id}"` : ''}>
+    ${permitirArrastar ? renderColunaArrastarLinha(prefixoLote, t.id) : ''}
     ${prefixoLote ? renderColunaSelecaoLoteLinha(prefixoLote, t.id, selecionadosLote) : ''}
     ${mostrarCompetencia ? `<td style="white-space:nowrap;">${competenciaLabel(t.competencia)}</td>` : ''}
     <td style="white-space:nowrap;">${fmtData(t.data)}</td>
@@ -12299,9 +12305,10 @@ function renderProjecaoFaturaModal(){
             // linha de agrupamento por competência (mais abaixo) nunca fique dessincronizado da quantidade
             // real de colunas exibidas (ex.: se uma coluna for adicionada/removida aqui no futuro).
             // Cabeçalhos fixos (não clicáveis) — ver comentário acima sobre a ordenação por clique estar
-            // desabilitada neste modal, ao contrário de Extrato/Futuros/Fatura.
+            // desabilitada neste modal, ao contrário de Extrato/Futuros/Fatura. Sem coluna de arrastar
+            // (renderColunaArrastarHead) também: com os itens agrupados por competência, arrastar entre
+            // grupos não faz sentido — ver renderLinhaItemFatura/permitirArrastar.
             const colunasHead = [
-              renderColunaArrastarHead(),
               renderColunaSelecaoLoteHead('Projecao', itensPagina.map(t=>t.id), UI.projecaoFaturaModal.selecionados),
               `<th>Data</th>`, `<th>Descrição</th>`,
               `<th style="text-align:center;">Parcela</th>`, `<th style="text-align:right;">Valor</th>`,
@@ -12324,7 +12331,7 @@ function renderProjecaoFaturaModal(){
                 ultimaCompetencia = t.competencia;
                 cabecalho = `<tr class="linha-grupo-competencia"><td colspan="${colspanGrupo}">${competenciaLabel(t.competencia)}</td></tr>`;
               }
-              return cabecalho + renderLinhaItemFatura(t, false, 'Projecao', UI.projecaoFaturaModal.selecionados);
+              return cabecalho + renderLinhaItemFatura(t, false, 'Projecao', UI.projecaoFaturaModal.selecionados, false);
             }).join('');
           })()}</tbody>`;
           })()}
@@ -16335,10 +16342,11 @@ function bindEvents(){
     }
     UI.regSelecionados.delete(id); scheduleSave(); render();
   }));
-  // ---- Reordenação manual por drag-and-drop (Ver Extrato/Lançamentos futuros/Ver Fatura/Ver Próximas
-  // Faturas — ver aplicarOrdemManual/persistirOrdemManual/recalcularSaldosSequenciais). Handler genérico
-  // único, reaproveitado pelos 4 modais via o atributo data-linha-arrastavel="<prefixo>" já escrito em cada
-  // <tr> (ver renderColunaArrastarLinha/renderLinhaItemFatura) — nenhuma implementação própria por modal.
+  // ---- Reordenação manual por drag-and-drop (Ver Extrato/Lançamentos futuros/Ver Fatura — Ver Próximas
+  // Faturas não participa mais, ver renderLinhaItemFatura/permitirArrastar — ver
+  // aplicarOrdemManual/persistirOrdemManual/recalcularSaldosSequenciais). Handler genérico único,
+  // reaproveitado pelos 3 modais via o atributo data-linha-arrastavel="<prefixo>" já escrito em cada <tr>
+  // (ver renderColunaArrastarLinha/renderLinhaItemFatura) — nenhuma implementação própria por modal.
   // Durante o arraste, só classes CSS são alternadas diretamente no DOM (nunca um render() por dragover,
   // que reconstruiria a tabela inteira a cada pixel movido); um render() completo só acontece uma vez, no
   // drop, depois de já persistida a nova ordem — reaproveitando o próprio bindEvents/render já existentes.
