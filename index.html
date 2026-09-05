@@ -12310,7 +12310,7 @@ function renderProjecaoFaturaModal(){
             // grupos não faz sentido — ver renderLinhaItemFatura/permitirArrastar.
             const colunasHead = [
               renderColunaSelecaoLoteHead('Projecao', itensPagina.map(t=>t.id), UI.projecaoFaturaModal.selecionados),
-              `<th>Data</th>`, `<th>Descrição</th>`,
+              `<th>Competência</th>`, `<th>Data</th>`, `<th>Descrição</th>`,
               `<th style="text-align:center;">Parcela</th>`, `<th style="text-align:right;">Valor</th>`,
               `<th class="no-print col-acoes-fatura">Ações</th>`,
             ];
@@ -12318,12 +12318,13 @@ function renderProjecaoFaturaModal(){
             return `<thead><tr>${colunasHead.join('')}</tr></thead>
           <tbody>${(()=>{
             // Sem seleção de competência, os lançamentos de vários meses ficam misturados na mesma lista —
-            // em vez de repetir a competência em cada linha (coluna removida), agrupamos com uma linha de
-            // cabeçalho por competência (a lista já vem ordenada por competência, então basta detectar a
-            // troca de valor a cada item; cada página recomeça sua própria detecção, então a primeira linha
-            // de cada página sempre mostra o cabeçalho da competência em exibição). O colspan cobre TODAS as
-            // colunas da tabela (colspanGrupo, calculado acima a partir do array de cabeçalho), nunca um
-            // número fixo, para a linha de agrupamento nunca ficar mais curta que a tabela.
+            // além da coluna Competência em cada linha (mostrarCompetencia=true em renderLinhaItemFatura),
+            // agrupamos visualmente com uma linha de cabeçalho por competência (a lista já vem ordenada por
+            // competência, então basta detectar a troca de valor a cada item; cada página recomeça sua
+            // própria detecção, então a primeira linha de cada página sempre mostra o cabeçalho da
+            // competência em exibição). O colspan cobre TODAS as colunas da tabela (colspanGrupo, calculado
+            // acima a partir do array de cabeçalho), nunca um número fixo, para a linha de agrupamento nunca
+            // ficar mais curta que a tabela.
             let ultimaCompetencia = null;
             return itensPagina.map(t=>{
               let cabecalho = '';
@@ -12331,7 +12332,7 @@ function renderProjecaoFaturaModal(){
                 ultimaCompetencia = t.competencia;
                 cabecalho = `<tr class="linha-grupo-competencia"><td colspan="${colspanGrupo}">${competenciaLabel(t.competencia)}</td></tr>`;
               }
-              return cabecalho + renderLinhaItemFatura(t, false, 'Projecao', UI.projecaoFaturaModal.selecionados, false);
+              return cabecalho + renderLinhaItemFatura(t, true, 'Projecao', UI.projecaoFaturaModal.selecionados, false);
             }).join('');
           })()}</tbody>`;
           })()}
