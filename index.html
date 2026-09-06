@@ -774,16 +774,25 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
    sempre ficar por cima de tudo o mais que possa estar visível na tela.
    opacity 0 + pointer-events:none (nunca display:none) é o padrão exigido pelo Chart.js para o tooltip
    externo: alternar display destruiria a medição de offsetWidth/Height usada para reposicionar perto das
-   bordas da janela (ver tooltipExternoHandler). */
+   bordas da janela (ver tooltipExternoHandler).
+   Largura: sem width fixa — um elemento position:fixed com width:auto cresce até o conteúdo (o background
+   sempre acompanha exatamente a largura do texto/valores exibidos), limitado por max-width para nunca ficar
+   largo demais numa fatia com rótulo comprido; min(300px, calc(100vw - 16px)) garante que esse teto nunca
+   ultrapasse a própria largura da tela (telas estreitas/mobile). Quando o conteúdo realmente precisa de
+   mais espaço do que esse teto permite, word-wrap/overflow-wrap quebram a linha DENTRO da caixa — nunca
+   ultrapassando o background (ver .chart-tooltip-externo-linha, que por isso não pode ter white-space:nowrap
+   aqui, ao contrário do padrão de nowrap usado noutros lugares do app). */
 .chart-tooltip-externo{
   position:fixed; top:0; left:0; z-index:2000; opacity:0; pointer-events:none;
   transition:opacity .1s ease;
   background:rgba(21,34,56,.92); color:#fff; font-family:var(--sans); font-size:12.5px; line-height:1.5;
-  padding:7px 10px; border-radius:8px; box-shadow:0 6px 18px rgba(11,42,94,.28); max-width:260px;
+  padding:7px 10px; border-radius:8px; box-shadow:0 6px 18px rgba(11,42,94,.28);
+  max-width:min(300px, calc(100vw - 16px));
+  word-wrap:break-word; overflow-wrap:break-word;
 }
-.chart-tooltip-externo-titulo{font-weight:700;margin-bottom:2px;}
-.chart-tooltip-externo-linha{display:flex;align-items:center;gap:6px;white-space:nowrap;}
-.chart-tooltip-externo-cor{width:10px;height:10px;border-radius:2px;border:1px solid rgba(255,255,255,.5);flex-shrink:0;}
+.chart-tooltip-externo-titulo{font-weight:700;margin-bottom:2px;word-wrap:break-word;overflow-wrap:break-word;}
+.chart-tooltip-externo-linha{display:flex;align-items:flex-start;gap:6px;word-wrap:break-word;overflow-wrap:break-word;}
+.chart-tooltip-externo-cor{width:10px;height:10px;border-radius:2px;border:1px solid rgba(255,255,255,.5);flex-shrink:0;margin-top:3px;}
 /* Blindagem contra overflow horizontal em telas pequenas (item 24 do requisito): o Chart.js normalmente já
    redimensiona o <canvas> via responsive:true, mas isso depende de JS já ter rodado — sem isto, o
    tamanho padrão do elemento (300x150) poderia ultrapassar a largura da tela em smartphones estreitos
