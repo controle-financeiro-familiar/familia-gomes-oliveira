@@ -837,8 +837,9 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
 .tabela-fluxo .icon-btn{padding:2px;font-size:12px;}
 /* Fluxo de Caixa no mobile (item 13 do requisito de responsividade): a mesma tabela vira uma lista
    vertical de cards — cada <tr> um card, cada <td> uma linha "rótulo: valor" — sem tocar no cálculo da
-   projeção nem duplicar a lógica de renderPainelProjecao/renderLinhaProjecao, só a apresentação. A linha
-   "Saldo do dia atual" continua destacada e na posição calculada dinamicamente pelo mês corrente. */
+   projeção nem duplicar a lógica de renderPainelProjecao/renderLinhaProjecao, só a apresentação. As linhas
+   "Saldo do Dia"/"Saldo do dia atual" continuam destacadas e na posição calculada dinamicamente para cada
+   dia com movimentação real (ver aplicarLinhasSaldoDiario). */
 @media(max-width:700px){
   .tabela-fluxo{min-width:0;width:100%;display:block;}
   .tabela-fluxo thead{display:none;}
@@ -2193,8 +2194,8 @@ summary::marker{content:'';}
 @media(max-width:900px){.contas-cols{grid-template-columns:1fr;}}
 .resumo-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;}
 .saldo-destaque{background:var(--navy-100);color:var(--navy-900);font-weight:700;border-radius:6px;}
-/* Linha dinâmica "Saldo do dia atual" na 1ª tabela do Fluxo de Caixa (mês real corrente) — ver
-   aplicarLinhaSaldoAtual()/renderLinhaSaldoAtual(). Destacada com a cor de acento (gold) para diferenciar
+/* Linhas dinâmicas "Saldo do Dia"/"Saldo do dia atual" nas tabelas do Fluxo de Caixa — ver
+   aplicarLinhasSaldoDiario()/renderLinhaSaldoAtual(). Destacada com a cor de acento (gold) para diferenciar
    dos lançamentos previstos normais, sem ser um alerta (não usa vermelho/laranja). */
 tr.linha-saldo-atual{background:#fff8e6;}
 tr.linha-saldo-atual td{border-top:2px solid var(--gold);border-bottom:2px solid var(--gold);font-weight:700;}
@@ -9263,46 +9264,108 @@ function calcSaldoAtualFluxoCaixa(){
   const dataRef = hojeISO();
   const contasContracheque = STATE.contas.filter(c=>STATE.contaTipos[c]==='Contracheque');
   // Item do requisito (rodada seguinte): o saldo atual da(s) conta(s) do tipo Contracheque (ex.: TRT) é
-  // somado ao saldo do dia atual/Saldo Atual (Hoje) — mesma fonte usada pela linha especial do Fluxo de
-  // Caixa (aplicarLinhaSaldoAtual) e pelo card "Saldo Atual (Hoje)" do Painel Financeiro (renderDashboard).
-  // Contracheque continua fora do Saldo Inicial/contasElegiveisFluxoCaixa (composição já documentada e
-  // usada como base da projeção mês a mês) — só o valor "hoje" passa a incluir o crédito já recebido.
+  // somado ao saldo do dia atual/Saldo Atual (Hoje) — usado pelo card "Saldo Atual (Hoje)" do Painel
+  // Financeiro (renderDashboard). Contracheque continua fora do Saldo Inicial/contasElegiveisFluxoCaixa
+  // (composição já documentada e usada como base da projeção mês a mês) — só este valor "hoje" do
+  // Dashboard passa a incluir o crédito já recebido. As linhas "Saldo do Dia" das tabelas do Fluxo de
+  // Caixa (ver aplicarLinhasSaldoDiario) usam SEMPRE só as contas elegíveis (Corrente/PJ/Poupança, sem
+  // Contracheque) — composição explicitamente pedida no requisito dessas linhas — então não reaproveitam
+  // esta função, que é específica do card do Dashboard.
   return contasElegiveisFluxoCaixa().reduce((s,c)=> s + saldoContaAteData(c, dataRef), 0)
     + contasContracheque.reduce((s,c)=> s + saldoContaAteData(c, dataRef), 0);
 }
-/* Injeta, no mês real corrente (e só nele — ver calcProjecoesMultiMes), uma linha especial "Saldo do dia
-   atual" na posição correspondente ao dia de hoje dentro da lista de lançamentos previstos já ordenada por
-   dia. O valor dessa linha é o saldo REAL apurado (calcSaldoAtualFluxoCaixa), não uma soma de previstos.
-   A partir dela, os lançamentos com dia > hoje têm seu Saldo recalculado tomando esse valor real como
-   base — assim a projeção dos dias seguintes permanece consistente com o que de fato aconteceu até agora,
-   em vez de arrastar o saldo puramente previsto. Os lançamentos com dia <= hoje mantêm o saldo já
-   calculado por calcProjecoesMes (não são alterados). O saldoFinal do mês (usado como saldo inicial do mês
-   seguinte na cadeia de calcProjecoesMultiMes) passa a refletir essa correção. */
-function aplicarLinhaSaldoAtual(m){
-  const diaAtual = new Date().getDate();
-  const saldoAtual = calcSaldoAtualFluxoCaixa();
-  const linhaEspecial = { id:'saldo-atual', especial:'saldo-atual', dia: diaAtual, saldo: saldoAtual };
+/* Linhas "Saldo do Dia" do Fluxo de Caixa — uma para cada dia que já teve movimentação REAL (já refletida
+   no Extrato) nas contas elegíveis (Conta Corrente/PJ/Poupança — mesma composição de
+   contasElegiveisFluxoCaixa), calculadas de forma estritamente cronológica e sem depender em nada dos
+   itens previstos (STATE.projecoes) exibidos nas demais linhas da mesma tabela — a fonte é sempre e
+   somente STATE.transactions (o próprio Extrato), então um lançamento previsto que porventura já esteja
+   "casado" com um lançamento real (ver encontrarLancamentoEfetivoParaProjecao) nunca é somado duas vezes:
+   ele só aparece nesta soma pela via real (STATE.transactions), nunca pela via prevista (que é apenas uma
+   camada de exibição por cima do mesmo dado, não uma segunda fonte). */
+/* Movimentação líquida (Receita − Despesa) de um único dia nas contas elegíveis do Fluxo de Caixa, com os
+   MESMOS critérios de inclusão/exclusão já usados no Extrato de cada conta (ver itensExtratoConta): exclui
+   o(s) lançamento(s) de Saldo Anterior (é o ponto de partida da conta, nunca uma movimentação do próprio
+   dia — ver ehSaldoAnterior) e considera qualquer outro lançamento da data exata, independentemente da
+   ordenação/posição visual em que ele apareça em qualquer tabela (requisito 4). */
+function movimentacaoDiaFluxoCaixa(dataISO){
+  const contasElegiveis = new Set(contasElegiveisFluxoCaixa());
+  let soma = 0;
+  STATE.transactions.forEach(t=>{
+    if(t.data!==dataISO || !contasElegiveis.has(t.conta) || ehSaldoAnterior(t)) return;
+    const v = Number(t.valor)||0;
+    soma += (t.tipo==='Receita' ? v : (t.tipo==='Despesa' ? -v : 0));
+  });
+  return soma;
+}
+/* Dias (1..31) de uma competência que já possuem ao menos um lançamento real e já efetivamente ocorrido
+   (data <= hoje) numa conta elegível do Fluxo de Caixa — junto com o dia de hoje (sempre, quando o mês
+   consultado é o mês real corrente — ver aplicarLinhasSaldoDiario), são os dias que recebem sua própria
+   linha "Saldo do Dia". Um dia sem nenhuma movimentação real (fora "hoje") não gera linha própria (evitando
+   inflar a tabela com dezenas de linhas "sem alteração"): isso não quebra a continuidade cronológica do
+   saldo, já que pular um dia sem lançamento nenhum chega ao mesmo valor que somar zero nele.
+   Um mês inteiramente futuro (nenhum dia com data <= hoje) simplesmente não gera nenhuma linha — não existe
+   Extrato ainda para ele. */
+function diasComMovimentoFluxoCaixa(ano, mes){
+  const hoje = hojeISO();
+  const competencia = chaveMes(ano, mes);
+  const contasElegiveis = new Set(contasElegiveisFluxoCaixa());
+  const dias = new Set();
+  STATE.transactions.forEach(t=>{
+    if(!t.data || t.data.slice(0,7)!==competencia || t.data>hoje) return;
+    if(!contasElegiveis.has(t.conta) || ehSaldoAnterior(t)) return;
+    dias.add(Number(t.data.slice(8,10)));
+  });
+  return [...dias].sort((a,b)=>a-b);
+}
+/* Injeta uma linha especial "Saldo do Dia" para cada dia com movimentação real (diasComMovimentoFluxoCaixa),
+   na posição cronológica correta entre os lançamentos previstos já ordenados por dia — o dia de hoje SEMPRE
+   recebe sua própria linha quando o mês exibido é o mês real corrente, mesmo sem nenhuma movimentação nele
+   (mantém o "você está aqui" que já existia antes desta generalização — o saldo nesse caso simplesmente
+   repete o do último dia com movimentação, sem alteração), com o rótulo "Saldo do dia atual" (ver
+   renderLinhaSaldoAtual); qualquer outro dia usa o rótulo "Saldo do Dia". O saldo de cada linha é sempre:
+   saldo do dia anterior COM movimentação (ou o Saldo Inicial do mês, para o primeiro dia com movimentação)
+   + a movimentação líquida do próprio dia (movimentacaoDiaFluxoCaixa) — nunca uma leitura dos itens
+   previstos já exibidos na tabela (requisitos 1-3). A partir da última linha "Saldo do Dia" inserida, os
+   lançamentos previstos com dia maior têm seu Saldo recalculado a partir desse valor real (mesma lógica que
+   já existia só para "hoje", agora generalizada para o último dia com dado real de cada mês) — os
+   lançamentos previstos com dia menor ou igual ao de alguma linha "Saldo do Dia" mantêm o saldo já
+   calculado por calcProjecoesMes, sem alteração. O saldoFinal do mês (saldo inicial do mês seguinte na
+   cadeia de calcProjecoesMultiMes) passa a refletir essa correção quando houver ao menos um dia real. */
+function aplicarLinhasSaldoDiario(m){
+  const hoje = new Date();
+  const ehMesReal = m.ano===hoje.getFullYear() && (m.mes-1)===hoje.getMonth();
+  const diaHoje = hoje.getDate();
+  const dias = diasComMovimentoFluxoCaixa(m.ano, m.mes);
+  if(ehMesReal && !dias.includes(diaHoje)) dias.push(diaHoje);
+  dias.sort((a,b)=>a-b);
+  if(!dias.length) return m;
   const linhas = m.linhas.slice();
-  let posicao = linhas.findIndex(l => (Number(l.dia)||0) > diaAtual);
-  if(posicao===-1) posicao = linhas.length;
-  linhas.splice(posicao, 0, linhaEspecial);
-  let saldoCorrente = saldoAtual;
-  for(let i=posicao+1;i<linhas.length;i++){
+  let saldoCorrente = m.saldoInicial;
+  dias.forEach(dia=>{
+    const dataISO = `${m.ano}-${pad2(m.mes)}-${pad2(dia)}`;
+    saldoCorrente += movimentacaoDiaFluxoCaixa(dataISO);
+    const linhaEspecial = { id:`saldo-dia-${dataISO}`, especial:'saldo-dia', ehHoje: ehMesReal && dia===diaHoje, dia, saldo: saldoCorrente };
+    let posicao = linhas.findIndex(l => (Number(l.dia)||0) > dia);
+    if(posicao===-1) posicao = linhas.length;
+    linhas.splice(posicao, 0, linhaEspecial);
+  });
+  const ultimoDia = dias[dias.length-1];
+  const posUltimo = linhas.findIndex(l => l.especial==='saldo-dia' && l.dia===ultimoDia);
+  for(let i=posUltimo+1;i<linhas.length;i++){
     const l = linhas[i];
+    if(l.especial) continue; // nunca deveria haver outra linha especial daqui em diante, mas por segurança
     saldoCorrente += (l.tipo==='Despesa' ? -l.valorCalculado : l.valorCalculado);
     l.saldo = saldoCorrente;
   }
-  const saldoFinal = linhas.length ? linhas[linhas.length-1].saldo : saldoAtual;
+  const saldoFinal = linhas.length ? linhas[linhas.length-1].saldo : saldoCorrente;
   return { ...m, linhas, saldoFinal };
 }
 function calcProjecoesMultiMes(anoBase, mesBase, qtdMeses){
   const meses = [];
   let ano = anoBase, mes = mesBase, saldoInicial = getSaldoInicialBase(anoBase, mesBase);
-  const hoje = new Date();
-  const realAno = hoje.getFullYear(), realMes = hoje.getMonth()+1;
   for(let i=0;i<qtdMeses;i++){
     let m = calcProjecoesMes(ano, mes, saldoInicial);
-    if(m.ano===realAno && m.mes===realMes) m = aplicarLinhaSaldoAtual(m);
+    m = aplicarLinhasSaldoDiario(m);
     meses.push(m);
     saldoInicial = m.saldoFinal;
     ({ano, mes} = proximoMes(ano, mes));
@@ -12580,14 +12643,16 @@ function renderLinhaProjecao(l){
       </td>
     </tr>`;
 }
-/* Linha especial "Saldo do dia atual" (ver aplicarLinhaSaldoAtual) — mesma estrutura de 6 colunas das
-   demais linhas (Dia/Descrição+Tipo+Valor mesclados/Saldo/Ações), sem botões de editar/excluir, pois não é
-   um lançamento previsto de verdade: é o saldo real apurado até hoje. */
+/* Linha especial "Saldo do Dia"/"Saldo do dia atual" (ver aplicarLinhasSaldoDiario) — mesma estrutura de 6
+   colunas das demais linhas (Dia/Descrição+Tipo+Valor mesclados/Saldo/Ações), sem botões de editar/excluir,
+   pois não é um lançamento previsto de verdade: é o saldo real já apurado no Extrato até aquele dia. O dia
+   de hoje usa o rótulo "Saldo do dia atual" (📍), preservando a identificação visual "você está aqui" já
+   existente; qualquer outro dia com movimentação real usa "Saldo do Dia" (📅). */
 function renderLinhaSaldoAtual(l){
   return `
-    <tr class="linha-saldo-atual" data-saldo-atual="1">
+    <tr class="linha-saldo-atual" data-saldo-dia="${l.dia}">
       <td data-label="Dia" style="text-align:center;font-family:var(--mono);">${pad2(l.dia)}</td>
-      <td colspan="3" class="linha-saldo-atual-label">📍 Saldo do dia atual</td>
+      <td colspan="3" class="linha-saldo-atual-label">${l.ehHoje ? '📍 Saldo do dia atual' : '📅 Saldo do Dia'}</td>
       <td data-label="Saldo" class="val-cell saldo-destaque" style="text-align:right;">${fmtBRL(l.saldo)}</td>
       <td data-label=""></td>
     </tr>`;
@@ -12596,7 +12661,7 @@ function renderLinhaSaldoAtual(l){
    mês selecionado no topo do app e tem o Saldo Inicial editável (campo mostrado uma vez, acima de todos
    os painéis); os 3 seguintes encadeiam o saldo final do painel anterior como saldo inicial, só exibido. */
 function renderPainelProjecao(m, idx){
-  const linhasHtml = m.linhas.length ? m.linhas.map(l=> l.especial==='saldo-atual' ? renderLinhaSaldoAtual(l) : renderLinhaProjecao(l)).join('') : `<tr><td colspan="6" class="hint" style="text-align:center;padding:14px;">Nenhum lançamento previsto ainda. Use "+ Novo lançamento previsto" para começar.</td></tr>`;
+  const linhasHtml = m.linhas.length ? m.linhas.map(l=> l.especial==='saldo-dia' ? renderLinhaSaldoAtual(l) : renderLinhaProjecao(l)).join('') : `<tr><td colspan="6" class="hint" style="text-align:center;padding:14px;">Nenhum lançamento previsto ainda. Use "+ Novo lançamento previsto" para começar.</td></tr>`;
   // DOCUMENTAÇÃO — ver o comentário completo junto à classe CSS ".tabela-fluxo" (procure por
   // "DOCUMENTAÇÃO — Largura das colunas" no <style> desta página) para a explicação de ponta a ponta de
   // como Dia/Descrição/Tipo/Valor/Saldo são dimensionados e como ajustá-los.
@@ -13068,6 +13133,7 @@ function renderResumo(){
           <li>O <b>Saldo Inicial</b> do primeiro mês é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança cadastrada (não inclui Contracheque, Reserva de Emergência nem cartões de crédito) — o mesmo valor já calculado no painel Contas;</li>
           <li>Acumula o efeito de cada lançamento em ordem cronológica;</li>
           <li>O <b>saldo final</b> de cada mês torna-se automaticamente o <b>saldo inicial</b> do mês seguinte, garantindo a continuidade da projeção financeira.</li>
+          <li>Toda data que já teve lançamentos efetivamente realizados (Conta Corrente, PJ ou Poupança) ganha sua própria linha <b>📅 Saldo do Dia</b> (o dia de hoje aparece destacado como <b>📍 Saldo do dia atual</b>), com o saldo real apurado no Extrato até aquele dia — sempre em ordem cronológica pela Data de cada lançamento, nunca pela posição visual da linha na tabela, e sem contar duas vezes um mesmo lançamento.</li>
         </ul>
       </div>
     </details>
