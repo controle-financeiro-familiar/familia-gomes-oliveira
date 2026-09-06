@@ -7921,6 +7921,19 @@ function resumoContasBancarias(ano, mes){
    do dispositivo) — lançamentos futuros do período (mesmo dentro do mês/ano selecionado) não aparecem nem
    entram nesses totais, na mesma lógica de corte já usada no Saldo Atual dos cards de Contas (ver
    saldoContaAteData/entradasRealizadas/saidasRealizadas). */
+/* Prioriza o(s) lançamento(s) de Saldo Anterior do dia 1 da competência exibida (ver ehSaldoAnterior) na
+   primeira posição da lista — só chamada na ordenação padrão (ver itensExtratoConta), nunca quando há
+   ordem manual ou ordenação por clique ativa nesta tabela, que sempre prevalecem integralmente sobre esta
+   prioridade. Um Saldo Anterior de outra data (não deveria existir para este período, mas por segurança)
+   nunca recebe este tratamento. Se houver mais de um (não deveria acontecer na prática, já que
+   aplicarSaldoAnteriorConta nunca duplica), a ordem relativa entre eles é preservada tal como já veio
+   ordenada (mesma regra de desempate: Receita antes de Despesa, depois id) — só reordena a POSIÇÃO na
+   lista, nunca a data/dados do lançamento em si. */
+function priorizarSaldoAnteriorPrimeiraLinha(itens, dataDia1){
+  const ehPrioritario = t=> ehSaldoAnterior(t) && t.data===dataDia1;
+  if(!itens.some(ehPrioritario)) return itens;
+  return [...itens.filter(ehPrioritario), ...itens.filter(t=>!ehPrioritario(t))];
+}
 function itensExtratoConta(conta, ano, mes){
   const inicioISO = `${ano}-${pad2(mes)}-01`, fimISO = `${ano}-${pad2(mes)}-31`;
   const hoje = hojeISO();
@@ -7934,14 +7947,21 @@ function itensExtratoConta(conta, ano, mes){
   // ordem escolhida por ele passa a ser a própria ordem de exibição (de cima para baixo, na sequência
   // arrastada) — e o saldo acumulado é recalculado nessa mesma sequência, em vez do padrão cronológico
   // crescente. Sem ordem manual, a exibição é exatamente a ordem cronológica já calculada acima (mais
-  // antigo primeiro), sem nenhuma inversão.
+  // antigo primeiro), com uma exceção: o Saldo Anterior do dia 1 (ver priorizarSaldoAnteriorPrimeiraLinha)
+  // sobe para a primeira linha, mas só enquanto a ordenação por clique do cabeçalho ('extrato') também
+  // estiver no estado original — assim que o usuário ordenar por qualquer coluna (inclusive Data), essa
+  // prioridade é desativada e a ordenação escolhida é respeitada integralmente (ver
+  // aplicarOrdenacaoClique/renderExtratoContaModal, chamado depois deste ponto sobre o resultado aqui).
   const temOrdemManual = itensPeriodo.some(t=>t.ordemExibicao!==undefined && t.ordemExibicao!==null);
   let comAcumulado;
   if(temOrdemManual){
     comAcumulado = recalcularSaldosSequenciais(aplicarOrdemManual(itensPeriodo), s.saldoInicial, 'saldoAcumulado');
   } else {
+    const itensOrdemPadrao = estadoOrdenacaoTabela('extrato').campo
+      ? itensPeriodo // ordenação por clique ativa: aplicarOrdenacaoClique vai reordenar tudo por conta própria
+      : priorizarSaldoAnteriorPrimeiraLinha(itensPeriodo, inicioISO);
     let acumulado = s.saldoInicial;
-    comAcumulado = itensPeriodo.map(t=>{
+    comAcumulado = itensOrdemPadrao.map(t=>{
       // O próprio lançamento de Saldo Anterior já está embutido em s.saldoInicial (ponto de partida) — não
       // soma de novo o efeito dele aqui, ou o valor entraria duplicado no saldo acumulado exibido.
       if(!ehSaldoAnterior(t)){
