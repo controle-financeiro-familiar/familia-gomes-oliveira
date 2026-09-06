@@ -4118,10 +4118,12 @@ function migrarCompetenciaParaVencimento(){
    6) Contracheque replicado automaticamente para meses futuros (contrachequeProjecao, ver
       gerarReplicacaoContracheque): competencia = competenciaDeData(data) — mesma regra já usada na
       própria geração da réplica.
-   7) Qualquer outro lançamento (conta comum, não cartão e não Contracheque): a aplicação nunca usa
-      competencia para esse tipo — o agrupamento por mês usa sempre a própria Data (ver competenciaDeData
-      nos filtros/relatórios) — garante o campo vazio, a mesma convenção já usada por toda criação/
-      importação de lançamentos desse tipo. */
+   7) Qualquer outro lançamento (conta comum, não cartão e não Contracheque): Fatura/Competência é um campo
+      de uso geral, editável manualmente em qualquer lançamento e preenchido automaticamente na importação
+      (ver importConfirm) — NUNCA recalculado ou zerado aqui; o valor que já estiver salvo (de uma
+      importação ou de uma edição manual) permanece intocado. O agrupamento por mês nos filtros/relatórios
+      continua usando sempre a própria Data (ver competenciaDeData), nunca este campo — ele é só
+      informativo/editável para esse tipo de lançamento, sem afetar nenhum cálculo do app. */
 function corrigirCompetenciaTransacoes(){
   const porParcelamento = {};
   STATE.transactions.forEach(t=>{
@@ -4168,7 +4170,8 @@ function corrigirCompetenciaTransacoes(){
     if(ehContaContracheque(t)){ if(!t.competencia) t.competencia = competenciaDeData(t.data); return; }
     const par = t.transferenciaVinculoId ? (porVinculo.get(t.transferenciaVinculoId)||[]).find(x=>x.id!==t.id) : null;
     if(par && ehContaContracheque(par)){ t.competencia = par.competencia || competenciaDeData(par.data); return; }
-    if(t.competencia) t.competencia = '';
+    // Regra 7 (ver docstring acima): campo de uso geral, nunca recalculado/zerado aqui — o que já estiver
+    // salvo (import ou edição manual) permanece exatamente como está.
   });
 }
 function corrigirCategoriasOrfas(){
@@ -8936,7 +8939,10 @@ function sincronizarParcelasFuturas(ref){
     STATE.transactions.push({
       id: uid(), data: ehCartaoValido ? ref.data : somarMesesData(ref.data, n-atual), descricao:descBase,
       valor: Number(ref.valor)||0, categoria:ref.categoria, grupo:ref.grupo, subgrupo:ref.subgrupo, tipo:ref.tipo, natureza:ref.natureza,
-      conta:ref.conta, pgto:ref.pgto, competencia: ehCartaoValido ? incrementarCompetencia(competenciaBase, n-atual) : '',
+      // Cartão de crédito: a fatura avança 1 mês por parcela (regra de sempre). Demais parcelamentos não
+      // têm essa noção de "avançar" — a Fatura/Competência (se o usuário tiver definido uma na parcela de
+      // referência) é simplesmente herdada igual em todas as parcelas futuras, nunca zerada/perdida.
+      conta:ref.conta, pgto:ref.pgto, competencia: ehCartaoValido ? incrementarCompetencia(competenciaBase, n-atual) : (ref.competencia||''),
       internacional: !!ref.internacional, taxaConversao: ref.internacional ? (Number(ref.taxaConversao)||null) : null,
       parcelaAtual:n, totalParcelas:total, parcelamentoId:ref.parcelamentoId, parcelaFutura:true,
       responsavel: ref.responsavel||'', entreFamilia: !!ref.entreFamilia, origemImportacao: !!ref.origemImportacao
@@ -8951,9 +8957,11 @@ function sincronizarParcelasFuturas(ref){
    subcategoria (grupo/subgrupo/tipo/natureza), responsável, conta, meio de pagamento, descrição e dados de
    compra internacional — preservando sempre a data, o valor e a numeração já registrados em cada parcela
    anterior, exatamente como pedido: essas parcelas já aconteceram e não devem ter seu histórico reescrito.
-   A competência só é recalculada quando a CONTA muda (ex.: correção de qual cartão a compra pertence) —
-   nesse caso, precisa ser recalculada a partir da data já salva de cada parcela para continuar apontando
-   para a fatura certa; do contrário, mantém a competência já salva. */
+   Só é recalculada quando a CONTA muda E o lançamento é de cartão de crédito (ex.: correção de qual cartão
+   a compra pertence) — nesse caso, precisa ser recalculada a partir da data já salva de cada parcela para
+   continuar apontando para a fatura certa. Em qualquer outro caso (conta não mudou, ou não é cartão de
+   crédito) mantém a Fatura/Competência já salva intacta — nunca zera um valor que o usuário tenha
+   definido manualmente ou que tenha vindo preenchido da importação. */
 function propagarParaParcelasAnteriores(ref){
   if(!ref || !ref.parcelamentoId || !(Number(ref.totalParcelas)>1)) return;
   const atual = Number(ref.parcelaAtual)||1;
@@ -8967,7 +8975,7 @@ function propagarParaParcelasAnteriores(ref){
     t.conta = ref.conta; t.pgto = ref.pgto;
     t.responsavel = ref.responsavel||''; t.entreFamilia = !!ref.entreFamilia;
     t.internacional = !!ref.internacional; t.taxaConversao = ref.internacional ? (Number(ref.taxaConversao)||null) : null;
-    if(contaMudou) t.competencia = ehCartaoValido ? competenciaFatura(t.data, ref.conta) : '';
+    if(contaMudou && ehCartaoValido) t.competencia = competenciaFatura(t.data, ref.conta);
   });
 }
 /* Efetiva a edição de um lançamento já existente (chamada pelo botão Salvar do modal Editar Lançamento —
@@ -9020,6 +9028,17 @@ function commitEdicaoLancamentoExistente(novo, antigo, conta, contaTransferencia
    como valor-base dos meses seguintes ainda não gerados. Função idempotente: pode ser chamada quantas
    vezes for preciso (após cada edição ou importação) sem duplicar nem perder nada. */
 function competenciaDeData(dataISO){ return (dataISO||'').slice(0,7); }
+/* Fatura/Competência "natural" de um lançamento a partir da própria Data — usada como valor-base do campo
+   Fatura/Competência (editável em qualquer lançamento, ver renderTxModal/saveTx) sempre que ainda não há
+   um valor explícito para preservar: compra em cartão de crédito usa a mesma regra de sempre
+   (competenciaFatura, considerando fechamento/vencimento do cartão); qualquer outro lançamento usa
+   simplesmente o mês da própria Data (competenciaDeData) — não existe "fatura" fora do cartão, então o
+   mês corrido é a referência mais neutra possível. */
+function competenciaBaseLancamento(dataISO, conta, pgto){
+  if(!dataISO) return null;
+  const ehCartao = pgto==='Cartão de Crédito' && STATE.cartoes.includes(conta);
+  return ehCartao ? competenciaFatura(dataISO, conta) : competenciaDeData(dataISO);
+}
 /* O contracheque-base de uma conta é o mês mais recente com lançamentos REAIS (importados ou
    cadastrados à mão) nela — nunca um mês só preenchido por esta própria replicação
    (contrachequeProjecao), que não deve virar modelo de si mesma. */
@@ -11402,18 +11421,13 @@ function abrirEdicaoLote(origemPrefixo, ids){
   };
   render();
 }
-/* Lançamentos de cartão de crédito dentro da seleção — só eles aceitam alteração em lote da Competência
-   da Fatura (mesmo critério usado em todo o resto do app: pgto "Cartão de Crédito" numa conta cadastrada
-   como cartão). Usada tanto para montar a prévia quanto para decidir, na hora de aplicar, quais
-   lançamentos de fato recebem esse campo. */
-function txsCartaoDaSelecaoLote(txs){ return txs.filter(t=>t.pgto==='Cartão de Crédito' && STATE.cartoes.includes(t.conta)); }
 /* Aplica a Edição em Lote — reaproveita EXATAMENTE as mesmas regras de negócio da edição individual
    (nunca uma lógica paralela): a categoria-folha escolhida determina grupo/subgrupo/tipo/natureza juntos
-   via catInfo (idêntico à gravação do formulário de Editar Lançamento); a Competência da Fatura só é
-   gravada nos lançamentos de cartão de crédito da seleção (os demais são ignorados silenciosamente para
-   esse campo específico — já avisado na prévia de confirmação); e qualquer alteração numa parcela
-   propaga automaticamente para as parcelas futuras já vinculadas, via sincronizarParcelasFuturas — o
-   mesmo mecanismo usado sempre que um lançamento parcelado é editado individualmente.
+   via catInfo (idêntico à gravação do formulário de Editar Lançamento); Fatura/Competência é gravada em
+   qualquer lançamento da seleção, de qualquer tipo (campo de uso geral, ver requisito); e qualquer
+   alteração numa parcela propaga automaticamente para as parcelas futuras já vinculadas, via
+   sincronizarParcelasFuturas — o mesmo mecanismo usado sempre que um lançamento parcelado é editado
+   individualmente.
    Só os campos com a caixa "Alterar este campo" marcada são tocados; todo o restante de cada lançamento
    (inclusive os campos não habilitados) permanece exatamente como estava. Retorna a contagem de
    lançamentos efetivamente alterados. */
@@ -11431,16 +11445,13 @@ function aplicarEdicaoLote(m){
       }
     }
     if(m.campos.competencia && m.valores.competencia){
-      const ehCartao = t.pgto==='Cartão de Crédito' && STATE.cartoes.includes(t.conta);
-      if(ehCartao){
-        t.competencia = m.valores.competencia; // remove da fatura de origem e vincula à nova automaticamente
-                                                 // — faturaPorCompetencia/itensFatura leem sempre t.competencia
-                                                 // ao vivo, então Ver Fatura, Ver Próxima Fatura e o painel
-                                                 // Cartões já refletem a mudança no próximo render()
-        mudou = true;
-      }
-      // lançamento não é de cartão: campo não aplicável a ele, ignorado silenciosamente (o usuário já foi
-      // avisado disso na prévia antes de confirmar) — nenhum outro dado deste lançamento é tocado
+      t.competencia = m.valores.competencia; // para cartão de crédito, remove da fatura de origem e vincula
+                                               // à nova automaticamente — faturaPorCompetencia/itensFatura
+                                               // leem sempre t.competencia ao vivo, então Ver Fatura, Ver
+                                               // Próxima Fatura e o painel Cartões já refletem a mudança no
+                                               // próximo render(); para os demais tipos, é só um campo
+                                               // informativo/editável, sem efeito em nenhum cálculo.
+      mudou = true;
     }
     if(m.campos.data && m.valores.data){
       t.data = m.valores.data;
@@ -14461,15 +14472,11 @@ function renderBackupModal(){
    Extrato e Ver Lançamentos futuros. Cada campo só é alterado se sua caixa "Alterar este campo" estiver
    marcada — os demais dados de cada lançamento (inclusive os campos não habilitados aqui) permanecem
    exatamente como estavam. A prévia mostra, antes de qualquer gravação, quantos lançamentos serão
-   afetados, quais campos mudam, os novos valores definidos e o aviso de quantos lançamentos da seleção
-   não são compatíveis com a Competência da Fatura (só se aplica a lançamentos de cartão de crédito). */
+   afetados, quais campos mudam e os novos valores definidos. */
 function renderEdicaoLoteModal(){
   const m = UI.edicaoLoteModal;
   const txs = m.ids.map(id=>STATE.transactions.find(t=>t.id===id)).filter(Boolean);
   const qtd = txs.length;
-  const txsCartao = txsCartaoDaSelecaoLote(txs);
-  const qtdCartao = txsCartao.length;
-  const qtdNaoCartao = qtd - qtdCartao;
   // Categoria: cascata Grupo → Categoria → Subcategoria (mesmos 3 níveis e mesma terminologia já usados no
   // formulário de Editar Lançamento individual) — a Subcategoria escolhida é a categoria-folha de verdade,
   // que determina grupo/subgrupo/tipo/natureza juntos na hora de aplicar (ver catInfo em aplicarEdicaoLote).
@@ -14479,7 +14486,7 @@ function renderEdicaoLoteModal(){
   const subgrupoSel = subgrupos.includes(m.valores.subgrupoSel) ? m.valores.subgrupoSel : (subgrupos[0]||'');
   const categoriasFolha = categoriasDoSubgrupo(grupoSel, subgrupoSel);
   const categoriaSel = categoriasFolha.includes(m.valores.categoriaSel) ? m.valores.categoriaSel : (categoriasFolha[0]||'');
-  // Competência da Fatura: janela de -6 a +18 meses a partir do mês atual, igual em espírito à janela usada
+  // Fatura/Competência: janela de -6 a +18 meses a partir do mês atual, igual em espírito à janela usada
   // no formulário individual — aqui não há uma única data-base de compra (a seleção pode ter datas
   // diferentes), então parte sempre do mês corrente.
   const compBase = chaveMes(UI.ano, UI.mes);
@@ -14489,7 +14496,7 @@ function renderEdicaoLoteModal(){
   // confirmação antes de aplicar.
   const previa = [];
   if(m.campos.categoria && categoriaSel) previa.push({ label:'Categoria', valor:`${iconeGrupo(grupoSel)} ${grupoSel} › ${subgrupoSel} › ${categoriaSel}`, qtd });
-  if(m.campos.competencia && competenciaSel) previa.push({ label:'Competência da Fatura', valor: competenciaLabel(competenciaSel), qtd: qtdCartao, aviso: qtdNaoCartao>0 ? `${qtdNaoCartao} lançamento${qtdNaoCartao===1?'':'s'} da seleção não é de cartão de crédito e não será afetado neste campo` : null });
+  if(m.campos.competencia && competenciaSel) previa.push({ label:'Fatura/Competência', valor: competenciaLabel(competenciaSel), qtd });
   if(m.campos.data && m.valores.data) previa.push({ label:'Data', valor: fmtData(m.valores.data), qtd });
   if(m.campos.valor && m.valores.valor!=='' && parseFloat(m.valores.valor)>0) previa.push({ label:'Valor', valor: fmtBRL(parseFloat(m.valores.valor)), qtd });
   if(m.campos.descricao && m.valores.descricao.trim()) previa.push({ label:'Descrição', valor: escapeHtml(m.valores.descricao.trim()), qtd });
@@ -14513,11 +14520,10 @@ function renderEdicaoLoteModal(){
         </div>
 
         <div class="lote-campo">
-          <label class="lote-campo-check"><input type="checkbox" id="loteChkCompetencia" ${m.campos.competencia?'checked':''}> <b>Competência da Fatura</b> <span class="hint">(só lançamentos de cartão de crédito)</span></label>
+          <label class="lote-campo-check"><input type="checkbox" id="loteChkCompetencia" ${m.campos.competencia?'checked':''}> <b>Fatura/Competência</b></label>
           ${m.campos.competencia ? `
           <div class="lote-campo-controles">
             <select id="loteCompetencia">${listaCompetencias.map(c=>`<option value="${c}" ${c===competenciaSel?'selected':''}>${competenciaLabel(c)}</option>`).join('')}</select>
-            ${qtdNaoCartao>0 ? `<p class="hint" style="color:var(--red-700, #b91c1c);margin-top:6px;">⚠️ ${qtdNaoCartao} de ${qtd} lançamento${qtd===1?'':'s'} selecionado${qtd===1?'':'s'} não é de cartão de crédito e não será alterado neste campo.</p>` : ''}
           </div>` : ''}
         </div>
 
@@ -14575,15 +14581,20 @@ function renderTxModal(){
   const categorias = categoriasDoGrupo(grupoAtual, tipoAtual);
   const subcategorias = subcategoriasDaCategoria(grupoAtual, categoriaAtual, tipoAtual);
   const isCartao = t.pgto === 'Cartão de Crédito' && STATE.cartoes.includes(t.conta);
-  // Ao editar um lançamento já existente, respeita a competência que já está salva (ex.: detectada pelo
-  // nome do arquivo na importação) — só recalcula pela data quando é um lançamento novo, que ainda não tem
-  // competência definida.
-  const comp = isCartao ? (t.id ? (t.competencia || (t.data ? competenciaFatura(t.data, t.conta) : null)) : (t.data ? competenciaFatura(t.data, t.conta) : null)) : null;
-  // Opções do seletor "Competência da Fatura" (edição de lançamento de cartão) — de 6 meses atrás a 18 à
-  // frente da competência natural da própria data da compra, sempre incluindo também a competência
-  // atualmente associada ao lançamento (comp), mesmo que fique fora dessa janela.
-  const listaCompetenciasFatura = (isCartao && t.id) ? (()=>{
-    const base = t.data ? competenciaFatura(t.data, t.conta) : comp;
+  // Fatura/Competência: campo geral, disponível na edição de QUALQUER lançamento (não só cartão de
+  // crédito — ver requisito). Ao editar um lançamento já existente, respeita a competência que já está
+  // salva (ex.: preenchida automaticamente na importação, ou definida manualmente antes) — só recalcula
+  // pela data quando é um lançamento novo, que ainda não tem competência definida. A base "natural" usada
+  // como fallback (competenciaBaseLancamento) é a mesma fórmula de fatura de sempre para cartão de
+  // crédito, e o mês corrido da própria Data para qualquer outro tipo.
+  const comp = t.id
+    ? (t.competencia || (t.data ? competenciaBaseLancamento(t.data, t.conta, t.pgto) : null))
+    : (isCartao && t.data ? competenciaFatura(t.data, t.conta) : null);
+  // Opções do seletor Fatura/Competência (só na edição de um lançamento já existente) — de 6 meses atrás a
+  // 18 à frente da competência natural da própria Data, sempre incluindo também a competência atualmente
+  // associada ao lançamento (comp), mesmo que fique fora dessa janela.
+  const listaCompetenciasFatura = t.id ? (()=>{
+    const base = t.data ? competenciaBaseLancamento(t.data, t.conta, t.pgto) : comp;
     const set = new Set();
     for(let i=-6;i<=18;i++) set.add(incrementarCompetencia(base, i));
     if(comp) set.add(comp);
@@ -14657,15 +14668,17 @@ function renderTxModal(){
                 </select>
               </div>` : ''}
             </div>
-            ${isCartao ? (t.id ? `
+            ${t.id ? `
             <div class="field" style="margin-top:10px;max-width:260px;">
-              <label>Competência da Fatura</label>
+              <label>Fatura/Competência</label>
               <select id="fCompetenciaFatura">${listaCompetenciasFatura.map(c=>`<option value="${c}" ${c===comp?'selected':''}>${competenciaLabel(c)}</option>`).join('')}</select>
             </div>
-            <p class="hint" style="margin:6px 0 0;">Move o lançamento para a fatura escolhida, sem alterar a data da compra (${fmtData(t.data)||'—'}), o valor ou os demais dados.</p>
-            ` : `
+            <p class="hint" style="margin:6px 0 0;">${isCartao
+              ? `Move o lançamento para a fatura escolhida, sem alterar a data da compra (${fmtData(t.data)||'—'}), o valor ou os demais dados.`
+              : `Associa o lançamento à competência escolhida, sem alterar a data (${fmtData(t.data)||'—'}), o valor ou os demais dados.`}</p>
+            ` : (isCartao ? `
             <div class="info-card"><span class="info-card-icon">💳</span><span>${Number(t.parcelas||1)>1 ? `Esta compra será dividida em <b>${Number(t.parcelas)}x</b>, a primeira entrando na fatura de <b>${competenciaLabel(comp)}</b>` : `Esta compra entrará na fatura de <b>${competenciaLabel(comp)}</b>`}${vencimentoLabel(comp,t.conta)?` (${Number(t.parcelas||1)>1 ? '1ª parcela vence' : 'vence'} em ${vencimentoLabel(comp,t.conta)})`:' — defina o dia de fechamento do cartão na aba Contas e Cartões para calcular automaticamente'}.</span></div>
-            `) : ''}
+            ` : '')}
           </div>
 
           <div>
@@ -16966,10 +16979,10 @@ function bindEvents(){
       nova.parcelaAtual = null; nova.totalParcelas = null; nova.parcelamentoId = '';
       nova.transferenciaInterna = false; nova.transferenciaVinculoId = ''; nova.contaTransferencia = '';
       nova.origemImportacao = false;
-      // Compra em cartão de crédito: a competência (fatura) precisa ser recalculada a partir da nova data,
-      // igual a qualquer novo lançamento de cartão — nunca herdada da competência do lançamento original.
-      const ehCartaoValido = nova.pgto==='Cartão de Crédito' && STATE.cartoes.includes(nova.conta);
-      nova.competencia = ehCartaoValido ? competenciaFatura(nova.data, nova.conta) : '';
+      // Cada cópia cai num mês diferente do original — a Fatura/Competência precisa ser recalculada a
+      // partir da NOVA data (fórmula de fatura para cartão, mês corrido para os demais — ver
+      // competenciaBaseLancamento), igual a qualquer lançamento novo; nunca herdada do original.
+      nova.competencia = competenciaBaseLancamento(nova.data, nova.conta, nova.pgto);
       STATE.transactions.push(nova);
     }
     UI.duplicarMesesModal = null;
@@ -18163,28 +18176,28 @@ function bindEvents(){
       if(parcelaAtualNova && parcelaAtualOriginal && parcelaAtualNova!==parcelaAtualOriginal){
         dataFinal = somarMesesData(dataV, parcelaAtualNova - parcelaAtualOriginal);
       }
-      const ehCartaoValido = pgto==='Cartão de Crédito' && STATE.cartoes.includes(conta);
       let competenciaFinal = '';
-      if(ehCartaoValido){
-        // A "Competência da Fatura" só prevalece quando o usuário de fato a alterou no campo dedicado do
-        // formulário (valor diferente da competência original) — isso é o que move o lançamento de fatura
-        // sem tocar na data (ver texto de ajuda ao lado do campo). Se o campo não foi tocado (ainda igual à
-        // competência original), a Data continua sendo quem decide: mudar a Data (ou a Conta) de um
-        // lançamento existente precisa recalcular a fatura pela nova data, senão editar só a Data nunca
-        // moveria o lançamento de mês nenhum (a "Competência da Fatura" pré-preenchida sempre venceria).
+      // Fatura/Competência: mesma regra de precedência para QUALQUER tipo de lançamento (antes só cartão
+      // de crédito) — o campo dedicado do formulário só prevalece quando o usuário de fato o alterou
+      // (valor diferente da competência original); do contrário, a Data (via competenciaBaseLancamento —
+      // fórmula de fatura para cartão, mês corrido para os demais) continua sendo quem decide: mudar a
+      // Data/Conta de um lançamento existente precisa recalcular, senão editar só a Data nunca moveria o
+      // lançamento de competência nenhuma (o valor pré-preenchido sempre venceria).
+      {
         const competenciaFaturaFoiAlterada = UI.editingTx.id && UI.editingTx.competenciaFaturaManual
           && UI.editingTx.competenciaFaturaManual!==UI.editingTx._competenciaOriginal;
         if(competenciaFaturaFoiAlterada){
           competenciaFinal = UI.editingTx.competenciaFaturaManual;
         } else {
-          // Ao editar um lançamento já existente, preserva a competência já salva (ex.: detectada pelo nome
-          // do arquivo na importação) contanto que a data e a conta não tenham sido alteradas — evita que
-          // simplesmente abrir e salvar de novo o lançamento troque a fatura para a calculada pela Data.
+          // Ao editar um lançamento já existente, preserva a competência já salva (ex.: preenchida
+          // automaticamente na importação) contanto que a data e a conta não tenham sido alteradas — evita
+          // que simplesmente abrir e salvar de novo o lançamento troque a competência para a calculada pela
+          // Data.
           const dataOuContaMudou = !UI.editingTx.id || dataFinal!==UI.editingTx._dataOriginal || conta!==UI.editingTx._contaOriginal;
           if(!dataOuContaMudou && UI.editingTx._competenciaOriginal){
             competenciaFinal = UI.editingTx._competenciaOriginal;
           } else if(dataFinal){
-            competenciaFinal = competenciaFatura(dataFinal, conta);
+            competenciaFinal = competenciaBaseLancamento(dataFinal, conta, pgto);
           }
         }
       }
@@ -18450,13 +18463,13 @@ function bindEvents(){
     selecionados.forEach(r=>{
       const info = catInfo(r.categoria);
       const valorAbs = Math.abs(Number(r.valor)||0);
-      const ehCartao = r.pgto==='Cartão de Crédito' && STATE.cartoes.includes(r.conta);
-      // Fatura/Competência: além da fatura do cartão, TODO lançamento importado de uma conta do tipo
-      // Contracheque recebe a competência do próprio contracheque (período selecionado antes do arquivo) —
-      // sem exceção por rubrica (remuneração, benefícios, empréstimos consignados, descontos etc., ver
-      // seção 10 do requisito), nunca só nos descontos de empréstimo.
-      const ehContracheque = STATE.contaTipos[r.conta]==='Contracheque';
-      const competencia = (ehCartao || ehContracheque) ? `${UI.importRefAno}-${pad2(UI.importRefMes)}` : '';
+      // Fatura/Competência: TODO lançamento criado por importação recebe a competência selecionada/
+      // importada (o período informado pelo usuário antes de escolher o arquivo — UI.importRefAno/Mês),
+      // sempre, independente do tipo de conta/lançamento — nunca a competência derivada da própria Data,
+      // que pode divergir dela (ex.: um lançamento com data perto da virada do mês, ou retroativo/futuro
+      // dentro do extrato importado). Editável depois, um a um, na tela de edição do lançamento (ver
+      // renderTxModal) — esta é só a atribuição automática no momento da criação.
+      const competencia = `${UI.importRefAno}-${pad2(UI.importRefMes)}`;
       const ehTransferencia = r.transferenciaInterna && r.contaTransferencia;
       const novaTx = {
         id: uid(), data:r.data, descricao:r.descricao, valor:valorAbs,
