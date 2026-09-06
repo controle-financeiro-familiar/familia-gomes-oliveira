@@ -4842,7 +4842,7 @@ let UI = {
   importTotaisEmprestimo: null, // { [descricao]: {totalParcelas, parcelamentoId} } — totais confirmados nesta importação (novos + detectados)
   pbValidacao: null, // { totalFatura, somaImportados } — validação da importação da fatura Personnalité Black
   editingTx: null,
-  edicaoLoteModal: null, // { origemPrefixo, ids, campos:{categoria,competencia,data,valor,descricao}, valores:{...} } — modal de Edição em Lote (ver abrirEdicaoLote)
+  edicaoLoteModal: null, // { origemPrefixo, ids, campos:{categoria,competencia,data,valor,descricao,responsavel}, valores:{...} } — modal de Edição em Lote (ver abrirEdicaoLote)
   intelFiltros: null, // { periodoMeses, horizonte, conta, grupo, categoria, tipo, aberto } — filtros da aba Inteligência Financeira (ver intelFiltrosPadrao/renderInteligencia); criado sob demanda na primeira renderização da aba
   ordenacaoTabelas: {}, // ordenação por clique no cabeçalho, por tabela — { [idTabela]: {campo,dir} } (ver estadoOrdenacaoTabela/cicloOrdenacaoClique); ausente/campo=null = ordenação original, antes de qualquer clique
   intelCenarioParams: null, // { conservador:{receita,despesa}, otimista:{receita,despesa} } — ajustes percentuais editáveis dos cenários (seção 9); null = usa os padrões (ver CENARIO_PADRAO)
@@ -10736,7 +10736,14 @@ function drawCharts(){
       options:{
         maintainAspectRatio:false,
         cutout:'68%',
-        layout:{ padding:0 },
+        // layout.padding>0 (era 0): cada fatia deste donut "salta" hoverOffset:12px para fora ao passar o
+        // mouse — sem nenhuma margem reservada, esse salto (e o tooltip nativo do Chart.js, desenhado no
+        // próprio canvas e limitado pelos seus limites) ficava cortado bem na borda do canvas/painel,
+        // sobretudo nos cartões cuja fatia já nasce encostada na borda. A margem não altera o tamanho do
+        // chart-box/painel (canvas continua do mesmo tamanho) nem a proporção visual do donut, só reduz
+        // minimamente seu raio dentro do espaço já existente, sobrando espaço suficiente (>=hoverOffset)
+        // para o hover e o tooltip aparecerem inteiros em qualquer fatia.
+        layout:{ padding:16 },
         plugins:{
           // A legenda já é exibida como HTML à esquerda (componente .legenda-item, mesmo padrão do
           // painel Renda Familiar), com a mesma cor de cada cartão — a legenda nativa do Chart.js fica
@@ -10765,7 +10772,13 @@ function drawCharts(){
       data:{ labels: subsOrdenadas, datasets:[{ data: valoresSub, backgroundColor: coresSub, borderColor:'#fff', borderWidth:1 }] },
       options:{
         maintainAspectRatio:false,
-        layout: { padding: 0 },
+        // layout.padding>0 (era 0): o tooltip nativo do Chart.js é desenhado dentro do próprio canvas e fica
+        // limitado pelos seus limites — sem nenhuma folga, uma fatia encostada na borda (ou o leve "pop-out"
+        // de hover que todo arco tem por padrão) faz o tooltip ficar cortado bem na borda do gráfico/painel.
+        // Esta margem interna não muda o tamanho do chart-box/painel (canvas continua do mesmo tamanho),
+        // só encolhe minimamente o raio da pizza dentro dele, dando espaço para o hover e o tooltip
+        // aparecerem inteiros em qualquer fatia, inclusive as mais próximas das extremidades.
+        layout: { padding: 10 },
         plugins:{
           // A legenda já é exibida como HTML à esquerda do gráfico (ver renderDashboard), com a mesma cor
           // de cada fatia — a legenda nativa do Chart.js fica desligada para não duplicar.
@@ -11297,8 +11310,8 @@ function abrirEdicaoLote(origemPrefixo, ids){
   if(!ids.length) return;
   UI.edicaoLoteModal = {
     origemPrefixo, ids,
-    campos: { categoria:false, competencia:false, data:false, valor:false, descricao:false },
-    valores: { grupo:'', subgrupoSel:'', categoriaSel:'', competencia:'', data:'', valor:'', descricao:'' }
+    campos: { categoria:false, competencia:false, data:false, valor:false, descricao:false, responsavel:false },
+    valores: { grupo:'', subgrupoSel:'', categoriaSel:'', competencia:'', data:'', valor:'', descricao:'', responsavel:'' }
   };
   render();
 }
@@ -11352,6 +11365,13 @@ function aplicarEdicaoLote(m){
     }
     if(m.campos.descricao && m.valores.descricao.trim()){
       t.descricao = m.valores.descricao.trim();
+      mudou = true;
+    }
+    // Responsável aceita valor vazio como escolha válida ("— não informado —", mesma opção já existente na
+    // edição individual — ver fResponsavel em renderTxModal), então o gatilho é só a caixa "Alterar este
+    // campo" marcada, nunca um valor truthy — permite inclusive limpar o responsável em lote.
+    if(m.campos.responsavel){
+      t.responsavel = m.valores.responsavel || '';
       mudou = true;
     }
     if(mudou){
@@ -14386,6 +14406,7 @@ function renderEdicaoLoteModal(){
   if(m.campos.data && m.valores.data) previa.push({ label:'Data', valor: fmtData(m.valores.data), qtd });
   if(m.campos.valor && m.valores.valor!=='' && parseFloat(m.valores.valor)>0) previa.push({ label:'Valor', valor: fmtBRL(parseFloat(m.valores.valor)), qtd });
   if(m.campos.descricao && m.valores.descricao.trim()) previa.push({ label:'Descrição', valor: escapeHtml(m.valores.descricao.trim()), qtd });
+  if(m.campos.responsavel) previa.push({ label:'Responsável', valor: m.valores.responsavel ? escapeHtml(m.valores.responsavel) : '— não informado —', qtd });
   const nenhumCampoValido = previa.length===0;
   return `
   <div class="overlay" id="ovEdicaoLote" ${attrZIndexModal('edicaoLoteModal')}>
@@ -14426,6 +14447,17 @@ function renderEdicaoLoteModal(){
         <div class="lote-campo">
           <label class="lote-campo-check"><input type="checkbox" id="loteChkDescricao" ${m.campos.descricao?'checked':''}> <b>Descrição</b></label>
           ${m.campos.descricao ? `<div class="lote-campo-controles"><input type="text" id="loteDescricao" value="${escapeHtml(m.valores.descricao||'')}" placeholder="Nova descrição"></div>` : ''}
+        </div>
+
+        <div class="lote-campo">
+          <label class="lote-campo-check"><input type="checkbox" id="loteChkResponsavel" ${m.campos.responsavel?'checked':''}> <b>Responsável</b></label>
+          ${m.campos.responsavel ? `
+          <div class="lote-campo-controles">
+            <select id="loteResponsavel">
+              <option value="">— não informado —</option>
+              ${[...STATE.responsaveis].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(p=>`<option value="${escapeHtml(p)}" ${m.valores.responsavel===p?'selected':''}>${escapeHtml(p)}</option>`).join('')}
+            </select>
+          </div>` : ''}
         </div>
 
         ${previa.length ? `
@@ -17689,12 +17721,14 @@ function bindEvents(){
       if(g('loteData')) m.valores.data = g('loteData').value;
       if(g('loteValor')) m.valores.valor = g('loteValor').value;
       if(g('loteDescricao')) m.valores.descricao = g('loteDescricao').value;
+      if(g('loteResponsavel')) m.valores.responsavel = g('loteResponsavel').value;
     };
     document.getElementById('loteChkCategoria')?.addEventListener('change', e=>{ syncLoteForm(); m.campos.categoria = e.target.checked; render(); });
     document.getElementById('loteChkCompetencia')?.addEventListener('change', e=>{ syncLoteForm(); m.campos.competencia = e.target.checked; render(); });
     document.getElementById('loteChkData')?.addEventListener('change', e=>{ syncLoteForm(); m.campos.data = e.target.checked; render(); });
     document.getElementById('loteChkValor')?.addEventListener('change', e=>{ syncLoteForm(); m.campos.valor = e.target.checked; render(); });
     document.getElementById('loteChkDescricao')?.addEventListener('change', e=>{ syncLoteForm(); m.campos.descricao = e.target.checked; render(); });
+    document.getElementById('loteChkResponsavel')?.addEventListener('change', e=>{ syncLoteForm(); m.campos.responsavel = e.target.checked; render(); });
     document.getElementById('loteGrupo')?.addEventListener('change', ()=>{ syncLoteForm(); m.valores.subgrupoSel=''; m.valores.categoriaSel=''; render(); });
     document.getElementById('loteSubgrupo')?.addEventListener('change', ()=>{ syncLoteForm(); m.valores.categoriaSel=''; render(); });
     document.getElementById('loteCategoriaFolha')?.addEventListener('change', ()=>{ syncLoteForm(); render(); });
@@ -17702,6 +17736,7 @@ function bindEvents(){
     document.getElementById('loteData')?.addEventListener('change', ()=>{ syncLoteForm(); render(); });
     document.getElementById('loteValor')?.addEventListener('input', ()=>{ syncLoteForm(); });
     document.getElementById('loteDescricao')?.addEventListener('input', ()=>{ syncLoteForm(); });
+    document.getElementById('loteResponsavel')?.addEventListener('change', ()=>{ syncLoteForm(); render(); });
     document.getElementById('confirmarEdicaoLote')?.addEventListener('click', ()=>{
       syncLoteForm();
       const qtdSelecionada = m.ids.length;
