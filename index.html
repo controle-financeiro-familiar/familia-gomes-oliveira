@@ -12818,8 +12818,8 @@ function renderFaturaEditModal(){
    "Pendente" mostra o selo clicável que abre a tela de conciliação manual (ver renderConciliarProjecaoModal
    e o handler de data-proj-conciliar). */
 function seloConciliacaoProjecao(l){
-  if(l.statusConciliacao==='conciliado') return ` <span class="tag" style="background:#e3f5ec;color:#1e8e5a;" title="Conciliado com o Extrato — Data e Valor exibidos são os reais, não os previstos">✅ Conciliado</span>`;
-  if(l.statusConciliacao==='pendente') return ` <span class="tag" style="background:#fff3ea;color:#c0392b;cursor:pointer;" data-proj-conciliar="${l.id}" data-proj-conciliar-mes="${l.competencia}" title="Existem possíveis correspondências no Extrato — clique para revisar e vincular manualmente">⚠️ Conciliação pendente</span>`;
+  if(l.statusConciliacao==='conciliado') return ` <span class="tag" style="background:#e3f5ec;color:#1e8e5a;font-size:9px;" title="Conciliado com o Extrato — Data e Valor exibidos são os reais, não os previstos">✅ Conciliado</span>`;
+  if(l.statusConciliacao==='pendente') return ` <span class="tag" style="background:#fff3ea;color:#c0392b;cursor:pointer;font-size:9px;" data-proj-conciliar="${l.id}" data-proj-conciliar-mes="${l.competencia}" title="Existem possíveis correspondências no Extrato — clique para revisar e vincular manualmente">⚠️ Conciliação pendente</span>`;
   return '';
 }
 function renderLinhaProjecao(l){
