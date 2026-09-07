@@ -3609,6 +3609,10 @@ function renomearContaEmTodosOsDados(antiga, nova){
     } else if(p.cartao===nova && p.descricao===antiga){
       p.descricao=nova;
     }
+    // Conta provável (ver renderNovaProjecaoModal/pontuarCandidatoConciliacao) é só uma referência auxiliar
+    // pelo nome da conta — precisa acompanhar a renomeação, senão o campo passaria a apontar para um nome
+    // de conta que não existe mais, deixando de ajudar a conciliação automática.
+    if(p.contaProvavelId===antiga) p.contaProvavelId=nova;
   });
 }
 function renomearConta(antiga, nova, tipoConta){
@@ -5442,10 +5446,12 @@ function buildCSVConfig(){
     // gravar, em JSON, respectivamente vinculosExtrato ({competencia: extratoLancamentoId do lançamento já
     // conciliado} — ver conciliarProjecoesComExtrato) e candidatosIgnorados ({competencia: [ids descartados
     // manualmente na tela de conciliação pendente]}) — só gravadas quando não vazias, para não poluir
-    // arquivos de quem nunca usou a conciliação.
+    // arquivos de quem nunca usou a conciliação. status (nunca usada por PROJECAO) é reaproveitada para
+    // gravar contaProvavelId — o nome da conta onde o lançamento provavelmente vai ser realizado, também só
+    // um critério auxiliar da conciliação, nunca o vínculo definitivo (ver pontuarCandidatoConciliacao).
     const vinculosJSON = p.vinculosExtrato && Object.keys(p.vinculosExtrato).length ? JSON.stringify(p.vinculosExtrato) : '';
     const ignoradosJSON = p.candidatosIgnorados && Object.keys(p.candidatosIgnorados).length ? JSON.stringify(p.candidatosIgnorados) : '';
-    rows.push(['PROJECAO', p.id, '', p.descricao, p.valor||0, p.categoria||'', p.grupo||'', p.subgrupo||'', p.tipo, '', p.cartao||'', vinculosJSON, p.competenciaInicio||'', p.competenciaFim||'', pad2(Math.min(31,Math.max(1,Number(p.dia)||1))), '', '', ignoradosJSON, '', '', '', '', '', '']);
+    rows.push(['PROJECAO', p.id, '', p.descricao, p.valor||0, p.categoria||'', p.grupo||'', p.subgrupo||'', p.tipo, '', p.cartao||'', vinculosJSON, p.competenciaInicio||'', p.competenciaFim||'', pad2(Math.min(31,Math.max(1,Number(p.dia)||1))), p.contaProvavelId||'', '', ignoradosJSON, '', '', '', '', '', '']);
   });
   STATE.metas.forEach(m=>{
     rows.push(['META', m.id, '', m.nome||'', m.valor||0, m.subcategoria||'', m.grupo||'', m.categoria||'', m.nivel, m.recorrencia, '', m.observacoes||'', m.competenciaInicio||'', '', '', '', '', '', '', '', '', '', '', '']);
@@ -5489,7 +5495,7 @@ function loadCSVConfig(text){
       let vinculosExtrato = {}, candidatosIgnorados = {};
       try{ if(r.pgto) vinculosExtrato = JSON.parse(r.pgto); }catch(e){ /* linha corrompida — ignora, item volta a ficar sem vínculo (a conciliação automática tenta de novo) */ }
       try{ if(r.parcela_atual) candidatosIgnorados = JSON.parse(r.parcela_atual); }catch(e){ /* idem */ }
-      projecoes.push({ id:r.id||uid(), dia:Math.min(31,Math.max(1,Number(r.dia_vencimento)||1)), descricao:r.descricao||'', tipo: r.tipo==='Receita'?'Receita':'Despesa', valor:parseFloat(r.valor)||0, cartao:r.conta||'', categoria:r.categoria||'', grupo:r.grupo||'', subgrupo:r.subgrupo||'', vinculosExtrato, candidatosIgnorados, competenciaInicio:r.competencia_fatura||'', competenciaFim:r.dia_fechamento||'' });
+      projecoes.push({ id:r.id||uid(), dia:Math.min(31,Math.max(1,Number(r.dia_vencimento)||1)), descricao:r.descricao||'', tipo: r.tipo==='Receita'?'Receita':'Despesa', valor:parseFloat(r.valor)||0, cartao:r.conta||'', categoria:r.categoria||'', grupo:r.grupo||'', subgrupo:r.subgrupo||'', contaProvavelId:r.status||'', vinculosExtrato, candidatosIgnorados, competenciaInicio:r.competencia_fatura||'', competenciaFim:r.dia_fechamento||'' });
     } else if(r.tipo_registro==='META'){
       metas.push({ id:r.id||uid(), nome:r.descricao||'', valor:parseFloat(r.valor)||0, subcategoria:r.categoria||'', grupo:r.grupo||'', categoria:r.subgrupo||'', nivel:r.tipo||'grupo', recorrencia:r.natureza||'mensal', observacoes:r.pgto||'', competenciaInicio:r.competencia_fatura||'' });
     } else if(r.tipo_registro==='CONTRACHEQUERESUMO'){
@@ -9248,7 +9254,7 @@ function itemAtivoNaCompetencia(item, competencia){
 /* Pontuação de o quanto um lançamento real é um bom candidato para realizar um item previsto — usada tanto
    pela conciliação automática (conciliarProjecoesComExtrato) quanto pela tela de conciliação manual
    (candidatosConciliacaoProjecao/renderConciliarProjecaoModal). Conta e Tipo são critérios FUNDAMENTAIS: um
-   tipo diferente sempre desqualifica; quando o item tem uma conta associada (hoje, só itens vinculados a
+   tipo diferente sempre desqualifica; quando o item tem uma conta associada (hoje, itens vinculados a
    cartão — ver item.cartao) uma conta diferente também desqualifica. Um lançamento de Saldo Anterior ou um
    espelho de transferência interna nunca é candidato (não é uma movimentação financeira original — mesma
    regra já usada no cálculo do Saldo do Dia). Fora da janela de competência (mês anterior/atual/seguinte à
@@ -9259,9 +9265,18 @@ function itemAtivoNaCompetencia(item, competencia){
    compartilharem a mesma classificação (ex.: Aluguel e Condomínio são ambos "Moradia/Habitação → Custos
    Fixos Ocorrentes"), então classificação sozinha desqualifica mesmo com pontuação alta. Por isso, antes de
    somar qualquer ponto, exige-se pelo menos UM sinal "forte" e específico deste lançamento em si — descrição
-   normalizada parecida OU valor numericamente próximo — sem isso, nunca vira candidato, por mais que
-   Grupo/Categoria/Subcategoria batam. Combinado esse sinal mínimo, os demais critérios (classificação,
-   data, Fatura/Competência) somam pontos para desempate e para ultrapassar LIMIAR_CONCILIACAO. */
+   normalizada parecida, valor numericamente próximo OU a conta bater com a Conta provável do item (ver
+   item.contaProvavelId/renderNovaProjecaoModal) — sem nenhum desses três, nunca vira candidato, por mais que
+   Grupo/Categoria/Subcategoria batam. A Conta provável é só um forte CRITÉRIO DE BUSCA (não um vínculo, não
+   um identificador único, e não substitui os demais critérios): quando informada, ela sozinha já basta para
+   trazer TODOS os lançamentos daquela conta na competência para dentro da avaliação (mesmo com data/valor
+   bem diferentes do previsto — ver exemplo no pedido original), mas ela NÃO decide sozinha qual deles é o
+   correto — isso continua sendo resolvido pelos demais critérios abaixo (classificação, descrição, valor,
+   data), e LIMIAR_CONCILIACAO/candidatosConciliacaoProjecao continuam garantindo que só concilia sozinho
+   quando existe exatamente 1 candidato com pontuação suficiente — 2 ou mais empatados no topo ficam como
+   "Conciliação pendente" para escolha manual, nunca uma conciliação automática insegura. Combinado o sinal
+   mínimo (de qualquer um dos três tipos), os demais critérios somam pontos para desempate e para ultrapassar
+   LIMIAR_CONCILIACAO. */
 const LIMIAR_CONCILIACAO = 4;
 function pontuarCandidatoConciliacao(item, t, competencia){
   if(t.tipo!==item.tipo) return -1;
@@ -9279,13 +9294,19 @@ function pontuarCandidatoConciliacao(item, t, competencia){
   const valorItem = Number(valorProjecaoItem(item, competencia))||0;
   const valorT = Number(t.valor)||0;
   const diffPct = valorItem>0 ? Math.abs(valorT-valorItem)/valorItem : 1;
-  if(!descBate && !descParecida && diffPct>0.30) return -1; // nenhum sinal específico deste lançamento — classificação/data sozinhas nunca bastam
+  // Conta provável (requisito 2 do pedido "Adicionar Conta provável"): quando informada e bate com a conta
+  // do lançamento real, é por si só um sinal forte e específico o bastante para qualificar o candidato,
+  // mesmo sem nenhuma semelhança de descrição/valor — é exatamente para isso que ela existe (ampliar a
+  // busca para TODOS os lançamentos daquela conta na competência, não só os com data/valor parecidos).
+  const contaProvavelBate = !!item.contaProvavelId && t.conta===item.contaProvavelId;
+  if(!descBate && !descParecida && !contaProvavelBate && diffPct>0.30) return -1; // nenhum sinal específico deste lançamento — classificação/data sozinhas nunca bastam
   let pontos = 0;
   if(descBate) pontos += 5;
   else if(descParecida) pontos += 2;
   if(diffPct<=0.01) pontos += 4;
   else if(diffPct<=0.10) pontos += 2;
   else if(diffPct<=0.30) pontos += 1;
+  if(contaProvavelBate) pontos += 4; // mesmo peso do valor muito próximo — um sinal forte, mas nunca decide sozinho (ver LIMIAR_CONCILIACAO/ambiguidade)
   if(item.grupo && t.grupo===item.grupo) pontos += 3;
   if(item.subgrupo && t.subgrupo===item.subgrupo) pontos += 3;
   if(item.categoria && t.categoria===item.categoria) pontos += 2;
@@ -12837,13 +12858,13 @@ function renderFaturaEditModal(){
    verde (sem ação — usar 🔓 nas Ações para desfazer um vínculo errado); "Pendente" mostra o selo clicável
    que abre a tela de conciliação manual (ver renderConciliarProjecaoModal e o handler de
    data-proj-conciliar); "contracheque-importado" (só para o previsto "Contracheque TRT" — ver
-   calcProjecoesMes) mostra um selo verde equivalente ao de "Conciliado", mas SEM o botão 🔓 nas Ações: não
-   há vínculo nenhum para desfazer aqui — a única forma de o previsto voltar a mostrar os dados projetados
-   manualmente é excluindo o próprio contracheque importado daquela competência (Extrato da conta), o que já
-   acontece automaticamente no próximo render. */
+   calcProjecoesMes) mostra o selo verde "✅ Importado", equivalente ao de "Conciliado", mas SEM o botão 🔓
+   nas Ações: não há vínculo nenhum para desfazer aqui — a única forma de o previsto voltar a mostrar os
+   dados projetados manualmente é excluindo o próprio contracheque importado daquela competência (Extrato
+   da conta), o que já acontece automaticamente no próximo render. */
 function seloConciliacaoProjecao(l){
   if(l.statusConciliacao==='conciliado') return ` <span class="tag" style="background:#e3f5ec;color:#1e8e5a;font-size:9px;" title="Conciliado com o Extrato — Data e Valor exibidos são os reais, não os previstos">✅ Conciliado</span>`;
-  if(l.statusConciliacao==='contracheque-importado') return ` <span class="tag" style="background:#e3f5ec;color:#1e8e5a;font-size:9px;" title="Contracheque importado nesta competência — Data e Valor exibidos são a Data do Crédito e o Valor Líquido reais, não os projetados">✅ Contracheque Importado</span>`;
+  if(l.statusConciliacao==='contracheque-importado') return ` <span class="tag" style="background:#e3f5ec;color:#1e8e5a;font-size:9px;" title="Contracheque importado nesta competência — Data e Valor exibidos são a Data do Crédito e o Valor Líquido reais, não os projetados">✅ Importado</span>`;
   if(l.statusConciliacao==='pendente') return ` <span class="tag" style="background:#fff3ea;color:#c0392b;cursor:pointer;font-size:9px;" data-proj-conciliar="${l.id}" data-proj-conciliar-mes="${l.competencia}" title="Existem possíveis correspondências no Extrato — clique para revisar e vincular manualmente">⚠️ Conciliação pendente</span>`;
   return '';
 }
@@ -13441,6 +13462,14 @@ function renderNovaProjecaoModal(){
           <div>
             <div class="field-section-label">Classificação${m.cartao ? '' : ' (usada também na conciliação automática com o Extrato)'}</div>
             <div class="tx-row">
+              <div class="field tx-wide"><label>Conta provável</label>
+                <select id="fNovaProjecaoContaProvavel" ${m.cartao?'disabled title="Não se aplica a lançamentos de cartão — o valor já vem inteiramente da fatura"':''}>
+                  <option value="">— não sei ainda —</option>
+                  ${contasOrdenadas().map(c=>`<option value="${escapeHtml(c)}" ${m.contaProvavelId===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div class="tx-row">
               <div class="field"><label>Grupo</label>
                 <select id="fNovaProjecaoGrupo" ${m.cartao?'disabled':''}>${grupos.map(g=>`<option value="${escapeHtml(g)}" ${grupoAtual===g?'selected':''}>${iconeGrupo(g)} ${escapeHtml(g)}</option>`).join('')}</select>
               </div>
@@ -13456,7 +13485,7 @@ function renderNovaProjecaoModal(){
                 </select>
               </div>
             </div>
-            ${m.cartao ? '' : `<p class="hint" style="margin:8px 0 0;">Editável a qualquer momento; não substitui o vínculo com o lançamento real do Extrato (ver selo de conciliação na tabela).</p>`}
+            ${m.cartao ? '' : `<p class="hint" style="margin:8px 0 0;">Conta provável, Grupo, Categoria e Subcategoria são editáveis a qualquer momento e nunca substituem o vínculo com o lançamento real do Extrato (ver selo de conciliação na tabela) — servem só para ajudar a conciliação automática a encontrá-lo.</p>`}
           </div>
 
           <div>
@@ -17518,7 +17547,7 @@ function bindEvents(){
   document.getElementById('closeRegCardDetalhe2')?.addEventListener('click', ()=>{ UI.regCardDetalheId=null; render(); });
 
   document.querySelectorAll('#btnNovaProjecao, #fabNovaProjecao').forEach(b=> b.addEventListener('click', ()=>{
-    UI.novaProjecaoModal = { ano: UI.ano, mes: UI.mes, dia:1, descricao:'', tipo:'Despesa', valor:0, cartao:'', grupo:'', subgrupo:'', categoria:'', editId:null };
+    UI.novaProjecaoModal = { ano: UI.ano, mes: UI.mes, dia:1, descricao:'', tipo:'Despesa', valor:0, cartao:'', grupo:'', subgrupo:'', categoria:'', contaProvavelId:'', editId:null };
     render();
   }));
   document.querySelectorAll('[data-proj-edit]').forEach(b=> b.addEventListener('click', ()=>{
@@ -17529,7 +17558,7 @@ function bindEvents(){
     const competenciaClicada = b.dataset.projMes || chaveMes(UI.ano, UI.mes);
     const [ano, mes] = competenciaClicada.split('-').map(Number);
     const valorAtual = item.cartao ? 0 : valorProjecaoItem(item, competenciaClicada);
-    UI.novaProjecaoModal = { ano, mes, dia:item.dia, descricao:item.descricao, tipo:item.tipo, valor:valorAtual, cartao:item.cartao||'', grupo:item.grupo||'', subgrupo:item.subgrupo||'', categoria:item.categoria||'', editId:item.id };
+    UI.novaProjecaoModal = { ano, mes, dia:item.dia, descricao:item.descricao, tipo:item.tipo, valor:valorAtual, cartao:item.cartao||'', grupo:item.grupo||'', subgrupo:item.subgrupo||'', categoria:item.categoria||'', contaProvavelId:item.contaProvavelId||'', editId:item.id };
     render();
   }));
   document.querySelectorAll('[data-proj-del]').forEach(b=> b.addEventListener('click', ()=>{
@@ -17587,6 +17616,7 @@ function bindEvents(){
     // Lê o valor JÁ SELECIONADO nos 3 selects (mesmo quando o usuário nunca disparou um "change" — a
     // seleção padrão calculada por renderNovaProjecaoModal já vem marcada no HTML) — garante que o que é
     // salvo sempre bate com o que está visivelmente escolhido no modal.
+    if(g('fNovaProjecaoContaProvavel') && !g('fNovaProjecaoContaProvavel').disabled) m.contaProvavelId = g('fNovaProjecaoContaProvavel').value;
     if(g('fNovaProjecaoGrupo') && !g('fNovaProjecaoGrupo').disabled) m.grupo = g('fNovaProjecaoGrupo').value;
     if(g('fNovaProjecaoCategoria') && !g('fNovaProjecaoCategoria').disabled) m.subgrupo = g('fNovaProjecaoCategoria').value;
     if(g('fNovaProjecaoSubcategoria') && !g('fNovaProjecaoSubcategoria').disabled) m.categoria = g('fNovaProjecaoSubcategoria').value;
@@ -17624,6 +17654,10 @@ function bindEvents(){
     UI.novaProjecaoModal.subgrupo = categoriasDoGrupo(UI.novaProjecaoModal.grupo,'Receita')[0]||'';
     UI.novaProjecaoModal.categoria = '';
     render();
+  });
+  document.getElementById('fNovaProjecaoContaProvavel')?.addEventListener('change', e=>{
+    syncNovaProjecaoForm();
+    UI.novaProjecaoModal.contaProvavelId = e.target.value;
   });
   document.getElementById('fNovaProjecaoGrupo')?.addEventListener('change', e=>{
     syncNovaProjecaoForm();
@@ -17680,15 +17714,16 @@ function bindEvents(){
           // conciliarProjecoesComExtrato tenta casá-la de novo com o Extrato nas competências em que
           // passar a estar ativa (o vínculo da versão antiga permanece intacto nela, para os meses já
           // exibidos antes desta edição).
-          STATE.projecoes.push({ id:uid(), dia:diaFinal, descricao:descricaoFinal, tipo:m.tipo, valor:m.cartao?0:valorFinal, cartao:m.cartao||'', grupo:m.cartao?'':(m.grupo||''), subgrupo:m.cartao?'':(m.subgrupo||''), categoria:m.cartao?'':(m.categoria||''), vinculosExtrato:{}, candidatosIgnorados:{}, competenciaInicio:competenciaEscolhida, competenciaFim:'' });
+          STATE.projecoes.push({ id:uid(), dia:diaFinal, descricao:descricaoFinal, tipo:m.tipo, valor:m.cartao?0:valorFinal, cartao:m.cartao||'', grupo:m.cartao?'':(m.grupo||''), subgrupo:m.cartao?'':(m.subgrupo||''), categoria:m.cartao?'':(m.categoria||''), contaProvavelId:m.cartao?'':(m.contaProvavelId||''), vinculosExtrato:{}, candidatosIgnorados:{}, competenciaInicio:competenciaEscolhida, competenciaFim:'' });
         } else {
           item.dia=diaFinal; item.descricao=descricaoFinal; item.tipo=m.tipo; item.valor=m.cartao?0:valorFinal; item.cartao=m.cartao||'';
           item.grupo=m.cartao?'':(m.grupo||''); item.subgrupo=m.cartao?'':(m.subgrupo||''); item.categoria=m.cartao?'':(m.categoria||'');
+          item.contaProvavelId=m.cartao?'':(m.contaProvavelId||'');
           item.competenciaInicio=competenciaInicio;
         }
       }
     } else {
-      STATE.projecoes.push({ id:uid(), dia:diaFinal, descricao:descricaoFinal, tipo:m.tipo, valor: m.cartao?0:valorFinal, cartao:m.cartao||'', grupo:m.cartao?'':(m.grupo||''), subgrupo:m.cartao?'':(m.subgrupo||''), categoria:m.cartao?'':(m.categoria||''), vinculosExtrato:{}, candidatosIgnorados:{}, competenciaInicio, competenciaFim:'' });
+      STATE.projecoes.push({ id:uid(), dia:diaFinal, descricao:descricaoFinal, tipo:m.tipo, valor: m.cartao?0:valorFinal, cartao:m.cartao||'', grupo:m.cartao?'':(m.grupo||''), subgrupo:m.cartao?'':(m.subgrupo||''), categoria:m.cartao?'':(m.categoria||''), contaProvavelId:m.cartao?'':(m.contaProvavelId||''), vinculosExtrato:{}, candidatosIgnorados:{}, competenciaInicio, competenciaFim:'' });
     }
     UI.novaProjecaoModal = null;
     scheduleSave(); render();
