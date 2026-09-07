@@ -838,8 +838,11 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
 /* Fluxo de Caixa no mobile (item 13 do requisito de responsividade): a mesma tabela vira uma lista
    vertical de cards — cada <tr> um card, cada <td> uma linha "rótulo: valor" — sem tocar no cálculo da
    projeção nem duplicar a lógica de renderPainelProjecao/renderLinhaProjecao, só a apresentação. As linhas
-   "Saldo do Dia"/"Saldo do dia atual" continuam destacadas e na posição calculada dinamicamente para cada
-   dia com movimentação real (ver aplicarLinhasSaldoDiario). */
+   "Saldo do Dia"/"Saldo do dia atual" continuam na posição calculada dinamicamente para cada dia com
+   movimentação real (ver aplicarLinhasSaldoDiario), com o mesmo cartão/borda/fundo de qualquer outra linha
+   — item do requisito: a única diferenciação visual é o negrito (já aplicado por padrão à coluna Dia e à
+   coluna Saldo de TODAS as linhas — ver td:first-child/.saldo-destaque — e ao rótulo mesclado desta linha
+   em .linha-saldo-atual-label logo abaixo), nunca cor de fundo/borda própria. */
 @media(max-width:700px){
   .tabela-fluxo{min-width:0;width:100%;display:block;}
   .tabela-fluxo thead{display:none;}
@@ -848,7 +851,6 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
     display:block;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-md);
     padding:8px 12px;margin-bottom:8px;
   }
-  .tabela-fluxo tr.linha-saldo-atual{border-color:var(--gold);border-width:2px;}
   .tabela-fluxo td{
     display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;font-size:13px;
     border-bottom:1px solid var(--navy-50);
@@ -870,7 +872,6 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
     border-radius:var(--radius-md) var(--radius-md) 0 0;border-bottom:1px solid var(--line);
   }
   .tabela-fluxo td:first-child::before{font-weight:700;}
-  .tabela-fluxo tr.linha-saldo-atual td:first-child{background:var(--gold-light,#fbf0d9);}
 }
 thead th{
   text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.3px;text-transform:uppercase;
@@ -2203,12 +2204,13 @@ summary::marker{content:'';}
 .resumo-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;}
 .saldo-destaque{background:var(--navy-100);color:var(--navy-900);font-weight:700;border-radius:6px;}
 /* Linhas dinâmicas "Saldo do Dia"/"Saldo do dia atual" nas tabelas do Fluxo de Caixa — ver
-   aplicarLinhasSaldoDiario()/renderLinhaSaldoAtual(). Destacada com a cor de acento (gold) para diferenciar
-   dos lançamentos previstos normais, sem ser um alerta (não usa vermelho/laranja). */
-tr.linha-saldo-atual{background:#fff8e6;}
-tr.linha-saldo-atual td{border-top:2px solid var(--gold);border-bottom:2px solid var(--gold);font-weight:700;}
-tr.linha-saldo-atual .linha-saldo-atual-label{color:var(--gold-dark);white-space:nowrap;}
-tr.linha-saldo-atual .saldo-destaque{background:var(--gold);color:var(--navy-950);}
+   aplicarLinhasSaldoDiario()/renderLinhaSaldoAtual(). Item do requisito: a ÚNICA diferenciação visual
+   permitida é negrito em toda a linha — mesmo fundo, mesma borda e mesmas cores das demais linhas da
+   tabela (inclusive o fundo/cor de .saldo-destaque na coluna Saldo, idêntico ao de qualquer outra linha —
+   ver .saldo-destaque logo acima). Nunca reintroduzir cor de fundo/borda própria, cor de texto diferente
+   nem ícone — só o negrito distingue esta linha. */
+tr.linha-saldo-atual td{font-weight:700;}
+tr.linha-saldo-atual .linha-saldo-atual-label{white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -12818,13 +12820,14 @@ function renderLinhaProjecao(l){
 /* Linha especial "Saldo do Dia"/"Saldo do dia atual" (ver aplicarLinhasSaldoDiario) — mesma estrutura de 6
    colunas das demais linhas (Dia/Descrição+Tipo+Valor mesclados/Saldo/Ações), sem botões de editar/excluir,
    pois não é um lançamento previsto de verdade: é o saldo real já apurado no Extrato até aquele dia. O dia
-   de hoje usa o rótulo "Saldo do dia atual" (📍), preservando a identificação visual "você está aqui" já
-   existente; qualquer outro dia com movimentação real usa "Saldo do Dia" (📅). */
+   de hoje usa o rótulo "Saldo do dia atual", qualquer outro dia com movimentação real usa "Saldo do Dia" —
+   texto puro, sem ícone (item do requisito: a única diferenciação visual desta linha é o negrito em toda
+   ela — ver .linha-saldo-atual no <style> — sem cor de fundo, borda ou ícone diferentes das demais linhas). */
 function renderLinhaSaldoAtual(l){
   return `
     <tr class="linha-saldo-atual" data-saldo-dia="${l.dia}">
       <td data-label="Dia" style="text-align:center;font-family:var(--mono);">${pad2(l.dia)}</td>
-      <td colspan="3" class="linha-saldo-atual-label">${l.ehHoje ? '📍 Saldo do dia atual' : '📅 Saldo do Dia'}</td>
+      <td colspan="3" class="linha-saldo-atual-label">${l.ehHoje ? 'Saldo do dia atual' : 'Saldo do Dia'}</td>
       <td data-label="Saldo" class="val-cell saldo-destaque" style="text-align:right;">${fmtBRL(l.saldo)}</td>
       <td data-label=""></td>
     </tr>`;
