@@ -758,9 +758,15 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 #painelRendaFamiliar .renda-top-row{grid-template-columns:max-content 1fr;}
 #painelRendaFamiliar .legenda-item{white-space:nowrap;}
 /* Em telas estreitas, volta a empilhar (legenda em cima, gráfico embaixo) — precisa vir DEPOIS das regras
-   de max-content acima para ganhar o empate de especificidade dentro da media query. */
+   de max-content acima para ganhar o empate de especificidade dentro da media query. Item do requisito: no
+   mobile a legenda de Renda Familiar volta a poder quebrar linha quando o nome da fonte + percentual não
+   couber na largura da tela (sem isso, white-space:nowrap - herdado da regra de desktop acima, pensada
+   para uma coluna estreita ao lado do gráfico - faria o texto vazar horizontalmente ou forçar rolagem de
+   lado numa tela cheia de largura limitada). Fatura por cartão continua sem quebra (nomes de cartão são
+   sempre curtos o bastante para não precisar). */
 @media(max-width:700px){
   #painelFaturaCartao .renda-top-row, #painelRendaFamiliar .renda-top-row{grid-template-columns:1fr;}
+  #painelRendaFamiliar .legenda-item{white-space:normal;}
 }
 .legenda-item .dot{width:13px;height:13px;border-radius:50%;flex-shrink:0;}
 .legenda-pct{color:#8393ac;font-weight:400;}
@@ -838,11 +844,10 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
 /* Fluxo de Caixa no mobile (item 13 do requisito de responsividade): a mesma tabela vira uma lista
    vertical de cards — cada <tr> um card, cada <td> uma linha "rótulo: valor" — sem tocar no cálculo da
    projeção nem duplicar a lógica de renderPainelProjecao/renderLinhaProjecao, só a apresentação. As linhas
-   "Saldo do Dia"/"Saldo do dia atual" continuam na posição calculada dinamicamente para cada dia com
-   movimentação real (ver aplicarLinhasSaldoDiario), com o mesmo cartão/borda/fundo de qualquer outra linha
-   — item do requisito: a única diferenciação visual é o negrito (já aplicado por padrão à coluna Dia e à
-   coluna Saldo de TODAS as linhas — ver td:first-child/.saldo-destaque — e ao rótulo mesclado desta linha
-   em .linha-saldo-atual-label logo abaixo), nunca cor de fundo/borda própria. */
+   "Saldo do Dia"/"Saldo Atual (Hoje)" continuam na posição calculada dinamicamente para cada dia com
+   movimentação real (ver aplicarLinhasSaldoDiario). "Saldo do Dia" (outros dias) usa o mesmo cartão/borda/
+   fundo de qualquer outra linha, só com negrito e ícone; só "Saldo Atual (Hoje)" (.linha-saldo-hoje) mantém
+   também a borda/fundo de destaque próprios (ver regra logo abaixo). */
 @media(max-width:700px){
   .tabela-fluxo{min-width:0;width:100%;display:block;}
   .tabela-fluxo thead{display:none;}
@@ -851,6 +856,7 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
     display:block;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-md);
     padding:8px 12px;margin-bottom:8px;
   }
+  .tabela-fluxo tr.linha-saldo-hoje{border-color:var(--gold);border-width:2px;}
   .tabela-fluxo td{
     display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;font-size:13px;
     border-bottom:1px solid var(--navy-50);
@@ -872,6 +878,7 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
     border-radius:var(--radius-md) var(--radius-md) 0 0;border-bottom:1px solid var(--line);
   }
   .tabela-fluxo td:first-child::before{font-weight:700;}
+  .tabela-fluxo tr.linha-saldo-hoje td:first-child{background:var(--gold-light,#fbf0d9);}
 }
 thead th{
   text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.3px;text-transform:uppercase;
@@ -2203,14 +2210,19 @@ summary::marker{content:'';}
 @media(max-width:900px){.contas-cols{grid-template-columns:1fr;}}
 .resumo-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;}
 .saldo-destaque{background:var(--navy-100);color:var(--navy-900);font-weight:700;border-radius:6px;}
-/* Linhas dinâmicas "Saldo do Dia"/"Saldo do dia atual" nas tabelas do Fluxo de Caixa — ver
-   aplicarLinhasSaldoDiario()/renderLinhaSaldoAtual(). Item do requisito: a ÚNICA diferenciação visual
-   permitida é negrito em toda a linha — mesmo fundo, mesma borda e mesmas cores das demais linhas da
-   tabela (inclusive o fundo/cor de .saldo-destaque na coluna Saldo, idêntico ao de qualquer outra linha —
-   ver .saldo-destaque logo acima). Nunca reintroduzir cor de fundo/borda própria, cor de texto diferente
-   nem ícone — só o negrito distingue esta linha. */
+/* Linhas dinâmicas "Saldo do Dia"/"Saldo Atual (Hoje)" nas tabelas do Fluxo de Caixa — ver
+   aplicarLinhasSaldoDiario()/renderLinhaSaldoAtual(). Toda linha (.linha-saldo-atual, base comum às duas
+   variantes) fica em negrito, com ícone no rótulo — mesmo fundo/borda/cor das demais linhas da tabela,
+   igual a qualquer lançamento comum. Só o dia de hoje ("Saldo Atual (Hoje)", classe extra .linha-saldo-hoje
+   — ver renderLinhaSaldoAtual) mantém também o destaque visual completo (cor de acento — gold) que já
+   existia antes: fundo, borda e o realce próprio na coluna Saldo — igual ao "você está aqui" original.
+   Nunca estender esse destaque adicional a "Saldo do Dia" (outros dias) — só negrito + ícone para eles. */
 tr.linha-saldo-atual td{font-weight:700;}
 tr.linha-saldo-atual .linha-saldo-atual-label{white-space:nowrap;}
+tr.linha-saldo-hoje{background:#fff8e6;}
+tr.linha-saldo-hoje td{border-top:2px solid var(--gold);border-bottom:2px solid var(--gold);}
+tr.linha-saldo-hoje .linha-saldo-atual-label{color:var(--gold-dark);}
+tr.linha-saldo-hoje .saldo-destaque{background:var(--gold);color:var(--navy-950);}
 </style>
 </head>
 <body>
@@ -6553,6 +6565,11 @@ function calcMapaCalorDespesas(anoBase, mesBase){
     const qtdPorDia = Array(diasNoMes+1).fill(0);
     STATE.transactions.forEach(t=>{
       if(!ehDespesaOrcamento(t)) return;
+      // Requisito: o mapa de calor não considera despesas da conta Contracheque (descontos da própria
+      // folha de pagamento — INSS, IRRF etc. — não são gasto real do orçamento familiar, e sim rubricas
+      // internas do holerite) — exclusão específica deste gráfico, não de ehDespesaOrcamento(), que
+      // continua compartilhada com o total "Despesas do mês" do Painel Financeiro (sem essa exclusão).
+      if(STATE.contaTipos[t.conta]==='Contracheque') return;
       const dataEfetiva = dataEfetivaMapaCalorDespesa(t);
       if(!dataEfetiva) return;
       const d = new Date(dataEfetiva+'T00:00:00');
@@ -7896,11 +7913,11 @@ function calcSaldoConta(conta, ano, mes){
    "lançamentos futuros" no Saldo Atual dos cards de Contas — sempre a data real do dispositivo, nunca a
    competência (mês/ano) selecionada no topo da aplicação. */
 function hojeISO(){ return new Date().toISOString().slice(0,10); }
-/* Mantém a linha "Saldo do dia atual" (aba Fluxo de Caixa) em dia sozinha, sem exigir nenhuma ação manual:
+/* Mantém a linha "Saldo Atual (Hoje)" (aba Fluxo de Caixa) em dia sozinha, sem exigir nenhuma ação manual:
    verifica periodicamente se a data mudou desde o último render e, se sim, força um novo render — o que
-   recalcula a posição (dia) e o valor (calcSaldoAtualFluxoCaixa) da linha automaticamente. Mesmo padrão já
-   usado pelo timer de atualizarFilebarInfoDOM, mas aqui precisa de um render completo (não só um trecho do
-   DOM), pois a posição da linha dentro da tabela também muda. */
+   recalcula a posição (dia) e o valor da linha automaticamente (ver aplicarLinhasSaldoDiario). Mesmo padrão
+   já usado pelo timer de atualizarFilebarInfoDOM, mas aqui precisa de um render completo (não só um trecho
+   do DOM), pois a posição da linha dentro da tabela também muda. */
 let ultimaDataConhecidaFluxoCaixa = hojeISO();
 setInterval(()=>{
   const hoje = hojeISO();
@@ -9491,7 +9508,7 @@ function calcSaldoAtualFluxoCaixa(){
    O saldo real sempre prevalece (requisito 2/11): um lançamento já no Extrato nunca é somado de novo (seu
    valorProjecaoPendente é 0), e a diferença entre o valor previsto e o valor real (quando existir) nunca é
    criada como um lançamento adicional — ela simplesmente desaparece porque só o saldo real conta a partir
-   dali. O dia de hoje usa o rótulo "Saldo do dia atual" (ver renderLinhaSaldoAtual) quando também possuir
+   dali. O dia de hoje usa o rótulo "Saldo Atual (Hoje)" (ver renderLinhaSaldoAtual) quando também possuir
    lançamento; qualquer outro dia usa "Saldo do Dia". O saldoFinal do mês (saldo inicial do mês seguinte na
    cadeia de calcProjecoesMultiMes) passa a ser o saldo da última linha "Saldo do Dia" inserida. */
 function aplicarLinhasSaldoDiario(m){
@@ -10699,6 +10716,20 @@ function renderDashboard(){
   const d = calcDashboard(UI.ano, UI.mes);
   const competencia = `${UI.ano}-${pad2(UI.mes)}`;
   const saldoAtual = calcSaldoAtualFluxoCaixa();
+  const alertaVencimentoHtml = (()=>{
+    const alertasVenc = alertasFluxoCaixaMes();
+    if(!alertasVenc.length) return '';
+    const itens = alertasVenc.map(a=>
+      `<b>${escapeHtml(a.descricao)}</b> (${fmtBRL(a.valor)}) vence amanhã — ${fmtData(a.data.toISOString().slice(0,10))}`
+    ).join(' &nbsp;•&nbsp; ');
+    return `<div class="banner" style="text-align:left;border-radius:8px;">🔔 ${itens}</div>`;
+  })();
+  // Item do requisito: no mobile, os alertas de vencimento ficam logo abaixo do card "Saldo Atual (Hoje)"
+  // — antes dos cards de Receitas/Despesas/Saldo/Poupança — para ficarem visíveis sem precisar rolar a
+  // tela toda; no desktop a ordem original é mantida (depois dos 4 cards). Só uma troca de POSIÇÃO no HTML
+  // gerado (mesmo padrão de checagem de window.innerWidth só na hora de montar a página, recalculada a
+  // cada render, já usado em UI.fluxoMesesFechados) — nenhuma mudança de conteúdo/cálculo dos alertas.
+  const alertaAntesDosCards = window.innerWidth<=700;
   return `
   <div class="dash-hero-saldo">
     <div class="dash-hero-saldo-topo">
@@ -10707,20 +10738,14 @@ function renderDashboard(){
     </div>
     <div class="dash-hero-saldo-val ${arredondarMoeda(saldoAtual)<0?'neg':''}">${fmtBRL(saldoAtual)}</div>
   </div>
+  ${alertaAntesDosCards ? alertaVencimentoHtml : ''}
   <div class="grid-cards">
     <div class="kpi receita"><div class="bar"></div><div class="lbl">💰 Receitas do mês</div><div class="val">${fmtBRL(d.receitasTotal)}</div></div>
     <div class="kpi despesa"><div class="bar"></div><div class="lbl">💸 Despesas do mês</div><div class="val">${fmtBRL(d.despesasTotal)}</div></div>
     <div class="kpi saldo"><div class="bar"></div><div class="lbl">⚖️ Saldo do mês</div><div class="val">${fmtBRL(d.saldo)}</div></div>
     <div class="kpi"><div class="bar"></div><div class="lbl">🐖 % Poupança</div><div class="val">${fmtPercentSmart(d.poupanca*100)}</div></div>
   </div>
-  ${(()=>{
-    const alertasVenc = alertasFluxoCaixaMes();
-    if(!alertasVenc.length) return '';
-    const itens = alertasVenc.map(a=>
-      `<b>${escapeHtml(a.descricao)}</b> (${fmtBRL(a.valor)}) vence amanhã — ${fmtData(a.data.toISOString().slice(0,10))}`
-    ).join(' &nbsp;•&nbsp; ');
-    return `<div class="banner" style="text-align:left;border-radius:8px;">🔔 ${itens}</div>`;
-  })()}
+  ${alertaAntesDosCards ? '' : alertaVencimentoHtml}
 <details class="ajuda-fluxo" data-ajuda-dashboard ${UI.ajudaDashboardAberta?'open':''}>
     <summary>ℹ️ Informações sobre esta tela</summary>
     <div class="ajuda-fluxo-conteudo">
@@ -12817,17 +12842,18 @@ function renderLinhaProjecao(l){
       </td>
     </tr>`;
 }
-/* Linha especial "Saldo do Dia"/"Saldo do dia atual" (ver aplicarLinhasSaldoDiario) — mesma estrutura de 6
+/* Linha especial "Saldo do Dia"/"Saldo Atual (Hoje)" (ver aplicarLinhasSaldoDiario) — mesma estrutura de 6
    colunas das demais linhas (Dia/Descrição+Tipo+Valor mesclados/Saldo/Ações), sem botões de editar/excluir,
-   pois não é um lançamento previsto de verdade: é o saldo real já apurado no Extrato até aquele dia. O dia
-   de hoje usa o rótulo "Saldo do dia atual", qualquer outro dia com movimentação real usa "Saldo do Dia" —
-   texto puro, sem ícone (item do requisito: a única diferenciação visual desta linha é o negrito em toda
-   ela — ver .linha-saldo-atual no <style> — sem cor de fundo, borda ou ícone diferentes das demais linhas). */
+   pois não é um lançamento previsto de verdade: é o saldo real já apurado no Extrato até aquele dia. Ambas
+   as variantes mantêm o ícone (📍/📅) e o negrito, mas só o dia de hoje ("Saldo Atual (Hoje)", classe extra
+   linha-saldo-hoje) mantém o destaque visual completo (fundo/borda de acento — ver .linha-saldo-hoje no
+   <style>), igual ao que já existia antes; qualquer outro dia com movimentação real ("Saldo do Dia") usa o
+   mesmo fundo/borda de uma linha comum, só com ícone e negrito. */
 function renderLinhaSaldoAtual(l){
   return `
-    <tr class="linha-saldo-atual" data-saldo-dia="${l.dia}">
+    <tr class="linha-saldo-atual${l.ehHoje ? ' linha-saldo-hoje' : ''}" data-saldo-dia="${l.dia}">
       <td data-label="Dia" style="text-align:center;font-family:var(--mono);">${pad2(l.dia)}</td>
-      <td colspan="3" class="linha-saldo-atual-label">${l.ehHoje ? 'Saldo do dia atual' : 'Saldo do Dia'}</td>
+      <td colspan="3" class="linha-saldo-atual-label">${l.ehHoje ? '📍 Saldo Atual (Hoje)' : '📅 Saldo do Dia'}</td>
       <td data-label="Saldo" class="val-cell saldo-destaque" style="text-align:right;">${fmtBRL(l.saldo)}</td>
       <td data-label=""></td>
     </tr>`;
@@ -13311,7 +13337,7 @@ function renderResumo(){
           <li>O <b>Saldo Inicial</b> do primeiro mês é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança cadastrada (não inclui Contracheque, Reserva de Emergência nem cartões de crédito) — o mesmo valor já calculado no painel Contas;</li>
           <li>Acumula o efeito de cada lançamento em ordem cronológica;</li>
           <li>O <b>saldo final</b> de cada mês torna-se automaticamente o <b>saldo inicial</b> do mês seguinte, garantindo a continuidade da projeção financeira.</li>
-          <li>Toda data que já possui algum lançamento nesta tabela ganha sua própria linha <b>📅 Saldo do Dia</b> (o dia de hoje aparece destacado como <b>📍 Saldo do dia atual</b>) — combinando o saldo real do Extrato das contas Corrente, PJ e Poupança com os lançamentos daquele dia que ainda não estão refletidos nesse Extrato. Um lançamento já existente no Extrato usa o valor exato registrado nele, nunca o valor previsto; um lançamento ainda não realizado entra como projeção pelo valor previsto. Nada é contado duas vezes.</li>
+          <li>Toda data que já possui algum lançamento nesta tabela ganha sua própria linha <b>📅 Saldo do Dia</b> (o dia de hoje aparece com destaque adicional como <b>📍 Saldo Atual (Hoje)</b>) — combinando o saldo real do Extrato das contas Corrente, PJ e Poupança com os lançamentos daquele dia que ainda não estão refletidos nesse Extrato. Um lançamento já existente no Extrato usa o valor exato registrado nele, nunca o valor previsto; um lançamento ainda não realizado entra como projeção pelo valor previsto. Nada é contado duas vezes.</li>
         </ul>
       </div>
     </details>
