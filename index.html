@@ -4901,6 +4901,7 @@ let UI = {
   buscaCategorias: '',
   textModal: null, // { tipo, nome, original, grupo } — modal genérico de nome único (conta, cartão, meio, grupo, categoria)
   novaProjecaoModal: null, // { ano, mes } — escolha do mês a partir do qual um novo lançamento previsto passa a aparecer
+  conciliarProjecaoModal: null, // { itemId, competencia } — revisão manual dos candidatos de conciliação de um previsto "pendente" (ver renderConciliarProjecaoModal)
   confirmDelParcela: null, // { id } — pergunta se a exclusão de uma parcela deve incluir as parcelas futuras da mesma compra
   pendingEdicaoParcela: null, // { novo, antigo, conta } — edição já validada de uma parcela existente, aguardando o usuário escolher o escopo de propagação (ver confirmEditarParcela) antes de ser efetivamente salva
   confirmEditarParcela: null, // { id } — pergunta se a edição de uma parcela deve ser aplicada só a ela, também às futuras, ou a todas as parcelas da mesma compra
@@ -4978,6 +4979,7 @@ const CAMADAS_MODAL = [
   'faturaEditModal',                   // painel Cartões — ajustar fechamento/vencimento de uma fatura
   'modalEmpateCartao',                 // painel Cartões — escolher manualmente o melhor cartão
   'novaProjecaoModal',                 // Fluxo de Caixa — novo/editar lançamento previsto
+  'conciliarProjecaoModal',            // Fluxo de Caixa — escolher manualmente o lançamento do Extrato que concilia um previsto pendente
   'textModal',                         // Configurações (conta/meio/responsável/grupo/categoria) — também
                                         // pode ser aberto de dentro do import (criar conta nova na hora)
 
@@ -5265,6 +5267,7 @@ function loadCSVRegistros(text){
   migrarNomesContasPadrao();
   aplicarResponsavelPadraoPorTipo();
   reconciliarPagamentosFatura(); // cria os espelhos de pagamento de fatura que ainda faltarem (ver função)
+  conciliarProjecoesComExtrato(); // vincula lançamentos previstos do Fluxo de Caixa aos seus correspondentes reais no Extrato (ver função)
   corrigirCompetenciaTransacoes(); // depois de reconciliarPagamentosFatura, para corrigir também os espelhos recém-criados
   corrigirLancamentosSemClassificacao(); // por último: só sobra sem grupo/categoria quem nenhuma correção acima resolveu
 }
@@ -5402,7 +5405,16 @@ function buildCSVConfig(){
   });
   STATE.projecoes.forEach(p=>{
     // Coluna dia_fechamento é reaproveitada para gravar competenciaFim (não usada por PROJECAO).
-    rows.push(['PROJECAO', p.id, '', p.descricao, p.valor||0, '', '', '', p.tipo, '', p.cartao||'', '', p.competenciaInicio||'', p.competenciaFim||'', pad2(Math.min(31,Math.max(1,Number(p.dia)||1))), '', '', '', '', '', '', '', '', '']);
+    // categoria/grupo/subgrupo: classificação do lançamento previsto (ver renderNovaProjecaoModal), usada
+    // também como critério auxiliar na conciliação automática com o Extrato (ver
+    // pontuarCandidatoConciliacao). pgto/parcela_atual são reaproveitadas (nunca usadas por PROJECAO) para
+    // gravar, em JSON, respectivamente vinculosExtrato ({competencia: extratoLancamentoId do lançamento já
+    // conciliado} — ver conciliarProjecoesComExtrato) e candidatosIgnorados ({competencia: [ids descartados
+    // manualmente na tela de conciliação pendente]}) — só gravadas quando não vazias, para não poluir
+    // arquivos de quem nunca usou a conciliação.
+    const vinculosJSON = p.vinculosExtrato && Object.keys(p.vinculosExtrato).length ? JSON.stringify(p.vinculosExtrato) : '';
+    const ignoradosJSON = p.candidatosIgnorados && Object.keys(p.candidatosIgnorados).length ? JSON.stringify(p.candidatosIgnorados) : '';
+    rows.push(['PROJECAO', p.id, '', p.descricao, p.valor||0, p.categoria||'', p.grupo||'', p.subgrupo||'', p.tipo, '', p.cartao||'', vinculosJSON, p.competenciaInicio||'', p.competenciaFim||'', pad2(Math.min(31,Math.max(1,Number(p.dia)||1))), '', '', ignoradosJSON, '', '', '', '', '', '']);
   });
   STATE.metas.forEach(m=>{
     rows.push(['META', m.id, '', m.nome||'', m.valor||0, m.subcategoria||'', m.grupo||'', m.categoria||'', m.nivel, m.recorrencia, '', m.observacoes||'', m.competenciaInicio||'', '', '', '', '', '', '', '', '', '', '', '']);
@@ -5443,7 +5455,10 @@ function loadCSVConfig(text){
       responsaveis.push(r.id);
       if(r.data) responsavelIcone[r.id] = r.data;
     } else if(r.tipo_registro==='PROJECAO'){
-      projecoes.push({ id:r.id||uid(), dia:Math.min(31,Math.max(1,Number(r.dia_vencimento)||1)), descricao:r.descricao||'', tipo: r.tipo==='Receita'?'Receita':'Despesa', valor:parseFloat(r.valor)||0, cartao:r.conta||'', competenciaInicio:r.competencia_fatura||'', competenciaFim:r.dia_fechamento||'' });
+      let vinculosExtrato = {}, candidatosIgnorados = {};
+      try{ if(r.pgto) vinculosExtrato = JSON.parse(r.pgto); }catch(e){ /* linha corrompida — ignora, item volta a ficar sem vínculo (a conciliação automática tenta de novo) */ }
+      try{ if(r.parcela_atual) candidatosIgnorados = JSON.parse(r.parcela_atual); }catch(e){ /* idem */ }
+      projecoes.push({ id:r.id||uid(), dia:Math.min(31,Math.max(1,Number(r.dia_vencimento)||1)), descricao:r.descricao||'', tipo: r.tipo==='Receita'?'Receita':'Despesa', valor:parseFloat(r.valor)||0, cartao:r.conta||'', categoria:r.categoria||'', grupo:r.grupo||'', subgrupo:r.subgrupo||'', vinculosExtrato, candidatosIgnorados, competenciaInicio:r.competencia_fatura||'', competenciaFim:r.dia_fechamento||'' });
     } else if(r.tipo_registro==='META'){
       metas.push({ id:r.id||uid(), nome:r.descricao||'', valor:parseFloat(r.valor)||0, subcategoria:r.categoria||'', grupo:r.grupo||'', categoria:r.subgrupo||'', nivel:r.tipo||'grupo', recorrencia:r.natureza||'mensal', observacoes:r.pgto||'', competenciaInicio:r.competencia_fatura||'' });
     } else if(r.tipo_registro==='CONTRACHEQUERESUMO'){
@@ -5501,6 +5516,7 @@ function loadCSVConfig(text){
   migrarNomesContasPadrao();
   aplicarResponsavelPadraoPorTipo();
   reconciliarPagamentosFatura(); // cartões/fechamentos podem ter chegado só agora — reconcilia de novo (idempotente)
+  conciliarProjecoesComExtrato(); // idem — lançamentos previstos podem ter novos candidatos no Extrato recém-carregado
   corrigirCompetenciaTransacoes(); // idem — cardConfig/contaTipos podem ter chegado só agora com este arquivo
 }
 function mesclarLista(doArquivo, padrao){
@@ -9011,6 +9027,7 @@ function commitEdicaoLancamentoExistente(novo, antigo, conta, contaTransferencia
   // Editar um lançamento já replicado não estende nem atualiza os meses seguintes sozinho; para
   // propagar o novo valor-base adiante, o usuário clica em "Replicar Contracheque" de novo (idempotente).
   reconciliarPagamentosFatura(); // se este lançamento é um pagamento de fatura, já espelha na hora
+  conciliarProjecoesComExtrato(); // se este lançamento realiza algum previsto do Fluxo de Caixa, já concilia na hora
   UI.editingTx=null; UI.pendingEdicaoParcela=null; UI.confirmEditarParcela=null;
   scheduleSave(); render();
 }
@@ -9183,25 +9200,147 @@ function itemAtivoNaCompetencia(item, competencia){
   if(item.competenciaFim && competencia > item.competenciaFim) return false;
   return true;
 }
-/* Item 8 do requisito (rodada de ajustes globais): quando um lançamento previsto (não vinculado a cartão,
-   cujo dia já vem sempre do vencimento atual — ver diaCartao acima) já possui um lançamento efetivamente
-   registrado correspondente na mesma competência, o dia (e o valor) exibidos passam a ser os do lançamento
-   real, "subindo" a linha para o dia em que realmente ocorreu — em vez de ficar fixo no dia previsto
-   original. A própria linha previsto é ajustada (nunca duplicada): por isso nunca aparecem previsto E
-   efetivo ao mesmo tempo para a mesma operação. Correspondência: mesma descrição (normalizada, ver
-   normalizarTexto) + mesmo tipo (Receita/Despesa) + algum lançamento real na mesma competência. Ambíguo
-   (0 ou 2+ correspondências) mantém o previsto original — nunca arrisca escolher a transação errada. */
-function encontrarLancamentoEfetivoParaProjecao(item, competencia){
-  const descNorm = normalizarTexto(item.descricao);
-  if(!descNorm) return null;
-  // Lançamentos comuns (não vinculados a fatura de cartão) não preenchem o campo `competencia` — usa o
-  // mês/ano da própria data (t.data.slice(0,7)) para saber a que competência pertencem, em vez desse campo
-  // (que só é populado para parcelas de cartão).
-  const candidatos = STATE.transactions.filter(t=>
-    t.data && t.data.slice(0,7)===competencia && t.tipo===item.tipo && !ehSaldoAnterior(t) &&
-    normalizarTexto(t.descricao)===descNorm
-  );
-  return candidatos.length===1 ? candidatos[0] : null;
+/* ---------- Conciliação dos lançamentos do Fluxo de Caixa com o Extrato ----------
+   Cada item de STATE.projecoes (lançamento previsto) pode ficar permanentemente vinculado ao lançamento
+   real do Extrato que o realizou, através de vinculosExtrato[competencia] = id do lançamento real
+   (t.id — o único identificador confiável: nunca muda por edição, é sempre novo em duplicação/parcelamento,
+   e nunca é reaproveitado após uma exclusão). O vínculo é por competência (não um único campo no item)
+   porque um mesmo item recorrente é avaliado em várias competências ao mesmo tempo (mês selecionado + os
+   3 seguintes — ver calcProjecoesMultiMes), cada uma com seu próprio lançamento real correspondente. Uma
+   vez estabelecido, o vínculo permanece mesmo que o lançamento do Extrato seja depois editado (data, valor,
+   descrição, categoria) — é sempre relido pelo id, nunca recalculado por semelhança. */
+/* Pontuação de o quanto um lançamento real é um bom candidato para realizar um item previsto — usada tanto
+   pela conciliação automática (conciliarProjecoesComExtrato) quanto pela tela de conciliação manual
+   (candidatosConciliacaoProjecao/renderConciliarProjecaoModal). Conta e Tipo são critérios FUNDAMENTAIS: um
+   tipo diferente sempre desqualifica; quando o item tem uma conta associada (hoje, só itens vinculados a
+   cartão — ver item.cartao) uma conta diferente também desqualifica. Um lançamento de Saldo Anterior ou um
+   espelho de transferência interna nunca é candidato (não é uma movimentação financeira original — mesma
+   regra já usada no cálculo do Saldo do Dia). Fora da janela de competência (mês anterior/atual/seguinte à
+   avaliada) também desqualifica — evita, por exemplo, casar com um lançamento de dezembro um previsto de
+   junho só porque a descrição é parecida.
+   Grupo/Categoria/Subcategoria NUNCA qualificam um candidato sozinhos (requisito 2 do pedido original —
+   "não deve ser utilizada isoladamente como identificador"): é comum várias contas completamente diferentes
+   compartilharem a mesma classificação (ex.: Aluguel e Condomínio são ambos "Moradia/Habitação → Custos
+   Fixos Ocorrentes"), então classificação sozinha desqualifica mesmo com pontuação alta. Por isso, antes de
+   somar qualquer ponto, exige-se pelo menos UM sinal "forte" e específico deste lançamento em si — descrição
+   normalizada parecida OU valor numericamente próximo — sem isso, nunca vira candidato, por mais que
+   Grupo/Categoria/Subcategoria batam. Combinado esse sinal mínimo, os demais critérios (classificação,
+   data, Fatura/Competência) somam pontos para desempate e para ultrapassar LIMIAR_CONCILIACAO. */
+const LIMIAR_CONCILIACAO = 4;
+function pontuarCandidatoConciliacao(item, t, competencia){
+  if(t.tipo!==item.tipo) return -1;
+  if(item.cartao && t.conta!==item.cartao) return -1;
+  if(ehSaldoAnterior(t) || t.entreFamilia) return -1;
+  if(!t.data) return -1;
+  const [anoComp, mesComp] = competencia.split('-').map(Number);
+  const compAnterior = mesAnterior(anoComp, mesComp), compSeguinte = proximoMes(anoComp, mesComp);
+  const { min } = limitesCompetenciaISO(chaveMes(compAnterior.ano, compAnterior.mes));
+  const { max } = limitesCompetenciaISO(chaveMes(compSeguinte.ano, compSeguinte.mes));
+  if(t.data<min || t.data>max) return -1;
+  const descItem = normalizarTexto(item.descricao), descT = normalizarTexto(t.descricao);
+  const descBate = descItem && descT===descItem;
+  const descParecida = descItem && descT && !descBate && (descT.includes(descItem) || descItem.includes(descT));
+  const valorItem = Number(valorProjecaoItem(item, competencia))||0;
+  const valorT = Number(t.valor)||0;
+  const diffPct = valorItem>0 ? Math.abs(valorT-valorItem)/valorItem : 1;
+  if(!descBate && !descParecida && diffPct>0.30) return -1; // nenhum sinal específico deste lançamento — classificação/data sozinhas nunca bastam
+  let pontos = 0;
+  if(descBate) pontos += 5;
+  else if(descParecida) pontos += 2;
+  if(diffPct<=0.01) pontos += 4;
+  else if(diffPct<=0.10) pontos += 2;
+  else if(diffPct<=0.30) pontos += 1;
+  if(item.grupo && t.grupo===item.grupo) pontos += 3;
+  if(item.subgrupo && t.subgrupo===item.subgrupo) pontos += 3;
+  if(item.categoria && t.categoria===item.categoria) pontos += 2;
+  if(t.data.slice(0,7)===competencia) pontos += 2; // mesma competência calendário (mês/ano da própria data)
+  if(t.competencia===competencia) pontos += 2; // Fatura/Competência explícita do lançamento bate
+  return pontos;
+}
+/* Um mesmo item recorrente é avaliado em várias competências ao mesmo tempo (mês selecionado + os 3
+   seguintes); um lançamento real já vinculado a ELE MESMO numa competência nunca pode ser reaproveitado
+   como candidato de OUTRA competência do mesmo item recorrente (um único lançamento real só pode realizar
+   uma ocorrência) — sem essa exclusão, um lançamento de setembro cairia também na janela de outubro
+   (mesAnterior/proximoMes) e seria vinculado às duas competências ao mesmo tempo. */
+function idsJaVinculadosOutrasCompetencias(item, competenciaAtual){
+  if(!item.vinculosExtrato) return new Set();
+  return new Set(Object.entries(item.vinculosExtrato).filter(([c])=>c!==competenciaAtual).map(([,id])=>id));
+}
+/* Candidatos plausíveis (pontuação >= LIMIAR_CONCILIACAO) para conciliar este item nesta competência,
+   excluindo os já descartados manualmente (item.candidatosIgnorados[competencia] — ver
+   renderConciliarProjecaoModal) e os já vinculados a este mesmo item em outra competência (ver
+   idsJaVinculadosOutrasCompetencias), do melhor para o pior. Itens de cartão nunca usam esta conciliação (o
+   valor da fatura já vem de faturaPorCompetencia, uma fonte própria e exata). */
+function candidatosConciliacaoProjecao(item, competencia){
+  if(item.cartao) return [];
+  const ignorados = new Set((item.candidatosIgnorados && item.candidatosIgnorados[competencia]) || []);
+  const jaVinculadosOutraCompetencia = idsJaVinculadosOutrasCompetencias(item, competencia);
+  return STATE.transactions
+    .filter(t=>!ignorados.has(t.id) && !jaVinculadosOutraCompetencia.has(t.id))
+    .map(t=>({ t, pontos: pontuarCandidatoConciliacao(item, t, competencia) }))
+    .filter(x=>x.pontos>=LIMIAR_CONCILIACAO)
+    .sort((a,b)=>b.pontos-a.pontos);
+}
+/* "Projetado" (ainda sem candidato plausível), "pendente" (2+ candidatos plausíveis, mas nenhum vínculo
+   automático seguro o suficiente — precisa de escolha manual) ou "conciliado" (vínculo já estabelecido e o
+   lançamento real ainda existe). Um vínculo cujo lançamento real foi excluído volta a "projetado"/"pendente"
+   normalmente (ver conciliarProjecoesComExtrato, que já limpa o vínculo quebrado). */
+function statusConciliacaoProjecao(item, competencia){
+  // Não aplicável a itens de cartão (fonte própria: faturaPorCompetencia) nem ao Contracheque TRT (fonte
+  // própria: encontrarEfetivoContrachequeTRT, sem ambiguidade — sempre "encontrado" ou "não encontrado",
+  // nunca "pendente") — ver candidatosConciliacaoProjecao/conciliarProjecoesComExtrato, que já excluem os
+  // dois desta conciliação genérica.
+  if(item.cartao || normalizarTexto(item.descricao)==='contrachequetrt') return null;
+  if(item.vinculosExtrato && item.vinculosExtrato[competencia] && STATE.transactions.some(t=>t.id===item.vinculosExtrato[competencia])){
+    return 'conciliado';
+  }
+  return candidatosConciliacaoProjecao(item, competencia).length>=2 ? 'pendente' : 'projetado';
+}
+/* Roda a conciliação automática de todos os itens previstos (não-cartão, não-Contracheque, que tem sua
+   própria correspondência dedicada — ver encontrarEfetivoContrachequeTRT) contra o Extrato, para o mês
+   selecionado e os 3 seguintes (mesma janela exibida no Fluxo de Caixa — ver calcProjecoesMultiMes).
+   Idempotente, como reconciliarPagamentosFatura: só atua quando ainda não há vínculo estabelecido para
+   aquela competência, e só estabelece um vínculo automático quando existe EXATAMENTE UM candidato plausível
+   (ambíguo — 2 ou mais — nunca vincula sozinho, fica como "pendente" para escolha manual — requisito 6).
+   Um vínculo cujo lançamento real foi excluído é limpo automaticamente (self-heal), voltando o item a
+   participar normalmente de uma nova tentativa de conciliação. Chamada nos mesmos pontos já usados por
+   reconciliarPagamentosFatura: ao carregar o arquivo, depois de importar um extrato e depois de salvar um
+   lançamento manualmente. */
+function conciliarProjecoesComExtrato(){
+  if(!STATE.projecoes?.length) return 0;
+  let vinculados = 0;
+  const idsReais = new Set(STATE.transactions.map(t=>t.id));
+  const meses = calcProjecoesMultiMesCompetencias(UI.ano, UI.mes, 4);
+  STATE.projecoes.forEach(item=>{
+    if(item.cartao || normalizarTexto(item.descricao)==='contrachequetrt') return;
+    meses.forEach(competencia=>{
+      if(!itemAtivoNaCompetencia(item, competencia)) return;
+      if(!item.vinculosExtrato) item.vinculosExtrato = {};
+      const vinculoAtual = item.vinculosExtrato[competencia];
+      if(vinculoAtual){
+        if(!idsReais.has(vinculoAtual)) delete item.vinculosExtrato[competencia]; // vínculo quebrado — limpa e tenta de novo abaixo
+        else return; // já conciliado e o lançamento real ainda existe — nada a fazer
+      }
+      const candidatos = candidatosConciliacaoProjecao(item, competencia);
+      if(candidatos.length===1){
+        item.vinculosExtrato[competencia] = candidatos[0].t.id;
+        vinculados++;
+      }
+    });
+  });
+  return vinculados;
+}
+/* Lista de competências ("AAAA-MM") do mês-base e dos qtdMeses-1 seguintes — mesma sequência de meses
+   exibida no Fluxo de Caixa (ver calcProjecoesMultiMes), extraída à parte para ser reaproveitada pela
+   conciliação automática sem precisar recalcular a projeção inteira. */
+function calcProjecoesMultiMesCompetencias(anoBase, mesBase, qtdMeses){
+  const competencias = [];
+  let ano = anoBase, mes = mesBase;
+  for(let i=0;i<qtdMeses;i++){
+    competencias.push(chaveMes(ano, mes));
+    ({ano, mes} = proximoMes(ano, mes));
+  }
+  return competencias;
 }
 /* Contracheque TRT (item 8): mesma ideia acima, mas com regra própria — o dia vem do lançamento de receita
    efetivamente creditado na conta do tipo Contracheque nesta competência (não por correspondência de
@@ -9277,17 +9416,30 @@ function calcProjecoesMes(ano, mes, saldoInicial){
           && STATE.transactions.some(t=> t.conta===contaVinculadaBancaria && t.contrachequeOrigemId && t.data && t.data.slice(0,7)===competencia);
         if(espelhoJaNaContaVinculada) valorProjecaoPendente = 0;
       } else {
-        const efetivo = encontrarLancamentoEfetivoParaProjecao(item, competencia);
-        if(efetivo){
-          dia = Number(efetivo.data.slice(8,10)); valorCalculado = Number(efetivo.valor)||0;
-          // Só considera "já no Extrato" quando o lançamento encontrado está numa das 3 contas elegíveis e
-          // NÃO é um lançamento espelho de transferência interna (requisito 7 do pedido — nunca usar um
-          // espelho como "efetivação" de um previsto comum, só o lançamento financeiro original).
-          const jaNoExtratoElegivel = !efetivo.entreFamilia && contasElegiveis.has(efetivo.conta);
+        // Conciliação com o Extrato (ver conciliarProjecoesComExtrato/statusConciliacaoProjecao): o vínculo,
+        // uma vez estabelecido em vinculosExtrato[competencia], é sempre relido pelo id do lançamento real
+        // (nunca recalculado por semelhança) — permanece válido mesmo que esse lançamento seja depois
+        // editado (data, valor, descrição, categoria). Um vínculo cujo lançamento real foi excluído é
+        // ignorado aqui (self-heal já faz isso em conciliarProjecoesComExtrato na próxima passada; até lá,
+        // simplesmente não é usado) e o item volta a exibir seus próprios dados previstos.
+        const vinculoId = item.vinculosExtrato && item.vinculosExtrato[competencia];
+        const real = vinculoId ? STATE.transactions.find(t=>t.id===vinculoId) : null;
+        if(real){
+          dia = Number(real.data.slice(8,10)); valorCalculado = Number(real.valor)||0;
+          // Só considera "já no Extrato elegível" (requisito 8/9 do pedido) quando o lançamento vinculado
+          // está numa das 3 contas elegíveis e NÃO é um lançamento espelho de transferência interna
+          // (requisito 7 — nunca usar um espelho como "efetivação" de um previsto comum, só o lançamento
+          // financeiro original) — mesmo critério já usado no cálculo do Saldo do Dia.
+          const jaNoExtratoElegivel = !real.entreFamilia && contasElegiveis.has(real.conta);
           valorProjecaoPendente = jaNoExtratoElegivel ? 0 : valorCalculado;
         }
       }
-      return { ...item, competencia, valorCalculado, dia, valorProjecaoPendente };
+      // dataPrevista/valorPrevisto: os dados ORIGINALMENTE projetados (item.dia/valorProjecaoItem), sempre
+      // preservados à parte para histórico/auditoria (requisito 4) — nunca sobrescritos pela conciliação,
+      // que só afeta dia/valorCalculado (exibidos) acima. statusConciliacao: rótulo exibido na linha (ver
+      // renderLinhaProjecao) — "conciliado"/"pendente"/"projetado", null para itens de cartão (não se aplica).
+      const statusConciliacao = statusConciliacaoProjecao(item, competencia);
+      return { ...item, competencia, valorCalculado, dia, valorProjecaoPendente, dataPrevista: item.dia, valorPrevisto: valorProjecaoItem(item, competencia), statusConciliacao };
     })
     .sort((a,b)=>(Number(a.dia)||0)-(Number(b.dia)||0));
   let saldo = saldoInicial;
@@ -9724,6 +9876,7 @@ function render(){
     ${UI.backupModal!==null ? renderBackupModal() : ""}
     ${UI.textModal!==null ? renderTextModal() : ""}
     ${UI.novaProjecaoModal!==null ? renderNovaProjecaoModal() : ""}
+    ${UI.conciliarProjecaoModal!==null ? renderConciliarProjecaoModal() : ""}
     ${UI.confirmDelParcela!==null ? renderConfirmDelParcelaModal() : ""}
     ${UI.confirmEditarParcela!==null ? renderConfirmEditarParcelaModal() : ""}
     ${UI.modalInstalarIOS ? renderModalInstalarIOS() : ""}
@@ -11537,7 +11690,7 @@ function aplicarEdicaoLote(m){
       if(Number(t.totalParcelas)>1 && t.parcelamentoId) sincronizarParcelasFuturas(t);
     }
   });
-  if(alterados>0){ reconciliarPagamentosFatura(); scheduleSave(); }
+  if(alterados>0){ reconciliarPagamentosFatura(); conciliarProjecoesComExtrato(); scheduleSave(); }
   return alterados;
 }
 /* Rótulo do cabeçalho de grupo de data usado na lista mobile de Registros (item 11 do requisito de
@@ -12623,19 +12776,33 @@ function renderFaturaEditModal(){
 /* Na tabela, só o Valor é editável diretamente (além do Saldo Inicial, acima da tabela). Dia, Descrição,
    Tipo e Cartão vinculado são definidos ao criar/editar o lançamento pelo modal (✏️/+) e aparecem aqui
    somente como texto — não há mais inputs para eles na própria linha. */
+/* Selo de status de conciliação (ver statusConciliacaoProjecao) ao lado da descrição — só para itens que
+   passam pela conciliação com o Extrato (não-cartão, não-Contracheque; l.statusConciliacao é null para os
+   demais, que não mostram selo nenhum). "Projetado" é o estado mais comum e não recebe selo (evita poluir a
+   tabela); "Conciliado" mostra o selo verde (sem ação — usar 🔓 nas Ações para desfazer um vínculo errado);
+   "Pendente" mostra o selo clicável que abre a tela de conciliação manual (ver renderConciliarProjecaoModal
+   e o handler de data-proj-conciliar). */
+function seloConciliacaoProjecao(l){
+  if(l.statusConciliacao==='conciliado') return ` <span class="tag" style="background:#e3f5ec;color:#1e8e5a;" title="Conciliado com o Extrato — Data e Valor exibidos são os reais, não os previstos">✅ Conciliado</span>`;
+  if(l.statusConciliacao==='pendente') return ` <span class="tag" style="background:#fff3ea;color:#c0392b;cursor:pointer;" data-proj-conciliar="${l.id}" data-proj-conciliar-mes="${l.competencia}" title="Existem possíveis correspondências no Extrato — clique para revisar e vincular manualmente">⚠️ Conciliação pendente</span>`;
+  return '';
+}
 function renderLinhaProjecao(l){
   const tagTipo = l.tipo==='Receita' ? 'Receita' : 'Despesa';
   return `
     <tr data-proj-id="${l.id}">
       <td data-label="Dia" style="text-align:center;font-family:var(--mono);">${pad2(l.dia)}</td>
-      <td data-label="Descrição">${escapeHtml(l.descricao)}${l.cartao ? ' 💳' : ''}</td>
+      <td data-label="Descrição">${escapeHtml(l.descricao)}${l.cartao ? ' 💳' : ''}${seloConciliacaoProjecao(l)}</td>
       <td data-label="Tipo"><span class="tag ${tagTipo}">${tagTipo}</span></td>
       <td data-label="Valor" class="val-cell ${l.tipo==='Despesa'?'neg':'pos'}" style="text-align:right;">
-        ${l.cartao ? `<span title="Calculado automaticamente pelo total atual da fatura deste cartão no mês">${fmtBRL(l.valorCalculado)}</span>` : fmtBRL(l.valor)}
+        ${l.cartao ? `<span title="Calculado automaticamente pelo total atual da fatura deste cartão no mês">${fmtBRL(l.valorCalculado)}</span>`
+          : l.statusConciliacao==='conciliado' ? `<span title="Valor real do Extrato (previsto: ${fmtBRL(l.valorPrevisto)})">${fmtBRL(l.valorCalculado)}</span>`
+          : fmtBRL(l.valorCalculado)}
       </td>
       <td data-label="Saldo" class="val-cell saldo-destaque" style="text-align:right;">${fmtBRL(l.saldo)}</td>
       <td data-label="" class="tabela-fluxo-acoes" style="white-space:nowrap;">
-        <button class="icon-btn" data-proj-edit="${l.id}" data-proj-mes="${l.competencia}" title="Editar dia, descrição, tipo, valor ou cartão vinculado">✏️</button>
+        ${l.statusConciliacao==='conciliado' ? `<button class="icon-btn" data-proj-desvincular="${l.id}" data-proj-desvincular-mes="${l.competencia}" title="Desfazer a conciliação com o Extrato (volta a ser projeção)">🔓</button>` : ''}
+        <button class="icon-btn" data-proj-edit="${l.id}" data-proj-mes="${l.competencia}" title="Editar dia, descrição, tipo, valor, classificação ou cartão vinculado">✏️</button>
         <button class="icon-btn" data-proj-del="${l.id}" title="Remover lançamento">🗑️</button>
       </td>
     </tr>`;
@@ -12669,7 +12836,7 @@ function renderPainelProjecao(m, idx){
   // competência (não um tamanho fixo) — evita quebra de linha/corte em valores altos e desperdício de
   // espaço quando os valores são baixos; recalculado a cada troca de mês/ano, já que o painel é
   // reconstruído do zero a cada renderização.
-  const valores = m.linhas.filter(l=>!l.especial).map(l => l.cartao ? l.valorCalculado : l.valor);
+  const valores = m.linhas.filter(l=>!l.especial).map(l => l.valorCalculado);
   const saldos = m.linhas.map(l => l.saldo);
   // chTipo aumentado (9→14): "Despesa"/"Receita" (dentro do badge .tag) precisam de espaço suficiente para
   // nunca quebrar em duas linhas — com 9 a coluna ficava estreita demais em telas menores que a largura
@@ -13151,6 +13318,18 @@ function renderResumo(){
 function renderNovaProjecaoModal(){
   const m = UI.novaProjecaoModal;
   const editando = !!m.editId;
+  // Classificação (Grupo → Categoria → Subcategoria — requisito 5): mesma cascata de 3 níveis já usada no
+  // resto do app (ver renderTxModal/gruposComTipo/categoriasDoGrupo/subcategoriasDaCategoria), usada aqui
+  // também como informação auxiliar na conciliação automática com o Extrato (ver
+  // pontuarCandidatoConciliacao) — nunca como identificador único (isso é sempre o vínculo por id em
+  // vinculosExtrato). Não se aplica a itens de cartão (valor/dia já vêm inteiramente da fatura, e nunca
+  // passam pela conciliação genérica — ver statusConciliacaoProjecao).
+  const grupos = gruposComTipo(m.tipo);
+  const grupoAtual = m.grupo || grupos[0] || '';
+  const categorias = categoriasDoGrupo(grupoAtual, m.tipo);
+  const subgrupoAtual = m.subgrupo || categorias[0] || '';
+  const subcategorias = subcategoriasDaCategoria(grupoAtual, subgrupoAtual, m.tipo);
+  const categoriaAtual = m.categoria || subcategorias[0] || '';
   return `
   <div class="overlay" id="ovNovaProjecao" ${attrZIndexModal('novaProjecaoModal')}>
     <div class="modal modal-editor-lancamento" style="width:480px;">
@@ -13185,6 +13364,27 @@ function renderNovaProjecaoModal(){
           </div>
 
           <div>
+            <div class="field-section-label">Classificação${m.cartao ? '' : ' (usada também na conciliação automática com o Extrato)'}</div>
+            <div class="tx-row">
+              <div class="field"><label>Grupo</label>
+                <select id="fNovaProjecaoGrupo" ${m.cartao?'disabled':''}>${grupos.map(g=>`<option value="${escapeHtml(g)}" ${grupoAtual===g?'selected':''}>${iconeGrupo(g)} ${escapeHtml(g)}</option>`).join('')}</select>
+              </div>
+              <div class="field"><label>Categoria</label>
+                <select id="fNovaProjecaoCategoria" ${m.cartao?'disabled':''}>${categorias.map(c=>`<option value="${escapeHtml(c)}" ${subgrupoAtual===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}</select>
+              </div>
+            </div>
+            <div class="tx-row">
+              <div class="field tx-wide"><label>Subcategoria</label>
+                <select id="fNovaProjecaoSubcategoria" ${m.cartao?'disabled':''}>
+                  <option value="">— selecionar —</option>
+                  ${subcategorias.map(s=>`<option value="${escapeHtml(s)}" ${categoriaAtual===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            ${m.cartao ? '' : `<p class="hint" style="margin:8px 0 0;">Editável a qualquer momento; não substitui o vínculo com o lançamento real do Extrato (ver selo de conciliação na tabela).</p>`}
+          </div>
+
+          <div>
             <div class="field-section-label">A partir de qual mês</div>
             <div class="tx-row">
               <div class="field"><label>Mês inicial</label>
@@ -13201,6 +13401,47 @@ function renderNovaProjecaoModal(){
       <div class="modal-foot">
         <button class="btn btn-ghost" id="cancelNovaProjecao">Cancelar</button>
         <button class="btn btn-primary" id="confirmNovaProjecao">💾 ${editando ? 'Salvar' : 'Adicionar'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+/* ---------- Modal: revisão manual da conciliação pendente (requisito 6) ----------
+   Aberto pelo selo "⚠️ Conciliação pendente" de uma linha do Fluxo de Caixa — lista os lançamentos do
+   Extrato que pontuaram como candidatos plausíveis (ver candidatosConciliacaoProjecao), do melhor para o
+   pior, para o usuário escolher qual realmente corresponde (ou nenhum). Nunca copia/recria o lançamento do
+   Extrato (requisito 7): escolher um candidato só grava seu id em vinculosExtrato[competencia] — o
+   lançamento original do Extrato nunca é tocado. */
+function renderConciliarProjecaoModal(){
+  const cfg = UI.conciliarProjecaoModal;
+  const item = STATE.projecoes.find(p=>p.id===cfg.itemId);
+  if(!item){ return ''; } // item pode ter sido excluído enquanto o modal estava aberto
+  const candidatos = candidatosConciliacaoProjecao(item, cfg.competencia);
+  return `
+  <div class="overlay" id="ovConciliarProjecao" ${attrZIndexModal('conciliarProjecaoModal')}>
+    <div class="modal" style="width:560px;">
+      <div class="modal-head"><h3>🔗 Conciliar com o Extrato</h3><button class="close-x" id="closeConciliarProjecao">✕</button></div>
+      <div class="modal-body">
+        <div class="info-card" style="margin-top:0;">
+          <span class="info-card-icon">${item.tipo==='Despesa'?'💸':'💰'}</span>
+          <span><b>${escapeHtml(item.descricao)}</b> — previsto para ${fmtData(`${cfg.competencia}-${pad2(item.dia)}`)}, ${fmtBRL(valorProjecaoItem(item, cfg.competencia))}</span>
+        </div>
+        <p class="hint" style="margin-top:10px;">Foram encontrados ${candidatos.length} lançamento(s) no Extrato parecidos com este previsto, mas nenhum é claramente o único — escolha abaixo qual corresponde de fato (ou nenhum, se for coincidência).</p>
+        ${candidatos.length ? `<table style="width:100%;">
+          <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th style="text-align:right;">Valor</th><th></th></tr></thead>
+          <tbody>
+            ${candidatos.map(c=>`<tr>
+              <td>${fmtData(c.t.data)}</td>
+              <td>${escapeHtml(c.t.descricao)} <span class="hint" style="margin:0;">(${escapeHtml(c.t.conta)})</span></td>
+              <td>${escapeHtml(c.t.categoria||'—')}</td>
+              <td style="text-align:right;">${fmtBRL(c.t.valor)}</td>
+              <td><button type="button" class="btn btn-ghost btn-sm" data-conciliar-escolher="${c.t.id}">✅ É este</button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>` : `<div class="empty-state"><div class="big">🔎</div>Nenhum candidato restante — todos já foram descartados.</div>`}
+      </div>
+      <div class="modal-foot" style="flex-wrap:wrap;gap:8px;">
+        <button class="btn btn-ghost" id="cancelConciliarProjecao">Fechar</button>
+        ${candidatos.length ? `<button class="btn btn-ghost" id="nenhumaConciliarProjecao">🚫 Nenhuma destas corresponde</button>` : ''}
       </div>
     </div>
   </div>`;
@@ -17202,7 +17443,7 @@ function bindEvents(){
   document.getElementById('closeRegCardDetalhe2')?.addEventListener('click', ()=>{ UI.regCardDetalheId=null; render(); });
 
   document.querySelectorAll('#btnNovaProjecao, #fabNovaProjecao').forEach(b=> b.addEventListener('click', ()=>{
-    UI.novaProjecaoModal = { ano: UI.ano, mes: UI.mes, dia:1, descricao:'', tipo:'Despesa', valor:0, cartao:'', editId:null };
+    UI.novaProjecaoModal = { ano: UI.ano, mes: UI.mes, dia:1, descricao:'', tipo:'Despesa', valor:0, cartao:'', grupo:'', subgrupo:'', categoria:'', editId:null };
     render();
   }));
   document.querySelectorAll('[data-proj-edit]').forEach(b=> b.addEventListener('click', ()=>{
@@ -17213,7 +17454,7 @@ function bindEvents(){
     const competenciaClicada = b.dataset.projMes || chaveMes(UI.ano, UI.mes);
     const [ano, mes] = competenciaClicada.split('-').map(Number);
     const valorAtual = item.cartao ? 0 : valorProjecaoItem(item, competenciaClicada);
-    UI.novaProjecaoModal = { ano, mes, dia:item.dia, descricao:item.descricao, tipo:item.tipo, valor:valorAtual, cartao:item.cartao||'', editId:item.id };
+    UI.novaProjecaoModal = { ano, mes, dia:item.dia, descricao:item.descricao, tipo:item.tipo, valor:valorAtual, cartao:item.cartao||'', grupo:item.grupo||'', subgrupo:item.subgrupo||'', categoria:item.categoria||'', editId:item.id };
     render();
   }));
   document.querySelectorAll('[data-proj-del]').forEach(b=> b.addEventListener('click', ()=>{
@@ -17221,6 +17462,45 @@ function bindEvents(){
     STATE.projecoes = STATE.projecoes.filter(p=>p.id!==b.dataset.projDel);
     scheduleSave(); render();
   }));
+  /* ---- Conciliação com o Extrato: selo "⚠️ Conciliação pendente" (abre a tela de candidatos) e botão
+     🔓 "desvincular" num item já conciliado (requisitos 6/7 — nunca automática quando há ambiguidade). ---- */
+  document.querySelectorAll('[data-proj-conciliar]').forEach(b=> b.addEventListener('click', ()=>{
+    UI.conciliarProjecaoModal = { itemId: b.dataset.projConciliar, competencia: b.dataset.projConciliarMes };
+    render();
+  }));
+  document.querySelectorAll('[data-proj-desvincular]').forEach(b=> b.addEventListener('click', ()=>{
+    const item = STATE.projecoes.find(p=>p.id===b.dataset.projDesvincular);
+    const competencia = b.dataset.projDesvincularMes;
+    if(!item || !item.vinculosExtrato) return;
+    if(!confirm('Desfazer a conciliação com o Extrato? O lançamento volta a mostrar a data e o valor previstos, e a próxima conciliação automática pode encontrá-lo de novo.')) return;
+    delete item.vinculosExtrato[competencia];
+    scheduleSave(); render();
+  }));
+  /* ---- Modal: revisão manual da conciliação pendente ---- */
+  document.getElementById('closeConciliarProjecao')?.addEventListener('click', ()=>{ UI.conciliarProjecaoModal=null; render(); });
+  document.getElementById('cancelConciliarProjecao')?.addEventListener('click', ()=>{ UI.conciliarProjecaoModal=null; render(); });
+  document.querySelectorAll('[data-conciliar-escolher]').forEach(b=> b.addEventListener('click', ()=>{
+    const cfg = UI.conciliarProjecaoModal;
+    const item = STATE.projecoes.find(p=>p.id===cfg.itemId);
+    if(!item) return;
+    if(!item.vinculosExtrato) item.vinculosExtrato = {};
+    item.vinculosExtrato[cfg.competencia] = b.dataset.conciliarEscolher;
+    UI.conciliarProjecaoModal = null;
+    scheduleSave(); render();
+  }));
+  document.getElementById('nenhumaConciliarProjecao')?.addEventListener('click', ()=>{
+    const cfg = UI.conciliarProjecaoModal;
+    const item = STATE.projecoes.find(p=>p.id===cfg.itemId);
+    if(item){
+      if(!item.candidatosIgnorados) item.candidatosIgnorados = {};
+      const jaIgnorados = item.candidatosIgnorados[cfg.competencia] || [];
+      const candidatosAtuais = candidatosConciliacaoProjecao(item, cfg.competencia).map(c=>c.t.id);
+      item.candidatosIgnorados[cfg.competencia] = [...new Set([...jaIgnorados, ...candidatosAtuais])];
+      scheduleSave();
+    }
+    UI.conciliarProjecaoModal = null;
+    render();
+  });
   /* ---- Modal: criar/editar um lançamento previsto ---- */
   function syncNovaProjecaoForm(){
     const m = UI.novaProjecaoModal; if(!m) return;
@@ -17229,6 +17509,12 @@ function bindEvents(){
     if(g('fNovaProjecaoDia') && !g('fNovaProjecaoDia').disabled) m.dia = Math.min(31, Math.max(1, Number(g('fNovaProjecaoDia').value)||1));
     if(g('fNovaProjecaoValor') && !g('fNovaProjecaoValor').disabled) m.valor = g('fNovaProjecaoValor').value;
     if(g('fNovaProjecaoAno')) { const v = Number(g('fNovaProjecaoAno').value); if(v) m.ano = v; }
+    // Lê o valor JÁ SELECIONADO nos 3 selects (mesmo quando o usuário nunca disparou um "change" — a
+    // seleção padrão calculada por renderNovaProjecaoModal já vem marcada no HTML) — garante que o que é
+    // salvo sempre bate com o que está visivelmente escolhido no modal.
+    if(g('fNovaProjecaoGrupo') && !g('fNovaProjecaoGrupo').disabled) m.grupo = g('fNovaProjecaoGrupo').value;
+    if(g('fNovaProjecaoCategoria') && !g('fNovaProjecaoCategoria').disabled) m.subgrupo = g('fNovaProjecaoCategoria').value;
+    if(g('fNovaProjecaoSubcategoria') && !g('fNovaProjecaoSubcategoria').disabled) m.categoria = g('fNovaProjecaoSubcategoria').value;
   }
   document.getElementById('closeNovaProjecao')?.addEventListener('click', ()=>{ UI.novaProjecaoModal=null; render(); });
   document.getElementById('cancelNovaProjecao')?.addEventListener('click', ()=>{ UI.novaProjecaoModal=null; render(); });
@@ -17250,8 +17536,37 @@ function bindEvents(){
     }
     render();
   });
-  document.getElementById('btnNovaProjecaoDespesa')?.addEventListener('click', ()=>{ syncNovaProjecaoForm(); UI.novaProjecaoModal.tipo='Despesa'; render(); });
-  document.getElementById('btnNovaProjecaoReceita')?.addEventListener('click', ()=>{ syncNovaProjecaoForm(); UI.novaProjecaoModal.tipo='Receita'; render(); });
+  document.getElementById('btnNovaProjecaoDespesa')?.addEventListener('click', ()=>{
+    syncNovaProjecaoForm(); UI.novaProjecaoModal.tipo='Despesa';
+    UI.novaProjecaoModal.grupo = gruposComTipo('Despesa')[0]||'';
+    UI.novaProjecaoModal.subgrupo = categoriasDoGrupo(UI.novaProjecaoModal.grupo,'Despesa')[0]||'';
+    UI.novaProjecaoModal.categoria = '';
+    render();
+  });
+  document.getElementById('btnNovaProjecaoReceita')?.addEventListener('click', ()=>{
+    syncNovaProjecaoForm(); UI.novaProjecaoModal.tipo='Receita';
+    UI.novaProjecaoModal.grupo = gruposComTipo('Receita')[0]||'';
+    UI.novaProjecaoModal.subgrupo = categoriasDoGrupo(UI.novaProjecaoModal.grupo,'Receita')[0]||'';
+    UI.novaProjecaoModal.categoria = '';
+    render();
+  });
+  document.getElementById('fNovaProjecaoGrupo')?.addEventListener('change', e=>{
+    syncNovaProjecaoForm();
+    UI.novaProjecaoModal.grupo = e.target.value;
+    UI.novaProjecaoModal.subgrupo = categoriasDoGrupo(UI.novaProjecaoModal.grupo, UI.novaProjecaoModal.tipo)[0]||'';
+    UI.novaProjecaoModal.categoria = '';
+    render();
+  });
+  document.getElementById('fNovaProjecaoCategoria')?.addEventListener('change', e=>{
+    syncNovaProjecaoForm();
+    UI.novaProjecaoModal.subgrupo = e.target.value;
+    UI.novaProjecaoModal.categoria = '';
+    render();
+  });
+  document.getElementById('fNovaProjecaoSubcategoria')?.addEventListener('change', e=>{
+    syncNovaProjecaoForm();
+    UI.novaProjecaoModal.categoria = e.target.value;
+  });
   function atualizarBotaoNovaProjecao(){
     const btn = document.getElementById('confirmNovaProjecao');
     if(!btn) return;
@@ -17286,13 +17601,19 @@ function bindEvents(){
           const [a0,mm0] = competenciaEscolhida.split('-').map(Number);
           const {ano:anoFim, mes:mesFim} = mesAnterior(a0, mm0);
           item.competenciaFim = chaveMes(anoFim, mesFim);
-          STATE.projecoes.push({ id:uid(), dia:diaFinal, descricao:descricaoFinal, tipo:m.tipo, valor:m.cartao?0:valorFinal, cartao:m.cartao||'', competenciaInicio:competenciaEscolhida, competenciaFim:'' });
+          // Versão nova (id novo): nasce sem vínculos de conciliação próprios — a próxima passada de
+          // conciliarProjecoesComExtrato tenta casá-la de novo com o Extrato nas competências em que
+          // passar a estar ativa (o vínculo da versão antiga permanece intacto nela, para os meses já
+          // exibidos antes desta edição).
+          STATE.projecoes.push({ id:uid(), dia:diaFinal, descricao:descricaoFinal, tipo:m.tipo, valor:m.cartao?0:valorFinal, cartao:m.cartao||'', grupo:m.cartao?'':(m.grupo||''), subgrupo:m.cartao?'':(m.subgrupo||''), categoria:m.cartao?'':(m.categoria||''), vinculosExtrato:{}, candidatosIgnorados:{}, competenciaInicio:competenciaEscolhida, competenciaFim:'' });
         } else {
-          item.dia=diaFinal; item.descricao=descricaoFinal; item.tipo=m.tipo; item.valor=m.cartao?0:valorFinal; item.cartao=m.cartao||''; item.competenciaInicio=competenciaInicio;
+          item.dia=diaFinal; item.descricao=descricaoFinal; item.tipo=m.tipo; item.valor=m.cartao?0:valorFinal; item.cartao=m.cartao||'';
+          item.grupo=m.cartao?'':(m.grupo||''); item.subgrupo=m.cartao?'':(m.subgrupo||''); item.categoria=m.cartao?'':(m.categoria||'');
+          item.competenciaInicio=competenciaInicio;
         }
       }
     } else {
-      STATE.projecoes.push({ id:uid(), dia:diaFinal, descricao:descricaoFinal, tipo:m.tipo, valor: m.cartao?0:valorFinal, cartao:m.cartao||'', competenciaInicio, competenciaFim:'' });
+      STATE.projecoes.push({ id:uid(), dia:diaFinal, descricao:descricaoFinal, tipo:m.tipo, valor: m.cartao?0:valorFinal, cartao:m.cartao||'', grupo:m.cartao?'':(m.grupo||''), subgrupo:m.cartao?'':(m.subgrupo||''), categoria:m.cartao?'':(m.categoria||''), vinculosExtrato:{}, candidatosIgnorados:{}, competenciaInicio, competenciaFim:'' });
     }
     UI.novaProjecaoModal = null;
     scheduleSave(); render();
@@ -18636,6 +18957,7 @@ function bindEvents(){
     // lançamentos recém-importados aparecem automaticamente sempre que a data deles cair dentro do
     // período/filtros já selecionados, sem necessidade de nenhum ajuste aqui.
     reconciliarPagamentosFatura(); // se este extrato trouxe uma despesa/receita de pagamento de fatura, já espelha
+    conciliarProjecoesComExtrato(); // se este extrato trouxe lançamentos que realizam previstos do Fluxo de Caixa, já concilia na hora
     scheduleSave();
     if(ignorados>0) mostrarToast(`${selecionados.length} lançamento(s) importado(s). ${ignorados} deixado(s) de fora por já estarem registrados.`);
   });
