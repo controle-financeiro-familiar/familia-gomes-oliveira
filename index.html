@@ -9222,10 +9222,28 @@ function encontrarEfetivoContrachequeTRT(competencia){
   const valorTotal = calcSaldoConta(contaContracheque, ano, mes).entradas;
   return { dia: Number(creditos[0].data.slice(8,10)), valor: valorTotal };
 }
+/* Quanto de uma fatura de cartão já foi pago a partir de uma conta ELEGÍVEL do Fluxo de Caixa (Conta
+   Corrente/PJ/Poupança) — usado só pela linha "Saldo do Dia" (ver calcProjecoesMes/valorProjecaoPendente),
+   nunca pelo restante da reconciliação de faturas (pagamentoFaturaValor, sem essa restrição de conta,
+   continua sendo a fonte de verdade do status "Paga"/"Atrasada" exibido em Contas e Cartões). Um pagamento
+   "espelhado" (crédito na própria conta do cartão) só conta aqui quando a ORIGEM do vínculo
+   (transferenciaVinculoId) é uma dessas 3 contas — sem isso, não há como saber de onde saiu o dinheiro. */
+function pagamentoFaturaValorElegivel(cartao, competencia){
+  const contasElegiveis = new Set(contasElegiveisFluxoCaixa());
+  return pagamentosCandidatosFatura(cartao, competencia).reduce((s,t)=>{
+    if(contasElegiveis.has(t.conta)) return s + (Number(t.valor)||0); // "só na conta corrente" (ver pagamentosCandidatosFatura)
+    if(t.transferenciaVinculoId){ // "espelhado": confere a conta de origem pelo vínculo
+      const origem = STATE.transactions.find(o=>o.id!==t.id && o.transferenciaVinculoId===t.transferenciaVinculoId);
+      if(origem && contasElegiveis.has(origem.conta)) return s + (Number(t.valor)||0);
+    }
+    return s;
+  }, 0);
+}
 /* Monta a projeção de um único mês a partir de um saldo inicial já dado (usado tanto para o mês
    selecionado no topo do app quanto para cada um dos meses seguintes, encadeados). */
 function calcProjecoesMes(ano, mes, saldoInicial){
   const competencia = chaveMes(ano, mes);
+  const contasElegiveis = new Set(contasElegiveisFluxoCaixa());
   const linhas = STATE.projecoes
     .filter(item=>itemAtivoNaCompetencia(item, competencia))
     .map(item=>{
@@ -9235,16 +9253,33 @@ function calcProjecoesMes(ano, mes, saldoInicial){
       const diaCartao = item.cartao ? diaVencimentoCartaoNaCompetencia(item.cartao, competencia) : null;
       let dia = diaCartao || item.dia;
       let valorCalculado = valorProjecaoItem(item, competencia);
-      if(!item.cartao){
-        if(normalizarTexto(item.descricao)==='contrachequetrt'){
-          const efetivoTRT = encontrarEfetivoContrachequeTRT(competencia);
-          if(efetivoTRT){ dia = efetivoTRT.dia; valorCalculado = efetivoTRT.valor; }
-        } else {
-          const efetivo = encontrarLancamentoEfetivoParaProjecao(item, competencia);
-          if(efetivo){ dia = Number(efetivo.data.slice(8,10)); valorCalculado = Number(efetivo.valor)||0; }
+      // valorProjecaoPendente: a parte deste item que AINDA não está refletida no Extrato das contas
+      // elegíveis (PJ/Corrente/Poupança) — usado só pela linha "Saldo do Dia" (ver aplicarLinhasSaldoDiario)
+      // para nunca somar de novo o que já é saldo real. Nunca altera as colunas Valor/Saldo desta própria
+      // linha, que continuam mostrando sempre o valor total do item, exatamente como antes deste requisito.
+      let valorProjecaoPendente = valorCalculado;
+      if(item.cartao){
+        // A fatura nunca está "no Extrato" enquanto não for paga (a conta do cartão não é uma das 3
+        // elegíveis) — só a parte AINDA não paga a partir de uma conta elegível continua como projeção.
+        valorProjecaoPendente = Math.max(0, valorCalculado - pagamentoFaturaValorElegivel(item.cartao, competencia));
+      } else if(normalizarTexto(item.descricao)==='contrachequetrt'){
+        const efetivoTRT = encontrarEfetivoContrachequeTRT(competencia);
+        if(efetivoTRT){ dia = efetivoTRT.dia; valorCalculado = efetivoTRT.valor; valorProjecaoPendente = valorCalculado; }
+        // Contracheque nunca é uma das 3 contas elegíveis — mesmo já efetivado na visão geral do Fluxo de
+        // Caixa (dia/valor real acima), para a linha "Saldo do Dia" (que soma só PJ/Corrente/Poupança) esse
+        // crédito ainda não está "no Extrato elegível" — continua pendente por inteiro.
+      } else {
+        const efetivo = encontrarLancamentoEfetivoParaProjecao(item, competencia);
+        if(efetivo){
+          dia = Number(efetivo.data.slice(8,10)); valorCalculado = Number(efetivo.valor)||0;
+          // Só considera "já no Extrato" quando o lançamento encontrado está numa das 3 contas elegíveis e
+          // NÃO é um lançamento espelho de transferência interna (requisito 7 do pedido — nunca usar um
+          // espelho como "efetivação" de um previsto comum, só o lançamento financeiro original).
+          const jaNoExtratoElegivel = !efetivo.entreFamilia && contasElegiveis.has(efetivo.conta);
+          valorProjecaoPendente = jaNoExtratoElegivel ? 0 : valorCalculado;
         }
       }
-      return { ...item, competencia, valorCalculado, dia };
+      return { ...item, competencia, valorCalculado, dia, valorProjecaoPendente };
     })
     .sort((a,b)=>(Number(a.dia)||0)-(Number(b.dia)||0));
   let saldo = saldoInicial;
@@ -9274,90 +9309,44 @@ function calcSaldoAtualFluxoCaixa(){
   return contasElegiveisFluxoCaixa().reduce((s,c)=> s + saldoContaAteData(c, dataRef), 0)
     + contasContracheque.reduce((s,c)=> s + saldoContaAteData(c, dataRef), 0);
 }
-/* Linhas "Saldo do Dia" do Fluxo de Caixa — uma para cada dia que já teve movimentação REAL (já refletida
-   no Extrato) nas contas elegíveis (Conta Corrente/PJ/Poupança — mesma composição de
-   contasElegiveisFluxoCaixa), calculadas de forma estritamente cronológica e sem depender em nada dos
-   itens previstos (STATE.projecoes) exibidos nas demais linhas da mesma tabela — a fonte é sempre e
-   somente STATE.transactions (o próprio Extrato), então um lançamento previsto que porventura já esteja
-   "casado" com um lançamento real (ver encontrarLancamentoEfetivoParaProjecao) nunca é somado duas vezes:
-   ele só aparece nesta soma pela via real (STATE.transactions), nunca pela via prevista (que é apenas uma
-   camada de exibição por cima do mesmo dado, não uma segunda fonte). */
-/* Movimentação líquida (Receita − Despesa) de um único dia nas contas elegíveis do Fluxo de Caixa, com os
-   MESMOS critérios de inclusão/exclusão já usados no Extrato de cada conta (ver itensExtratoConta): exclui
-   o(s) lançamento(s) de Saldo Anterior (é o ponto de partida da conta, nunca uma movimentação do próprio
-   dia — ver ehSaldoAnterior) e considera qualquer outro lançamento da data exata, independentemente da
-   ordenação/posição visual em que ele apareça em qualquer tabela (requisito 4). */
-function movimentacaoDiaFluxoCaixa(dataISO){
-  const contasElegiveis = new Set(contasElegiveisFluxoCaixa());
-  let soma = 0;
-  STATE.transactions.forEach(t=>{
-    if(t.data!==dataISO || !contasElegiveis.has(t.conta) || ehSaldoAnterior(t)) return;
-    const v = Number(t.valor)||0;
-    soma += (t.tipo==='Receita' ? v : (t.tipo==='Despesa' ? -v : 0));
-  });
-  return soma;
-}
-/* Dias (1..31) de uma competência que já possuem ao menos um lançamento real e já efetivamente ocorrido
-   (data <= hoje) numa conta elegível do Fluxo de Caixa — junto com o dia de hoje (sempre, quando o mês
-   consultado é o mês real corrente — ver aplicarLinhasSaldoDiario), são os dias que recebem sua própria
-   linha "Saldo do Dia". Um dia sem nenhuma movimentação real (fora "hoje") não gera linha própria (evitando
-   inflar a tabela com dezenas de linhas "sem alteração"): isso não quebra a continuidade cronológica do
-   saldo, já que pular um dia sem lançamento nenhum chega ao mesmo valor que somar zero nele.
-   Um mês inteiramente futuro (nenhum dia com data <= hoje) simplesmente não gera nenhuma linha — não existe
-   Extrato ainda para ele. */
-function diasComMovimentoFluxoCaixa(ano, mes){
-  const hoje = hojeISO();
-  const competencia = chaveMes(ano, mes);
-  const contasElegiveis = new Set(contasElegiveisFluxoCaixa());
-  const dias = new Set();
-  STATE.transactions.forEach(t=>{
-    if(!t.data || t.data.slice(0,7)!==competencia || t.data>hoje) return;
-    if(!contasElegiveis.has(t.conta) || ehSaldoAnterior(t)) return;
-    dias.add(Number(t.data.slice(8,10)));
-  });
-  return [...dias].sort((a,b)=>a-b);
-}
-/* Injeta uma linha especial "Saldo do Dia" para cada dia com movimentação real (diasComMovimentoFluxoCaixa),
-   na posição cronológica correta entre os lançamentos previstos já ordenados por dia — o dia de hoje SEMPRE
-   recebe sua própria linha quando o mês exibido é o mês real corrente, mesmo sem nenhuma movimentação nele
-   (mantém o "você está aqui" que já existia antes desta generalização — o saldo nesse caso simplesmente
-   repete o do último dia com movimentação, sem alteração), com o rótulo "Saldo do dia atual" (ver
-   renderLinhaSaldoAtual); qualquer outro dia usa o rótulo "Saldo do Dia". O saldo de cada linha é sempre:
-   saldo do dia anterior COM movimentação (ou o Saldo Inicial do mês, para o primeiro dia com movimentação)
-   + a movimentação líquida do próprio dia (movimentacaoDiaFluxoCaixa) — nunca uma leitura dos itens
-   previstos já exibidos na tabela (requisitos 1-3). A partir da última linha "Saldo do Dia" inserida, os
-   lançamentos previstos com dia maior têm seu Saldo recalculado a partir desse valor real (mesma lógica que
-   já existia só para "hoje", agora generalizada para o último dia com dado real de cada mês) — os
-   lançamentos previstos com dia menor ou igual ao de alguma linha "Saldo do Dia" mantêm o saldo já
-   calculado por calcProjecoesMes, sem alteração. O saldoFinal do mês (saldo inicial do mês seguinte na
-   cadeia de calcProjecoesMultiMes) passa a refletir essa correção quando houver ao menos um dia real. */
+/* Injeta uma linha especial "Saldo do Dia" SOMENTE nos dias que já possuem ao menos um lançamento nas
+   próprias tabelas do Fluxo de Caixa (STATE.projecoes já filtrado/calculado por calcProjecoesMes) — nunca
+   em todos os dias do período (requisito 1). Para cada um desses dias:
+     1) consulta o saldo REAL acumulado das contas elegíveis (PJ/Corrente/Poupança) até a data — o Extrato
+        nunca inclui datas futuras, então um dia além de hoje usa o último saldo real conhecido (hoje);
+     2) soma a essa base só a parcela de cada lançamento do próprio dia que AINDA não está refletida no
+        Extrato (l.valorProjecaoPendente, já calculado por calcProjecoesMes — 0 quando o lançamento já foi
+        encontrado como real numa conta elegível, o valor cheio quando ainda é só projeção, ou o saldo
+        residual ainda não pago quando é uma fatura de cartão parcialmente quitada).
+   O saldo real sempre prevalece (requisito 2/11): um lançamento já no Extrato nunca é somado de novo (seu
+   valorProjecaoPendente é 0), e a diferença entre o valor previsto e o valor real (quando existir) nunca é
+   criada como um lançamento adicional — ela simplesmente desaparece porque só o saldo real conta a partir
+   dali. O dia de hoje usa o rótulo "Saldo do dia atual" (ver renderLinhaSaldoAtual) quando também possuir
+   lançamento; qualquer outro dia usa "Saldo do Dia". O saldoFinal do mês (saldo inicial do mês seguinte na
+   cadeia de calcProjecoesMultiMes) passa a ser o saldo da última linha "Saldo do Dia" inserida. */
 function aplicarLinhasSaldoDiario(m){
+  const diasComLancamento = [...new Set(m.linhas.map(l=>Number(l.dia)||0))].sort((a,b)=>a-b);
+  if(!diasComLancamento.length) return m;
   const hoje = new Date();
   const ehMesReal = m.ano===hoje.getFullYear() && (m.mes-1)===hoje.getMonth();
   const diaHoje = hoje.getDate();
-  const dias = diasComMovimentoFluxoCaixa(m.ano, m.mes);
-  if(ehMesReal && !dias.includes(diaHoje)) dias.push(diaHoje);
-  dias.sort((a,b)=>a-b);
-  if(!dias.length) return m;
+  const hojeStr = hojeISO();
+  const contasElegiveis = contasElegiveisFluxoCaixa();
   const linhas = m.linhas.slice();
-  let saldoCorrente = m.saldoInicial;
-  dias.forEach(dia=>{
+  let saldoFinal = m.saldoFinal;
+  diasComLancamento.forEach(dia=>{
     const dataISO = `${m.ano}-${pad2(m.mes)}-${pad2(dia)}`;
-    saldoCorrente += movimentacaoDiaFluxoCaixa(dataISO);
-    const linhaEspecial = { id:`saldo-dia-${dataISO}`, especial:'saldo-dia', ehHoje: ehMesReal && dia===diaHoje, dia, saldo: saldoCorrente };
+    const dataRef = dataISO<=hojeStr ? dataISO : hojeStr;
+    const saldoReal = contasElegiveis.reduce((s,c)=> s + saldoContaAteData(c, dataRef), 0);
+    const pendentesDoDia = m.linhas.filter(l=>Number(l.dia)===dia)
+      .reduce((s,l)=> s + (l.tipo==='Despesa' ? -l.valorProjecaoPendente : l.valorProjecaoPendente), 0);
+    const saldoDia = saldoReal + pendentesDoDia;
+    const linhaEspecial = { id:`saldo-dia-${dataISO}`, especial:'saldo-dia', ehHoje: ehMesReal && dia===diaHoje, dia, saldo: saldoDia };
     let posicao = linhas.findIndex(l => (Number(l.dia)||0) > dia);
     if(posicao===-1) posicao = linhas.length;
     linhas.splice(posicao, 0, linhaEspecial);
+    saldoFinal = saldoDia;
   });
-  const ultimoDia = dias[dias.length-1];
-  const posUltimo = linhas.findIndex(l => l.especial==='saldo-dia' && l.dia===ultimoDia);
-  for(let i=posUltimo+1;i<linhas.length;i++){
-    const l = linhas[i];
-    if(l.especial) continue; // nunca deveria haver outra linha especial daqui em diante, mas por segurança
-    saldoCorrente += (l.tipo==='Despesa' ? -l.valorCalculado : l.valorCalculado);
-    l.saldo = saldoCorrente;
-  }
-  const saldoFinal = linhas.length ? linhas[linhas.length-1].saldo : saldoCorrente;
   return { ...m, linhas, saldoFinal };
 }
 function calcProjecoesMultiMes(anoBase, mesBase, qtdMeses){
@@ -13133,7 +13122,7 @@ function renderResumo(){
           <li>O <b>Saldo Inicial</b> do primeiro mês é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança cadastrada (não inclui Contracheque, Reserva de Emergência nem cartões de crédito) — o mesmo valor já calculado no painel Contas;</li>
           <li>Acumula o efeito de cada lançamento em ordem cronológica;</li>
           <li>O <b>saldo final</b> de cada mês torna-se automaticamente o <b>saldo inicial</b> do mês seguinte, garantindo a continuidade da projeção financeira.</li>
-          <li>Toda data que já teve lançamentos efetivamente realizados (Conta Corrente, PJ ou Poupança) ganha sua própria linha <b>📅 Saldo do Dia</b> (o dia de hoje aparece destacado como <b>📍 Saldo do dia atual</b>), com o saldo real apurado no Extrato até aquele dia — sempre em ordem cronológica pela Data de cada lançamento, nunca pela posição visual da linha na tabela, e sem contar duas vezes um mesmo lançamento.</li>
+          <li>Toda data que já possui algum lançamento nesta tabela ganha sua própria linha <b>📅 Saldo do Dia</b> (o dia de hoje aparece destacado como <b>📍 Saldo do dia atual</b>) — combinando o saldo real do Extrato das contas Corrente, PJ e Poupança com os lançamentos daquele dia que ainda não estão refletidos nesse Extrato. Um lançamento já existente no Extrato usa o valor exato registrado nele, nunca o valor previsto; um lançamento ainda não realizado entra como projeção pelo valor previsto. Nada é contado duas vezes.</li>
         </ul>
       </div>
     </details>
