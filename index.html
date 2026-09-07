@@ -1773,7 +1773,15 @@ summary::marker{content:'';}
   display:inline-flex;align-items:center;gap:2px;background:var(--navy-50);border:1px solid var(--line);
   border-radius:20px;padding:5px 6px 5px 12px;font-size:12.5px;color:var(--navy-800);font-weight:600;
 }
-.resumo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:16px;align-items:start;}
+/* align-items:stretch (item do requisito — altura padronizada por linha do grid): cada .panel filho estica
+   para ocupar a altura da linha inteira do grid — a MAIOR altura entre os painéis daquela linha (é assim que
+   o CSS Grid já calcula a altura de uma "track" de linha, por padrão, sem JS nenhum) — nunca a altura de
+   todo o grid inteiro, então linhas diferentes continuam podendo ter alturas diferentes entre si. Um painel
+   com conteúdo menor só ganha espaço em branco extra dentro da própria borda, nunca fica mais baixo que o
+   vizinho nem acontece nenhum corte/scroll (.tabela-fluxo-wrap já não tem max-height — ver comentário
+   próprio a ela). Recalculado automaticamente a cada render, então funciona também quando a quantidade de
+   lançamentos de qualquer mês muda dinamicamente. */
+.resumo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:16px;align-items:stretch;}
 @media(max-width:480px){.grid-cards{grid-template-columns:1fr;}}
 .saldo-final-projetado{
   display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding:10px 14px;
@@ -12821,9 +12829,12 @@ function renderLinhaSaldoAtual(l){
       <td data-label=""></td>
     </tr>`;
 }
-/* Um painel/mês da projeção, replicando exatamente a mesma estrutura de tabela. O 1º painel (idx 0) é o
-   mês selecionado no topo do app e tem o Saldo Inicial editável (campo mostrado uma vez, acima de todos
-   os painéis); os 3 seguintes encadeiam o saldo final do painel anterior como saldo inicial, só exibido. */
+/* Um painel/mês da projeção, replicando exatamente a mesma estrutura de tabela — inclusive o "Saldo
+   inicial" no cabeçalho (fluxo-mes-resumo), mostrado da mesma forma em TODOS os painéis, sem exceção (item
+   do requisito de padronização visual). O 1º painel (idx 0) é o mês selecionado no topo do app; além desse
+   valor só de leitura no próprio cabeçalho, ele também tem o campo Saldo Inicial EDITÁVEL, mostrado uma
+   única vez acima de todos os painéis (ver renderResumo) — os 3 painéis seguintes encadeiam o saldo final
+   do painel anterior como saldo inicial, sempre só exibido. */
 function renderPainelProjecao(m, idx){
   const linhasHtml = m.linhas.length ? m.linhas.map(l=> l.especial==='saldo-dia' ? renderLinhaSaldoAtual(l) : renderLinhaProjecao(l)).join('') : `<tr><td colspan="6" class="hint" style="text-align:center;padding:14px;">Nenhum lançamento previsto ainda. Use "+ Novo lançamento previsto" para começar.</td></tr>`;
   // DOCUMENTAÇÃO — ver o comentário completo junto à classe CSS ".tabela-fluxo" (procure por
@@ -12863,7 +12874,7 @@ function renderPainelProjecao(m, idx){
       <summary class="fluxo-mes-summary">
         <span class="fluxo-mes-titulo">📅 ${MESES[m.mes-1]}/${m.ano}</span>
         <span class="fluxo-mes-resumo">
-          ${idx===0 ? '' : `<span class="hint" style="margin:0;">Saldo inicial ${fmtBRL(m.saldoInicial)}</span>`}
+          <span class="hint" style="margin:0;">Saldo inicial ${fmtBRL(m.saldoInicial)}</span>
           <b class="${classeSinalMoeda(m.saldoFinal)}">Saldo final ${fmtBRL(m.saldoFinal)}</b>
         </span>
         <span class="expand-arrow" data-arrow-for="fluxo-mes-${chaveMesFluxo}">${abertoFluxo?'➖':'➕'}</span>
