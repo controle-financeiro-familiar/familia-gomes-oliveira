@@ -9265,9 +9265,17 @@ function calcProjecoesMes(ano, mes, saldoInicial){
       } else if(normalizarTexto(item.descricao)==='contrachequetrt'){
         const efetivoTRT = encontrarEfetivoContrachequeTRT(competencia);
         if(efetivoTRT){ dia = efetivoTRT.dia; valorCalculado = efetivoTRT.valor; valorProjecaoPendente = valorCalculado; }
-        // Contracheque nunca é uma das 3 contas elegíveis — mesmo já efetivado na visão geral do Fluxo de
-        // Caixa (dia/valor real acima), para a linha "Saldo do Dia" (que soma só PJ/Corrente/Poupança) esse
-        // crédito ainda não está "no Extrato elegível" — continua pendente por inteiro.
+        // O Contracheque em si nunca é uma das 3 contas elegíveis, mas o líquido é depositado na sua Conta
+        // vinculada (STATE.contaVinculada) através de um lançamento espelho "Recebimento de Proventos..."
+        // (ver importConfirm/aplicarTransferenciaInterna, marcado com contrachequeOrigemId nos dois lados).
+        // Quando essa conta vinculada É uma das 3 elegíveis e o espelho já existe para esta competência, o
+        // valor já está no Extrato elegível (o mesmo saldoReal de aplicarLinhasSaldoDiario já soma essa
+        // conta inteira) — deixa de ser pendente, senão seria contado duas vezes.
+        const contaContracheque = STATE.contas.find(c=>STATE.contaTipos[c]==='Contracheque');
+        const contaVinculadaBancaria = contaContracheque ? STATE.contaVinculada[contaContracheque] : null;
+        const espelhoJaNaContaVinculada = contaVinculadaBancaria && contasElegiveis.has(contaVinculadaBancaria)
+          && STATE.transactions.some(t=> t.conta===contaVinculadaBancaria && t.contrachequeOrigemId && t.data && t.data.slice(0,7)===competencia);
+        if(espelhoJaNaContaVinculada) valorProjecaoPendente = 0;
       } else {
         const efetivo = encontrarLancamentoEfetivoParaProjecao(item, competencia);
         if(efetivo){
