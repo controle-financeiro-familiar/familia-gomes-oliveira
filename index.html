@@ -850,6 +850,16 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
 .tabela-fluxo th{padding:6px 8px;}
 .tabela-fluxo td:nth-child(2){overflow-wrap:break-word;word-break:break-word;}
 .tabela-fluxo .icon-btn{padding:2px;font-size:12px;}
+/* Coluna Ações (desktop): botões sempre alinhados à direita, espaçamento uniforme entre eles e nunca em
+   mais de uma linha — display:flex resolve os três de uma vez (flex-wrap:nowrap é redundante com
+   white-space:nowrap do <td>, mas documenta a intenção mesmo se o white-space inline for removido no
+   futuro). A largura da própria coluna já é calculada à parte (ver renderPainelProjecao/chAcoes) para
+   sempre caber os 3 ícones (inclusive o 🔓 pós-conciliação) sem estourar a tabela. */
+.tabela-fluxo td.tabela-fluxo-acoes{display:flex;justify-content:flex-end;align-items:center;gap:4px;flex-wrap:nowrap;}
+/* Selo de status de conciliação (ver seloConciliacaoProjecao): só o ícone, sem badge/fundo/borda — o
+   significado fica só no tooltip (title) e no aria-label, nunca em texto visível na tabela. */
+.selo-conciliacao{display:inline-block;font-size:12px;cursor:default;line-height:1;vertical-align:middle;}
+.selo-conciliacao[data-clicavel]{cursor:pointer;}
 /* Fluxo de Caixa no mobile (item 13 do requisito de responsividade): a mesma tabela vira uma lista
    vertical de cards — cada <tr> um card, cada <td> uma linha "rótulo: valor" — sem tocar no cálculo da
    projeção nem duplicar a lógica de renderPainelProjecao/renderLinhaProjecao, só a apresentação. As linhas
@@ -1452,6 +1462,10 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 }
 .info-card.warn{background:#fff8e6;border-color:#f0d090;color:#7a5000;}
 .info-card .info-card-icon{font-size:17px;line-height:1.4;}
+/* Resumo ao vivo do modal de conciliação (renderConciliarProjecaoModal — requisito 2): qtd/valor
+   conciliado/projetado/diferença/status, lado a lado, recalculado a cada checkbox marcado/desmarcado. */
+.conciliar-resumo{border-collapse:separate;border-spacing:8px 0;margin-left:-8px;width:calc(100% + 16px) !important;}
+.conciliar-resumo td{background:var(--navy-50);border-radius:8px;padding:8px 12px;font-size:12px;}
 /* Previsão Financeira: no desktop, Projeção e Confiabilidade dividem a mesma linha (Confiabilidade
    alinhada à direita, via order+margin-left:auto — nunca empurrando para uma linha extra), com Faixa
    provável na linha de baixo, ocupando a largura toda (flex-basis:100% força a quebra, mesma técnica já
@@ -4865,6 +4879,7 @@ let STATE = {
   ready: false,
   dirty: false, // true quando há alterações ainda não salvas nos arquivos .cfg/.log conectados
   contrachequeResumos: {}, // { [conta]: { [competencia AAAA-MM]: {bruto,descontos,liquido,margemConsignavel,remuneracaoConsignacao} } } — valores oficiais extraídos do PDF do contracheque na importação (ver renderExtratoContaModal/resumoContrachequeCompetencia), nunca recalculados a partir dos lançamentos quando existem
+  projecaoExclusoesPorCompetencia: {}, // { [lancamentoId]: { [competencia AAAA-MM]: true } } — exclusão de um lançamento previsto (STATE.projecoes) de UMA competência específica, sem excluir o cadastro nem as demais competências (ver itemAtivoNaCompetencia/renderConfirmDelProjecaoModal). Identificado sempre pelo id imutável do lançamento, nunca por descrição/valor/data/classificação — sobrevive a edições do lançamento e nunca é recriado automaticamente numa atualização do Fluxo de Caixa.
 };
 let UI = {
   tab: "dashboard",
@@ -4936,7 +4951,8 @@ let UI = {
   buscaCategorias: '',
   textModal: null, // { tipo, nome, original, grupo } — modal genérico de nome único (conta, cartão, meio, grupo, categoria)
   novaProjecaoModal: null, // { ano, mes } — escolha do mês a partir do qual um novo lançamento previsto passa a aparecer
-  conciliarProjecaoModal: null, // { itemId, competencia } — revisão manual dos candidatos de conciliação de um previsto "pendente" (ver renderConciliarProjecaoModal)
+  conciliarProjecaoModal: null, // { itemId, competencia, selecionados } — revisão manual dos candidatos de conciliação de um previsto "pendente"/já conciliado (ver renderConciliarProjecaoModal) — selecionados: ids marcados nos checkboxes, ainda não confirmados
+  confirmDelProjecao: null, // { itemId, competencia } — pergunta se a exclusão de um lançamento previsto deve valer só para esta competência (ver STATE.projecaoExclusoesPorCompetencia) ou para o lançamento inteiro (todas as competências)
   confirmDelParcela: null, // { id } — pergunta se a exclusão de uma parcela deve incluir as parcelas futuras da mesma compra
   pendingEdicaoParcela: null, // { novo, antigo, conta } — edição já validada de uma parcela existente, aguardando o usuário escolher o escopo de propagação (ver confirmEditarParcela) antes de ser efetivamente salva
   confirmEditarParcela: null, // { id } — pergunta se a edição de uma parcela deve ser aplicada só a ela, também às futuras, ou a todas as parcelas da mesma compra
@@ -5032,6 +5048,7 @@ const CAMADAS_MODAL = [
                                         // modal de Nível 1 (Ver Extrato/Lançamentos futuros/Ver Fatura/Ver
                                         // Próximas Faturas), por isso fica no Nível 2, acima deles todos
   'duplicarMesesModal',                // ovDuplicarMeses — Duplicar por vários meses consecutivos
+  'confirmDelProjecao',                // ovConfirmDelProjecao — confirmar escopo da exclusão de um lançamento previsto (só esta competência ou todas)
   'confirmDelParcela',                 // ovConfirmDelParcela — confirmar exclusão de parcela
   'confirmEditarParcela',              // ovConfirmEditarParcela — confirmar escopo da edição de uma parcela
   'backupModal',                       // ovBackup — Backup e Restauração
@@ -5463,11 +5480,19 @@ function buildCSVConfig(){
       rows.push(['CONTRACHEQUERESUMO', conta, r.dataCredito||'', '', r.bruto||0, '', '', '', '', '', conta, '', competencia, r.descontos||0, r.liquido||0, r.margemConsignavel||0, '', r.remuneracaoConsignacao||0, '', '', '', '', '', '']);
     });
   });
+  // Exclusão por competência de um lançamento previsto (ver STATE.projecaoExclusoesPorCompetencia/
+  // itemAtivoNaCompetencia) — id = lancamentoId (imutável), competencia_fatura = a competência excluída.
+  Object.keys(STATE.projecaoExclusoesPorCompetencia||{}).forEach(lancamentoId=>{
+    Object.keys(STATE.projecaoExclusoesPorCompetencia[lancamentoId]||{}).forEach(competencia=>{
+      if(!STATE.projecaoExclusoesPorCompetencia[lancamentoId][competencia]) return;
+      rows.push(['PROJECAOEXCLUSAO', lancamentoId, '', '', '', '', '', '', '', '', '', '', competencia, '', '', '', '', '', '', '', '', '', '', '']);
+    });
+  });
   return Papa.unparse(rows);
 }
 function loadCSVConfig(text){
   const parsed = Papa.parse(text.trim(), { header:true, skipEmptyLines:true });
-  const cardConfig = {}, cardOverrides = {}, cardStatus = {}, saldosIniciais = {}, contas = [], cartoes = [], categoriasCSV = [], meiosPagamento = [], contaTipos = {}, contaResponsavel = {}, contaBandeira = {}, contaExtra = {}, contaVinculada = {}, cardLimite = {}, gruposLimiteCartao = {}, responsaveis = [], responsavelIcone = {}, subcategoriaResponsavel = {}, projecoes = [], metas = [], contrachequeResumos = {};
+  const cardConfig = {}, cardOverrides = {}, cardStatus = {}, saldosIniciais = {}, contas = [], cartoes = [], categoriasCSV = [], meiosPagamento = [], contaTipos = {}, contaResponsavel = {}, contaBandeira = {}, contaExtra = {}, contaVinculada = {}, cardLimite = {}, gruposLimiteCartao = {}, responsaveis = [], responsavelIcone = {}, subcategoriaResponsavel = {}, projecoes = [], metas = [], contrachequeResumos = {}, projecaoExclusoes = {};
   parsed.data.forEach(r=>{
     if(r.tipo_registro==='CARDCFG'){
       cardConfig[r.id] = { fechamento: r.dia_fechamento?Number(r.dia_fechamento):null, vencimento: r.dia_vencimento?Number(r.dia_vencimento):null };
@@ -5513,10 +5538,17 @@ function loadCSVConfig(text){
       cardLimite[r.id] = { limiteTotal: r.valor?parseFloat(r.valor):null, grupoLimiteId: r.pgto||null };
     } else if(r.tipo_registro==='GRUPOLIMITE'){
       gruposLimiteCartao[r.id] = { limiteTotal: parseFloat(r.valor)||0 };
+    } else if(r.tipo_registro==='PROJECAOEXCLUSAO'){
+      // Exclusão de um lançamento previsto (STATE.projecoes) de UMA competência específica (ver
+      // itemAtivoNaCompetencia/renderConfirmDelProjecaoModal) — id = r.id (lancamentoId, imutável),
+      // competência = r.competencia_fatura, nunca descrição/valor/data/classificação.
+      if(!projecaoExclusoes[r.id]) projecaoExclusoes[r.id] = {};
+      if(r.competencia_fatura) projecaoExclusoes[r.id][r.competencia_fatura] = true;
     }
   });
   STATE.cardConfig = {...CARDCFG_DEFAULT, ...cardConfig}; STATE.cardOverrides = cardOverrides; STATE.cardStatus = cardStatus; STATE.saldosIniciais = saldosIniciais;
   STATE.contrachequeResumos = contrachequeResumos;
+  STATE.projecaoExclusoesPorCompetencia = projecaoExclusoes;
   STATE.contaResponsavel = { ...CONTA_RESPONSAVEL_DEFAULT, ...contaResponsavel };
   STATE.contaBandeira = { ...CONTA_BANDEIRA_DEFAULT, ...contaBandeira };
   STATE.contaExtra = { ...contaExtra };
@@ -9236,21 +9268,30 @@ function valorProjecaoItem(item, competencia){
 /* Um item só aparece a partir do mês/ano escolhido em "competenciaInicio" (se definido); sem essa
    restrição, aparece em todos os meses, como na planilha de referência. Se "competenciaFim" estiver
    definido, o item deixa de aparecer a partir do mês seguinte a ele (usado quando uma edição futura
-   "encerra" a versão antiga do item — ver confirmNovaProjecao). */
+   "encerra" a versão antiga do item — ver confirmNovaProjecao). Por fim, uma exclusão específica desta
+   competência (STATE.projecaoExclusoesPorCompetencia — ver renderConfirmDelProjecaoModal) também impede o
+   item de aparecer aqui, sem excluir o cadastro nem afetar nenhuma outra competência: é a única forma de
+   "excluir só deste mês" sem que a próxima atualização do Fluxo de Caixa recrie a linha automaticamente. */
 function itemAtivoNaCompetencia(item, competencia){
   if(item.competenciaInicio && competencia < item.competenciaInicio) return false;
   if(item.competenciaFim && competencia > item.competenciaFim) return false;
+  if(STATE.projecaoExclusoesPorCompetencia?.[item.id]?.[competencia]) return false;
   return true;
 }
 /* ---------- Conciliação dos lançamentos do Fluxo de Caixa com o Extrato ----------
-   Cada item de STATE.projecoes (lançamento previsto) pode ficar permanentemente vinculado ao lançamento
-   real do Extrato que o realizou, através de vinculosExtrato[competencia] = id do lançamento real
-   (t.id — o único identificador confiável: nunca muda por edição, é sempre novo em duplicação/parcelamento,
-   e nunca é reaproveitado após uma exclusão). O vínculo é por competência (não um único campo no item)
+   Cada item de STATE.projecoes (lançamento previsto) pode ficar permanentemente vinculado a UM OU MAIS
+   lançamentos reais do Extrato que o realizaram, através de vinculosExtrato[competencia] = array de ids dos
+   lançamentos reais (t.id — o único identificador confiável: nunca muda por edição, é sempre novo em
+   duplicação/parcelamento, e nunca é reaproveitado após uma exclusão) — ver vinculosDaCompetencia, a única
+   função que deve ler este campo (normaliza o formato antigo, um único id solto, para array de 1). Mais de
+   um vínculo na mesma competência representa a MESMA realização financeira fragmentada em vários registros
+   (ex.: pagamento de fatura quitado em duas transferências parciais que juntas somam o valor projetado) —
+   nunca duas ocorrências diferentes do previsto. O vínculo é por competência (não um único campo no item)
    porque um mesmo item recorrente é avaliado em várias competências ao mesmo tempo (mês selecionado + os
-   3 seguintes — ver calcProjecoesMultiMes), cada uma com seu próprio lançamento real correspondente. Uma
-   vez estabelecido, o vínculo permanece mesmo que o lançamento do Extrato seja depois editado (data, valor,
-   descrição, categoria) — é sempre relido pelo id, nunca recalculado por semelhança. */
+   3 seguintes — ver calcProjecoesMultiMes), cada uma com seu(s) próprio(s) lançamento(s) real(is)
+   correspondente(s). Uma vez estabelecido, cada vínculo permanece mesmo que o lançamento do Extrato seja
+   depois editado (data, valor, descrição, categoria) — é sempre relido pelo id, nunca recalculado por
+   semelhança. */
 /* Pontuação de o quanto um lançamento real é um bom candidato para realizar um item previsto — usada tanto
    pela conciliação automática (conciliarProjecoesComExtrato) quanto pela tela de conciliação manual
    (candidatosConciliacaoProjecao/renderConciliarProjecaoModal). Conta e Tipo são critérios FUNDAMENTAIS: um
@@ -9314,42 +9355,66 @@ function pontuarCandidatoConciliacao(item, t, competencia){
   if(t.competencia===competencia) pontos += 2; // Fatura/Competência explícita do lançamento bate
   return pontos;
 }
+/* Vínculos de conciliação de um item numa competência: SEMPRE um array de ids de lançamentos reais do
+   Extrato (t.id), mesmo quando há só 1 — um previsto pode ser conciliado com MAIS DE UM registro (ex.: um
+   pagamento de fatura quitado em duas transferências parciais que juntas somam o valor projetado). Aceita
+   também o formato antigo (um único id como string solta, de dados salvos antes desta mudança) por
+   compatibilidade — sempre devolvido como array de 1 elemento, nunca a string solta. Esta função é a ÚNICA
+   forma de ler vinculosExtrato[competencia] no resto do código — nunca acessar o campo bruto diretamente,
+   para não reintroduzir a distinção string-vs-array em outro lugar. */
+function vinculosDaCompetencia(item, competencia){
+  const v = item.vinculosExtrato && item.vinculosExtrato[competencia];
+  if(!v) return [];
+  return Array.isArray(v) ? v : [v];
+}
 /* Um mesmo item recorrente é avaliado em várias competências ao mesmo tempo (mês selecionado + os 3
-   seguintes); um lançamento real já vinculado a ELE MESMO numa competência nunca pode ser reaproveitado
-   como candidato de OUTRA competência do mesmo item recorrente (um único lançamento real só pode realizar
-   uma ocorrência) — sem essa exclusão, um lançamento de setembro cairia também na janela de outubro
-   (mesAnterior/proximoMes) e seria vinculado às duas competências ao mesmo tempo. */
+   seguintes); um lançamento real já vinculado a ELE MESMO numa OUTRA competência nunca pode ser
+   reaproveitado como candidato desta — sem essa exclusão, um lançamento de setembro cairia também na
+   janela de outubro (mesAnterior/proximoMes) e seria vinculado às duas competências ao mesmo tempo. Um
+   mesmo lançamento real nunca é contado duas vezes na mesma realização financeira (requisito 11): a soma
+   de todos os vínculos de uma competência representa uma ÚNICA ocorrência do previsto, ainda que
+   fragmentada em vários registros do Extrato. */
 function idsJaVinculadosOutrasCompetencias(item, competenciaAtual){
   if(!item.vinculosExtrato) return new Set();
-  return new Set(Object.entries(item.vinculosExtrato).filter(([c])=>c!==competenciaAtual).map(([,id])=>id));
+  const ids = [];
+  Object.keys(item.vinculosExtrato).forEach(c=>{ if(c!==competenciaAtual) ids.push(...vinculosDaCompetencia(item, c)); });
+  return new Set(ids);
 }
 /* Candidatos plausíveis (pontuação >= LIMIAR_CONCILIACAO) para conciliar este item nesta competência,
    excluindo os já descartados manualmente (item.candidatosIgnorados[competencia] — ver
-   renderConciliarProjecaoModal) e os já vinculados a este mesmo item em outra competência (ver
-   idsJaVinculadosOutrasCompetencias), do melhor para o pior. Itens de cartão nunca usam esta conciliação (o
-   valor da fatura já vem de faturaPorCompetencia, uma fonte própria e exata). O previsto "Contracheque TRT"
-   também nunca usa esta conciliação — voltou a ser uma exceção (ver calcProjecoesMes/statusConciliacaoProjecao):
-   sua data/valor vêm exclusivamente de existir ou não um contracheque importado na competência
-   (contrachequeCompetenciaImportada/dataCreditoContracheque/resumoContrachequeCompetencia), nunca de um
-   vínculo com o Extrato — mesmo o lançamento "Recebimento de Proventos..." não deve ser usado para
-   determinar esse valor (requisito explícito: não depender da conciliação com o Extrato). */
+   renderConciliarProjecaoModal), os já vinculados a este mesmo item em outra competência (ver
+   idsJaVinculadosOutrasCompetencias) e os já vinculados a ele NESTA MESMA competência (vinculosDaCompetencia
+   — um registro já conciliado não deve aparecer de novo na lista de "restantes" a escolher, mesmo que o
+   previsto aceite outros registros adicionais), do melhor para o pior. Itens de cartão nunca usam esta
+   conciliação (o valor da fatura já vem de faturaPorCompetencia, uma fonte própria e exata). O previsto
+   "Contracheque TRT" também nunca usa esta conciliação — voltou a ser uma exceção (ver
+   calcProjecoesMes/statusConciliacaoProjecao): sua data/valor vêm exclusivamente de existir ou não um
+   contracheque importado na competência (contrachequeCompetenciaImportada/dataCreditoContracheque/
+   resumoContrachequeCompetencia), nunca de um vínculo com o Extrato — mesmo o lançamento "Recebimento de
+   Proventos..." não deve ser usado para determinar esse valor (requisito explícito: não depender da
+   conciliação com o Extrato). */
 function candidatosConciliacaoProjecao(item, competencia){
   if(item.cartao || normalizarTexto(item.descricao)==='contrachequetrt') return [];
   const ignorados = new Set((item.candidatosIgnorados && item.candidatosIgnorados[competencia]) || []);
   const jaVinculadosOutraCompetencia = idsJaVinculadosOutrasCompetencias(item, competencia);
+  const jaVinculadosMesmaCompetencia = new Set(vinculosDaCompetencia(item, competencia));
   return STATE.transactions
-    .filter(t=>!ignorados.has(t.id) && !jaVinculadosOutraCompetencia.has(t.id))
+    .filter(t=>!ignorados.has(t.id) && !jaVinculadosOutraCompetencia.has(t.id) && !jaVinculadosMesmaCompetencia.has(t.id))
     .map(t=>({ t, pontos: pontuarCandidatoConciliacao(item, t, competencia) }))
     .filter(x=>x.pontos>=LIMIAR_CONCILIACAO)
     .sort((a,b)=>b.pontos-a.pontos);
 }
 /* "Projetado" (ainda sem candidato plausível), "pendente" (2+ candidatos plausíveis, mas nenhum vínculo
-   automático seguro o suficiente — precisa de escolha manual), "conciliado" (vínculo já estabelecido e o
-   lançamento real ainda existe) ou "contracheque-importado" (só para o previsto "Contracheque TRT": já
-   existe um contracheque importado para esta competência — ver contrachequeCompetenciaImportada — então
-   data/valor exibidos vêm dele, não são mais uma projeção). Um vínculo cujo lançamento real foi excluído
-   volta a "projetado"/"pendente" normalmente (ver conciliarProjecoesComExtrato, que já limpa o vínculo
-   quebrado). */
+   automático seguro o suficiente — precisa de escolha manual), "conciliado" (1+ vínculos estabelecidos, o(s)
+   lançamento(s) real(is) ainda existe(m), e o mais recente deles caiu dentro do PRÓPRIO mês/ano desta
+   competência), "antecipado"/"postecipado" (mesma coisa, mas o lançamento real mais recente caiu num mês
+   anterior/posterior ao da competência planejada — ver calcProjecoesMes/regra conceitual "Competência ≠
+   necessariamente Data Real") ou "contracheque-importado" (só para o previsto "Contracheque TRT": já existe
+   um contracheque importado para esta competência — ver contrachequeCompetenciaImportada — então data/valor
+   exibidos vêm dele, não são mais uma projeção). Um vínculo cujo lançamento real foi excluído é ignorado
+   aqui (self-heal — ver conciliarProjecoesComExtrato, que já limpa vínculos quebrados; enquanto isso não
+   roda, esta função simplesmente não conta esse vínculo específico, então um item com TODOS os vínculos
+   quebrados volta a "projetado"/"pendente" normalmente). */
 function statusConciliacaoProjecao(item, competencia){
   // Não aplicável a itens de cartão (fonte própria: faturaPorCompetencia — sem noção de "pendente", o valor
   // da fatura é sempre exato). O previsto "Contracheque TRT" é sempre uma exceção à parte, com sua própria
@@ -9361,7 +9426,14 @@ function statusConciliacaoProjecao(item, competencia){
     const contaContracheque = STATE.contas.find(c=>STATE.contaTipos[c]==='Contracheque');
     return (contaContracheque && contrachequeCompetenciaImportada(contaContracheque, competencia)) ? 'contracheque-importado' : 'projetado';
   }
-  if(item.vinculosExtrato && item.vinculosExtrato[competencia] && STATE.transactions.some(t=>t.id===item.vinculosExtrato[competencia])){
+  const reais = vinculosDaCompetencia(item, competencia).map(id=>STATE.transactions.find(t=>t.id===id)).filter(Boolean);
+  if(reais.length){
+    // Vários registros podem realizar o mesmo previsto em datas diferentes (requisito 1/2) — o mês/ano do
+    // registro MAIS RECENTE entre eles decide se a realização, como um todo, ficou dentro do mês planejado,
+    // antecipada ou posterior (a última parcela é que "fecha" a realização completa do valor projetado).
+    const mesRealMaisRecente = reais.map(t=>t.data).sort().slice(-1)[0].slice(0,7);
+    if(mesRealMaisRecente < competencia) return 'antecipado';
+    if(mesRealMaisRecente > competencia) return 'postecipado';
     return 'conciliado';
   }
   return candidatosConciliacaoProjecao(item, competencia).length>=2 ? 'pendente' : 'projetado';
@@ -9386,14 +9458,22 @@ function conciliarProjecoesComExtrato(){
     meses.forEach(competencia=>{
       if(!itemAtivoNaCompetencia(item, competencia)) return;
       if(!item.vinculosExtrato) item.vinculosExtrato = {};
-      const vinculoAtual = item.vinculosExtrato[competencia];
-      if(vinculoAtual){
-        if(!idsReais.has(vinculoAtual)) delete item.vinculosExtrato[competencia]; // vínculo quebrado — limpa e tenta de novo abaixo
-        else return; // já conciliado e o lançamento real ainda existe — nada a fazer
+      // Self-heal: remove da lista qualquer id cujo lançamento real já não existe mais (foi excluído do
+      // Extrato) — nunca apaga os demais vínculos ainda válidos da mesma competência (requisito 1: vários
+      // registros podem compor uma única realização; um deles sumir não invalida os outros).
+      const vinculoAtual = vinculosDaCompetencia(item, competencia).filter(id=>idsReais.has(id));
+      if(vinculoAtual.length){
+        item.vinculosExtrato[competencia] = vinculoAtual; // ainda tem pelo menos 1 vínculo válido — nada a fazer
+        return;
       }
+      delete item.vinculosExtrato[competencia]; // nenhum vínculo válido restante — tenta conciliar de novo abaixo
+      // A conciliação AUTOMÁTICA nunca soma múltiplos registros sozinha (isso é sempre uma escolha manual no
+      // modal — requisito 1/2, "não considerar automaticamente que um lançamento só pode corresponder a
+      // exatamente um registro"): só estabelece um vínculo automático quando existe EXATAMENTE UM candidato
+      // plausível no total, exatamente como antes desta mudança.
       const candidatos = candidatosConciliacaoProjecao(item, competencia);
       if(candidatos.length===1){
-        item.vinculosExtrato[competencia] = candidatos[0].t.id;
+        item.vinculosExtrato[competencia] = [candidatos[0].t.id];
         vinculados++;
       }
     });
@@ -9448,6 +9528,11 @@ function calcProjecoesMes(ano, mes, saldoInicial){
       // para nunca somar de novo o que já é saldo real. Nunca altera as colunas Valor/Saldo desta própria
       // linha, que continuam mostrando sempre o valor total do item, exatamente como antes deste requisito.
       let valorProjecaoPendente = valorCalculado;
+      // dataReal/qtdVinculos: só preenchidos quando há 1+ vínculos válidos com o Extrato (ver
+      // vinculosDaCompetencia) — usados pela linha (tooltip/selo) para mostrar a data real mais recente e
+      // quantos registros compõem a realização, sem afetar dia/valorCalculado quando a realização caiu fora
+      // do mês desta própria competência (ver bloco abaixo).
+      let dataReal = null, qtdVinculos = 0;
       if(item.cartao){
         // A fatura nunca está "no Extrato" enquanto não for paga (a conta do cartão não é uma das 3
         // elegíveis) — só a parte AINDA não paga a partir de uma conta elegível continua como projeção.
@@ -9482,32 +9567,51 @@ function calcProjecoesMes(ano, mes, saldoInicial){
           valorProjecaoPendente = espelhoJaNaContaVinculada ? 0 : valorCalculado;
         }
       } else {
-        // Conciliação com o Extrato (ver conciliarProjecoesComExtrato/statusConciliacaoProjecao): o vínculo,
-        // uma vez estabelecido em vinculosExtrato[competencia], é sempre relido pelo id do lançamento real
-        // (nunca recalculado por semelhança) — permanece válido mesmo que esse lançamento seja depois
-        // editado (data, valor, descrição, categoria). Um vínculo cujo lançamento real foi excluído é
-        // ignorado aqui (self-heal já faz isso em conciliarProjecoesComExtrato na próxima passada; até lá,
-        // simplesmente não é usado) e o item volta a exibir seus próprios dados previstos.
-        const vinculoId = item.vinculosExtrato && item.vinculosExtrato[competencia];
-        const real = vinculoId ? STATE.transactions.find(t=>t.id===vinculoId) : null;
-        if(real){
-          dia = Number(real.data.slice(8,10)); valorCalculado = Number(real.valor)||0;
+        // Conciliação com o Extrato (ver conciliarProjecoesComExtrato/statusConciliacaoProjecao): cada
+        // vínculo em vinculosExtrato[competencia] (ver vinculosDaCompetencia — sempre um array, 1 ou mais
+        // registros) é sempre relido pelo id do lançamento real (nunca recalculado por semelhança) —
+        // permanece válido mesmo que esse lançamento seja depois editado (data, valor, descrição,
+        // categoria). Um vínculo cujo lançamento real foi excluído é ignorado aqui (self-heal já faz isso em
+        // conciliarProjecoesComExtrato na próxima passada; até lá, simplesmente não entra na soma) — só
+        // quando NENHUM vínculo restar válido o item volta a exibir seus próprios dados previstos.
+        const reais = vinculosDaCompetencia(item, competencia).map(id=>STATE.transactions.find(t=>t.id===id)).filter(Boolean);
+        if(reais.length){
+          qtdVinculos = reais.length;
+          valorCalculado = reais.reduce((s,t)=>s+(Number(t.valor)||0), 0);
+          // Regra conceitual do requisito 8/9: a COMPETÊNCIA representa o planejamento original e nunca
+          // muda por causa da conciliação (o item já está fixo nesta tabela, por itemAtivoNaCompetencia) —
+          // só o "dia" de exibição/ordenação dentro DESTA MESMA tabela é atualizado para o real, e mesmo
+          // assim só quando o registro mais recente caiu no mesmo mês/ano da própria competência exibida.
+          // Quando cai num mês diferente (pago/recebido antecipada ou posteriormente — ver
+          // statusConciliacaoProjecao, que classifica esse caso como "antecipado"/"postecipado"), o dia
+          // continua sendo o originalmente projetado (dataPrevista abaixo) — nunca reposiciona a linha para
+          // um "dia X" que pertenceria a outro mês, o que seria enganoso dentro desta tabela. A data real
+          // completa (dataReal, com mês/ano) fica disponível à parte para o tooltip/selo mostrarem sempre a
+          // data real verdadeira, independentemente de onde a linha está posicionada.
+          const dataRealMaisRecente = reais.map(t=>t.data).sort().slice(-1)[0];
+          dataReal = dataRealMaisRecente;
+          if(dataRealMaisRecente.slice(0,7)===competencia) dia = Number(dataRealMaisRecente.slice(8,10));
           // Só considera "já no Extrato elegível" (requisito 8/9 do pedido) quando o lançamento vinculado
           // está numa das 3 contas elegíveis e NÃO é um lançamento espelho de transferência interna
           // (requisito 7 — nunca usar um espelho como "efetivação" de um previsto comum, só o lançamento
-          // financeiro original) — mesmo critério já usado no cálculo do Saldo do Dia.
-          const jaNoExtratoElegivel = !real.entreFamilia && contasElegiveis.has(real.conta);
-          valorProjecaoPendente = jaNoExtratoElegivel ? 0 : valorCalculado;
+          // financeiro original) — mesmo critério já usado no cálculo do Saldo do Dia. Com múltiplos
+          // vínculos, cada um é avaliado individualmente: a soma dos que AINDA não estão numa conta
+          // elegível é o que continua pendente (requisito 1 — nunca tudo-ou-nada quando só parte já
+          // aconteceu numa conta elegível).
+          valorProjecaoPendente = reais.reduce((s,t)=>{
+            const jaNoExtratoElegivel = !t.entreFamilia && contasElegiveis.has(t.conta);
+            return s + (jaNoExtratoElegivel ? 0 : (Number(t.valor)||0));
+          }, 0);
         }
       }
       // dataPrevista/valorPrevisto: os dados ORIGINALMENTE projetados (item.dia/valorProjecaoItem), sempre
       // preservados à parte para histórico/auditoria (requisito 4) — nunca sobrescritos pela conciliação
       // nem pelo contracheque importado, que só afetam dia/valorCalculado (exibidos) acima. statusConciliacao:
-      // rótulo exibido na linha (ver renderLinhaProjecao) — "conciliado"/"pendente"/"projetado" para itens
-      // comuns, "contracheque-importado" para o Contracheque TRT quando há contracheque na competência,
-      // null para itens de cartão (não se aplica).
+      // rótulo exibido na linha (ver renderLinhaProjecao) — "conciliado"/"antecipado"/"postecipado"/"pendente"/
+      // "projetado" para itens comuns, "contracheque-importado" para o Contracheque TRT quando há
+      // contracheque na competência, null para itens de cartão (não se aplica).
       const statusConciliacao = statusConciliacaoProjecao(item, competencia);
-      return { ...item, competencia, valorCalculado, dia, valorProjecaoPendente, dataPrevista: item.dia, valorPrevisto: valorProjecaoItem(item, competencia), statusConciliacao };
+      return { ...item, competencia, valorCalculado, dia, valorProjecaoPendente, dataPrevista: item.dia, valorPrevisto: valorProjecaoItem(item, competencia), dataReal, qtdVinculos, statusConciliacao };
     })
     .sort((a,b)=>(Number(a.dia)||0)-(Number(b.dia)||0));
   let saldo = saldoInicial;
@@ -9945,6 +10049,7 @@ function render(){
     ${UI.textModal!==null ? renderTextModal() : ""}
     ${UI.novaProjecaoModal!==null ? renderNovaProjecaoModal() : ""}
     ${UI.conciliarProjecaoModal!==null ? renderConciliarProjecaoModal() : ""}
+    ${UI.confirmDelProjecao!==null ? renderConfirmDelProjecaoModal() : ""}
     ${UI.confirmDelParcela!==null ? renderConfirmDelParcelaModal() : ""}
     ${UI.confirmEditarParcela!==null ? renderConfirmEditarParcelaModal() : ""}
     ${UI.modalInstalarIOS ? renderModalInstalarIOS() : ""}
@@ -12854,22 +12959,46 @@ function renderFaturaEditModal(){
    somente como texto — não há mais inputs para eles na própria linha. */
 /* Selo de status de conciliação (ver statusConciliacaoProjecao) ao lado da descrição — só para itens que
    têm algum status (l.statusConciliacao é null para itens de cartão, que não mostram selo nenhum).
-   "Projetado" é o estado mais comum e não recebe selo (evita poluir a tabela); "Conciliado" mostra o selo
-   verde (sem ação — usar 🔓 nas Ações para desfazer um vínculo errado); "Pendente" mostra o selo clicável
-   que abre a tela de conciliação manual (ver renderConciliarProjecaoModal e o handler de
-   data-proj-conciliar); "contracheque-importado" (só para o previsto "Contracheque TRT" — ver
-   calcProjecoesMes) mostra o selo verde "✅ Importado", equivalente ao de "Conciliado", mas SEM o botão 🔓
-   nas Ações: não há vínculo nenhum para desfazer aqui — a única forma de o previsto voltar a mostrar os
-   dados projetados manualmente é excluindo o próprio contracheque importado daquela competência (Extrato
-   da conta), o que já acontece automaticamente no próximo render. */
+   "Projetado" é o estado mais comum e não recebe selo (evita poluir a tabela). Os demais mostram SÓ o
+   ícone — sem texto, fundo ou borda de badge (requisito 5: a aparência de "chip" foi removida de propósito,
+   inclusive da linha de tipo Receita/Despesa não — só dos selos de conciliação) — com o significado
+   completo sempre disponível pelo tooltip (title) e por acessibilidade (aria-label/role="img"), nunca só
+   visualmente:
+     🔗 Conciliado — 1+ vínculos com o Extrato, o mais recente dentro do próprio mês da competência.
+     ⏪ Antecipado — idem, mas o vínculo mais recente caiu num mês ANTERIOR ao da competência planejada.
+     ⏩ Postecipado — idem, mas num mês POSTERIOR.
+     📥 Contracheque importado — só para o previsto "Contracheque TRT" (ver calcProjecoesMes).
+     ⏳ Pendente — 2+ candidatos plausíveis, nenhum vínculo automático seguro; clicável (abre
+        renderConciliarProjecaoModal).
+   🔗/⏪/⏩ também são clicáveis (mesmo modal — permite rever os vínculos já feitos ou ACRESCENTAR mais
+   registros, ver requisito 1/2: um previsto pode ser conciliado com mais de um lançamento do Extrato).
+   📥 nunca é clicável (não há vínculo nenhum para revisar/desfazer aqui — ver comentário de
+   calcProjecoesMes/candidatosConciliacaoProjecao sobre o Contracheque TRT nunca depender do Extrato). */
 function seloConciliacaoProjecao(l){
-  if(l.statusConciliacao==='conciliado') return ` <span class="tag" style="background:#e3f5ec;color:#1e8e5a;font-size:9px;" title="Conciliado com o Extrato — Data e Valor exibidos são os reais, não os previstos">✅ Conciliado</span>`;
-  if(l.statusConciliacao==='contracheque-importado') return ` <span class="tag" style="background:#e3f5ec;color:#1e8e5a;font-size:9px;" title="Contracheque importado nesta competência — Data e Valor exibidos são a Data do Crédito e o Valor Líquido reais, não os projetados">✅ Importado</span>`;
-  if(l.statusConciliacao==='pendente') return ` <span class="tag" style="background:#fff3ea;color:#c0392b;cursor:pointer;font-size:9px;" data-proj-conciliar="${l.id}" data-proj-conciliar-mes="${l.competencia}" title="Existem possíveis correspondências no Extrato — clique para revisar e vincular manualmente">⚠️ Conciliação pendente</span>`;
+  const dataRealFmt = l.dataReal ? fmtData(l.dataReal) : '';
+  const sufixoRegistros = l.qtdVinculos>1 ? ` (${l.qtdVinculos} registros)` : '';
+  const clicavel = (icone, textoAcessivel) =>
+    ` <span class="selo-conciliacao" role="img" data-clicavel data-proj-conciliar="${l.id}" data-proj-conciliar-mes="${l.competencia}" title="${escapeHtml(textoAcessivel)}" aria-label="${escapeHtml(textoAcessivel)}">${icone}</span>`;
+  const fixo = (icone, textoAcessivel) =>
+    ` <span class="selo-conciliacao" role="img" title="${escapeHtml(textoAcessivel)}" aria-label="${escapeHtml(textoAcessivel)}">${icone}</span>`;
+  if(l.statusConciliacao==='conciliado') return clicavel('🔗', `Conciliado com o Extrato${sufixoRegistros} — Data e Valor exibidos são os reais, não os previstos`);
+  if(l.statusConciliacao==='antecipado') return clicavel('⏪', `Realizado antecipadamente em ${dataRealFmt}`);
+  if(l.statusConciliacao==='postecipado') return clicavel('⏩', `Realizado posteriormente em ${dataRealFmt}`);
+  if(l.statusConciliacao==='contracheque-importado') return fixo('📥', 'Contracheque importado nesta competência — Data e Valor exibidos são a Data do Crédito e o Valor Líquido reais, não os projetados');
+  if(l.statusConciliacao==='pendente') return clicavel('⏳', 'Conciliação pendente - Existem possíveis correspondências no Extrato, clique para revisar e vincular manualmente');
   return '';
 }
 function renderLinhaProjecao(l){
   const tagTipo = l.tipo==='Receita' ? 'Receita' : 'Despesa';
+  const statusComValorReal = ['conciliado','antecipado','postecipado','contracheque-importado'].includes(l.statusConciliacao);
+  const tituloValorReal = l.statusConciliacao==='contracheque-importado'
+    ? `Valor Líquido do contracheque importado (previsto: ${fmtBRL(l.valorPrevisto)})`
+    : `Valor real do Extrato (previsto: ${fmtBRL(l.valorPrevisto)})`;
+  // 🔓 "desfazer": disponível em qualquer status com vínculo de fato estabelecido (conciliado/antecipado/
+  // postecipado) — remove TODOS os vínculos desta competência de uma vez (remoção individual de um só
+  // registro, quando há vários, é feita dentro do próprio modal de conciliação — ver
+  // renderConciliarProjecaoModal).
+  const temVinculo = ['conciliado','antecipado','postecipado'].includes(l.statusConciliacao);
   return `
     <tr data-proj-id="${l.id}">
       <td data-label="Dia" style="text-align:center;font-family:var(--mono);">${pad2(l.dia)}</td>
@@ -12877,15 +13006,14 @@ function renderLinhaProjecao(l){
       <td data-label="Tipo"><span class="tag ${tagTipo}">${tagTipo}</span></td>
       <td data-label="Valor" class="val-cell ${l.tipo==='Despesa'?'neg':'pos'}" style="text-align:right;">
         ${l.cartao ? `<span title="Calculado automaticamente pelo total atual da fatura deste cartão no mês">${fmtBRL(l.valorCalculado)}</span>`
-          : l.statusConciliacao==='conciliado' ? `<span title="Valor real do Extrato (previsto: ${fmtBRL(l.valorPrevisto)})">${fmtBRL(l.valorCalculado)}</span>`
-          : l.statusConciliacao==='contracheque-importado' ? `<span title="Valor Líquido do contracheque importado (previsto: ${fmtBRL(l.valorPrevisto)})">${fmtBRL(l.valorCalculado)}</span>`
+          : statusComValorReal ? `<span title="${escapeHtml(tituloValorReal)}">${fmtBRL(l.valorCalculado)}</span>`
           : fmtBRL(l.valorCalculado)}
       </td>
       <td data-label="Saldo" class="val-cell saldo-destaque" style="text-align:right;">${fmtBRL(l.saldo)}</td>
       <td data-label="" class="tabela-fluxo-acoes" style="white-space:nowrap;">
-        ${l.statusConciliacao==='conciliado' ? `<button class="icon-btn" data-proj-desvincular="${l.id}" data-proj-desvincular-mes="${l.competencia}" title="Desfazer a conciliação com o Extrato (volta a ser projeção)">🔓</button>` : ''}
+        ${temVinculo ? `<button class="icon-btn" data-proj-desvincular="${l.id}" data-proj-desvincular-mes="${l.competencia}" title="Desfazer a conciliação com o Extrato (remove ${l.qtdVinculos>1?`os ${l.qtdVinculos} vínculos`:'o vínculo'} desta competência — volta a ser projeção)">🔓</button>` : ''}
         <button class="icon-btn" data-proj-edit="${l.id}" data-proj-mes="${l.competencia}" title="Editar dia, descrição, tipo, valor, classificação ou cartão vinculado">✏️</button>
-        <button class="icon-btn" data-proj-del="${l.id}" title="Remover lançamento">🗑️</button>
+        <button class="icon-btn" data-proj-del="${l.id}" data-proj-del-mes="${l.competencia}" title="Remover lançamento">🗑️</button>
       </td>
     </tr>`;
 }
@@ -12930,15 +13058,16 @@ function renderPainelProjecao(m, idx){
   // total da tabela, mesmo com table-layout:fixed. Só afeta o layout de tabela (desktop/tablet); no mobile
   // (≤700px) a tabela vira lista de cards e essas larguras deixam de valer (ver @media(max-width:700px)).
   const chDia = 5, chTipo = 14; // colunas de largura fixa — altere aqui para mudar Dia/Tipo
-  // Ações: largura fixa, mas com 2 variantes — conciliar uma linha (ver seloConciliacaoProjecao) acrescenta
-  // um 3º ícone (🔓 "desfazer conciliação") ao lado de ✏️/🗑️, então a coluna precisa de mais espaço só
-  // quando isso realmente acontece; do contrário sobra espaço desperdiçado o tempo todo. Sem esse ajuste, o
-  // 🔓 de uma linha conciliada não cabia nos 7ch fixos de antes e "vazava" — table-layout:fixed then
-  // preferia quebrar linha na célula ou estourar a largura total da tabela (rolagem horizontal indevida,
-  // já que a soma das colunas deixava de bater 100%). Recalculado a cada renderização do painel, junto com
-  // chValor/chSaldo, então nunca fica desatualizado quando uma linha é conciliada/desvinculada.
-  const temLinhaConciliada = m.linhas.some(l=>!l.especial && l.statusConciliacao==='conciliado');
-  const chAcoes = temLinhaConciliada ? 11 : 7;
+  // Ações: largura fixa, mas com 2 variantes — ter algum vínculo com o Extrato (conciliado, antecipado ou
+  // postecipado — ver seloConciliacaoProjecao/renderLinhaProjecao) acrescenta um 3º ícone (🔓 "desfazer
+  // conciliação") ao lado de ✏️/🗑️, então a coluna precisa de mais espaço só quando isso realmente
+  // acontece; do contrário sobra espaço desperdiçado o tempo todo. Sem esse ajuste, o 🔓 de uma linha
+  // conciliada não cabia nos 7ch fixos de antes e "vazava" — table-layout:fixed then preferia quebrar linha
+  // na célula ou estourar a largura total da tabela (rolagem horizontal indevida, já que a soma das colunas
+  // deixava de bater 100%). Recalculado a cada renderização do painel, junto com chValor/chSaldo, então
+  // nunca fica desatualizado quando uma linha é conciliada/desvinculada.
+  const temLinhaComVinculo = m.linhas.some(l=>!l.especial && ['conciliado','antecipado','postecipado'].includes(l.statusConciliacao));
+  const chAcoes = temLinhaComVinculo ? 11 : 7;
   const chValor = Math.max(8, ...valores.map(v=>fmtBRL(v).length)) + 1.5;
   const chSaldo = Math.max(8, ...saldos.map(v=>fmtBRL(v).length)) + 1.5;
   // Descrição recebe um espaço moderado — nem domina a tabela, nem fica curta demais — proporcional ao
@@ -13469,6 +13598,22 @@ function renderNovaProjecaoModal(){
                 </select>
               </div>
             </div>
+            ${(!m.cartao && m.contaProvavelId) ? (()=>{
+              // Pré-visualização (requisito 3): TODOS os lançamentos do Extrato daquela conta na
+              // competência sendo editada aparecem aqui de imediato, sem filtrar por descrição/valor/data
+              // (os critérios de correspondência só entram depois, na conciliação em si — ver
+              // pontuarCandidatoConciliacao) — só para o usuário já ver o que existe antes de conciliar.
+              const competenciaModal = chaveMes(m.ano, m.mes);
+              const registros = STATE.transactions
+                .filter(t=>t.conta===m.contaProvavelId && t.data && t.data.slice(0,7)===competenciaModal)
+                .sort((a,b)=> a.data<b.data ? -1 : (a.data>b.data ? 1 : 0));
+              return `
+            <div class="field-section-label" style="margin-top:10px;">Registros do Extrato em ${escapeHtml(competenciaLabel(competenciaModal))} — ${escapeHtml(m.contaProvavelId)}</div>
+            ${registros.length ? `<div class="table-wrap" style="max-height:180px;overflow-y:auto;overflow-x:auto;"><table style="width:100%;table-layout:fixed;font-size:11.5px;">
+              <thead><tr><th style="width:18%;">Data</th><th style="width:58%;">Descrição</th><th style="width:24%;text-align:right;">Valor</th></tr></thead>
+              <tbody>${registros.map(t=>`<tr><td>${fmtData(t.data)}</td><td style="overflow-wrap:break-word;">${escapeHtml(t.descricao)}</td><td style="text-align:right;">${fmtBRL(t.valor)}</td></tr>`).join('')}</tbody>
+            </table></div>` : `<p class="hint" style="margin:4px 0 0;">Nenhum lançamento encontrado nessa conta em ${escapeHtml(competenciaLabel(competenciaModal))} ainda.</p>`}`;
+            })() : ''}
             <div class="tx-row">
               <div class="field"><label>Grupo</label>
                 <select id="fNovaProjecaoGrupo" ${m.cartao?'disabled':''}>${grupos.map(g=>`<option value="${escapeHtml(g)}" ${grupoAtual===g?'selected':''}>${iconeGrupo(g)} ${escapeHtml(g)}</option>`).join('')}</select>
@@ -13509,43 +13654,116 @@ function renderNovaProjecaoModal(){
     </div>
   </div>`;
 }
-/* ---------- Modal: revisão manual da conciliação pendente (requisito 6) ----------
-   Aberto pelo selo "⚠️ Conciliação pendente" de uma linha do Fluxo de Caixa — lista os lançamentos do
-   Extrato que pontuaram como candidatos plausíveis (ver candidatosConciliacaoProjecao), do melhor para o
-   pior, para o usuário escolher qual realmente corresponde (ou nenhum). Nunca copia/recria o lançamento do
-   Extrato (requisito 7): escolher um candidato só grava seu id em vinculosExtrato[competencia] — o
-   lançamento original do Extrato nunca é tocado. */
+/* ---------- Modal: revisão manual da conciliação (requisito 6 original + requisitos 1/2/7 desta rodada)
+   ----------
+   Aberto pelo selo de conciliação de uma linha do Fluxo de Caixa (⏳ pendente, ou 🔗/⏪/⏩ já conciliado —
+   ver seloConciliacaoProjecao) — lista os lançamentos do Extrato que pontuaram como candidatos plausíveis
+   (ver candidatosConciliacaoProjecao, que já exclui os já vinculados), do melhor para o pior, para o
+   usuário marcar (checkbox) um ou VÁRIOS que correspondem de fato (requisito 1 — um previsto pode ser
+   conciliado com mais de um registro do Extrato, ex.: pagamento quitado em duas transferências parciais).
+   Nunca copia/recria o lançamento do Extrato (requisito 7/14): marcar e confirmar só acrescenta os ids
+   escolhidos a vinculosExtrato[competencia] — os lançamentos originais do Extrato nunca são tocados.
+   UI.conciliarProjecaoModal.selecionados guarda os ids marcados nos checkboxes AINDA NÃO confirmados (só
+   em memória, some ao fechar sem confirmar); os vínculos JÁ confirmados (item.vinculosExtrato) aparecem
+   destacados numa lista à parte, cada um com seu próprio botão de remover individual. O resumo (requisito
+   2) mostra sempre, ao vivo: quantos registros estão total ou parcialmente selecionados, quanto somam, o
+   valor projetado e a diferença entre os dois — sem exigir que a soma bata exatamente (o previsto pode ter
+   sido só uma estimativa). */
 function renderConciliarProjecaoModal(){
   const cfg = UI.conciliarProjecaoModal;
   const item = STATE.projecoes.find(p=>p.id===cfg.itemId);
   if(!item){ return ''; } // item pode ter sido excluído enquanto o modal estava aberto
-  const candidatos = candidatosConciliacaoProjecao(item, cfg.competencia);
+  const vinculoIds = vinculosDaCompetencia(item, cfg.competencia);
+  const reaisVinculados = vinculoIds.map(id=>STATE.transactions.find(t=>t.id===id)).filter(Boolean);
+  const candidatos = candidatosConciliacaoProjecao(item, cfg.competencia); // já exclui os de reaisVinculados
+  const selecionados = cfg.selecionados || [];
+  const candidatosSelecionados = candidatos.filter(c=>selecionados.includes(c.t.id));
+  const valorProjetado = Number(valorProjecaoItem(item, cfg.competencia))||0;
+  const valorTotalPreview = reaisVinculados.reduce((s,t)=>s+(Number(t.valor)||0),0) + candidatosSelecionados.reduce((s,c)=>s+(Number(c.t.valor)||0),0);
+  const qtdTotalPreview = reaisVinculados.length + candidatosSelecionados.length;
+  const diferenca = valorTotalPreview - valorProjetado;
+  const statusPreview = qtdTotalPreview===0 ? 'Sem conciliação' : (Math.abs(diferenca)<0.005 ? 'Conciliado' : `Conciliado (diferença de ${fmtBRL(Math.abs(diferenca))})`);
+  // Larguras fixas o bastante para Data/Categoria/Tipo/Valor/Ação nunca quebrarem linha nem cortarem
+  // conteúdo, com Descrição recebendo o espaço restante (requisito 9) — soma sempre 100%, então a tabela
+  // nunca precisa de overflow-x (requisito "não usar overflow-x como solução principal").
+  const linhaRegistro = (t, acaoHtml) => `<tr>
+              <td style="width:11%;">${fmtData(t.data)}</td>
+              <td style="width:39%;">${escapeHtml(t.descricao)} <span class="hint" style="margin:0;">(${escapeHtml(t.conta)})</span></td>
+              <td style="width:16%;">${escapeHtml(t.categoria||'—')}</td>
+              <td style="width:10%;text-align:center;"><span class="tag ${t.tipo}" style="font-size:9px;">${t.tipo}</span></td>
+              <td style="width:14%;text-align:right;">${fmtBRL(t.valor)}</td>
+              <td style="width:10%;text-align:center;">${acaoHtml}</td>
+            </tr>`;
   return `
   <div class="overlay" id="ovConciliarProjecao" ${attrZIndexModal('conciliarProjecaoModal')}>
-    <div class="modal" style="width:560px;">
+    <div class="modal" style="width:100%;max-width:1100px;">
       <div class="modal-head"><h3>🔗 Conciliar com o Extrato</h3><button class="close-x" id="closeConciliarProjecao">✕</button></div>
       <div class="modal-body">
         <div class="info-card" style="margin-top:0;">
           <span class="info-card-icon">${item.tipo==='Despesa'?'💸':'💰'}</span>
-          <span><b>${escapeHtml(item.descricao)}</b> — previsto para ${fmtData(`${cfg.competencia}-${pad2(item.dia)}`)}, ${fmtBRL(valorProjecaoItem(item, cfg.competencia))}</span>
+          <span><b>${escapeHtml(item.descricao)}</b> — previsto para ${fmtData(`${cfg.competencia}-${pad2(item.dia)}`)}, ${fmtBRL(valorProjetado)} (${competenciaLabel(cfg.competencia)})</span>
         </div>
-        <p class="hint" style="margin-top:10px;">Foram encontrados ${candidatos.length} lançamento(s) no Extrato parecidos com este previsto, mas nenhum é claramente o único — escolha abaixo qual corresponde de fato (ou nenhum, se for coincidência).</p>
-        ${candidatos.length ? `<table style="width:100%;">
-          <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th style="text-align:right;">Valor</th><th></th></tr></thead>
+        <table class="conciliar-resumo" style="width:100%;margin-top:10px;">
+          <tbody><tr>
+            <td><span class="hint" style="margin:0;">Registros conciliados</span><br><b>${qtdTotalPreview}</b></td>
+            <td><span class="hint" style="margin:0;">Valor conciliado</span><br><b>${fmtBRL(valorTotalPreview)}</b></td>
+            <td><span class="hint" style="margin:0;">Valor projetado</span><br><b>${fmtBRL(valorProjetado)}</b></td>
+            <td><span class="hint" style="margin:0;">Diferença</span><br><b class="${Math.abs(diferenca)<0.005?'':'neg'}">${fmtBRL(diferenca)}</b></td>
+            <td><span class="hint" style="margin:0;">Status</span><br><b>${statusPreview}</b></td>
+          </tr></tbody>
+        </table>
+        ${reaisVinculados.length ? `
+        <p class="field-section-label" style="margin:14px 0 4px;">Vínculos já confirmados</p>
+        <div class="table-wrap" style="overflow-x:auto;"><table style="width:100%;table-layout:fixed;">
+          <thead><tr><th style="width:11%;">Data</th><th style="width:39%;">Descrição</th><th style="width:16%;">Categoria</th><th style="width:10%;">Tipo</th><th style="width:14%;text-align:right;">Valor</th><th style="width:10%;"></th></tr></thead>
+          <tbody>${reaisVinculados.map(t=>linhaRegistro(t, `<button type="button" class="icon-btn" data-conciliar-remover-vinculo="${t.id}" title="Remover este vínculo (volta a ser um candidato disponível)">🗑️</button>`)).join('')}</tbody>
+        </table></div>` : ''}
+        <p class="field-section-label" style="margin:14px 0 4px;">Candidatos disponíveis${candidatos.length ? ` (${candidatos.length})` : ''}</p>
+        <p class="hint" style="margin-top:0;">Marque um ou mais registros que correspondem de fato a este previsto (não é preciso que a data ou o valor sejam exatamente iguais) e confirme a seleção.</p>
+        ${candidatos.length ? `<div class="table-wrap" style="overflow-x:auto;"><table style="width:100%;table-layout:fixed;">
+          <thead><tr><th style="width:10%;"></th><th style="width:11%;">Data</th><th style="width:39%;">Descrição</th><th style="width:16%;">Categoria</th><th style="width:10%;">Tipo</th><th style="width:14%;text-align:right;">Valor</th></tr></thead>
           <tbody>
             ${candidatos.map(c=>`<tr>
+              <td style="text-align:center;"><input type="checkbox" data-conciliar-check="${c.t.id}" ${selecionados.includes(c.t.id)?'checked':''}></td>
               <td>${fmtData(c.t.data)}</td>
               <td>${escapeHtml(c.t.descricao)} <span class="hint" style="margin:0;">(${escapeHtml(c.t.conta)})</span></td>
               <td>${escapeHtml(c.t.categoria||'—')}</td>
+              <td><span class="tag ${c.t.tipo}" style="font-size:9px;">${c.t.tipo}</span></td>
               <td style="text-align:right;">${fmtBRL(c.t.valor)}</td>
-              <td><button type="button" class="btn btn-ghost btn-sm" data-conciliar-escolher="${c.t.id}">✅ É este</button></td>
             </tr>`).join('')}
           </tbody>
-        </table>` : `<div class="empty-state"><div class="big">🔎</div>Nenhum candidato restante — todos já foram descartados.</div>`}
+        </table></div>` : `<div class="empty-state"><div class="big">🔎</div>Nenhum candidato restante — todos já foram vinculados ou descartados.</div>`}
       </div>
       <div class="modal-foot" style="flex-wrap:wrap;gap:8px;">
         <button class="btn btn-ghost" id="cancelConciliarProjecao">Fechar</button>
-        ${candidatos.length ? `<button class="btn btn-ghost" id="nenhumaConciliarProjecao">🚫 Nenhuma destas corresponde</button>` : ''}
+        ${candidatos.length ? `<button class="btn btn-ghost" id="nenhumaConciliarProjecao">🚫 Nenhuma das restantes corresponde</button>` : ''}
+        ${selecionados.length ? `<button class="btn btn-primary" id="confirmarConciliarSelecao">✅ Confirmar seleção (${selecionados.length})</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+/* ---------- Modal: excluir um lançamento previsto — só desta competência ou o lançamento inteiro?
+   (requisito 6) ----------
+   "Somente esta competência" grava a exclusão em STATE.projecaoExclusoesPorCompetencia (ver
+   itemAtivoNaCompetencia) — o cadastro do lançamento e todas as demais competências continuam intactos,
+   e a exclusão nunca é revertida sozinha por uma atualização do Fluxo de Caixa. "Este lançamento inteiro"
+   é o comportamento antigo (remove de STATE.projecoes por completo, em todas as competências). Em nenhum
+   dos dois casos o registro do Extrato é tocado (requisito 14). */
+function renderConfirmDelProjecaoModal(){
+  const cfg = UI.confirmDelProjecao;
+  const item = STATE.projecoes.find(p=>p.id===cfg.itemId);
+  if(!item) return '';
+  return `
+  <div class="overlay" id="ovConfirmDelProjecao" ${attrZIndexModal('confirmDelProjecao')}>
+    <div class="modal" style="width:460px;">
+      <div class="modal-head"><h3>🗑️ Excluir lançamento previsto</h3><button class="close-x" id="closeConfirmDelProjecao">✕</button></div>
+      <div class="modal-body">
+        <div class="info-card warn" style="margin-top:0;"><span class="info-card-icon">⚠️</span><span>"${escapeHtml(item.descricao)}" é um lançamento recorrente, que também aparece nas demais competências do Fluxo de Caixa. O que você deseja excluir?</span></div>
+      </div>
+      <div class="modal-foot" style="flex-wrap:wrap;gap:8px;">
+        <button class="btn btn-ghost" id="closeConfirmDelProjecao2">Cancelar</button>
+        <button class="btn btn-ghost" id="delApenasEstaCompetencia">Somente ${escapeHtml(competenciaLabel(cfg.competencia))}</button>
+        <button class="btn btn-primary" id="delProjecaoTodasCompetencias">Este lançamento inteiro</button>
       </div>
     </div>
   </div>`;
@@ -17561,37 +17779,77 @@ function bindEvents(){
     UI.novaProjecaoModal = { ano, mes, dia:item.dia, descricao:item.descricao, tipo:item.tipo, valor:valorAtual, cartao:item.cartao||'', grupo:item.grupo||'', subgrupo:item.subgrupo||'', categoria:item.categoria||'', contaProvavelId:item.contaProvavelId||'', editId:item.id };
     render();
   }));
+  /* ---- Exclusão de um lançamento previsto: sempre pergunta o escopo (só esta competência ou o
+     lançamento inteiro — requisito 6), nunca exclui direto. Item já ativo em uma única competência (sem
+     competenciaInicio/competenciaFim divergentes e sem outras versões) ainda passa pela mesma pergunta —
+     simples e previsível, e "Este lançamento inteiro" já resolve o caso comum de 1 clique a mais. ---- */
   document.querySelectorAll('[data-proj-del]').forEach(b=> b.addEventListener('click', ()=>{
-    if(!confirm('Remover este lançamento previsto?')) return;
-    STATE.projecoes = STATE.projecoes.filter(p=>p.id!==b.dataset.projDel);
-    scheduleSave(); render();
+    UI.confirmDelProjecao = { itemId: b.dataset.projDel, competencia: b.dataset.projDelMes };
+    render();
   }));
-  /* ---- Conciliação com o Extrato: selo "⚠️ Conciliação pendente" (abre a tela de candidatos) e botão
-     🔓 "desvincular" num item já conciliado (requisitos 6/7 — nunca automática quando há ambiguidade). ---- */
+  document.getElementById('closeConfirmDelProjecao')?.addEventListener('click', ()=>{ UI.confirmDelProjecao=null; render(); });
+  document.getElementById('closeConfirmDelProjecao2')?.addEventListener('click', ()=>{ UI.confirmDelProjecao=null; render(); });
+  document.getElementById('delApenasEstaCompetencia')?.addEventListener('click', ()=>{
+    const cfg = UI.confirmDelProjecao;
+    if(!STATE.projecaoExclusoesPorCompetencia[cfg.itemId]) STATE.projecaoExclusoesPorCompetencia[cfg.itemId] = {};
+    STATE.projecaoExclusoesPorCompetencia[cfg.itemId][cfg.competencia] = true;
+    UI.confirmDelProjecao = null;
+    scheduleSave(); render();
+  });
+  document.getElementById('delProjecaoTodasCompetencias')?.addEventListener('click', ()=>{
+    const cfg = UI.confirmDelProjecao;
+    STATE.projecoes = STATE.projecoes.filter(p=>p.id!==cfg.itemId);
+    delete STATE.projecaoExclusoesPorCompetencia[cfg.itemId]; // exclusões pontuais de um lançamento que não existe mais não têm mais sentido
+    UI.confirmDelProjecao = null;
+    scheduleSave(); render();
+  });
+  /* ---- Conciliação com o Extrato: selo 🔗/⏪/⏩/⏳ (abre a tela de candidatos/revisão — agora também para
+     itens já conciliados, para permitir ACRESCENTAR mais registros — requisito 1) e botão 🔓 "desvincular"
+     (remove TODOS os vínculos desta competência de uma vez — requisitos 6/7 — nunca automática quando há
+     ambiguidade). ---- */
   document.querySelectorAll('[data-proj-conciliar]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.conciliarProjecaoModal = { itemId: b.dataset.projConciliar, competencia: b.dataset.projConciliarMes };
+    UI.conciliarProjecaoModal = { itemId: b.dataset.projConciliar, competencia: b.dataset.projConciliarMes, selecionados: [] };
     render();
   }));
   document.querySelectorAll('[data-proj-desvincular]').forEach(b=> b.addEventListener('click', ()=>{
     const item = STATE.projecoes.find(p=>p.id===b.dataset.projDesvincular);
     const competencia = b.dataset.projDesvincularMes;
     if(!item || !item.vinculosExtrato) return;
-    if(!confirm('Desfazer a conciliação com o Extrato? O lançamento volta a mostrar a data e o valor previstos, e a próxima conciliação automática pode encontrá-lo de novo.')) return;
+    const qtd = vinculosDaCompetencia(item, competencia).length;
+    if(!confirm(`Desfazer a conciliação com o Extrato${qtd>1?` (${qtd} registros vinculados)`:''}? O lançamento volta a mostrar a data e o valor previstos, e a próxima conciliação automática pode encontrá-lo de novo.`)) return;
     delete item.vinculosExtrato[competencia];
     scheduleSave(); render();
   }));
-  /* ---- Modal: revisão manual da conciliação pendente ---- */
+  /* ---- Modal: revisão manual da conciliação (multi-seleção) ---- */
   document.getElementById('closeConciliarProjecao')?.addEventListener('click', ()=>{ UI.conciliarProjecaoModal=null; render(); });
   document.getElementById('cancelConciliarProjecao')?.addEventListener('click', ()=>{ UI.conciliarProjecaoModal=null; render(); });
-  document.querySelectorAll('[data-conciliar-escolher]').forEach(b=> b.addEventListener('click', ()=>{
+  document.querySelectorAll('[data-conciliar-check]').forEach(cb=> cb.addEventListener('change', e=>{
+    const cfg = UI.conciliarProjecaoModal; if(!cfg) return;
+    const id = e.target.dataset.conciliarCheck;
+    cfg.selecionados = e.target.checked ? [...new Set([...(cfg.selecionados||[]), id])] : (cfg.selecionados||[]).filter(x=>x!==id);
+    render();
+  }));
+  document.querySelectorAll('[data-conciliar-remover-vinculo]').forEach(b=> b.addEventListener('click', ()=>{
     const cfg = UI.conciliarProjecaoModal;
     const item = STATE.projecoes.find(p=>p.id===cfg.itemId);
     if(!item) return;
-    if(!item.vinculosExtrato) item.vinculosExtrato = {};
-    item.vinculosExtrato[cfg.competencia] = b.dataset.conciliarEscolher;
-    UI.conciliarProjecaoModal = null;
+    const restantes = vinculosDaCompetencia(item, cfg.competencia).filter(id=>id!==b.dataset.conciliarRemoverVinculo);
+    if(restantes.length) item.vinculosExtrato[cfg.competencia] = restantes;
+    else delete item.vinculosExtrato[cfg.competencia];
     scheduleSave(); render();
   }));
+  document.getElementById('confirmarConciliarSelecao')?.addEventListener('click', ()=>{
+    const cfg = UI.conciliarProjecaoModal;
+    const item = STATE.projecoes.find(p=>p.id===cfg.itemId);
+    if(item && cfg.selecionados?.length){
+      if(!item.vinculosExtrato) item.vinculosExtrato = {};
+      const atuais = vinculosDaCompetencia(item, cfg.competencia);
+      item.vinculosExtrato[cfg.competencia] = [...new Set([...atuais, ...cfg.selecionados])];
+      scheduleSave();
+    }
+    UI.conciliarProjecaoModal = null;
+    render();
+  });
   document.getElementById('nenhumaConciliarProjecao')?.addEventListener('click', ()=>{
     const cfg = UI.conciliarProjecaoModal;
     const item = STATE.projecoes.find(p=>p.id===cfg.itemId);
