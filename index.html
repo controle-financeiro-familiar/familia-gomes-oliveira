@@ -9307,13 +9307,13 @@ function idsJaVinculadosOutrasCompetencias(item, competenciaAtual){
    renderConciliarProjecaoModal) e os já vinculados a este mesmo item em outra competência (ver
    idsJaVinculadosOutrasCompetencias), do melhor para o pior. Itens de cartão nunca usam esta conciliação (o
    valor da fatura já vem de faturaPorCompetencia, uma fonte própria e exata). O previsto "Contracheque TRT"
-   participa normalmente da conciliação (não é mais uma exceção — ver candidatosConciliacaoContrachequeTRT),
-   só que com critérios próprios em vez da pontuação genérica por semelhança de descrição/valor, já que o
-   lançamento que o realiza (o espelho "Recebimento de Proventos...") é estruturalmente diferente de um
-   previsto comum (ver o comentário da própria candidatosConciliacaoContrachequeTRT). */
+   também nunca usa esta conciliação — voltou a ser uma exceção (ver calcProjecoesMes/statusConciliacaoProjecao):
+   sua data/valor vêm exclusivamente de existir ou não um contracheque importado na competência
+   (contrachequeCompetenciaImportada/dataCreditoContracheque/resumoContrachequeCompetencia), nunca de um
+   vínculo com o Extrato — mesmo o lançamento "Recebimento de Proventos..." não deve ser usado para
+   determinar esse valor (requisito explícito: não depender da conciliação com o Extrato). */
 function candidatosConciliacaoProjecao(item, competencia){
-  if(item.cartao) return [];
-  if(normalizarTexto(item.descricao)==='contrachequetrt') return candidatosConciliacaoContrachequeTRT(item, competencia);
+  if(item.cartao || normalizarTexto(item.descricao)==='contrachequetrt') return [];
   const ignorados = new Set((item.candidatosIgnorados && item.candidatosIgnorados[competencia]) || []);
   const jaVinculadosOutraCompetencia = idsJaVinculadosOutrasCompetencias(item, competencia);
   return STATE.transactions
@@ -9323,24 +9323,31 @@ function candidatosConciliacaoProjecao(item, competencia){
     .sort((a,b)=>b.pontos-a.pontos);
 }
 /* "Projetado" (ainda sem candidato plausível), "pendente" (2+ candidatos plausíveis, mas nenhum vínculo
-   automático seguro o suficiente — precisa de escolha manual) ou "conciliado" (vínculo já estabelecido e o
-   lançamento real ainda existe). Um vínculo cujo lançamento real foi excluído volta a "projetado"/"pendente"
-   normalmente (ver conciliarProjecoesComExtrato, que já limpa o vínculo quebrado). */
+   automático seguro o suficiente — precisa de escolha manual), "conciliado" (vínculo já estabelecido e o
+   lançamento real ainda existe) ou "contracheque-importado" (só para o previsto "Contracheque TRT": já
+   existe um contracheque importado para esta competência — ver contrachequeCompetenciaImportada — então
+   data/valor exibidos vêm dele, não são mais uma projeção). Um vínculo cujo lançamento real foi excluído
+   volta a "projetado"/"pendente" normalmente (ver conciliarProjecoesComExtrato, que já limpa o vínculo
+   quebrado). */
 function statusConciliacaoProjecao(item, competencia){
   // Não aplicável a itens de cartão (fonte própria: faturaPorCompetencia — sem noção de "pendente", o valor
-  // da fatura é sempre exato). O previsto "Contracheque TRT" NÃO é mais uma exceção aqui: participa da
-  // mesma conciliação genérica de qualquer outro previsto, só que candidatosConciliacaoProjecao usa
-  // critérios próprios para ele (ver candidatosConciliacaoContrachequeTRT) em vez da pontuação por
-  // semelhança de descrição/valor.
+  // da fatura é sempre exato). O previsto "Contracheque TRT" é sempre uma exceção à parte, com sua própria
+  // fonte de verdade (ver calcProjecoesMes) — nunca participa da conciliação genérica com o Extrato
+  // (requisito explícito: a existência de um contracheque importado na competência é o único critério, não
+  // um vínculo com o lançamento "Recebimento de Proventos...").
   if(item.cartao) return null;
+  if(normalizarTexto(item.descricao)==='contrachequetrt'){
+    const contaContracheque = STATE.contas.find(c=>STATE.contaTipos[c]==='Contracheque');
+    return (contaContracheque && contrachequeCompetenciaImportada(contaContracheque, competencia)) ? 'contracheque-importado' : 'projetado';
+  }
   if(item.vinculosExtrato && item.vinculosExtrato[competencia] && STATE.transactions.some(t=>t.id===item.vinculosExtrato[competencia])){
     return 'conciliado';
   }
   return candidatosConciliacaoProjecao(item, competencia).length>=2 ? 'pendente' : 'projetado';
 }
-/* Roda a conciliação automática de todos os itens previstos não-cartão (inclusive o Contracheque TRT, que
-   participa normalmente — ver candidatosConciliacaoProjecao/candidatosConciliacaoContrachequeTRT) contra o
-   Extrato, para o mês selecionado e os 3 seguintes (mesma janela exibida no Fluxo de Caixa — ver
+/* Roda a conciliação automática de todos os itens previstos não-cartão e não-Contracheque (que tem sua
+   própria fonte de verdade, sem depender do Extrato — ver calcProjecoesMes/statusConciliacaoProjecao)
+   contra o Extrato, para o mês selecionado e os 3 seguintes (mesma janela exibida no Fluxo de Caixa — ver
    calcProjecoesMultiMes). Idempotente, como reconciliarPagamentosFatura: só atua quando ainda não há
    vínculo estabelecido para aquela competência, e só estabelece um vínculo automático quando existe
    EXATAMENTE UM candidato plausível (ambíguo — 2 ou mais — nunca vincula sozinho, fica como "pendente"
@@ -9354,7 +9361,7 @@ function conciliarProjecoesComExtrato(){
   const idsReais = new Set(STATE.transactions.map(t=>t.id));
   const meses = calcProjecoesMultiMesCompetencias(UI.ano, UI.mes, 4);
   STATE.projecoes.forEach(item=>{
-    if(item.cartao) return;
+    if(item.cartao || normalizarTexto(item.descricao)==='contrachequetrt') return;
     meses.forEach(competencia=>{
       if(!itemAtivoNaCompetencia(item, competencia)) return;
       if(!item.vinculosExtrato) item.vinculosExtrato = {};
@@ -9383,37 +9390,6 @@ function calcProjecoesMultiMesCompetencias(anoBase, mesBase, qtdMeses){
     ({ano, mes} = proximoMes(ano, mes));
   }
   return competencias;
-}
-/* Contracheque TRT (item 8): candidatos de conciliação para o previsto "Contracheque TRT", usados por
-   candidatosConciliacaoProjecao no lugar da pontuação genérica (pontuarCandidatoConciliacao). O valor do
-   Fluxo de Caixa para este previsto NUNCA é o bruto do contracheque (soma das rubricas de crédito na
-   própria conta Contracheque, ex.: Salário TRT + GAJ + Adicionais + Auxílios — o que era feito antes por
-   este mesmo nome de função) — é sempre o valor efetivamente recebido: o lançamento "Recebimento de
-   Proventos..." criado na Conta vinculada bancária na importação do contracheque (ver
-   importConfirm/aplicarTransferenciaInterna), marcado com contrachequeOrigemId em ambos os lados do
-   espelho de transferência (saída Despesa na conta Contracheque, entrada Receita na conta bancária).
-   Por que uma função dedicada em vez da pontuação genérica (descrição/valor parecidos — ver
-   pontuarCandidatoConciliacao): esse lançamento é sempre um espelho de transferência interna
-   (entreFamilia=true), que a pontuação genérica descarta de propósito (linha "if(... || t.entreFamilia)
-   return -1" — nunca tratar um espelho como efetivação de um previsto comum, requisito histórico da
-   conciliação). Aqui é o caso contrário: o espelho especificamente marcado com contrachequeOrigemId É a
-   efetivação por definição. Também não faria sentido comparar a descrição ("Contracheque TRT" nunca é
-   parecida com "Recebimento de Proventos...") nem o valor (o previsto costuma ser só uma estimativa
-   grosseira, digitada manualmente — ver valorProjecaoItem) — o sinal forte e específico aqui é o próprio
-   marcador estrutural contrachequeOrigemId, presente exclusivamente neste lançamento, combinado com a
-   competência explícita (t.competencia, sempre igual à do contracheque de origem, nunca derivada da data
-   de crédito — ver importConfirm). Mesmas exclusões da conciliação genérica (candidatosIgnorados/
-   idsJaVinculadosOutrasCompetencias). Na prática há no máximo 1 candidato por competência (só existe um
-   contracheque importado por mês) — conciliarProjecoesComExtrato já concilia automaticamente quando há
-   exatamente 1; 0 mantém o previsto como "Projetado" com o valor manual (item 4 do requisito); mais de 1
-   (ex.: reimportação atípica) fica "pendente" para escolha manual, nunca conciliado automaticamente. */
-function candidatosConciliacaoContrachequeTRT(item, competencia){
-  const ignorados = new Set((item.candidatosIgnorados && item.candidatosIgnorados[competencia]) || []);
-  const jaVinculadosOutraCompetencia = idsJaVinculadosOutrasCompetencias(item, competencia);
-  return STATE.transactions
-    .filter(t=> t.contrachequeOrigemId && t.tipo==='Receita' && t.competencia===competencia
-      && !ignorados.has(t.id) && !jaVinculadosOutraCompetencia.has(t.id))
-    .map(t=>({ t, pontos: 99 })); // sinal estrutural direto (contrachequeOrigemId) — sempre acima do LIMIAR_CONCILIACAO, sem pontuação por semelhança
 }
 /* Quanto de uma fatura de cartão já foi pago a partir de uma conta ELEGÍVEL do Fluxo de Caixa (Conta
    Corrente/PJ/Poupança) — usado só pela linha "Saldo do Dia" (ver calcProjecoesMes/valorProjecaoPendente),
@@ -9455,21 +9431,42 @@ function calcProjecoesMes(ano, mes, saldoInicial){
         // A fatura nunca está "no Extrato" enquanto não for paga (a conta do cartão não é uma das 3
         // elegíveis) — só a parte AINDA não paga a partir de uma conta elegível continua como projeção.
         valorProjecaoPendente = Math.max(0, valorCalculado - pagamentoFaturaValorElegivel(item.cartao, competencia));
+      } else if(normalizarTexto(item.descricao)==='contrachequetrt'){
+        // Fonte de verdade EXCLUSIVA: existe ou não um contracheque importado NESTA competência (ver
+        // contrachequeCompetenciaImportada) — nunca a conciliação com o Extrato, nem o lançamento
+        // "Recebimento de Proventos..." (requisito explícito de não depender de nenhum dos dois). Com
+        // contracheque importado: Data do Crédito (dataCreditoContracheque) + Valor Líquido
+        // (resumoContrachequeCompetencia — nunca o bruto). Sem contracheque importado: dia/valorCalculado
+        // já são os manualmente projetados (item.dia/valorProjecaoItem, inicializados no topo desta
+        // função) — nada a fazer aqui. Como esses dois campos do item nunca são sobrescritos por este
+        // bloco (só as variáveis locais dia/valorCalculado mudam), dataPrevista/valorPrevisto abaixo
+        // sempre preservam o que o usuário projetou manualmente, mesmo com um contracheque importado —
+        // excluir o contracheque depois faz esta condição voltar a false no próximo render, restaurando
+        // esses valores automaticamente, sem qualquer ação adicional.
+        const contaContracheque = STATE.contas.find(c=>STATE.contaTipos[c]==='Contracheque');
+        const importado = contaContracheque && contrachequeCompetenciaImportada(contaContracheque, competencia);
+        if(importado){
+          const [anoComp, mesComp] = competencia.split('-').map(Number);
+          const dataCredito = dataCreditoContracheque(contaContracheque, anoComp, mesComp);
+          if(dataCredito) dia = Number(dataCredito.slice(8,10));
+          valorCalculado = resumoContrachequeCompetencia(contaContracheque, anoComp, mesComp).liquido;
+          // valorProjecaoPendente (Saldo do Dia — preocupação à parte, não é "conciliação"): quando o
+          // líquido já foi creditado numa das 3 contas elegíveis através do espelho "Recebimento de
+          // Proventos..." (marcado com contrachequeOrigemId — ver importConfirm/aplicarTransferenciaInterna),
+          // esse valor já está no saldo real dessa conta (aplicarLinhasSaldoDiario soma o saldo real da
+          // conta inteira) — contá-lo de novo aqui duplicaria o valor no Saldo do Dia.
+          const contaVinculadaBancaria = STATE.contaVinculada[contaContracheque];
+          const espelhoJaNaContaVinculada = contaVinculadaBancaria && contasElegiveis.has(contaVinculadaBancaria)
+            && STATE.transactions.some(t=> t.conta===contaVinculadaBancaria && t.contrachequeOrigemId && t.competencia===competencia);
+          valorProjecaoPendente = espelhoJaNaContaVinculada ? 0 : valorCalculado;
+        }
       } else {
         // Conciliação com o Extrato (ver conciliarProjecoesComExtrato/statusConciliacaoProjecao): o vínculo,
         // uma vez estabelecido em vinculosExtrato[competencia], é sempre relido pelo id do lançamento real
         // (nunca recalculado por semelhança) — permanece válido mesmo que esse lançamento seja depois
         // editado (data, valor, descrição, categoria). Um vínculo cujo lançamento real foi excluído é
         // ignorado aqui (self-heal já faz isso em conciliarProjecoesComExtrato na próxima passada; até lá,
-        // simplesmente não é usado) e o item volta a exibir seus próprios dados previstos. Vale também para
-        // o previsto "Contracheque TRT" — não é mais uma exceção (ver candidatosConciliacaoContrachequeTRT):
-        // o "lançamento real" dele é sempre o espelho "Recebimento de Proventos..." criado na Conta
-        // vinculada bancária na importação do contracheque, com o valor efetivamente recebido (líquido) —
-        // NUNCA o bruto do contracheque (soma das rubricas de crédito na própria conta Contracheque, que é
-        // como este valor era calculado antes). Enquanto não houver esse vínculo, dia/valorCalculado
-        // continuam sendo os do próprio previsto (dataPrevista/valorPrevisto abaixo) — o valor projetado
-        // manualmente pelo usuário (item.valor, editável na tela de lançamento previsto), nunca recalculado
-        // a partir do contracheque.
+        // simplesmente não é usado) e o item volta a exibir seus próprios dados previstos.
         const vinculoId = item.vinculosExtrato && item.vinculosExtrato[competencia];
         const real = vinculoId ? STATE.transactions.find(t=>t.id===vinculoId) : null;
         if(real){
@@ -9477,21 +9474,17 @@ function calcProjecoesMes(ano, mes, saldoInicial){
           // Só considera "já no Extrato elegível" (requisito 8/9 do pedido) quando o lançamento vinculado
           // está numa das 3 contas elegíveis e NÃO é um lançamento espelho de transferência interna
           // (requisito 7 — nunca usar um espelho como "efetivação" de um previsto comum, só o lançamento
-          // financeiro original) — mesmo critério já usado no cálculo do Saldo do Dia. ÚNICA exceção: o
-          // espelho "Recebimento de Proventos..." do Contracheque (marcado com contrachequeOrigemId) — é
-          // tecnicamente um espelho de transferência interna (entreFamilia=true), mas quando cai numa das 3
-          // contas elegíveis o dinheiro está de fato ali, já somado ao saldo real dessa conta
-          // (aplicarLinhasSaldoDiario usa o saldo real da conta inteira) — contá-lo de novo como "pendente"
-          // duplicaria o valor no Saldo do Dia.
+          // financeiro original) — mesmo critério já usado no cálculo do Saldo do Dia.
           const jaNoExtratoElegivel = !real.entreFamilia && contasElegiveis.has(real.conta);
-          const ehRecebimentoContrachequeElegivel = !!real.contrachequeOrigemId && contasElegiveis.has(real.conta);
-          valorProjecaoPendente = (jaNoExtratoElegivel || ehRecebimentoContrachequeElegivel) ? 0 : valorCalculado;
+          valorProjecaoPendente = jaNoExtratoElegivel ? 0 : valorCalculado;
         }
       }
       // dataPrevista/valorPrevisto: os dados ORIGINALMENTE projetados (item.dia/valorProjecaoItem), sempre
-      // preservados à parte para histórico/auditoria (requisito 4) — nunca sobrescritos pela conciliação,
-      // que só afeta dia/valorCalculado (exibidos) acima. statusConciliacao: rótulo exibido na linha (ver
-      // renderLinhaProjecao) — "conciliado"/"pendente"/"projetado", null para itens de cartão (não se aplica).
+      // preservados à parte para histórico/auditoria (requisito 4) — nunca sobrescritos pela conciliação
+      // nem pelo contracheque importado, que só afetam dia/valorCalculado (exibidos) acima. statusConciliacao:
+      // rótulo exibido na linha (ver renderLinhaProjecao) — "conciliado"/"pendente"/"projetado" para itens
+      // comuns, "contracheque-importado" para o Contracheque TRT quando há contracheque na competência,
+      // null para itens de cartão (não se aplica).
       const statusConciliacao = statusConciliacaoProjecao(item, competencia);
       return { ...item, competencia, valorCalculado, dia, valorProjecaoPendente, dataPrevista: item.dia, valorPrevisto: valorProjecaoItem(item, competencia), statusConciliacao };
     })
@@ -12839,13 +12832,18 @@ function renderFaturaEditModal(){
    Tipo e Cartão vinculado são definidos ao criar/editar o lançamento pelo modal (✏️/+) e aparecem aqui
    somente como texto — não há mais inputs para eles na própria linha. */
 /* Selo de status de conciliação (ver statusConciliacaoProjecao) ao lado da descrição — só para itens que
-   passam pela conciliação com o Extrato (não-cartão, não-Contracheque; l.statusConciliacao é null para os
-   demais, que não mostram selo nenhum). "Projetado" é o estado mais comum e não recebe selo (evita poluir a
-   tabela); "Conciliado" mostra o selo verde (sem ação — usar 🔓 nas Ações para desfazer um vínculo errado);
-   "Pendente" mostra o selo clicável que abre a tela de conciliação manual (ver renderConciliarProjecaoModal
-   e o handler de data-proj-conciliar). */
+   têm algum status (l.statusConciliacao é null para itens de cartão, que não mostram selo nenhum).
+   "Projetado" é o estado mais comum e não recebe selo (evita poluir a tabela); "Conciliado" mostra o selo
+   verde (sem ação — usar 🔓 nas Ações para desfazer um vínculo errado); "Pendente" mostra o selo clicável
+   que abre a tela de conciliação manual (ver renderConciliarProjecaoModal e o handler de
+   data-proj-conciliar); "contracheque-importado" (só para o previsto "Contracheque TRT" — ver
+   calcProjecoesMes) mostra um selo verde equivalente ao de "Conciliado", mas SEM o botão 🔓 nas Ações: não
+   há vínculo nenhum para desfazer aqui — a única forma de o previsto voltar a mostrar os dados projetados
+   manualmente é excluindo o próprio contracheque importado daquela competência (Extrato da conta), o que já
+   acontece automaticamente no próximo render. */
 function seloConciliacaoProjecao(l){
   if(l.statusConciliacao==='conciliado') return ` <span class="tag" style="background:#e3f5ec;color:#1e8e5a;font-size:9px;" title="Conciliado com o Extrato — Data e Valor exibidos são os reais, não os previstos">✅ Conciliado</span>`;
+  if(l.statusConciliacao==='contracheque-importado') return ` <span class="tag" style="background:#e3f5ec;color:#1e8e5a;font-size:9px;" title="Contracheque importado nesta competência — Data e Valor exibidos são a Data do Crédito e o Valor Líquido reais, não os projetados">✅ Contracheque Importado</span>`;
   if(l.statusConciliacao==='pendente') return ` <span class="tag" style="background:#fff3ea;color:#c0392b;cursor:pointer;font-size:9px;" data-proj-conciliar="${l.id}" data-proj-conciliar-mes="${l.competencia}" title="Existem possíveis correspondências no Extrato — clique para revisar e vincular manualmente">⚠️ Conciliação pendente</span>`;
   return '';
 }
@@ -12859,6 +12857,7 @@ function renderLinhaProjecao(l){
       <td data-label="Valor" class="val-cell ${l.tipo==='Despesa'?'neg':'pos'}" style="text-align:right;">
         ${l.cartao ? `<span title="Calculado automaticamente pelo total atual da fatura deste cartão no mês">${fmtBRL(l.valorCalculado)}</span>`
           : l.statusConciliacao==='conciliado' ? `<span title="Valor real do Extrato (previsto: ${fmtBRL(l.valorPrevisto)})">${fmtBRL(l.valorCalculado)}</span>`
+          : l.statusConciliacao==='contracheque-importado' ? `<span title="Valor Líquido do contracheque importado (previsto: ${fmtBRL(l.valorPrevisto)})">${fmtBRL(l.valorCalculado)}</span>`
           : fmtBRL(l.valorCalculado)}
       </td>
       <td data-label="Saldo" class="val-cell saldo-destaque" style="text-align:right;">${fmtBRL(l.saldo)}</td>
