@@ -819,22 +819,31 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
    2) JavaScript — função renderPainelProjecao() (busque por esse nome na área de código desta página): é
       onde a largura de CADA coluna é efetivamente calculada e escrita como "width:XX%;" inline no
       <th> de cada coluna, toda vez que o painel é desenhado. A lógica:
-        a) cada coluna recebe um "peso" em unidades de caractere (ch): Dia=5, Tipo=9, Ações=7 (fixos);
+        a) cada coluna recebe um "peso" em unidades de caractere (ch): Dia=5, Tipo=14 (fixos); Ações
+           também é fixo, mas com DOIS valores possíveis — 7 quando nenhuma linha do painel está
+           conciliada (2 ícones: ✏️/🗑️) ou 11 quando pelo menos uma linha já está (3 ícones: 🔓/✏️/🗑️,
+           ver seloConciliacaoProjecao/renderLinhaProjecao) — o 🔓 de "desfazer conciliação" só aparece
+           nesse caso, então a coluna só precisa ficar mais larga quando ele realmente existe, evitando
+           desperdiçar espaço enquanto nenhuma linha do mês foi conciliada ainda;
            Valor e Saldo são calculados a partir do maior valor monetário realmente exibido naquele
            mês (fmtBRL(...).length + 1.5 de folga) — por isso currency alta não quebra linha nem corta;
-           Descrição recebe 85% da soma das outras colunas (nem domina a tabela, nem fica curta demais).
+           Descrição recebe 30% da soma das outras colunas (nem domina a tabela, nem fica curta demais),
+           com um mínimo de 20ch para nunca ficar espremida quando as demais colunas são todas estreitas.
         b) todos os pesos são somados (chTotal) e cada coluna vira uma PORCENTAGEM desse total
            (pct = ch/chTotal*100) — a soma das 6 colunas é sempre exatamente 100%, o que é o que
            evita a rolagem horizontal (table-layout:fixed misturando % com ch/px podia somar mais que
-           100% e vazar para fora do painel — por isso o cálculo é feito só em % desde o início).
+           100% e vazar para fora do painel — por isso o cálculo é feito só em % desde o início). Como
+           Ações também entra nessa mesma soma antes de virar %, aumentá-la (quando há 🔓) nunca faz a
+           tabela ultrapassar 100% nem precisar de overflow-x — só redistribui um pouco as demais.
         c) essas porcentagens são escritas em cada <th style="width:XX%"> no HTML gerado.
 
    PARA ALTERAR A LARGURA DE UMA COLUNA:
-      Vá até renderPainelProjecao() e ajuste as constantes chDia / chTipo / chAcoes (colunas de largura
-      fixa), ou o multiplicador 0.85 usado em chDescricao (quanto maior, mais espaço a Descrição ocupa
-      relativo às demais). Não é necessário tocar neste bloco de CSS para isso — as classes abaixo só
-      cuidam de espaçamento (padding) e quebra de texto, não de largura. Qualquer alteração nos pesos
-      continua garantindo soma=100% automaticamente (o cálculo percentual é sempre relativo ao total).
+      Vá até renderPainelProjecao() e ajuste as constantes chDia / chTipo, os dois valores possíveis de
+      chAcoes (sem/com 🔓 — variável temLinhaConciliada decide qual usar), ou o multiplicador 0.30 usado em
+      chDescricao (quanto maior, mais espaço a Descrição ocupa relativo às demais). Não é necessário tocar
+      neste bloco de CSS para isso — as classes abaixo só cuidam de espaçamento (padding) e quebra de texto,
+      não de largura. Qualquer alteração nos pesos continua garantindo soma=100% automaticamente (o cálculo
+      percentual é sempre relativo ao total).
    ===================================================================================== */
 .tabela-fluxo{min-width:520px;}
 .tabela-fluxo td{padding:5px 8px;font-size:11.5px;}
@@ -9297,9 +9306,14 @@ function idsJaVinculadosOutrasCompetencias(item, competenciaAtual){
    excluindo os já descartados manualmente (item.candidatosIgnorados[competencia] — ver
    renderConciliarProjecaoModal) e os já vinculados a este mesmo item em outra competência (ver
    idsJaVinculadosOutrasCompetencias), do melhor para o pior. Itens de cartão nunca usam esta conciliação (o
-   valor da fatura já vem de faturaPorCompetencia, uma fonte própria e exata). */
+   valor da fatura já vem de faturaPorCompetencia, uma fonte própria e exata). O previsto "Contracheque TRT"
+   participa normalmente da conciliação (não é mais uma exceção — ver candidatosConciliacaoContrachequeTRT),
+   só que com critérios próprios em vez da pontuação genérica por semelhança de descrição/valor, já que o
+   lançamento que o realiza (o espelho "Recebimento de Proventos...") é estruturalmente diferente de um
+   previsto comum (ver o comentário da própria candidatosConciliacaoContrachequeTRT). */
 function candidatosConciliacaoProjecao(item, competencia){
   if(item.cartao) return [];
+  if(normalizarTexto(item.descricao)==='contrachequetrt') return candidatosConciliacaoContrachequeTRT(item, competencia);
   const ignorados = new Set((item.candidatosIgnorados && item.candidatosIgnorados[competencia]) || []);
   const jaVinculadosOutraCompetencia = idsJaVinculadosOutrasCompetencias(item, competencia);
   return STATE.transactions
@@ -9313,33 +9327,34 @@ function candidatosConciliacaoProjecao(item, competencia){
    lançamento real ainda existe). Um vínculo cujo lançamento real foi excluído volta a "projetado"/"pendente"
    normalmente (ver conciliarProjecoesComExtrato, que já limpa o vínculo quebrado). */
 function statusConciliacaoProjecao(item, competencia){
-  // Não aplicável a itens de cartão (fonte própria: faturaPorCompetencia) nem ao Contracheque TRT (fonte
-  // própria: encontrarEfetivoContrachequeTRT, sem ambiguidade — sempre "encontrado" ou "não encontrado",
-  // nunca "pendente") — ver candidatosConciliacaoProjecao/conciliarProjecoesComExtrato, que já excluem os
-  // dois desta conciliação genérica.
-  if(item.cartao || normalizarTexto(item.descricao)==='contrachequetrt') return null;
+  // Não aplicável a itens de cartão (fonte própria: faturaPorCompetencia — sem noção de "pendente", o valor
+  // da fatura é sempre exato). O previsto "Contracheque TRT" NÃO é mais uma exceção aqui: participa da
+  // mesma conciliação genérica de qualquer outro previsto, só que candidatosConciliacaoProjecao usa
+  // critérios próprios para ele (ver candidatosConciliacaoContrachequeTRT) em vez da pontuação por
+  // semelhança de descrição/valor.
+  if(item.cartao) return null;
   if(item.vinculosExtrato && item.vinculosExtrato[competencia] && STATE.transactions.some(t=>t.id===item.vinculosExtrato[competencia])){
     return 'conciliado';
   }
   return candidatosConciliacaoProjecao(item, competencia).length>=2 ? 'pendente' : 'projetado';
 }
-/* Roda a conciliação automática de todos os itens previstos (não-cartão, não-Contracheque, que tem sua
-   própria correspondência dedicada — ver encontrarEfetivoContrachequeTRT) contra o Extrato, para o mês
-   selecionado e os 3 seguintes (mesma janela exibida no Fluxo de Caixa — ver calcProjecoesMultiMes).
-   Idempotente, como reconciliarPagamentosFatura: só atua quando ainda não há vínculo estabelecido para
-   aquela competência, e só estabelece um vínculo automático quando existe EXATAMENTE UM candidato plausível
-   (ambíguo — 2 ou mais — nunca vincula sozinho, fica como "pendente" para escolha manual — requisito 6).
-   Um vínculo cujo lançamento real foi excluído é limpo automaticamente (self-heal), voltando o item a
-   participar normalmente de uma nova tentativa de conciliação. Chamada nos mesmos pontos já usados por
-   reconciliarPagamentosFatura: ao carregar o arquivo, depois de importar um extrato e depois de salvar um
-   lançamento manualmente. */
+/* Roda a conciliação automática de todos os itens previstos não-cartão (inclusive o Contracheque TRT, que
+   participa normalmente — ver candidatosConciliacaoProjecao/candidatosConciliacaoContrachequeTRT) contra o
+   Extrato, para o mês selecionado e os 3 seguintes (mesma janela exibida no Fluxo de Caixa — ver
+   calcProjecoesMultiMes). Idempotente, como reconciliarPagamentosFatura: só atua quando ainda não há
+   vínculo estabelecido para aquela competência, e só estabelece um vínculo automático quando existe
+   EXATAMENTE UM candidato plausível (ambíguo — 2 ou mais — nunca vincula sozinho, fica como "pendente"
+   para escolha manual — requisito 6). Um vínculo cujo lançamento real foi excluído é limpo automaticamente
+   (self-heal), voltando o item a participar normalmente de uma nova tentativa de conciliação. Chamada nos
+   mesmos pontos já usados por reconciliarPagamentosFatura: ao carregar o arquivo, depois de importar um
+   extrato e depois de salvar um lançamento manualmente. */
 function conciliarProjecoesComExtrato(){
   if(!STATE.projecoes?.length) return 0;
   let vinculados = 0;
   const idsReais = new Set(STATE.transactions.map(t=>t.id));
   const meses = calcProjecoesMultiMesCompetencias(UI.ano, UI.mes, 4);
   STATE.projecoes.forEach(item=>{
-    if(item.cartao || normalizarTexto(item.descricao)==='contrachequetrt') return;
+    if(item.cartao) return;
     meses.forEach(competencia=>{
       if(!itemAtivoNaCompetencia(item, competencia)) return;
       if(!item.vinculosExtrato) item.vinculosExtrato = {};
@@ -9369,24 +9384,36 @@ function calcProjecoesMultiMesCompetencias(anoBase, mesBase, qtdMeses){
   }
   return competencias;
 }
-/* Contracheque TRT (item 8): mesma ideia acima, mas com regra própria — o dia vem do lançamento de receita
-   efetivamente creditado na conta do tipo Contracheque nesta competência (não por correspondência de
-   descrição, já que cada rubrica de crédito importada do contracheque pode cair em subcategorias
-   diferentes — Salário TRT, Assistência Saúde, Assistência Pré-Escolar, Auxílio Alimentação — ver
-   RUBRICA_TRT_CODIGO_CATEGORIA), e o valor considerado é o total de entradas já efetivamente creditado
-   nessa conta nesta competência, somando todas as subcategorias de receita (mesma lógica de
-   calcSaldoConta/entradas usada no restante da aplicação), não o valor fixo recorrente do lançamento
-   previsto. */
-function encontrarEfetivoContrachequeTRT(competencia){
-  const [ano, mes] = competencia.split('-').map(Number);
-  const contaContracheque = STATE.contas.find(c=>STATE.contaTipos[c]==='Contracheque');
-  if(!contaContracheque) return null;
-  const creditos = STATE.transactions
-    .filter(t=> t.conta===contaContracheque && t.data && t.data.slice(0,7)===competencia && t.tipo==='Receita' && !ehSaldoAnterior(t))
-    .sort((a,b)=> a.data<b.data ? -1 : (a.data>b.data ? 1 : 0));
-  if(!creditos.length) return null;
-  const valorTotal = calcSaldoConta(contaContracheque, ano, mes).entradas;
-  return { dia: Number(creditos[0].data.slice(8,10)), valor: valorTotal };
+/* Contracheque TRT (item 8): candidatos de conciliação para o previsto "Contracheque TRT", usados por
+   candidatosConciliacaoProjecao no lugar da pontuação genérica (pontuarCandidatoConciliacao). O valor do
+   Fluxo de Caixa para este previsto NUNCA é o bruto do contracheque (soma das rubricas de crédito na
+   própria conta Contracheque, ex.: Salário TRT + GAJ + Adicionais + Auxílios — o que era feito antes por
+   este mesmo nome de função) — é sempre o valor efetivamente recebido: o lançamento "Recebimento de
+   Proventos..." criado na Conta vinculada bancária na importação do contracheque (ver
+   importConfirm/aplicarTransferenciaInterna), marcado com contrachequeOrigemId em ambos os lados do
+   espelho de transferência (saída Despesa na conta Contracheque, entrada Receita na conta bancária).
+   Por que uma função dedicada em vez da pontuação genérica (descrição/valor parecidos — ver
+   pontuarCandidatoConciliacao): esse lançamento é sempre um espelho de transferência interna
+   (entreFamilia=true), que a pontuação genérica descarta de propósito (linha "if(... || t.entreFamilia)
+   return -1" — nunca tratar um espelho como efetivação de um previsto comum, requisito histórico da
+   conciliação). Aqui é o caso contrário: o espelho especificamente marcado com contrachequeOrigemId É a
+   efetivação por definição. Também não faria sentido comparar a descrição ("Contracheque TRT" nunca é
+   parecida com "Recebimento de Proventos...") nem o valor (o previsto costuma ser só uma estimativa
+   grosseira, digitada manualmente — ver valorProjecaoItem) — o sinal forte e específico aqui é o próprio
+   marcador estrutural contrachequeOrigemId, presente exclusivamente neste lançamento, combinado com a
+   competência explícita (t.competencia, sempre igual à do contracheque de origem, nunca derivada da data
+   de crédito — ver importConfirm). Mesmas exclusões da conciliação genérica (candidatosIgnorados/
+   idsJaVinculadosOutrasCompetencias). Na prática há no máximo 1 candidato por competência (só existe um
+   contracheque importado por mês) — conciliarProjecoesComExtrato já concilia automaticamente quando há
+   exatamente 1; 0 mantém o previsto como "Projetado" com o valor manual (item 4 do requisito); mais de 1
+   (ex.: reimportação atípica) fica "pendente" para escolha manual, nunca conciliado automaticamente. */
+function candidatosConciliacaoContrachequeTRT(item, competencia){
+  const ignorados = new Set((item.candidatosIgnorados && item.candidatosIgnorados[competencia]) || []);
+  const jaVinculadosOutraCompetencia = idsJaVinculadosOutrasCompetencias(item, competencia);
+  return STATE.transactions
+    .filter(t=> t.contrachequeOrigemId && t.tipo==='Receita' && t.competencia===competencia
+      && !ignorados.has(t.id) && !jaVinculadosOutraCompetencia.has(t.id))
+    .map(t=>({ t, pontos: 99 })); // sinal estrutural direto (contrachequeOrigemId) — sempre acima do LIMIAR_CONCILIACAO, sem pontuação por semelhança
 }
 /* Quanto de uma fatura de cartão já foi pago a partir de uma conta ELEGÍVEL do Fluxo de Caixa (Conta
    Corrente/PJ/Poupança) — usado só pela linha "Saldo do Dia" (ver calcProjecoesMes/valorProjecaoPendente),
@@ -9428,27 +9455,21 @@ function calcProjecoesMes(ano, mes, saldoInicial){
         // A fatura nunca está "no Extrato" enquanto não for paga (a conta do cartão não é uma das 3
         // elegíveis) — só a parte AINDA não paga a partir de uma conta elegível continua como projeção.
         valorProjecaoPendente = Math.max(0, valorCalculado - pagamentoFaturaValorElegivel(item.cartao, competencia));
-      } else if(normalizarTexto(item.descricao)==='contrachequetrt'){
-        const efetivoTRT = encontrarEfetivoContrachequeTRT(competencia);
-        if(efetivoTRT){ dia = efetivoTRT.dia; valorCalculado = efetivoTRT.valor; valorProjecaoPendente = valorCalculado; }
-        // O Contracheque em si nunca é uma das 3 contas elegíveis, mas o líquido é depositado na sua Conta
-        // vinculada (STATE.contaVinculada) através de um lançamento espelho "Recebimento de Proventos..."
-        // (ver importConfirm/aplicarTransferenciaInterna, marcado com contrachequeOrigemId nos dois lados).
-        // Quando essa conta vinculada É uma das 3 elegíveis e o espelho já existe para esta competência, o
-        // valor já está no Extrato elegível (o mesmo saldoReal de aplicarLinhasSaldoDiario já soma essa
-        // conta inteira) — deixa de ser pendente, senão seria contado duas vezes.
-        const contaContracheque = STATE.contas.find(c=>STATE.contaTipos[c]==='Contracheque');
-        const contaVinculadaBancaria = contaContracheque ? STATE.contaVinculada[contaContracheque] : null;
-        const espelhoJaNaContaVinculada = contaVinculadaBancaria && contasElegiveis.has(contaVinculadaBancaria)
-          && STATE.transactions.some(t=> t.conta===contaVinculadaBancaria && t.contrachequeOrigemId && t.data && t.data.slice(0,7)===competencia);
-        if(espelhoJaNaContaVinculada) valorProjecaoPendente = 0;
       } else {
         // Conciliação com o Extrato (ver conciliarProjecoesComExtrato/statusConciliacaoProjecao): o vínculo,
         // uma vez estabelecido em vinculosExtrato[competencia], é sempre relido pelo id do lançamento real
         // (nunca recalculado por semelhança) — permanece válido mesmo que esse lançamento seja depois
         // editado (data, valor, descrição, categoria). Um vínculo cujo lançamento real foi excluído é
         // ignorado aqui (self-heal já faz isso em conciliarProjecoesComExtrato na próxima passada; até lá,
-        // simplesmente não é usado) e o item volta a exibir seus próprios dados previstos.
+        // simplesmente não é usado) e o item volta a exibir seus próprios dados previstos. Vale também para
+        // o previsto "Contracheque TRT" — não é mais uma exceção (ver candidatosConciliacaoContrachequeTRT):
+        // o "lançamento real" dele é sempre o espelho "Recebimento de Proventos..." criado na Conta
+        // vinculada bancária na importação do contracheque, com o valor efetivamente recebido (líquido) —
+        // NUNCA o bruto do contracheque (soma das rubricas de crédito na própria conta Contracheque, que é
+        // como este valor era calculado antes). Enquanto não houver esse vínculo, dia/valorCalculado
+        // continuam sendo os do próprio previsto (dataPrevista/valorPrevisto abaixo) — o valor projetado
+        // manualmente pelo usuário (item.valor, editável na tela de lançamento previsto), nunca recalculado
+        // a partir do contracheque.
         const vinculoId = item.vinculosExtrato && item.vinculosExtrato[competencia];
         const real = vinculoId ? STATE.transactions.find(t=>t.id===vinculoId) : null;
         if(real){
@@ -9456,9 +9477,15 @@ function calcProjecoesMes(ano, mes, saldoInicial){
           // Só considera "já no Extrato elegível" (requisito 8/9 do pedido) quando o lançamento vinculado
           // está numa das 3 contas elegíveis e NÃO é um lançamento espelho de transferência interna
           // (requisito 7 — nunca usar um espelho como "efetivação" de um previsto comum, só o lançamento
-          // financeiro original) — mesmo critério já usado no cálculo do Saldo do Dia.
+          // financeiro original) — mesmo critério já usado no cálculo do Saldo do Dia. ÚNICA exceção: o
+          // espelho "Recebimento de Proventos..." do Contracheque (marcado com contrachequeOrigemId) — é
+          // tecnicamente um espelho de transferência interna (entreFamilia=true), mas quando cai numa das 3
+          // contas elegíveis o dinheiro está de fato ali, já somado ao saldo real dessa conta
+          // (aplicarLinhasSaldoDiario usa o saldo real da conta inteira) — contá-lo de novo como "pendente"
+          // duplicaria o valor no Saldo do Dia.
           const jaNoExtratoElegivel = !real.entreFamilia && contasElegiveis.has(real.conta);
-          valorProjecaoPendente = jaNoExtratoElegivel ? 0 : valorCalculado;
+          const ehRecebimentoContrachequeElegivel = !!real.contrachequeOrigemId && contasElegiveis.has(real.conta);
+          valorProjecaoPendente = (jaNoExtratoElegivel || ehRecebimentoContrachequeElegivel) ? 0 : valorCalculado;
         }
       }
       // dataPrevista/valorPrevisto: os dados ORIGINALMENTE projetados (item.dia/valorProjecaoItem), sempre
@@ -12882,7 +12909,16 @@ function renderPainelProjecao(m, idx){
   // nunca quebrar em duas linhas — com 9 a coluna ficava estreita demais em telas menores que a largura
   // total da tabela, mesmo com table-layout:fixed. Só afeta o layout de tabela (desktop/tablet); no mobile
   // (≤700px) a tabela vira lista de cards e essas larguras deixam de valer (ver @media(max-width:700px)).
-  const chDia = 5, chTipo = 14, chAcoes = 7; // colunas de largura fixa — altere aqui para mudar Dia/Tipo/Ações
+  const chDia = 5, chTipo = 14; // colunas de largura fixa — altere aqui para mudar Dia/Tipo
+  // Ações: largura fixa, mas com 2 variantes — conciliar uma linha (ver seloConciliacaoProjecao) acrescenta
+  // um 3º ícone (🔓 "desfazer conciliação") ao lado de ✏️/🗑️, então a coluna precisa de mais espaço só
+  // quando isso realmente acontece; do contrário sobra espaço desperdiçado o tempo todo. Sem esse ajuste, o
+  // 🔓 de uma linha conciliada não cabia nos 7ch fixos de antes e "vazava" — table-layout:fixed then
+  // preferia quebrar linha na célula ou estourar a largura total da tabela (rolagem horizontal indevida,
+  // já que a soma das colunas deixava de bater 100%). Recalculado a cada renderização do painel, junto com
+  // chValor/chSaldo, então nunca fica desatualizado quando uma linha é conciliada/desvinculada.
+  const temLinhaConciliada = m.linhas.some(l=>!l.especial && l.statusConciliacao==='conciliado');
+  const chAcoes = temLinhaConciliada ? 11 : 7;
   const chValor = Math.max(8, ...valores.map(v=>fmtBRL(v).length)) + 1.5;
   const chSaldo = Math.max(8, ...saldos.map(v=>fmtBRL(v).length)) + 1.5;
   // Descrição recebe um espaço moderado — nem domina a tabela, nem fica curta demais — proporcional ao
