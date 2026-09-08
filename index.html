@@ -9239,6 +9239,24 @@ function contasElegiveisFluxoCaixa(){
 function getSaldoInicialBase(ano, mes){
   return contasElegiveisFluxoCaixa().reduce((s,c)=> s + calcSaldoConta(c, ano, mes).saldoInicial, 0);
 }
+/* Saldo REAL consolidado das contas elegíveis do Fluxo de Caixa (PJ/Corrente/Poupança) até uma data —
+   fonte ÚNICA de "saldo real" usada tanto pelo saldo de cada lançamento (calcProjecoesMes) quanto pela
+   linha "Saldo do Dia" (aplicarLinhasSaldoDiario), para que os dois nunca possam divergir por usarem
+   fórmulas diferentes (requisito de correção definitiva do cálculo de saldos). Cartões de crédito nunca
+   entram (contasElegiveisFluxoCaixa já os exclui, junto com Contracheque/Reserva de Emergência/qualquer
+   outro tipo de conta). Registros-espelho de transferência entre contas próprias (entreFamilia) SÃO
+   somados normalmente aqui — cada lado é uma movimentação real na SUA PRÓPRIA conta; ao consolidar as
+   contas elegíveis, os dois lados de uma transferência ENTRE ELAS se cancelam automaticamente (soma
+   líquida zero), nunca precisando de nenhuma exclusão especial. Nunca olha para o futuro: uma data
+   posterior a hoje é sempre tratada como hoje — um lançamento com data futura (mesmo já real no Extrato,
+   ex. um pagamento antecipado registrado com a data futura errada) só deve afetar este saldo no dia em
+   que a data efetivamente chegar, nunca antes (mesma regra de corte já usada no Saldo Atual dos cards de
+   Contas — ver saldoContaAteData). */
+function saldoRealConsolidadoAteData(dataISO){
+  const hoje = hojeISO();
+  const dataRef = dataISO<=hoje ? dataISO : hoje;
+  return contasElegiveisFluxoCaixa().reduce((s,c)=> s + saldoContaAteData(c, dataRef), 0);
+}
 /* Campos de valor da aba Projeções usam o mesmo formato de digitação da taxa de conversão de compras
    internacionais na importação: texto livre com vírgula decimal, sem spin buttons do input numérico. */
 function parseMoedaTexto(v){
@@ -9543,7 +9561,19 @@ function pagamentoFaturaValorElegivel(cartao, competencia){
   }, 0);
 }
 /* Monta a projeção de um único mês a partir de um saldo inicial já dado (usado tanto para o mês
-   selecionado no topo do app quanto para cada um dos meses seguintes, encadeados). */
+   selecionado no topo do app quanto para cada um dos meses seguintes, encadeados).
+   Correção definitiva do cálculo de saldos: a coluna "Saldo" de CADA lançamento nunca mais é uma simples
+   soma acumulada dos valores projetados a partir de saldoInicial — ela é sempre saldoRealConsolidadoAteData
+   (saldo REAL das contas PJ/Corrente/Poupança, a partir do Extrato — nunca cartão) NA DATA daquele
+   lançamento, mais os pendentes (valorProjecaoPendente, com sinal) ACUMULADOS de todos os lançamentos
+   desta tabela até ali (inclusive de dias anteriores — nunca só os do próprio dia, senão um pendente de
+   um dia anterior "desaparece" do saldo dos dias seguintes assim que a data muda). O saldo real tem
+   sempre prioridade: ele é recalculado a cada dia distinto que aparece na tabela, nunca fica "preso" a um
+   saldo anterior incorreto só porque foi calculado por uma linha anterior. saldoInicial continua sendo o
+   ponto de partida encadeado entre meses (ver calcProjecoesMultiMes) — mas só entra como um AJUSTE de
+   pendente ainda não resolvido (saldoInicial − saldo real no fim do mês anterior), nunca substituindo o
+   saldo real do mês atual, que é sempre recalculado do zero a partir do Extrato. Para o 1º mês da cadeia,
+   saldoInicial já É o saldo real (getSaldoInicialBase), então esse ajuste é sempre zero. */
 function calcProjecoesMes(ano, mes, saldoInicial){
   const competencia = chaveMes(ano, mes);
   const contasElegiveis = new Set(contasElegiveisFluxoCaixa());
@@ -9557,9 +9587,10 @@ function calcProjecoesMes(ano, mes, saldoInicial){
       let dia = diaCartao || item.dia;
       let valorCalculado = valorProjecaoItem(item, competencia);
       // valorProjecaoPendente: a parte deste item que AINDA não está refletida no Extrato das contas
-      // elegíveis (PJ/Corrente/Poupança) — usado só pela linha "Saldo do Dia" (ver aplicarLinhasSaldoDiario)
-      // para nunca somar de novo o que já é saldo real. Nunca altera as colunas Valor/Saldo desta própria
-      // linha, que continuam mostrando sempre o valor total do item, exatamente como antes deste requisito.
+      // elegíveis (PJ/Corrente/Poupança) — usado tanto pela linha "Saldo do Dia" quanto pela coluna Saldo
+      // de cada lançamento (ver o cálculo unificado no final desta função) para nunca somar de novo o que
+      // já é saldo real. Nunca altera a coluna Valor desta própria linha, que continua mostrando sempre o
+      // valor total do item, exatamente como antes deste requisito.
       let valorProjecaoPendente = valorCalculado;
       // dataReal/qtdVinculos: só preenchidos quando há 1+ vínculos válidos com o Extrato (ver
       // vinculosDaCompetencia) — usados pela linha (tooltip/selo) para mostrar a data real mais recente e
@@ -9647,9 +9678,36 @@ function calcProjecoesMes(ano, mes, saldoInicial){
       return { ...item, competencia, valorCalculado, dia, valorProjecaoPendente, dataPrevista: item.dia, valorPrevisto: valorProjecaoItem(item, competencia), dataReal, qtdVinculos, statusConciliacao };
     })
     .sort((a,b)=>(Number(a.dia)||0)-(Number(b.dia)||0));
-  let saldo = saldoInicial;
-  linhas.forEach(l=>{ saldo += (l.tipo==='Receita' ? l.valorCalculado : -l.valorCalculado); l.saldo = saldo; });
-  return { ano, mes, saldoInicial, linhas, saldoFinal: saldo };
+  // Saldo de cada lançamento (correção definitiva do cálculo de saldos — ver comentário da função acima):
+  // saldoRealConsolidadoAteData recalculado a cada dia distinto encontrado (nunca só uma vez no início),
+  // mais os pendentes (valorProjecaoPendente, com sinal de Receita/Despesa) acumulados desde o início
+  // desta tabela — nunca zerados ao virar o dia, para um pendente de um dia anterior continuar refletido
+  // nos dias seguintes até ser efetivamente conciliado. O ajuste de pendente ainda não resolvido, herdado
+  // do(s) mês(es) anterior(es) da cadeia (calcProjecoesMultiMes), entra como o valor inicial deste
+  // acumulador — para o 1º mês da cadeia (saldoInicial já é o saldo real de getSaldoInicialBase) esse
+  // ajuste é sempre zero. saldoRealAntesDoMes usa getSaldoInicialBase (não saldoRealConsolidadoAteData num
+  // "dia anterior ao mês") de propósito: um lançamento de Saldo Anterior é sempre datado no dia 1 do
+  // próprio mês a que se refere (ver aplicarSaldoAnteriorConta), nunca no último dia do mês anterior — só
+  // getSaldoInicialBase/calcSaldoConta usa exatamente esse mesmo corte (<=, incluindo o dia 1), garantindo
+  // que o ajuste dê zero de verdade no 1º mês da cadeia.
+  const saldoRealAntesDoMes = getSaldoInicialBase(ano, mes);
+  let pendenteAcumulado = saldoInicial - saldoRealAntesDoMes;
+  let diaCalculadoAtual = null, saldoRealDoDiaAtual = saldoRealAntesDoMes;
+  linhas.forEach(l=>{
+    const dia = Math.min(31, Math.max(1, Number(l.dia)||1));
+    if(dia!==diaCalculadoAtual){
+      saldoRealDoDiaAtual = saldoRealConsolidadoAteData(`${ano}-${pad2(mes)}-${pad2(dia)}`);
+      diaCalculadoAtual = dia;
+    }
+    pendenteAcumulado += (l.tipo==='Receita' ? l.valorProjecaoPendente : -l.valorProjecaoPendente);
+    l.saldo = saldoRealDoDiaAtual + pendenteAcumulado;
+  });
+  // saldoFinal: o saldo do último lançamento da tabela (já real+pendente acumulado, como acima) — ou,
+  // quando o mês não tem nenhum lançamento, o saldo real puro no último dia do mês (nunca o saldoInicial
+  // repassado sem verificação, mesmo numa tabela vazia).
+  const { max: ultimoDiaMes } = limitesCompetenciaISO(competencia);
+  const saldoFinal = linhas.length ? linhas[linhas.length-1].saldo : saldoRealConsolidadoAteData(ultimoDiaMes);
+  return { ano, mes, saldoInicial, linhas, saldoFinal };
 }
 /* Replica a mesma tabela para o mês selecionado e os 3 meses seguintes: o saldo final de cada mês vira o
    saldo inicial do próximo (só o primeiro mês tem Saldo Inicial editável — os demais são sempre o
@@ -9676,36 +9734,29 @@ function calcSaldoAtualFluxoCaixa(){
 }
 /* Injeta uma linha especial "Saldo do Dia" SOMENTE nos dias que já possuem ao menos um lançamento nas
    próprias tabelas do Fluxo de Caixa (STATE.projecoes já filtrado/calculado por calcProjecoesMes) — nunca
-   em todos os dias do período (requisito 1). Para cada um desses dias:
-     1) consulta o saldo REAL acumulado das contas elegíveis (PJ/Corrente/Poupança) até a data — o Extrato
-        nunca inclui datas futuras, então um dia além de hoje usa o último saldo real conhecido (hoje);
-     2) soma a essa base só a parcela de cada lançamento do próprio dia que AINDA não está refletida no
-        Extrato (l.valorProjecaoPendente, já calculado por calcProjecoesMes — 0 quando o lançamento já foi
-        encontrado como real numa conta elegível, o valor cheio quando ainda é só projeção, ou o saldo
-        residual ainda não pago quando é uma fatura de cartão parcialmente quitada).
-   O saldo real sempre prevalece (requisito 2/11): um lançamento já no Extrato nunca é somado de novo (seu
-   valorProjecaoPendente é 0), e a diferença entre o valor previsto e o valor real (quando existir) nunca é
-   criada como um lançamento adicional — ela simplesmente desaparece porque só o saldo real conta a partir
-   dali. O dia de hoje usa o rótulo "Saldo Atual (Hoje)" (ver renderLinhaSaldoAtual) quando também possuir
-   lançamento; qualquer outro dia usa "Saldo do Dia". O saldoFinal do mês (saldo inicial do mês seguinte na
-   cadeia de calcProjecoesMultiMes) passa a ser o saldo da última linha "Saldo do Dia" inserida. */
+   em todos os dias do período (requisito 1). Correção definitiva do cálculo de saldos: o valor de cada
+   linha "Saldo do Dia" NUNCA é recalculado aqui com uma fórmula própria — é sempre lido diretamente do
+   campo `saldo` do ÚLTIMO lançamento daquele dia na própria tabela (m.linhas, já ordenada e já calculada
+   por inteiro em calcProjecoesMes, que usa saldo REAL consolidado das contas elegíveis + pendentes
+   acumulados). Ter as duas linhas (o último lançamento do dia e o "Saldo do Dia" daquele mesmo dia)
+   sempre lendo o mesmíssimo valor, em vez de duas fórmulas calculadas em paralelo, é o que garante — por
+   construção, não por coincidência — que nunca divirjam entre si (requisito 10). O dia de hoje usa o
+   rótulo "Saldo Atual (Hoje)" (ver renderLinhaSaldoAtual) quando também possuir lançamento; qualquer
+   outro dia usa "Saldo do Dia". O saldoFinal do mês (saldo inicial do mês seguinte na cadeia de
+   calcProjecoesMultiMes) passa a ser o saldo da última linha "Saldo do Dia" inserida — idêntico ao
+   m.saldoFinal que calcProjecoesMes já calculou (mantido aqui só por clareza/compatibilidade). */
 function aplicarLinhasSaldoDiario(m){
   const diasComLancamento = [...new Set(m.linhas.map(l=>Number(l.dia)||0))].sort((a,b)=>a-b);
   if(!diasComLancamento.length) return m;
   const hoje = new Date();
   const ehMesReal = m.ano===hoje.getFullYear() && (m.mes-1)===hoje.getMonth();
   const diaHoje = hoje.getDate();
-  const hojeStr = hojeISO();
-  const contasElegiveis = contasElegiveisFluxoCaixa();
   const linhas = m.linhas.slice();
   let saldoFinal = m.saldoFinal;
   diasComLancamento.forEach(dia=>{
     const dataISO = `${m.ano}-${pad2(m.mes)}-${pad2(dia)}`;
-    const dataRef = dataISO<=hojeStr ? dataISO : hojeStr;
-    const saldoReal = contasElegiveis.reduce((s,c)=> s + saldoContaAteData(c, dataRef), 0);
-    const pendentesDoDia = m.linhas.filter(l=>Number(l.dia)===dia)
-      .reduce((s,l)=> s + (l.tipo==='Despesa' ? -l.valorProjecaoPendente : l.valorProjecaoPendente), 0);
-    const saldoDia = saldoReal + pendentesDoDia;
+    const linhasDoDia = m.linhas.filter(l=>Number(l.dia)===dia);
+    const saldoDia = linhasDoDia[linhasDoDia.length-1].saldo;
     const linhaEspecial = { id:`saldo-dia-${dataISO}`, especial:'saldo-dia', ehHoje: ehMesReal && dia===diaHoje, dia, saldo: saldoDia };
     let posicao = linhas.findIndex(l => (Number(l.dia)||0) > dia);
     if(posicao===-1) posicao = linhas.length;
@@ -9725,6 +9776,43 @@ function calcProjecoesMultiMes(anoBase, mesBase, qtdMeses){
     ({ano, mes} = proximoMes(ano, mes));
   }
   return meses;
+}
+/* Validação automática de consistência dos saldos do Fluxo de Caixa: para cada mês já calculado (recebe
+   o resultado pronto de calcProjecoesMultiMes/calcProjecoesMes — nunca recalcula nada por conta própria,
+   para sempre auditar exatamente os mesmos números exibidos na tela), confere que o Saldo do Dia de cada
+   dia é sempre exatamente igual ao saldo do ÚLTIMO lançamento daquele dia na própria tabela (requisito
+   11: "Saldo do Dia ≠ último saldo efetivo dos lançamentos daquele dia"). Com a correção desta rodada
+   (aplicarLinhasSaldoDiario agora sempre LÊ esse valor em vez de recalculá-lo em paralelo — ver seu
+   comentário) essa divergência deixou de ser estruturalmente possível, mas a validação continua existindo
+   como uma rede de segurança contra qualquer regressão futura: cada divergência encontrada é reportada
+   junto com os lançamentos daquele dia (id/descrição/tipo/valor/saldo de cada um), para nunca precisar
+   adivinhar qual lançamento está causando o problema. Roda automaticamente a cada render do Fluxo de
+   Caixa (ver renderResumo) e loga no console (nunca interrompe a renderização nem altera nenhum valor
+   exibido — é só diagnóstico). */
+function validarConsistenciaSaldoFluxoCaixa(meses){
+  const divergencias = [];
+  meses.forEach(m=>{
+    const porDia = new Map();
+    m.linhas.forEach(l=>{
+      const dia = Number(l.dia)||0;
+      if(l.especial==='saldo-dia'){
+        const grupo = porDia.get(dia);
+        const saldoUltimoLancamento = grupo && grupo.length ? grupo[grupo.length-1].saldo : null;
+        if(saldoUltimoLancamento!==null && Math.abs(saldoUltimoLancamento - l.saldo) > 0.01){
+          divergencias.push({
+            competencia: chaveMes(m.ano, m.mes), dia,
+            saldoDoDia: l.saldo, saldoUltimoLancamento, diferenca: arredondarMoeda(l.saldo - saldoUltimoLancamento),
+            lancamentosDoDia: grupo.map(x=>({ id:x.id, descricao:x.descricao, tipo:x.tipo, valorCalculado:x.valorCalculado, valorProjecaoPendente:x.valorProjecaoPendente, saldo:x.saldo, statusConciliacao:x.statusConciliacao })),
+          });
+        }
+      } else {
+        if(!porDia.has(dia)) porDia.set(dia, []);
+        porDia.get(dia).push(l);
+      }
+    });
+  });
+  if(divergencias.length) console.warn('⚠️ Divergência de Saldo do Dia detectada no Fluxo de Caixa — Saldo do Dia deveria ser sempre igual ao saldo do último lançamento daquele dia:', divergencias);
+  return divergencias;
 }
 
 /* ===================== RENDER RAIZ ===================== */
@@ -13500,6 +13588,7 @@ function drawChartsInteligencia(){
 }
 function renderResumo(){
   const meses = calcProjecoesMultiMes(UI.ano, UI.mes, 4);
+  validarConsistenciaSaldoFluxoCaixa(meses); // só loga no console em caso de divergência — nunca altera o que é exibido
   // Item 8 do requisito: no mobile, todos os meses iniciam recolhidos (nenhum abre automaticamente) — só
   // na 1ª renderização desta aba na sessão, para não recolher de novo um mês que o usuário já reabriu
   // manualmente. Desktop mantém o comportamento padrão de sempre (todos abertos).
