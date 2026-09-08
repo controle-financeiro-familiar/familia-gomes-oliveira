@@ -4140,12 +4140,21 @@ function migrarCompetenciaParaVencimento(){
       fatura certa. Quando a referência é uma parcela POSTERIOR (>1) — ex.: um lançamento importado já a
       partir da parcela 9/12, sem que as parcelas 1-8 (faturadas antes do período importado) tenham sido
       trazidas para o app — a Data de TODAS as parcelas continua sendo a da compra ORIGINAL (convenção do
-      próprio banco no arquivo exportado), então nunca representa a fatura desta parcela específica:
-      recalcular por competenciaFatura(data,...) devolveria sempre a competência da 1ª parcela, jogando
-      fora a informação de "parcela atual" que o próprio arquivo trouxe (bug relatado: uma parcela 9/12
-      importada como Janeiro/2026 virava Abril/2025, a competência da 1ª parcela). Nesse caso a competência
-      já atribuída à referência (na importação, ou editada manualmente) é mantida intocada — só cai de
-      volta para o cálculo por Data se por algum motivo ainda estiver vazia.
+      próprio banco no arquivo exportado), então nunca representa a fatura desta parcela específica.
+      AUDITORIA (fatura de Janeiro/2026 do BB Elo Nanquim): uma versão anterior desta lógica, nesse caso,
+      simplesmente preservava intocada qualquer competência já gravada na referência — o que parecia seguro
+      (nunca sobrescrever uma competência de importação legítima), mas na prática deixava PERMANENTEMENTE
+      erradas as parcelas importadas isoladamente sob uma versão ainda mais antiga do importador (antes de
+      existir a regra "sempre usa a competência selecionada na importação"), que gravava a competência via
+      competenciaFatura(data,...) tratando qualquer parcela como se fosse a 1ª — perdendo a informação de
+      qual parcela é de fato (ex.: uma parcela 6/6 comprada em Julho/2025 ficava presa em Julho/2025, em vez
+      de avançar 5 meses até a fatura real, Janeiro/2026). Ver decidirCompetenciaParcelaIsolada: mede
+      quantos meses já existem entre a fatura que a Data geraria para uma suposta 1ª parcela e a competência
+      já gravada — uma parcela nº N só pode estar certa se esse avanço for de pelo menos N-1 meses; quando
+      não é, corrige para a posição real no cronograma, sem depender de nenhuma parcela anterior existir no
+      sistema. Preserva intocado qualquer valor cujo avanço já pareça suficiente (pode já estar certo, ou
+      ter sido definido/corrigido manualmente) e qualquer grupo/categoria cuja Data não seja uma compra
+      original fixa (ver GRUPOS_SEM_DATA_ORIGINAL_FIXA) — nunca sobrescreve "no achismo".
    2) Compra/despesa avulsa de cartão de crédito (fora de um parcelamento >1x): competencia =
       competenciaFatura(data, conta).
    3) Pagamento/recebimento da própria fatura (categorias em CATEGORIAS_FATURA): PROPOSITALMENTE não
@@ -4172,6 +4181,108 @@ function migrarCompetenciaParaVencimento(){
       importação ou de uma edição manual) permanece intocado. O agrupamento por mês nos filtros/relatórios
       continua usando sempre a própria Data (ver competenciaDeData), nunca este campo — ele é só
       informativo/editável para esse tipo de lançamento, sem afetar nenhum cálculo do app. */
+/* Competência "canônica" de uma parcela de cartão de crédito, calculada só a partir da própria Data (a da
+   compra ORIGINAL, sempre igual em todas as parcelas — convenção de todo o app) e do número da própria
+   parcela: a fatura N-1 meses depois da fatura que essa Data geraria se fosse a parcela 1
+   (competenciaFatura), avançada mês a mês — a mesma progressão que sincronizarParcelasFuturas usa para
+   gerar as parcelas futuras a partir de uma referência confiável. Nunca depende de nenhuma outra parcela
+   já existir no sistema, por isso serve de base tanto para detectar a assinatura do bug antigo quanto para
+   calcular a posição real de uma parcela isolada no cronograma (ver decidirCompetenciaParcelaIsolada). */
+function competenciaCanonicaParcela(t){
+  return incrementarCompetencia(competenciaFatura(t.data, t.conta), (Number(t.parcelaAtual)||1) - 1);
+}
+/* Diferença em meses entre duas competências (AAAA-MM) — positiva quando `b` é depois de `a`. Mesmo
+   critério de cálculo de incrementarCompetencia, só que na direção inversa (quantos meses separam as
+   duas), usada por decidirCompetenciaParcelaIsolada para medir o quanto uma competência já avançou. */
+function diferencaEmMesesCompetencia(a, b){
+  const [anoA, mesA] = a.split('-').map(Number);
+  const [anoB, mesB] = b.split('-').map(Number);
+  return (anoB-anoA)*12 + (mesB-mesA);
+}
+/* Grupos/categorias de cartão de crédito cuja Data NÃO é uma compra original fixa repetida em todas as
+   parcelas — são encargos/estornos cobrados ou creditados mês a mês (ex.: anuidade parcelada e o
+   "desconto automático" que a acompanha), cada ocorrência já com a PRÓPRIA Data correta daquele mês. Sem
+   uma parcela irmã para provar qual dos dois casos é (compra parcelada de verdade vs. encargo mensal),
+   nunca entram na correção automática de decidirCompetenciaParcelaIsolada — mesmo que a fórmula abaixo
+   sugira uma competência diferente, o mais provável é que a Data já contada aqui simplesmente não segue a
+   convenção "mesma Data em todas as parcelas" que a fórmula pressupõe. */
+const GRUPOS_SEM_DATA_ORIGINAL_FIXA = new Set(['Tributos e Despesas Bancárias']);
+/* Quando a referência de um parcelamento (a menor parcela presente no sistema) já é uma parcela >1 — ou
+   seja, as parcelas anteriores nunca foram importadas — decide se a competência já gravada nela deve ser
+   corrigida, sem nunca sobrescrever "no achismo" um valor que já pode estar certo ou ter sido definido/
+   corrigido manualmente pelo usuário.
+   AUDITORIA (fatura de Janeiro/2026 do BB Elo Nanquim, cartão "Estilo Elo Nanquim"): uma versão mais antiga
+   do importador gravava a competência de QUALQUER parcela via competenciaFatura(data,conta) — a mesma
+   fórmula usada para a parcela 1 — perdendo por completo a informação de qual parcela é de fato (ex.: uma
+   parcela 6/6 comprada em 16/07/2025 ficando presa na fatura de uma suposta 1ª parcela, em vez de avançar 5
+   meses até a fatura em que o banco realmente cobrou essa parcela, Janeiro/2026).
+   Detecção ROBUSTA (não exige bater dígito a dígito com uma fórmula exata, sensível ao dia exato de
+   fechamento do cartão — duas parcelas da mesma compra comprada em dias consecutivos, um antes e outro
+   depois do fechamento, ainda assim têm de convergir para a MESMA conclusão): mede quantos meses já existem
+   entre `competenciaFatura(data,conta)` (a fatura que a 1ª parcela teria, calculada só a partir da Data e
+   do fechamento do cartão) e a competência JÁ GRAVADA na referência. Uma parcela nº N só pode estar CERTA
+   se esse avanço for de PELO MENOS N-1 meses — nunca menos, porque a compra em si nunca "recua" no tempo.
+   Quando o avanço já gravado é menor que isso, é impossível estar certo: corrige para a posição real no
+   cronograma (competenciaCanonicaParcela). Quando já é suficiente (inclusive, sem bater exatamente com a
+   fórmula — um mesmo dia de fechamento pode legitimamente colocar parcelas vizinhas em posições um pouco
+   diferentes), quando o grupo/categoria indica que a Data não é uma compra original fixa (ver
+   GRUPOS_SEM_DATA_ORIGINAL_FIXA), ou quando há evidência de uma ANTECIPAÇÃO de várias parcelas na MESMA
+   fatura (ver `irmãs` abaixo — ex.: "ANTEC ... PARC 04/05" pagando adiantado parcelas 2, 3, 4 e 5 de uma
+   vez, todas legitimamente na mesma competência, nunca uma por mês), preserva o valor já gravado intocado. */
+function decidirCompetenciaParcelaIsolada(ref){
+  const parcela = Number(ref.parcelaAtual)||1;
+  const competenciaCorreta = competenciaCanonicaParcela(ref); // posição real desta parcela no cronograma
+  if(ref.competencia === competenciaCorreta) return { classificacao:'ok', competenciaSugerida: competenciaCorreta };
+  if(GRUPOS_SEM_DATA_ORIGINAL_FIXA.has(ref.grupo) || (ref.grupo==='Transações' && ref.categoria==='Estorno ou Reembolso')){
+    return { classificacao:'revisar', competenciaSugerida: competenciaCorreta };
+  }
+  // Antecipação de várias parcelas na mesma fatura: outra transação de cartão, mesma conta+descrição
+  // normalizada+Data+valor mas número de parcela DIFERENTE, já gravada na MESMA competência — prova de que
+  // várias posições do cronograma caem juntas, de propósito, na fatura desta competência (a Data sozinha,
+  // sem essa evidência, sugeriria erradamente que só uma parcela por mês seria esperada aqui).
+  const irmaMesmaFaturaAntecipada = STATE.transactions.some(t2=>
+    t2.id!==ref.id && t2.pgto==='Cartão de Crédito' && t2.conta===ref.conta && Number(t2.totalParcelas)>1
+    && t2.data===ref.data && Math.abs((Number(t2.valor)||0)-(Number(ref.valor)||0))<0.01
+    && normalizarTexto(limparDescricaoParcelamento(t2.descricao))===normalizarTexto(limparDescricaoParcelamento(ref.descricao))
+    && Number(t2.parcelaAtual)!==parcela && t2.competencia===ref.competencia);
+  if(irmaMesmaFaturaAntecipada) return { classificacao:'revisar', competenciaSugerida: competenciaCorreta };
+  const baseline = competenciaFatura(ref.data, ref.conta); // fatura que a 1ª parcela teria
+  const avancoJaGravado = diferencaEmMesesCompetencia(baseline, ref.competencia);
+  if(avancoJaGravado < parcela-1) return { classificacao:'corrigir', competenciaSugerida: competenciaCorreta };
+  return { classificacao:'revisar', competenciaSugerida: competenciaCorreta };
+}
+/* Auditoria somente leitura (nunca altera STATE.transactions) dos parcelamentos de cartão de crédito cuja
+   referência (a menor parcela presente no sistema) é uma parcela >1 sem as anteriores cadastradas — lista
+   exatamente o que corrigirCompetenciaTransacoes corrigiria (ou preservaria) na próxima vez que rodar,
+   sem produzir nenhum efeito colateral. Pensada para conferir o alcance da correção ANTES dela rodar de
+   verdade (chamável a qualquer momento, inclusive pelo console: diagnosticoCompetenciasParcelasIsoladas()),
+   e para os casos "revisar" (avanço já parece suficiente, ou fora do escopo desta correção — ver
+   GRUPOS_SEM_DATA_ORIGINAL_FIXA) ficarem visíveis para revisão humana em vez de desaparecerem
+   silenciosamente. Casos já "ok" (a competência já bate com a fórmula) não entram no relatório. */
+function diagnosticoCompetenciasParcelasIsoladas(){
+  const porParcelamento = {};
+  STATE.transactions.forEach(t=>{
+    if(t.pgto==='Cartão de Crédito' && STATE.cartoes.includes(t.conta) && t.parcelamentoId && Number(t.totalParcelas)>1){
+      (porParcelamento[t.parcelamentoId] = porParcelamento[t.parcelamentoId] || []).push(t);
+    }
+  });
+  const relatorio = [];
+  Object.values(porParcelamento).forEach(grupo=>{
+    const ref = grupo.reduce((a,b)=> Number(b.parcelaAtual)<Number(a.parcelaAtual) ? b : a);
+    if(Number(ref.parcelaAtual)===1 || !ref.competencia) return; // fora do escopo desta auditoria (ver regra 1)
+    const decisao = decidirCompetenciaParcelaIsolada(ref);
+    if(decisao.classificacao==='ok') return;
+    relatorio.push({
+      id: ref.id, conta: ref.conta, descricao: ref.descricao, valor: ref.valor,
+      parcela: `${ref.parcelaAtual}/${ref.totalParcelas}`, parcelamentoId: ref.parcelamentoId,
+      competenciaAtual: ref.competencia,
+      competenciaSugerida: decisao.competenciaSugerida,
+      acao: decisao.classificacao,
+    });
+  });
+  return relatorio;
+}
+if(typeof window!=='undefined') window.diagnosticoCompetenciasParcelasIsoladas = diagnosticoCompetenciasParcelasIsoladas;
 function corrigirCompetenciaTransacoes(){
   const porParcelamento = {};
   STATE.transactions.forEach(t=>{
@@ -4182,7 +4293,12 @@ function corrigirCompetenciaTransacoes(){
   const jaCorrigidos = new Set();
   Object.values(porParcelamento).forEach(grupo=>{
     const ref = grupo.reduce((a,b)=> Number(b.parcelaAtual)<Number(a.parcelaAtual) ? b : a);
-    if(Number(ref.parcelaAtual)===1 || !ref.competencia) ref.competencia = competenciaFatura(ref.data, ref.conta);
+    if(Number(ref.parcelaAtual)===1 || !ref.competencia){
+      ref.competencia = competenciaFatura(ref.data, ref.conta);
+    } else {
+      const decisao = decidirCompetenciaParcelaIsolada(ref);
+      if(decisao.classificacao==='corrigir') ref.competencia = decisao.competenciaSugerida;
+    }
     jaCorrigidos.add(ref.id);
     grupo.forEach(t=>{
       if(t.id===ref.id) return;
@@ -5316,6 +5432,7 @@ function loadCSVRegistros(text){
   migrarCompetenciaParaVencimento();
   migrarNomesContasPadrao();
   aplicarResponsavelPadraoPorTipo();
+  consolidarDuplicatasDeParcelas(); // saneia duplicidades reais de parcelas de cartão ANTES de tudo abaixo (ver função) — inclusive as trazidas por versões antigas do importador
   reconciliarPagamentosFatura(); // cria os espelhos de pagamento de fatura que ainda faltarem (ver função)
   conciliarProjecoesComExtrato(); // vincula lançamentos previstos do Fluxo de Caixa aos seus correspondentes reais no Extrato (ver função)
   corrigirCompetenciaTransacoes(); // depois de reconciliarPagamentosFatura, para corrigir também os espelhos recém-criados
@@ -5582,6 +5699,7 @@ function loadCSVConfig(text){
   migrarCompetenciaParaVencimento();
   migrarNomesContasPadrao();
   aplicarResponsavelPadraoPorTipo();
+  consolidarDuplicatasDeParcelas(); // idem — saneia duplicidades de parcelas trazidas por versões antigas do importador (ver função)
   reconciliarPagamentosFatura(); // cartões/fechamentos podem ter chegado só agora — reconcilia de novo (idempotente)
   conciliarProjecoesComExtrato(); // idem — lançamentos previstos podem ter novos candidatos no Extrato recém-carregado
   corrigirCompetenciaTransacoes(); // idem — cardConfig/contaTipos podem ter chegado só agora com este arquivo
@@ -17049,8 +17167,33 @@ function saoParcelasDiferentes(entry, t){
   if(!entryEhParcela || !tEhParcela) return false;
   return !(Number(entry.parcelaAtual)===Number(t.parcelaAtual) && Number(entry.totalParcelas)===Number(t.totalParcelas));
 }
+/* Identidade de uma parcela de cartão de crédito para fins de duplicidade/consolidação: conta + descrição
+   normalizada (sem o texto de parcelamento, ex. "PARC 06/06" — ver limparDescricaoParcelamento) + valor da
+   própria parcela + Data (sempre a da compra ORIGINAL, igual em todas as parcelas — convenção do app) +
+   número da parcela/total. Não inclui `tipo`, `competencia` nem `parcelamentoId` — são campos DERIVADOS,
+   recalculados a cada importação, e um bug de importação pode calculá-los diferente de uma vez para outra
+   sem que a parcela deixe de ser a MESMA (ver auditoria da fatura de Janeiro/2026 do BB Elo Nanquim:
+   "Produtos Glob PARC 11/12" foi importado 2x sob parcelamentoId diferentes, numa delas até com o tipo
+   invertido para Receita — mesmo assim, é a mesma parcela, nunca duas compras distintas). Só se aplica a
+   lançamentos com parcela reconhecida (totalParcelas>1); para os demais, a checagem de duplicidade
+   continua exatamente como antes (conta+valor+tipo+data próxima). */
+function chaveIdentidadeParcela(t){
+  const desc = normalizarTexto(limparDescricaoParcelamento(t.descricao||''));
+  return `${t.conta}|${desc}|${(Math.abs(Number(t.valor))||0).toFixed(2)}|${t.data}|${t.parcelaAtual}/${t.totalParcelas}`;
+}
 function encontrarDuplicata(entry){
   const valorAbs = Math.abs(Number(entry.valor)||0);
+  // Parcela reconhecida (ex.: "PARC 06/06" já extraído por detectarParcela/parcelaExplicita): a identidade
+  // da própria parcela (conta + descrição normalizada + valor + Data da compra + nº da parcela) já é prova
+  // suficiente de que é a MESMA parcela sendo reimportada — mesmo que competência, parcelamentoId ou até o
+  // tipo (Despesa/Receita) tenham sido calculados de forma diferente entre uma importação e outra (ver
+  // chaveIdentidadeParcela). Checado ANTES do critério padrão abaixo, que exige o mesmo `tipo` e por isso
+  // nunca pegaria uma reimportação em que o tipo saiu errado.
+  if(Number(entry.totalParcelas)>1){
+    const chave = chaveIdentidadeParcela(entry);
+    const existente = STATE.transactions.find(t=> Number(t.totalParcelas)>1 && chaveIdentidadeParcela(t)===chave);
+    if(existente) return { tipo:'exata', tx:existente };
+  }
   // A verificação de duplicidade só compara lançamentos da MESMA conta — o mesmo valor, mesma descrição
   // e data próxima em contas diferentes são movimentações genuinamente distintas (ex.: um Pix de
   // R$150 saindo da Conta Corrente e outro Pix de R$150 saindo de outra conta não são duplicados entre
@@ -17071,6 +17214,72 @@ function encontrarDuplicata(entry){
   }
   return null;
 }
+/* ---------- Saneamento automático de duplicidades reais de parcelas de cartão de crédito ----------
+   Consolida, entre os lançamentos JÁ existentes em STATE.transactions, parcelas de cartão de crédito com a
+   mesma identidade (ver chaveIdentidadeParcela: conta + descrição normalizada + valor + Data da compra +
+   nº da parcela/total) que acabaram importadas mais de uma vez — ainda que sob parcelamentoId diferente,
+   competência diferente ou até `tipo` diferente entre as cópias (exatamente o caso auditado na fatura de
+   Janeiro/2026 do BB Elo Nanquim: "Produtos Glob PARC 11/12" apareceu 2x, uma delas classificada como
+   Receita/estorno por engano). Só age quando a identidade é INEQUÍVOCA — os 5 campos de
+   chaveIdentidadeParcela batendo exatamente — nunca por proximidade/heurística, para nunca remover um
+   lançamento legítimo por engano.
+   Entre os membros de um mesmo grupo duplicado, mantém sempre UMA cópia: a que já está classificada como
+   Despesa (uma parcela numerada de uma compra parcelada é sempre, por natureza, uma compra — nunca um
+   estorno/crédito legítimo) ou, se todas tiverem o mesmo tipo, a primeira encontrada (critério objetivo e
+   estável, nunca por proximidade). Remove as demais cópias e, junto com elas, qualquer parcela FUTURA já
+   gerada a partir de uma cópia descartada (parcelaFutura:true do parcelamentoId dela) — nunca toca em
+   nenhuma parcela de outro parcelamentoId, inclusive o da cópia mantida.
+   Idempotente — roda a cada carregamento de dados, como reconciliarPagamentosFatura/
+   corrigirCompetenciaTransacoes — e devolve a lista do que foi removido (para registro/diagnóstico; ver
+   também a chamada equivalente sem mutação, se precisar só do relatório antes de aplicar). */
+function identificarDuplicatasDeParcelas(){
+  const porChave = {};
+  STATE.transactions.forEach(t=>{
+    if(!(t.pgto==='Cartão de Crédito' && STATE.cartoes.includes(t.conta) && Number(t.totalParcelas)>1)) return;
+    const chave = chaveIdentidadeParcela(t);
+    (porChave[chave] = porChave[chave] || []).push(t);
+  });
+  const aRemover = [];
+  Object.values(porChave).forEach(grupo=>{
+    if(grupo.length<=1) return;
+    // Critério de desempate por pontuação, sempre objetivo/reprodutível — nunca por proximidade: (1) uma
+    // cópia já Despesa pesa mais que qualquer outra (uma parcela numerada é sempre, por natureza, uma
+    // compra); (2) uma cópia importada de verdade (sem parcelaFutura) pesa mais que uma gerada
+    // automaticamente por sincronizarParcelasFuturas a partir de OUTRA cópia duplicada — ex.: duas
+    // importações isoladas da mesma "antecipação de parcela" (mesma Data, parcelas 4/5 e 5/5) fazem a
+    // primeira gerar sozinha uma parcela 5/5 futura especulativa que colide, na identidade, com a 5/5
+    // genuína da segunda importação — a genuína (nunca a projetada) é quem deve sobreviver; (3) por fim,
+    // uma cópia cuja competência já bate com a fórmula canônica (ver competenciaCanonicaParcela) desempata
+    // entre remanescentes equivalentes. Nunca decide por proximidade/heurística de valor.
+    const pontuacao = t => (t.tipo==='Despesa'?100:0) + (t.parcelaFutura?0:10) + (t.competencia===competenciaCanonicaParcela(t)?1:0);
+    const manter = grupo.slice().sort((a,b)=> pontuacao(b)-pontuacao(a))[0];
+    grupo.forEach(t=>{
+      if(t.id===manter.id) return;
+      aRemover.push({ id:t.id, conta:t.conta, descricao:t.descricao, valor:t.valor, tipo:t.tipo,
+        competencia:t.competencia, parcelamentoId:t.parcelamentoId, mantidoId:manter.id });
+    });
+  });
+  return aRemover;
+}
+function consolidarDuplicatasDeParcelas(){
+  const removidos = identificarDuplicatasDeParcelas();
+  if(removidos.length){
+    const idsRemover = new Set(removidos.map(r=>r.id));
+    const parcelamentoIdsRemovidos = new Set(removidos.map(r=>r.parcelamentoId).filter(Boolean));
+    STATE.transactions = STATE.transactions.filter(t=>
+      !idsRemover.has(t.id) && !(t.parcelaFutura && parcelamentoIdsRemovidos.has(t.parcelamentoId)));
+  }
+  return removidos;
+}
+if(typeof window!=='undefined') window.consolidarDuplicatasDeParcelas = consolidarDuplicatasDeParcelas;
+/* Versão somente leitura de consolidarDuplicatasDeParcelas — mesma detecção (identificarDuplicatasDeParcelas),
+   sem remover nada; devolve a mesma lista que seria removida, para conferir o alcance da consolidação ANTES
+   de aplicá-la de verdade (ver requisito de diagnóstico/simulação antes de uma migração de dados).
+   Chamável a qualquer momento, inclusive pelo console: diagnosticoDuplicatasDeParcelas(). */
+function diagnosticoDuplicatasDeParcelas(){
+  return identificarDuplicatasDeParcelas();
+}
+if(typeof window!=='undefined') window.diagnosticoDuplicatasDeParcelas = diagnosticoDuplicatasDeParcelas;
 /* `contaFiltro`, quando informado, restringe a varredura aos lançamentos daquela conta/cartão — usado
    quando "Verificar duplicidade" é aberto de dentro de um modal da aba Contas e Cartões (o contexto já
    deixa claro qual conta está sendo analisada, então não faz sentido comparar as demais). Sem o filtro,
