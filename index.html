@@ -4939,7 +4939,7 @@ let UI = {
   buscaCategorias: '',
   textModal: null, // { tipo, nome, original, grupo } — modal genérico de nome único (conta, cartão, meio, grupo, categoria)
   novaProjecaoModal: null, // { ano, mes } — escolha do mês a partir do qual um novo lançamento previsto passa a aparecer
-  conciliarProjecaoModal: null, // { itemId, competencia, selecionados } — revisão manual dos candidatos de conciliação de um previsto "pendente"/já conciliado (ver renderConciliarProjecaoModal) — selecionados: ids marcados nos checkboxes, ainda não confirmados
+  conciliarProjecaoModal: null, // { itemId, competencia, selecionados, pagina, porPagina } — revisão manual dos candidatos de conciliação de um previsto "pendente"/já conciliado (ver renderConciliarProjecaoModal) — selecionados: ids marcados nos checkboxes, ainda não confirmados; pagina/porPagina paginam a tabela de candidatos (mesmo padrão da tabela de Registros), sem nunca limitar o conjunto de candidatos calculado (só a exibição) — a ordenação por clique usa o mecanismo genérico de UI.ordenacaoTabelas (idTabela 'conciliarCandidatos'), não precisa de estado próprio aqui
   confirmDelProjecao: null, // { itemId, competencia } — pergunta se a exclusão de um lançamento previsto deve valer só para esta competência (ver STATE.projecaoExclusoesPorCompetencia) ou para o lançamento inteiro (todas as competências)
   confirmDelParcela: null, // { id } — pergunta se a exclusão de uma parcela deve incluir as parcelas futuras da mesma compra
   pendingEdicaoParcela: null, // { novo, antigo, conta } — edição já validada de uma parcela existente, aguardando o usuário escolher o escopo de propagação (ver confirmEditarParcela) antes de ser efetivamente salva
@@ -13604,22 +13604,6 @@ function renderNovaProjecaoModal(){
                 </select>
               </div>
             </div>
-            ${(!m.cartao && m.contaProvavelId) ? (()=>{
-              // Pré-visualização (requisito 3): TODOS os lançamentos do Extrato daquela conta na
-              // competência sendo editada aparecem aqui de imediato, sem filtrar por descrição/valor/data
-              // (os critérios de correspondência só entram depois, na conciliação em si — ver
-              // pontuarCandidatoConciliacao) — só para o usuário já ver o que existe antes de conciliar.
-              const competenciaModal = chaveMes(m.ano, m.mes);
-              const registros = STATE.transactions
-                .filter(t=>t.conta===m.contaProvavelId && t.data && t.data.slice(0,7)===competenciaModal)
-                .sort((a,b)=> a.data<b.data ? -1 : (a.data>b.data ? 1 : 0));
-              return `
-            <div class="field-section-label" style="margin-top:10px;">Registros do Extrato em ${escapeHtml(competenciaLabel(competenciaModal))} — ${escapeHtml(m.contaProvavelId)}</div>
-            ${registros.length ? `<div class="table-wrap" style="max-height:180px;overflow-y:auto;overflow-x:auto;"><table style="width:100%;table-layout:fixed;font-size:11.5px;">
-              <thead><tr><th style="width:18%;">Data</th><th style="width:58%;">Descrição</th><th style="width:24%;text-align:right;">Valor</th></tr></thead>
-              <tbody>${registros.map(t=>`<tr><td>${fmtData(t.data)}</td><td style="overflow-wrap:break-word;">${escapeHtml(t.descricao)}</td><td style="text-align:right;">${fmtBRL(t.valor)}</td></tr>`).join('')}</tbody>
-            </table></div>` : `<p class="hint" style="margin:4px 0 0;">Nenhum lançamento encontrado nessa conta em ${escapeHtml(competenciaLabel(competenciaModal))} ainda.</p>`}`;
-            })() : ''}
             <div class="tx-row">
               <div class="field"><label>Grupo</label>
                 <select id="fNovaProjecaoGrupo" ${m.cartao?'disabled':''}>${grupos.map(g=>`<option value="${escapeHtml(g)}" ${grupoAtual===g?'selected':''}>${iconeGrupo(g)} ${escapeHtml(g)}</option>`).join('')}</select>
@@ -13660,8 +13644,8 @@ function renderNovaProjecaoModal(){
     </div>
   </div>`;
 }
-/* ---------- Modal: revisão manual da conciliação (requisito 6 original + requisitos 1/2/7 desta rodada)
-   ----------
+/* ---------- Modal: revisão manual da conciliação (requisito 6 original + requisitos 1/2/7 de rodadas
+   anteriores + ordenação/paginação desta rodada) ----------
    Aberto pelo selo de conciliação de uma linha do Fluxo de Caixa (⏳ pendente, ou 🔗/⏪/⏩ já conciliado —
    ver seloConciliacaoProjecao) — lista os lançamentos do Extrato que pontuaram como candidatos plausíveis
    (ver candidatosConciliacaoProjecao, que já exclui os já vinculados), do melhor para o pior, para o
@@ -13671,17 +13655,25 @@ function renderNovaProjecaoModal(){
    escolhidos a vinculosExtrato[competencia] — os lançamentos originais do Extrato nunca são tocados.
    UI.conciliarProjecaoModal.selecionados guarda os ids marcados nos checkboxes AINDA NÃO confirmados (só
    em memória, some ao fechar sem confirmar); os vínculos JÁ confirmados (item.vinculosExtrato) aparecem
-   destacados numa lista à parte, cada um com seu próprio botão de remover individual. O resumo (requisito
-   2) mostra sempre, ao vivo: quantos registros estão total ou parcialmente selecionados, quanto somam, o
-   valor projetado e a diferença entre os dois — sem exigir que a soma bata exatamente (o previsto pode ter
-   sido só uma estimativa). */
+   destacados numa lista à parte, cada um com seu próprio botão de remover individual. O resumo mostra
+   sempre, ao vivo: quantos registros estão total ou parcialmente selecionados, quanto somam, o valor
+   projetado e a diferença entre os dois — sem exigir que a soma bata exatamente (o previsto pode ter sido
+   só uma estimativa) — SEMPRE calculado sobre candidatosConciliacaoModal() por inteiro, nunca sobre a
+   fatia paginada abaixo (requisito "a paginação é apenas uma forma de apresentação").
+   Ordenação/paginação da tabela "Candidatos disponíveis": mesmo padrão usado em toda a aplicação —
+   ordenação por clique no cabeçalho (thOrdenavel/data-ordenar-tabela, mecanismo genérico e delegado, ver
+   bindEvents) aplicada com aplicarOrdenacaoClique sobre TODOS os candidatos, e só depois disso a
+   paginação (renderRodapePaginacaoGenerica, mesmo componente da tabela de Registros) recorta a página
+   atual para exibição — nunca o contrário. A contagem "Candidatos disponíveis (N)" e o rodapé de
+   paginação sempre refletem candidatos.length (o conjunto COMPLETO retornado por
+   candidatosConciliacaoModal), nunca o tamanho da página exibida. */
 function renderConciliarProjecaoModal(){
   const cfg = UI.conciliarProjecaoModal;
   const item = STATE.projecoes.find(p=>p.id===cfg.itemId);
   if(!item){ return ''; } // item pode ter sido excluído enquanto o modal estava aberto
   const vinculoIds = vinculosDaCompetencia(item, cfg.competencia);
   const reaisVinculados = vinculoIds.map(id=>STATE.transactions.find(t=>t.id===id)).filter(Boolean);
-  const candidatos = candidatosConciliacaoModal(item, cfg.competencia); // já exclui os de reaisVinculados; sem corte de pontuação quando há Conta provável
+  const candidatos = candidatosConciliacaoModal(item, cfg.competencia); // já exclui os de reaisVinculados; sem corte de pontuação quando há Conta provável; NUNCA fatiado/limitado aqui
   const selecionados = cfg.selecionados || [];
   const candidatosSelecionados = candidatos.filter(c=>selecionados.includes(c.t.id));
   const valorProjetado = Number(valorProjecaoItem(item, cfg.competencia))||0;
@@ -13689,17 +13681,42 @@ function renderConciliarProjecaoModal(){
   const qtdTotalPreview = reaisVinculados.length + candidatosSelecionados.length;
   const diferenca = valorTotalPreview - valorProjetado;
   const statusPreview = qtdTotalPreview===0 ? 'Sem conciliação' : (Math.abs(diferenca)<0.005 ? 'Conciliado' : `Conciliado (diferença de ${fmtBRL(Math.abs(diferenca))})`);
-  // Larguras fixas o bastante para Data/Categoria/Tipo/Valor/Ação nunca quebrarem linha nem cortarem
-  // conteúdo, com Descrição recebendo o espaço restante (requisito 9) — soma sempre 100%, então a tabela
-  // nunca precisa de overflow-x (requisito "não usar overflow-x como solução principal").
+  // Larguras fixas o bastante para Data/Conta/Categoria/Tipo/Valor/Ação nunca quebrarem linha nem cortarem
+  // conteúdo, com Descrição recebendo o espaço restante — soma sempre 100%, então a tabela nunca precisa
+  // de overflow-x (requisito "não usar overflow-x como solução principal").
   const linhaRegistro = (t, acaoHtml) => `<tr>
-              <td style="width:11%;">${fmtData(t.data)}</td>
-              <td style="width:39%;">${escapeHtml(t.descricao)} <span class="hint" style="margin:0;">(${escapeHtml(t.conta)})</span></td>
-              <td style="width:16%;">${escapeHtml(t.categoria||'—')}</td>
-              <td style="width:10%;text-align:center;"><span class="tag ${t.tipo}" style="font-size:9px;">${t.tipo}</span></td>
+              <td style="width:10%;">${fmtData(t.data)}</td>
+              <td style="width:30%;">${escapeHtml(t.descricao)}</td>
+              <td style="width:14%;">${escapeHtml(t.conta)}</td>
+              <td style="width:14%;">${escapeHtml(t.categoria||'—')}</td>
+              <td style="width:9%;text-align:center;"><span class="tag ${t.tipo}" style="font-size:9px;">${t.tipo}</span></td>
               <td style="width:14%;text-align:right;">${fmtBRL(t.valor)}</td>
-              <td style="width:10%;text-align:center;">${acaoHtml}</td>
+              <td style="width:9%;text-align:center;">${acaoHtml}</td>
             </tr>`;
+  // Ordenação (item 1 do pedido): aplicada sobre a lista COMPLETA de candidatos, antes de qualquer
+  // paginação — na ordenação original (sem clique), aplicarOrdenacaoClique devolve `candidatos` como
+  // estão (já ordenados por pontuação, do melhor para o pior candidato).
+  const candidatosOrdenados = aplicarOrdenacaoClique(candidatos, 'conciliarCandidatos', {
+    data: { tipo:'data', valor: c=>c.t.data },
+    descricao: { tipo:'texto', valor: c=>c.t.descricao },
+    conta: { tipo:'texto', valor: c=>c.t.conta },
+    categoria: { tipo:'texto', valor: c=>c.t.categoria },
+    tipo: { tipo:'texto', valor: c=>c.t.tipo },
+    valor: { tipo:'numero', valor: c=>Number(c.t.valor)||0 },
+  });
+  // Paginação (item 1 do pedido) — mesmo padrão/componente da tabela de Registros
+  // (renderRodapePaginacaoGenerica): opera sobre candidatosOrdenados por inteiro (totalFiltrado =
+  // candidatos.length, nunca o tamanho da página), só recorta pageList para a exibição.
+  const totalFiltrado = candidatosOrdenados.length;
+  const porPagina = cfg.porPagina || 10;
+  const totalPaginas = porPagina==='TODOS' ? 1 : Math.max(1, Math.ceil(totalFiltrado/porPagina));
+  if(!cfg.pagina || cfg.pagina<1) cfg.pagina = 1;
+  else if(cfg.pagina>totalPaginas) cfg.pagina = totalPaginas;
+  const inicioIdx = porPagina==='TODOS' ? 0 : (cfg.pagina-1)*porPagina;
+  const fimIdx = porPagina==='TODOS' ? totalFiltrado : Math.min(inicioIdx+porPagina, totalFiltrado);
+  const pageList = candidatosOrdenados.slice(inicioIdx, fimIdx);
+  const rodapePaginacaoCandidatos = renderRodapePaginacaoGenerica(totalFiltrado, porPagina, cfg.pagina, totalPaginas, inicioIdx, fimIdx,
+    { selectId:'conciliarPorPagina', dataAttr:'conciliar-pagina', opcoesPorPagina:[5,10,25,50] });
   return `
   <div class="overlay" id="ovConciliarProjecao" ${attrZIndexModal('conciliarProjecaoModal')}>
     <div class="modal" style="width:100%;max-width:1100px;">
@@ -13721,24 +13738,34 @@ function renderConciliarProjecaoModal(){
         ${reaisVinculados.length ? `
         <p class="field-section-label" style="margin:14px 0 4px;">Vínculos já confirmados</p>
         <div class="table-wrap" style="overflow-x:auto;"><table style="width:100%;table-layout:fixed;">
-          <thead><tr><th style="width:11%;">Data</th><th style="width:39%;">Descrição</th><th style="width:16%;">Categoria</th><th style="width:10%;">Tipo</th><th style="width:14%;text-align:right;">Valor</th><th style="width:10%;"></th></tr></thead>
+          <thead><tr><th style="width:10%;">Data</th><th style="width:30%;">Descrição</th><th style="width:14%;">Conta</th><th style="width:14%;">Categoria</th><th style="width:9%;">Tipo</th><th style="width:14%;text-align:right;">Valor</th><th style="width:9%;"></th></tr></thead>
           <tbody>${reaisVinculados.map(t=>linhaRegistro(t, `<button type="button" class="icon-btn" data-conciliar-remover-vinculo="${t.id}" title="Remover este vínculo (volta a ser um candidato disponível)">🗑️</button>`)).join('')}</tbody>
         </table></div>` : ''}
         <p class="field-section-label" style="margin:14px 0 4px;">Candidatos disponíveis${candidatos.length ? ` (${candidatos.length})` : ''}</p>
-        <p class="hint" style="margin-top:0;">Marque um ou mais registros que correspondem de fato a este previsto (não é preciso que a data ou o valor sejam exatamente iguais) e confirme a seleção.</p>
-        ${candidatos.length ? `<div class="table-wrap" style="overflow-x:auto;"><table style="width:100%;table-layout:fixed;">
-          <thead><tr><th style="width:10%;"></th><th style="width:11%;">Data</th><th style="width:39%;">Descrição</th><th style="width:16%;">Categoria</th><th style="width:10%;">Tipo</th><th style="width:14%;text-align:right;">Valor</th></tr></thead>
+        <p class="hint" style="margin-top:0;">Marque um ou mais registros que correspondem de fato a este previsto (não é preciso que a data ou o valor sejam exatamente iguais) e confirme a seleção. Clique num cabeçalho para ordenar.</p>
+        ${candidatos.length ? `<div class="table-wrap" style="overflow-x:auto;" data-ordenar-tabela="conciliarCandidatos"><table style="width:100%;table-layout:fixed;">
+          <thead><tr>
+            <th style="width:6%;"></th>
+            ${thOrdenavel('conciliarCandidatos','data','Data',{style:'width:10%;'})}
+            ${thOrdenavel('conciliarCandidatos','descricao','Descrição',{style:'width:27%;'})}
+            ${thOrdenavel('conciliarCandidatos','conta','Conta',{style:'width:14%;'})}
+            ${thOrdenavel('conciliarCandidatos','categoria','Categoria',{style:'width:14%;'})}
+            ${thOrdenavel('conciliarCandidatos','tipo','Tipo',{style:'width:9%;'})}
+            ${thOrdenavel('conciliarCandidatos','valor','Valor',{style:'width:20%;text-align:right;'})}
+          </tr></thead>
           <tbody>
-            ${candidatos.map(c=>`<tr>
+            ${pageList.map(c=>`<tr>
               <td style="text-align:center;"><input type="checkbox" data-conciliar-check="${c.t.id}" ${selecionados.includes(c.t.id)?'checked':''}></td>
               <td>${fmtData(c.t.data)}</td>
-              <td>${escapeHtml(c.t.descricao)} <span class="hint" style="margin:0;">(${escapeHtml(c.t.conta)})</span></td>
+              <td>${escapeHtml(c.t.descricao)}</td>
+              <td>${escapeHtml(c.t.conta)}</td>
               <td>${escapeHtml(c.t.categoria||'—')}</td>
               <td><span class="tag ${c.t.tipo}" style="font-size:9px;">${c.t.tipo}</span></td>
               <td style="text-align:right;">${fmtBRL(c.t.valor)}</td>
             </tr>`).join('')}
           </tbody>
-        </table></div>` : `<div class="empty-state"><div class="big">🔎</div>Nenhum candidato restante — todos já foram vinculados ou descartados.</div>`}
+        </table></div>
+        <div class="registros-rodape">${rodapePaginacaoCandidatos}</div>` : `<div class="empty-state"><div class="big">🔎</div>Nenhum candidato restante — todos já foram vinculados ou descartados.</div>`}
       </div>
       <div class="modal-foot" style="flex-wrap:wrap;gap:8px;">
         <button class="btn btn-ghost" id="cancelConciliarProjecao">Fechar</button>
@@ -17814,7 +17841,7 @@ function bindEvents(){
      (remove TODOS os vínculos desta competência de uma vez — requisitos 6/7 — nunca automática quando há
      ambiguidade). ---- */
   document.querySelectorAll('[data-proj-conciliar]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.conciliarProjecaoModal = { itemId: b.dataset.projConciliar, competencia: b.dataset.projConciliarMes, selecionados: [] };
+    UI.conciliarProjecaoModal = { itemId: b.dataset.projConciliar, competencia: b.dataset.projConciliarMes, selecionados: [], pagina: 1, porPagina: 10 };
     render();
   }));
   document.querySelectorAll('[data-proj-desvincular]').forEach(b=> b.addEventListener('click', ()=>{
@@ -17833,6 +17860,26 @@ function bindEvents(){
     const cfg = UI.conciliarProjecaoModal; if(!cfg) return;
     const id = e.target.dataset.conciliarCheck;
     cfg.selecionados = e.target.checked ? [...new Set([...(cfg.selecionados||[]), id])] : (cfg.selecionados||[]).filter(x=>x!==id);
+    render();
+  }));
+  /* ---- Modal de conciliação: paginação da tabela de candidatos (mesmo padrão da tabela de Registros/
+     prévia de "Duplicar por vários meses") — só recorta a exibição, nunca a lista de candidatos calculada
+     em si (candidatosConciliacaoModal continua sendo chamada por inteiro a cada render). A ordenação por
+     clique no cabeçalho já funciona sem handler próprio — é coberta pelo delegado genérico
+     data-ordenar-tabela/data-ordenar-th registrado no topo desta função. ---- */
+  document.getElementById('conciliarPorPagina')?.addEventListener('change', e=>{
+    const cfg = UI.conciliarProjecaoModal; if(!cfg) return;
+    const v = e.target.value;
+    cfg.porPagina = v==='TODOS' ? 'TODOS' : Number(v);
+    cfg.pagina = 1;
+    render();
+  });
+  document.querySelectorAll('[data-conciliar-pagina]').forEach(b=> b.addEventListener('click', ()=>{
+    const cfg = UI.conciliarProjecaoModal; if(!cfg) return;
+    const v = b.dataset.conciliarPagina;
+    if(v==='prev') cfg.pagina = Math.max(1, (cfg.pagina||1)-1);
+    else if(v==='next') cfg.pagina = (cfg.pagina||1)+1;
+    else cfg.pagina = Number(v);
     render();
   }));
   document.querySelectorAll('[data-conciliar-remover-vinculo]').forEach(b=> b.addEventListener('click', ()=>{
