@@ -8047,6 +8047,35 @@ function priorizarSaldoAnteriorPrimeiraLinha(itens, dataDia1){
   if(!itens.some(ehPrioritario)) return itens;
   return [...itens.filter(ehPrioritario), ...itens.filter(t=>!ehPrioritario(t))];
 }
+/* Empurra o(s) lançamento(s) de BB Rende Fácil (aplicação/resgate automático do saldo ocioso — ver
+   ehMovimentoRendeFacilBB) para o FIM de cada dia que tiver mais de um lançamento, na EXIBIÇÃO do Extrato
+   — requisito explícito: é um movimento automático do próprio banco, nunca uma ação deliberada do
+   usuário naquele momento do dia, então deve aparecer sempre depois dos demais lançamentos daquele mesmo
+   dia. `itens` já chega ordenado cronologicamente (mesma sequência usada para calcular saldoAcumulado em
+   itensExtratoConta — nunca recalculada aqui), então dias iguais formam sempre um trecho CONTÍGUO do
+   array: percorre uma única vez, fecha cada grupo de dia ao trocar de data, e dentro dele reparte em "não
+   Rende Fácil" + "Rende Fácil" (cada bloco preservando sua própria ordem relativa original — nunca uma
+   nova ordenação por tipo/id dentro do bloco). Só reordena a POSIÇÃO na lista, nunca o saldoAcumulado já
+   atribuído a cada item — mesmo espírito de priorizarSaldoAnteriorPrimeiraLinha, e chamada só na
+   ordenação padrão (nunca com ordem manual ou ordenação por clique ativa, que sempre prevalecem
+   integralmente sobre esta prioridade). */
+function priorizarRendeFacilUltimaLinhaDoDia(itens){
+  const resultado = [];
+  let dataGrupoAtual = null, grupoAtual = [];
+  const fecharGrupo = ()=>{
+    if(!grupoAtual.length) return;
+    const semRendeFacil = grupoAtual.filter(t=>!ehMovimentoRendeFacilBB(t));
+    const soRendeFacil = grupoAtual.filter(ehMovimentoRendeFacilBB);
+    resultado.push(...semRendeFacil, ...soRendeFacil);
+    grupoAtual = [];
+  };
+  itens.forEach(t=>{
+    if(t.data!==dataGrupoAtual){ fecharGrupo(); dataGrupoAtual = t.data; }
+    grupoAtual.push(t);
+  });
+  fecharGrupo();
+  return resultado;
+}
 function itensExtratoConta(conta, ano, mes){
   const inicioISO = `${ano}-${pad2(mes)}-01`, fimISO = `${ano}-${pad2(mes)}-31`;
   const hoje = hojeISO();
@@ -8066,19 +8095,22 @@ function itensExtratoConta(conta, ano, mes){
   // Ordem de EXIBIÇÃO (de cima para baixo) — independente do saldo já calculado acima. Ordem manual
   // (drag-and-drop, seção 8.1 do requisito): quando o usuário já reordenou este período, a ordem escolhida
   // por ele passa a ser a própria ordem de exibição, sem tocar no saldo de nenhuma linha (aplicarOrdemManual
-  // só reordena o array). Sem ordem manual, a exibição é a ordem cronológica, com uma exceção: o Saldo
-  // Anterior do dia 1 (ver priorizarSaldoAnteriorPrimeiraLinha) sobe para a primeira linha, mas só enquanto
-  // a ordenação por clique do cabeçalho ('extrato') também estiver no estado original — assim que o usuário
-  // ordenar por qualquer coluna (inclusive Data), essa prioridade é desativada e a ordenação escolhida é
-  // respeitada integralmente (ver aplicarOrdenacaoClique/renderExtratoContaModal, chamado depois deste
-  // ponto). O próprio Saldo Anterior participa normalmente de ambas — ordem manual e ordenação por clique —
-  // como qualquer outro lançamento (ver checkbox/drag habilitados em renderExtratoContaModal).
+  // só reordena o array). Sem ordem manual, a exibição é a ordem cronológica, com duas exceções: primeiro
+  // o(s) lançamento(s) de BB Rende Fácil de cada dia vão para o fim daquele mesmo dia (ver
+  // priorizarRendeFacilUltimaLinhaDoDia), depois o Saldo Anterior do dia 1 (ver
+  // priorizarSaldoAnteriorPrimeiraLinha) sobe para a primeira linha de toda a lista — nessa ordem, para o
+  // Saldo Anterior nunca ficar "preso" atrás de um Rende Fácil do próprio dia 1. Isso só vale enquanto a
+  // ordenação por clique do cabeçalho ('extrato') também estiver no estado original — assim que o usuário
+  // ordenar por qualquer coluna (inclusive Data), essas prioridades são desativadas e a ordenação escolhida
+  // é respeitada integralmente (ver aplicarOrdenacaoClique/renderExtratoContaModal, chamado depois deste
+  // ponto). Saldo Anterior e Rende Fácil participam normalmente de ambas — ordem manual e ordenação por
+  // clique — como qualquer outro lançamento (ver checkbox/drag habilitados em renderExtratoContaModal).
   const temOrdemManual = itensPeriodo.some(t=>t.ordemExibicao!==undefined && t.ordemExibicao!==null);
   const itensOrdemExibicao = temOrdemManual
     ? aplicarOrdemManual(comSaldoCronologico)
     : (estadoOrdenacaoTabela('extrato').campo
         ? comSaldoCronologico // ordenação por clique ativa: aplicarOrdenacaoClique reordena por conta própria
-        : priorizarSaldoAnteriorPrimeiraLinha(comSaldoCronologico, inicioISO));
+        : priorizarSaldoAnteriorPrimeiraLinha(priorizarRendeFacilUltimaLinhaDoDia(comSaldoCronologico), inicioISO));
   const qtdPeriodo = itensPeriodo.filter(t=>!ehSaldoAnterior(t)).length;
   return {
     itens: itensOrdemExibicao,
@@ -16963,11 +16995,26 @@ function buildParsedFromMap(){
     } else if(rendeFacilBB){
       catSugerida = rendeFacilBB.categoria;
       tipo = rendeFacilBB.tipo;
+    } else if(e.tipoExplicito){
+      // O parser já sabe se é Despesa ou Receita, a partir da própria ESTRUTURA do documento (ex.: fatura
+      // em PDF/XLSX/CSV, onde a coluna/sinal em que o valor foi impresso já resolve isso sem ambiguidade) —
+      // checado ANTES de ehPagamentoDeFatura/TRNTYPE (ambos heurísticas, para formatos que não trazem essa
+      // classificação pronta) de propósito: bug corrigido nesta rodada em que uma compra genuína,
+      // corretamente identificada como Despesa pelo próprio parser (ex.: fatura CSV do NuCartão), virava
+      // Receita só porque seu valor coincidia (por acaso) com o total já calculado de uma fatura ANTERIOR
+      // deste mesmo cartão (ver ehPagamentoDeFaturaPorValor) — uma classificação heurística nunca pode
+      // sobrepor uma classificação já certa, vinda da própria estrutura do arquivo. Uma sugestão de
+      // categoria por palavra-chave que implique o tipo contrário é descartada, para não deixar o
+      // lançamento com categoria e tipo inconsistentes entre si.
+      tipo = e.tipoExplicito;
+      if(catSugerida && !CATEGORIAS.some(c=>c[0]===catSugerida && c[3]===tipo)) catSugerida = '';
     } else if(ehPagamentoDeFatura(e.descricao, conta, e.valor)){
-      // Sinal textual definitivo: o pagamento da fatura é sempre um crédito para o CARTÃO (Receita) e uma
-      // saída da CONTA que efetua o pagamento (Despesa) — prevalece sobre a sugestão por palavra-chave e
-      // sobre o sinal do valor, que podem não seguir a convenção "negativo=despesa" para esse tipo
-      // específico de lançamento (não é uma compra, é a liquidação da própria fatura).
+      // Sinal textual/de valor (ver ehPagamentoDeFaturaPorTexto/PorValor) — só chega aqui quando o parser
+      // NÃO forneceu tipoExplicito (ex.: extrato OFX/CSV genérico, sem coluna/seção própria que já resolva
+      // Despesa/Receita): o pagamento da fatura é sempre um crédito para o CARTÃO (Receita) e uma saída da
+      // CONTA que efetua o pagamento (Despesa) — prevalece sobre a sugestão por palavra-chave e sobre o
+      // sinal do valor, que podem não seguir a convenção "negativo=despesa" para esse tipo específico de
+      // lançamento (não é uma compra, é a liquidação da própria fatura).
       const ehCartaoDestino = STATE.cartoes.includes(conta);
       catSugerida = ehCartaoDestino ? 'Recebimento por Pagamento de Fatura' : 'Pagamento de Fatura de Cartão de Crédito';
       tipo = ehCartaoDestino ? 'Receita' : 'Despesa';
@@ -16986,12 +17033,6 @@ function buildParsedFromMap(){
       const pareceTextoDePagamento = /pgto|pagto|pagamento/.test(normalizarTexto(e.descricao));
       catSugerida = pareceTextoDePagamento ? 'Recebimento por Pagamento de Fatura'
         : ((catSugerida && CATEGORIAS.some(c=>c[0]===catSugerida && c[3]==='Receita')) ? catSugerida : 'Estorno ou Reembolso');
-    } else if(e.tipoExplicito){
-      // O parser já sabe se é Despesa ou Receita (ex.: fatura de cartão, onde valor negativo é
-      // estorno/crédito) — uma sugestão de categoria por palavra-chave que implique o tipo contrário é
-      // descartada, para não deixar o lançamento com categoria e tipo inconsistentes entre si.
-      tipo = e.tipoExplicito;
-      if(catSugerida && !CATEGORIAS.some(c=>c[0]===catSugerida && c[3]===tipo)) catSugerida = '';
     } else {
       // Sem classificação explícita do parser (ex.: extrato OFX ou CSV): segue a convenção padrão de
       // extrato/fatura — valor negativo = saída/despesa, positivo = entrada/receita — independentemente
