@@ -9225,6 +9225,19 @@ function limitesCompetenciaISO(competencia){
 }
 function proximoMes(ano, mes){ mes+=1; if(mes>12){ mes=1; ano+=1; } return {ano,mes}; }
 function mesAnterior(ano, mes){ mes-=1; if(mes<1){ mes=12; ano-=1; } return {ano,mes}; }
+/* Data ISO (AAAA-MM-DD) do dia calendário imediatamente anterior a dataISO — cruza mês/ano corretamente
+   (ex.: dia 1 de fevereiro devolve 31 de janeiro). Usa Date.UTC/setUTCDate (nunca o construtor local nem
+   somar/subtrair dias "na mão") para nunca sofrer de fuso horário/horário de verão. Usada pelo cálculo do
+   Saldo do Dia do Fluxo de Caixa (ver calcProjecoesMes) para ancorar o saldo sequencial de cada dia com
+   lançamento sempre no saldo real de fechamento do dia calendário anterior — nunca no de "o dia com
+   lançamento anterior", que pode ficar desatualizado quando existem dias sem nenhuma linha na tabela mas
+   com lançamentos reais nas contas elegíveis. */
+function diaAnteriorISO(dataISO){
+  const [y,m,d] = dataISO.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m-1, d));
+  dt.setUTCDate(dt.getUTCDate()-1);
+  return dt.toISOString().slice(0,10);
+}
 /* Tipos de conta que compõem o Saldo Inicial do Fluxo de Caixa — usa o TIPO da conta (não nomes fixos),
    então qualquer conta cadastrada com um desses tipos entra automaticamente na soma. Contracheque,
    Reserva de Emergência e Cartão de Crédito ficam de fora por definição (ver TIPOS_FLUXO_CAIXA). */
@@ -9239,6 +9252,41 @@ function contasElegiveisFluxoCaixa(){
 function getSaldoInicialBase(ano, mes){
   return contasElegiveisFluxoCaixa().reduce((s,c)=> s + calcSaldoConta(c, ano, mes).saldoInicial, 0);
 }
+/* Variante de saldoContaAteData EXCLUSIVA do Fluxo de Caixa: ignora a Aplicação Automática do Saldo (BB
+   Rende Fácil) feita NO PRÓPRIO dia da data de corte (dataLimiteISO) — nunca as de dias anteriores, nem
+   nenhum Resgate Automático (ver CATEGORIAS_RENDE_FACIL_BB/ehMovimentoRendeFacilBB). O banco aplica
+   automaticamente todo saldo ocioso ao final de cada dia e resgata (com o próprio dinheiro + rendimento)
+   no dia útil seguinte: uma aplicação feita HOJE ainda não teve nenhuma chance de ser resgatada, então
+   contá-la reduziria artificialmente o saldo disponível daquele dia por um dinheiro que a família nem
+   gastou nem perdeu (só está momentaneamente estacionado no Rende Fácil) — requisito explícito: "não
+   considerar para compor o saldo do dia... BB Rende Fácil". Já a aplicação de QUALQUER dia anterior já
+   teve pelo menos um dia útil para ser resgatada e passa a ser só mais um lançamento real da sequência
+   histórica da conta, contado normalmente (excluí-la também faria esta função divergir, sem necessidade,
+   do saldo bancário real de dias já fechados). Nunca reaproveitada fora do Fluxo de Caixa — o Saldo Atual
+   dos cards de Contas e o Extrato continuam usando saldoContaAteData/calcSaldoConta sem nenhuma alteração,
+   refletindo sempre o saldo bancário literal, como já esperado nesses dois lugares. */
+function saldoContaAteDataSemRendeFacilBB(conta, dataLimiteISO){
+  const ehAplicacaoDoDiaDeCorte = t=> t.data===dataLimiteISO && ehMovimentoRendeFacilBB(t)
+    && t.categoria===CATEGORIAS_RENDE_FACIL_BB[0]; // 'Aplicação Automática do Saldo'
+  const txsConta = STATE.transactions.filter(t=>t.conta===conta && !ehAplicacaoDoDiaDeCorte(t));
+  const referencia = txsConta
+    .filter(t=> ehSaldoAnterior(t) && t.data<=dataLimiteISO)
+    .sort((a,b)=> a.data<b.data ? 1 : (a.data>b.data ? -1 : 0))[0] || null;
+  let saldo = 0, dataCorte = null;
+  if(referencia){
+    saldo = referencia.tipo==='Despesa' ? -(Number(referencia.valor)||0) : (Number(referencia.valor)||0);
+    dataCorte = referencia.data;
+  }
+  txsConta.forEach(t=>{
+    if(ehSaldoAnterior(t)) return;
+    const depoisDaReferencia = !dataCorte || t.data>dataCorte;
+    if(depoisDaReferencia && t.data<=dataLimiteISO){
+      const v = Number(t.valor)||0;
+      saldo += (t.tipo==='Receita' ? v : (t.tipo==='Despesa' ? -v : 0));
+    }
+  });
+  return saldo;
+}
 /* Saldo REAL consolidado das contas elegíveis do Fluxo de Caixa (PJ/Corrente/Poupança) até uma data —
    fonte ÚNICA de "saldo real" usada tanto pelo saldo de cada lançamento (calcProjecoesMes) quanto pela
    linha "Saldo do Dia" (aplicarLinhasSaldoDiario), para que os dois nunca possam divergir por usarem
@@ -9247,7 +9295,9 @@ function getSaldoInicialBase(ano, mes){
    outro tipo de conta). Registros-espelho de transferência entre contas próprias (entreFamilia) SÃO
    somados normalmente aqui — cada lado é uma movimentação real na SUA PRÓPRIA conta; ao consolidar as
    contas elegíveis, os dois lados de uma transferência ENTRE ELAS se cancelam automaticamente (soma
-   líquida zero), nunca precisando de nenhuma exclusão especial. Nunca olha para o futuro: uma data
+   líquida zero), nunca precisando de nenhuma exclusão especial. BB Rende Fácil (aplicação/resgate
+   automático) é excluído (ver saldoContaAteDataSemRendeFacilBB acima) — requisito explícito para o Fluxo
+   de Caixa, que não existe no Saldo Atual/Extrato de Contas. Nunca olha para o futuro: uma data
    posterior a hoje é sempre tratada como hoje — um lançamento com data futura (mesmo já real no Extrato,
    ex. um pagamento antecipado registrado com a data futura errada) só deve afetar este saldo no dia em
    que a data efetivamente chegar, nunca antes (mesma regra de corte já usada no Saldo Atual dos cards de
@@ -9255,7 +9305,7 @@ function getSaldoInicialBase(ano, mes){
 function saldoRealConsolidadoAteData(dataISO){
   const hoje = hojeISO();
   const dataRef = dataISO<=hoje ? dataISO : hoje;
-  return contasElegiveisFluxoCaixa().reduce((s,c)=> s + saldoContaAteData(c, dataRef), 0);
+  return contasElegiveisFluxoCaixa().reduce((s,c)=> s + saldoContaAteDataSemRendeFacilBB(c, dataRef), 0);
 }
 /* Campos de valor da aba Projeções usam o mesmo formato de digitação da taxa de conversão de compras
    internacionais na importação: texto livre com vírgula decimal, sem spin buttons do input numérico. */
@@ -9656,14 +9706,23 @@ function calcProjecoesMes(ano, mes, saldoInicial){
           dataReal = dataRealMaisRecente;
           if(dataRealMaisRecente.slice(0,7)===competencia) dia = Number(dataRealMaisRecente.slice(8,10));
           // Só considera "já no Extrato elegível" (requisito 8/9 do pedido) quando o lançamento vinculado
-          // está numa das 3 contas elegíveis e NÃO é um lançamento espelho de transferência interna
-          // (requisito 7 — nunca usar um espelho como "efetivação" de um previsto comum, só o lançamento
-          // financeiro original) — mesmo critério já usado no cálculo do Saldo do Dia. Com múltiplos
+          // está numa das 3 contas elegíveis e NÃO é ele mesmo um lançamento-espelho de transferência
+          // interna (requisito 7 — nunca usar um espelho como "efetivação" de um previsto comum, só o
+          // lançamento financeiro original) — mesmo critério já usado no cálculo do Saldo do Dia. O teste
+          // usa especificamente transferenciaInterna (o marcador técnico de "esta é a perna espelhada de
+          // uma transferência entre contas próprias", criado por aplicarTransferenciaInterna), NUNCA
+          // entreFamilia (um rótulo mais amplo, de classificação — ex.: renda recebida por/atribuída a um
+          // membro da família — que não implica que o lançamento seja um espelho de transferência: um
+          // recebimento real de cliente pode estar marcado entreFamilia=true, e mesmo assim já é dinheiro
+          // de verdade na conta elegível, contado normalmente por saldoRealConsolidadoAteData). Usar
+          // entreFamilia aqui excluía indevidamente esse tipo de lançamento do "já realizado", fazendo-o
+          // continuar entrando no Saldo do Dia como pendente ainda que já estivesse dentro do saldo real
+          // consolidado — contando-o duas vezes (bug de consolidação PJ/Corrente/Poupança). Com múltiplos
           // vínculos, cada um é avaliado individualmente: a soma dos que AINDA não estão numa conta
           // elegível é o que continua pendente (requisito 1 — nunca tudo-ou-nada quando só parte já
           // aconteceu numa conta elegível).
           valorProjecaoPendente = reais.reduce((s,t)=>{
-            const jaNoExtratoElegivel = !t.entreFamilia && contasElegiveis.has(t.conta);
+            const jaNoExtratoElegivel = !t.transferenciaInterna && contasElegiveis.has(t.conta);
             return s + (jaNoExtratoElegivel ? 0 : (Number(t.valor)||0));
           }, 0);
         }
@@ -9678,36 +9737,66 @@ function calcProjecoesMes(ano, mes, saldoInicial){
       return { ...item, competencia, valorCalculado, dia, valorProjecaoPendente, dataPrevista: item.dia, valorPrevisto: valorProjecaoItem(item, competencia), dataReal, qtdVinculos, statusConciliacao };
     })
     .sort((a,b)=>(Number(a.dia)||0)-(Number(b.dia)||0));
-  // Saldo de cada lançamento (correção definitiva do cálculo de saldos — ver comentário da função acima):
-  // saldoRealConsolidadoAteData recalculado a cada dia distinto encontrado (nunca só uma vez no início),
-  // mais os pendentes (valorProjecaoPendente, com sinal de Receita/Despesa) acumulados desde o início
-  // desta tabela — nunca zerados ao virar o dia, para um pendente de um dia anterior continuar refletido
-  // nos dias seguintes até ser efetivamente conciliado. O ajuste de pendente ainda não resolvido, herdado
-  // do(s) mês(es) anterior(es) da cadeia (calcProjecoesMultiMes), entra como o valor inicial deste
-  // acumulador — para o 1º mês da cadeia (saldoInicial já é o saldo real de getSaldoInicialBase) esse
-  // ajuste é sempre zero. saldoRealAntesDoMes usa getSaldoInicialBase (não saldoRealConsolidadoAteData num
-  // "dia anterior ao mês") de propósito: um lançamento de Saldo Anterior é sempre datado no dia 1 do
-  // próprio mês a que se refere (ver aplicarSaldoAnteriorConta), nunca no último dia do mês anterior — só
+  // Saldo de cada lançamento (correção definitiva do cálculo de saldos): acumulador SEQUENCIAL dentro de
+  // cada dia, somando o valorCalculado (valor total do item, com sinal de Receita/Despesa) de cada linha
+  // NA PRÓPRIA ORDEM da tabela — nunca um mesmo valor repetido para todos os lançamentos do dia (bug
+  // relatado: dois lançamentos conciliados no mesmo dia mostravam idêntico "Saldo do Dia" em vez do saldo
+  // passo a passo). Ao virar o dia, o acumulador reinicia sempre a partir do Saldo do Dia VERDADEIRO do dia
+  // CALENDÁRIO anterior (saldoRealConsolidadoAteData(diaAnteriorISO(dia)) + pendenteAcumulado até ali) —
+  // nunca do saldoRealConsolidadoAteData do PRÓPRIO dia (que já embutiria o dia inteiro no início dele) nem
+  // do saldo do último dia COM LANÇAMENTO NESTA TABELA (que pode ficar desatualizado quando existe um "dia
+  // vazio" nesta tabela — sem nenhuma linha própria — mas com lançamentos reais nas contas elegíveis: usar
+  // diaAnteriorISO, em vez de "o dia anterior com lançamento", garante que esses dias vazios nunca fiquem de
+  // fora do saldo real usado como ponto de partida do dia seguinte).
+  //
+  // Saldo do Dia (linha especial injetada por aplicarLinhasSaldoDiario, guardada aqui em saldoPorDia):
+  // calculado À PARTE do total sequencial acima, de propósito — é sempre saldoRealConsolidadoAteData(dia)
+  // (saldo real das contas elegíveis, já sem a Aplicação Automática do BB Rende Fácil do próprio dia) mais
+  // os pendentes (valorProjecaoPendente, com sinal de Receita/Despesa) acumulados desde o início desta
+  // tabela, nunca zerados ao virar o dia (para um pendente de um dia anterior continuar refletido nos dias
+  // seguintes até ser efetivamente conciliado). Por ser independente do total sequencial das linhas
+  // listadas, o Saldo do Dia pode legitimamente DIVERGIR desse total quando existem lançamentos reais nas
+  // contas elegíveis, naquela data, sem nenhuma linha correspondente nesta tabela (ex.: um Pix avulso sem
+  // item previsto) — é exatamente esse cenário que validarConsistenciaSaldoFluxoCaixa investiga e reporta,
+  // nunca um valor a "ajustar" para coincidir. O ajuste de pendente ainda não resolvido, herdado do(s)
+  // mês(es) anterior(es) da cadeia (calcProjecoesMultiMes), entra como o valor inicial deste acumulador —
+  // para o 1º mês da cadeia (saldoInicial já é o saldo real de getSaldoInicialBase) esse ajuste é sempre
+  // zero. saldoRealAntesDoMes usa getSaldoInicialBase (não saldoRealConsolidadoAteData num "dia anterior ao
+  // mês") de propósito: um lançamento de Saldo Anterior é sempre datado no dia 1 do próprio mês a que se
+  // refere (ver aplicarSaldoAnteriorConta), nunca no último dia do mês anterior — só
   // getSaldoInicialBase/calcSaldoConta usa exatamente esse mesmo corte (<=, incluindo o dia 1), garantindo
-  // que o ajuste dê zero de verdade no 1º mês da cadeia.
+  // que o ajuste dê zero de verdade no 1º mês da cadeia. Pela mesma razão, saldoInicial (que já é
+  // saldoRealAntesDoMes + esse ajuste herdado) é usado — em vez de diaAnteriorISO — como o ponto de partida
+  // do acumulador sequencial só para o 1º dia com lançamento do próprio mês (diaAnteriorISO cruzaria para o
+  // mês anterior, cuja própria referência de Saldo Anterior é outra).
   const saldoRealAntesDoMes = getSaldoInicialBase(ano, mes);
   let pendenteAcumulado = saldoInicial - saldoRealAntesDoMes;
-  let diaCalculadoAtual = null, saldoRealDoDiaAtual = saldoRealAntesDoMes;
-  linhas.forEach(l=>{
-    const dia = Math.min(31, Math.max(1, Number(l.dia)||1));
-    if(dia!==diaCalculadoAtual){
-      saldoRealDoDiaAtual = saldoRealConsolidadoAteData(`${ano}-${pad2(mes)}-${pad2(dia)}`);
-      diaCalculadoAtual = dia;
-    }
-    pendenteAcumulado += (l.tipo==='Receita' ? l.valorProjecaoPendente : -l.valorProjecaoPendente);
-    l.saldo = saldoRealDoDiaAtual + pendenteAcumulado;
+  const saldoPorDia = new Map();
+  const diasOrdenados = [...new Set(linhas.map(l=>Math.min(31, Math.max(1, Number(l.dia)||1))))].sort((a,b)=>a-b);
+  diasOrdenados.forEach(dia=>{
+    const dataAtualISO = `${ano}-${pad2(mes)}-${pad2(dia)}`;
+    // dia===1: diaAnteriorISO cruzaria para o mês anterior, cuja própria referência de Saldo Anterior é
+    // outra — usa saldoInicial diretamente (já é o saldo real do início deste mês + pendente herdado da
+    // cadeia). Qualquer outro dia (2 a 31): diaAnteriorISO continua dentro do mesmo mês, então recalcular a
+    // partir dele é sempre seguro e corrige o "dia vazio" descrito acima — inclusive quando o 1º dia COM
+    // LANÇAMENTO nesta tabela não é o dia 1 do mês.
+    const anchorDoDia = dia===1 ? saldoInicial : (saldoRealConsolidadoAteData(diaAnteriorISO(dataAtualISO)) + pendenteAcumulado);
+    let saldoSequencial = anchorDoDia;
+    linhas.filter(l=>Math.min(31, Math.max(1, Number(l.dia)||1))===dia).forEach(l=>{
+      saldoSequencial += (l.tipo==='Receita' ? l.valorCalculado : -l.valorCalculado);
+      l.saldo = saldoSequencial;
+      pendenteAcumulado += (l.tipo==='Receita' ? l.valorProjecaoPendente : -l.valorProjecaoPendente);
+    });
+    const saldoDoDia = saldoRealConsolidadoAteData(dataAtualISO) + pendenteAcumulado;
+    saldoPorDia.set(dia, saldoDoDia);
   });
-  // saldoFinal: o saldo do último lançamento da tabela (já real+pendente acumulado, como acima) — ou,
-  // quando o mês não tem nenhum lançamento, o saldo real puro no último dia do mês (nunca o saldoInicial
-  // repassado sem verificação, mesmo numa tabela vazia).
+  // saldoFinal: o Saldo do Dia VERDADEIRO do último dia com lançamento (nunca o saldo sequencial "ingênuo"
+  // da última linha, que pode divergir dele — ver acima) — ou, quando o mês não tem nenhum lançamento, o
+  // saldo real puro no último dia do mês (nunca o saldoInicial repassado sem verificação, mesmo numa tabela
+  // vazia). Encadeado para o mês seguinte por calcProjecoesMultiMes (m.saldoFinal vira o saldoInicial de lá).
   const { max: ultimoDiaMes } = limitesCompetenciaISO(competencia);
-  const saldoFinal = linhas.length ? linhas[linhas.length-1].saldo : saldoRealConsolidadoAteData(ultimoDiaMes);
-  return { ano, mes, saldoInicial, linhas, saldoFinal };
+  const saldoFinal = diasOrdenados.length ? saldoPorDia.get(diasOrdenados[diasOrdenados.length-1]) : saldoRealConsolidadoAteData(ultimoDiaMes);
+  return { ano, mes, saldoInicial, linhas, saldoFinal, saldoPorDia };
 }
 /* Replica a mesma tabela para o mês selecionado e os 3 meses seguintes: o saldo final de cada mês vira o
    saldo inicial do próximo (só o primeiro mês tem Saldo Inicial editável — os demais são sempre o
@@ -9735,12 +9824,12 @@ function calcSaldoAtualFluxoCaixa(){
 /* Injeta uma linha especial "Saldo do Dia" SOMENTE nos dias que já possuem ao menos um lançamento nas
    próprias tabelas do Fluxo de Caixa (STATE.projecoes já filtrado/calculado por calcProjecoesMes) — nunca
    em todos os dias do período (requisito 1). Correção definitiva do cálculo de saldos: o valor de cada
-   linha "Saldo do Dia" NUNCA é recalculado aqui com uma fórmula própria — é sempre lido diretamente do
-   campo `saldo` do ÚLTIMO lançamento daquele dia na própria tabela (m.linhas, já ordenada e já calculada
-   por inteiro em calcProjecoesMes, que usa saldo REAL consolidado das contas elegíveis + pendentes
-   acumulados). Ter as duas linhas (o último lançamento do dia e o "Saldo do Dia" daquele mesmo dia)
-   sempre lendo o mesmíssimo valor, em vez de duas fórmulas calculadas em paralelo, é o que garante — por
-   construção, não por coincidência — que nunca divirjam entre si (requisito 10). O dia de hoje usa o
+   linha "Saldo do Dia" vem sempre de m.saldoPorDia (calculado em calcProjecoesMes como saldo REAL
+   consolidado das contas elegíveis, sem BB Rende Fácil, + pendentes acumulados) — NUNCA do saldo da última
+   linha daquele dia na tabela. As duas fontes normalmente coincidem, mas podem divergir de propósito
+   quando existem lançamentos reais, nas contas elegíveis, que não têm nenhuma linha correspondente nesta
+   tabela (ver comentário de validarConsistenciaSaldoFluxoCaixa) — nesse caso o Saldo do Dia é o valor
+   correto (o saldo bancário real), e a divergência é reportada, nunca escondida. O dia de hoje usa o
    rótulo "Saldo Atual (Hoje)" (ver renderLinhaSaldoAtual) quando também possuir lançamento; qualquer
    outro dia usa "Saldo do Dia". O saldoFinal do mês (saldo inicial do mês seguinte na cadeia de
    calcProjecoesMultiMes) passa a ser o saldo da última linha "Saldo do Dia" inserida — idêntico ao
@@ -9755,8 +9844,7 @@ function aplicarLinhasSaldoDiario(m){
   let saldoFinal = m.saldoFinal;
   diasComLancamento.forEach(dia=>{
     const dataISO = `${m.ano}-${pad2(m.mes)}-${pad2(dia)}`;
-    const linhasDoDia = m.linhas.filter(l=>Number(l.dia)===dia);
-    const saldoDia = linhasDoDia[linhasDoDia.length-1].saldo;
+    const saldoDia = m.saldoPorDia.get(dia);
     const linhaEspecial = { id:`saldo-dia-${dataISO}`, especial:'saldo-dia', ehHoje: ehMesReal && dia===diaHoje, dia, saldo: saldoDia };
     let posicao = linhas.findIndex(l => (Number(l.dia)||0) > dia);
     if(posicao===-1) posicao = linhas.length;
@@ -9777,42 +9865,56 @@ function calcProjecoesMultiMes(anoBase, mesBase, qtdMeses){
   }
   return meses;
 }
-/* Validação automática de consistência dos saldos do Fluxo de Caixa: para cada mês já calculado (recebe
-   o resultado pronto de calcProjecoesMultiMes/calcProjecoesMes — nunca recalcula nada por conta própria,
-   para sempre auditar exatamente os mesmos números exibidos na tela), confere que o Saldo do Dia de cada
-   dia é sempre exatamente igual ao saldo do ÚLTIMO lançamento daquele dia na própria tabela (requisito
-   11: "Saldo do Dia ≠ último saldo efetivo dos lançamentos daquele dia"). Com a correção desta rodada
-   (aplicarLinhasSaldoDiario agora sempre LÊ esse valor em vez de recalculá-lo em paralelo — ver seu
-   comentário) essa divergência deixou de ser estruturalmente possível, mas a validação continua existindo
-   como uma rede de segurança contra qualquer regressão futura: cada divergência encontrada é reportada
-   junto com os lançamentos daquele dia (id/descrição/tipo/valor/saldo de cada um), para nunca precisar
-   adivinhar qual lançamento está causando o problema. Roda automaticamente a cada render do Fluxo de
-   Caixa (ver renderResumo) e loga no console (nunca interrompe a renderização nem altera nenhum valor
-   exibido — é só diagnóstico). */
+/* Validação/diagnóstico automático do Fluxo de Caixa: para cada mês já calculado (recebe o resultado
+   pronto de calcProjecoesMultiMes/calcProjecoesMes — nunca recalcula nada por conta própria, para sempre
+   auditar exatamente os mesmos números exibidos na tela), compara o Saldo do Dia (m.saldoPorDia — saldo
+   real das contas elegíveis, sem BB Rende Fácil, + pendentes acumulados) com o total sequencial das
+   linhas efetivamente LISTADAS nesta tabela naquele dia (saldo da última linha do dia). Uma diferença
+   aqui NÃO é, por si só, um bug: ela é o retrato exato de que existe um lançamento real, numa conta
+   elegível, naquela data, sem nenhuma linha correspondente nesta tabela (requisito explícito: "verificar
+   se há outros lançamentos não listados na tabela do fluxo de caixa" — nunca simplesmente ajustar o valor
+   final para coincidir). Por isso, ao encontrar uma diferença, busca em STATE.transactions os lançamentos
+   daquele dia, nas contas elegíveis do Fluxo de Caixa, que podem explicá-la — descartando do universo de
+   candidatos: BB Rende Fácil (ehMovimentoRendeFacilBB — já excluído do próprio Saldo do Dia), transferências
+   entre contas próprias (entreFamilia/transferenciaInterna — cada lado já é a movimentação real da SUA
+   PRÓPRIA conta e se cancela ao consolidar as contas elegíveis, nunca é um lançamento "não listado" no
+   sentido do requisito) e qualquer lançamento já vinculado a algum item desta mesma tabela em qualquer
+   competência (vinculosExtrato). Roda automaticamente a cada render do Fluxo de Caixa (ver renderResumo) e
+   só loga no console (nunca interrompe a renderização nem altera nenhum valor exibido). */
 function validarConsistenciaSaldoFluxoCaixa(meses){
-  const divergencias = [];
+  const idsJaVinculados = new Set();
+  STATE.projecoes.forEach(item=>{
+    if(!item.vinculosExtrato) return;
+    Object.values(item.vinculosExtrato).forEach(ids=>(ids||[]).forEach(id=>idsJaVinculados.add(id)));
+  });
+  const contasElegiveis = contasElegiveisFluxoCaixa();
+  const relatorios = [];
   meses.forEach(m=>{
     const porDia = new Map();
     m.linhas.forEach(l=>{
+      if(l.especial==='saldo-dia') return;
       const dia = Number(l.dia)||0;
-      if(l.especial==='saldo-dia'){
-        const grupo = porDia.get(dia);
-        const saldoUltimoLancamento = grupo && grupo.length ? grupo[grupo.length-1].saldo : null;
-        if(saldoUltimoLancamento!==null && Math.abs(saldoUltimoLancamento - l.saldo) > 0.01){
-          divergencias.push({
-            competencia: chaveMes(m.ano, m.mes), dia,
-            saldoDoDia: l.saldo, saldoUltimoLancamento, diferenca: arredondarMoeda(l.saldo - saldoUltimoLancamento),
-            lancamentosDoDia: grupo.map(x=>({ id:x.id, descricao:x.descricao, tipo:x.tipo, valorCalculado:x.valorCalculado, valorProjecaoPendente:x.valorProjecaoPendente, saldo:x.saldo, statusConciliacao:x.statusConciliacao })),
-          });
-        }
-      } else {
-        if(!porDia.has(dia)) porDia.set(dia, []);
-        porDia.get(dia).push(l);
-      }
+      if(!porDia.has(dia)) porDia.set(dia, []);
+      porDia.get(dia).push(l);
+    });
+    (m.saldoPorDia || new Map()).forEach((saldoDoDia, dia)=>{
+      const grupo = porDia.get(dia) || [];
+      const saldoUltimoLancamento = grupo.length ? grupo[grupo.length-1].saldo : null;
+      if(saldoUltimoLancamento===null || Math.abs(saldoUltimoLancamento - saldoDoDia) <= 0.01) return;
+      const dataISO = `${m.ano}-${pad2(m.mes)}-${pad2(dia)}`;
+      const candidatosNaoListados = STATE.transactions
+        .filter(t=> t.data===dataISO && contasElegiveis.includes(t.conta) && !ehMovimentoRendeFacilBB(t)
+          && !t.entreFamilia && !t.transferenciaInterna && !idsJaVinculados.has(t.id))
+        .map(t=>({ id:t.id, conta:t.conta, descricao:t.descricao, tipo:t.tipo, valor:t.valor }));
+      relatorios.push({
+        competencia: chaveMes(m.ano, m.mes), dia, saldoDoDia, saldoUltimoLancamento,
+        diferenca: arredondarMoeda(saldoDoDia - saldoUltimoLancamento),
+        candidatosNaoListados,
+      });
     });
   });
-  if(divergencias.length) console.warn('⚠️ Divergência de Saldo do Dia detectada no Fluxo de Caixa — Saldo do Dia deveria ser sempre igual ao saldo do último lançamento daquele dia:', divergencias);
-  return divergencias;
+  if(relatorios.length) console.info('ℹ️ Saldo do Dia difere do total sequencial das linhas listadas no Fluxo de Caixa nesse(s) dia(s) — ver candidatosNaoListados de cada item para os lançamentos reais que provavelmente explicam a diferença (isso é esperado quando existem lançamentos reais sem linha correspondente na tabela):', relatorios);
+  return relatorios;
 }
 
 /* ===================== RENDER RAIZ ===================== */
