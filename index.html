@@ -15677,14 +15677,23 @@ function renderModalParcelasEmprestimo(){
 }
 function renderImportStep1(){
   // Conta do tipo Reserva de Emergência: importação restrita EXCLUSIVAMENTE a .csv (extrato PicPay); conta
-  // do tipo Contracheque: restrita EXCLUSIVAMENTE a .pdf (Demonstrativo de Pagamento do TRT) — ver
-  // handleFile, que repete essa mesma checagem para o caso de arrastar-e-soltar um arquivo de outro tipo.
-  const ehContaReservaEmergencia = STATE.contaTipos[UI.importMap.contaDestino]==='Reserva de Emergência';
-  const ehContaContracheque = STATE.contaTipos[UI.importMap.contaDestino]==='Contracheque';
+  // do tipo Contracheque: restrita EXCLUSIVAMENTE a .pdf (Demonstrativo de Pagamento do TRT); NuCartão
+  // (Nubank): restrita EXCLUSIVAMENTE a .csv, no formato próprio da fatura do Nubank; NuConta (Nubank):
+  // restrita a .ofx OU .csv, nos dois formatos próprios do extrato do Nubank (ver
+  // ehCartaoNubank/ehContaCorrenteNubank) — ver handleFile, que repete essa mesma checagem para o caso de
+  // arrastar-e-soltar um arquivo de outro tipo.
+  const contaDestino = UI.importMap.contaDestino;
+  const ehContaReservaEmergencia = STATE.contaTipos[contaDestino]==='Reserva de Emergência';
+  const ehContaContracheque = STATE.contaTipos[contaDestino]==='Contracheque';
+  const ehCartaoNu = ehCartaoNubank(contaDestino);
+  const ehContaNu = ehContaCorrenteNubank(contaDestino);
   const hint = ehContaReservaEmergencia ? 'Conta do tipo Reserva de Emergência — aceita somente o extrato .csv exportado do PicPay.'
     : ehContaContracheque ? 'Formato aceito: PDF (.pdf)'
+    : ehCartaoNu ? 'NuCartão (Nubank) — aceita somente a fatura .csv exportada do Nubank.'
+    : ehContaNu ? 'NuConta (Nubank) — aceita extrato .ofx ou .csv exportado do Nubank.'
     : 'Aceita extratos em .ofx ou .xlsx exportados do seu banco ou cartão.';
-  const accept = ehContaReservaEmergencia ? '.csv' : ehContaContracheque ? '.pdf,application/pdf' : '.ofx,.xlsx,.pdf';
+  const accept = ehContaReservaEmergencia ? '.csv' : ehContaContracheque ? '.pdf,application/pdf'
+    : ehCartaoNu ? '.csv' : ehContaNu ? '.ofx,.csv' : '.ofx,.xlsx,.pdf';
   return `
   <span class="step-badge">Passo 2 de 4 · Escolher arquivo</span>
   <div class="info-card" style="margin-top:0;"><span class="info-card-icon">📌</span><span>Conta de destino: <b>${escapeHtml(UI.importMap.contaDestino)}</b> · Período: <b>${MESES[UI.importRefMes-1]}/${UI.importRefAno}</b> <button type="button" class="icon-btn" id="btnImportVoltarPre" title="Trocar período/conta" style="padding:1px 4px;">✏️</button></span></div>
@@ -15698,10 +15707,12 @@ function renderImportStep1(){
 function renderImportStep2(){
   const raw = UI.importRaw;
   const infoContaPeriodo = `<div class="info-card"><span class="info-card-icon">📌</span><span>Conta de destino: <b>${escapeHtml(UI.importMap.contaDestino)}</b> · Período: <b>${MESES[UI.importRefMes-1]}/${UI.importRefAno}</b> · Meio de pagamento/recebimento: determinado automaticamente pelo tipo da conta no próximo passo.</span></div>`;
-  if(raw.type==='pdf' || raw.type==='ofx' || raw.type==='xlsx-pb' || raw.type==='csv-reserva'){
+  if(raw.type==='pdf' || raw.type==='ofx' || raw.type==='xlsx-pb' || raw.type==='csv-reserva' || raw.type==='csv-nucartao' || raw.type==='csv-nuconta'){
     const msgTipo = raw.type==='ofx' ? 'Arquivo OFX detectado — data, descrição e valor extraídos automaticamente.'
       : raw.type==='xlsx-pb' ? 'Fatura do Personnalité Black (.xlsx) detectada — lançamentos extraídos automaticamente da planilha.'
       : raw.type==='csv-reserva' ? 'Extrato CSV da Reserva de Emergência (PicPay) detectado — tipo de operação (Pix enviado, Pix/Transferência recebidos, Rendimento) identificado automaticamente, com descrição e classificação já geradas para cada lançamento. A coluna Hora do arquivo foi descartada e a Forma de Pagamento será sempre "Débito em Conta".'
+      : raw.type==='csv-nucartao' ? 'Fatura CSV do NuCartão (Nubank) detectada — data, descrição e valor extraídos automaticamente, com o tipo (compra/pagamento recebido) já determinado pelo sinal do próprio arquivo.'
+      : raw.type==='csv-nuconta' ? 'Extrato CSV da NuConta (Nubank) detectado — data, descrição e valor extraídos automaticamente.'
       : 'Texto extraído do PDF — linhas com padrão de data e valor foram identificadas automaticamente. Confira com atenção no próximo passo, pois PDFs variam bastante entre bancos.';
     return `
     <span class="step-badge">Passo 3 de 4 · Confirmar — ${escapeHtml(UI.importFileName)}</span>
@@ -15903,6 +15914,16 @@ function detectFileType(name){
   if(ext==='csv') return 'csv';
   return 'nao-suportado';
 }
+/* Identifica se uma conta é o cartão (NuCartão) ou a conta corrente (NuConta) da Nubank, pelo mesmo
+   mecanismo de detecção por nome já usado para o logotipo (ver identificarInstituicao/
+   INSTITUICOES_FINANCEIRAS) — nunca por comparação literal do nome da conta, para continuar funcionando
+   mesmo se o usuário renomear a conta, igual em espírito ao restante da aplicação. Usadas só para
+   restringir os formatos de arquivo aceitos nesta importação (ver renderImportStep1/handleFile): o Nubank
+   não emite a fatura do cartão em .ofx/.xlsx (só .csv, num formato próprio) nem o extrato da conta em
+   .xlsx (só .ofx ou .csv, também num formato próprio) — diferente dos demais bancos/cartões desta
+   aplicação, que continuam aceitando .ofx/.xlsx/.pdf normalmente. */
+function ehCartaoNubank(conta){ return STATE.cartoes.includes(conta) && identificarInstituicao(conta)?.sigla==='Nubank'; }
+function ehContaCorrenteNubank(conta){ return !STATE.cartoes.includes(conta) && identificarInstituicao(conta)?.sigla==='Nubank'; }
 /* Converte o valor do extrato CSV da Reserva de Emergência (PicPay) para número com sinal — vem como
    texto no formato "−R$ 1.330,00" (saída) ou "+R$ 150,00" (entrada), com ponto como separador de milhar e
    vírgula como decimal. O caractere de "menos" usado pelo PicPay é o sinal matemático "−" (U+2212), não o
@@ -15987,6 +16008,67 @@ function parseCSVReservaEmergencia(texto){
       cl ? cl.categoria : null
     ];
   }).filter(r=>r[0]);
+}
+/* Converte o valor da fatura CSV do NuCartão (Nubank) para número com sinal — vem entre aspas (por causa
+   da vírgula decimal, que quebraria a contagem de colunas se não fosse citado) no formato brasileiro
+   "20,35" (compra) ou "- 452,55" (pagamento recebido/estorno, com um espaço entre o sinal de menos e o
+   número) — nunca ponto como separador de milhar nessa exportação. O sinal é detectado ANTES de remover
+   os caracteres não numéricos (que descartaria o próprio "-"). */
+function parseValorNuCartaoCSV(v){
+  const s = String(v??'').trim();
+  if(!s) return 0;
+  const negativo = s.startsWith('-');
+  const numStr = s.replace(/[^0-9,]/g,'').replace(/\./g,'').replace(',', '.');
+  const n = parseFloat(numStr);
+  if(isNaN(n)) return 0;
+  return negativo ? -Math.abs(n) : Math.abs(n);
+}
+/* ---- Fatura do NuCartão (Nubank) — único formato de arquivo aceito para esta conta (ver
+   ehCartaoNubank/handleFile): CSV com cabeçalho "date,title,amount" — data já em AAAA-MM-DD (sem precisar
+   adivinhar o ano, ao contrário de faturas em PDF de outros bancos), descrição em "title" e valor em
+   "amount" (ver parseValorNuCartaoCSV). Convenção de sinal igual à fatura do Personnalité Black (.xlsx):
+   valor positivo = compra (Despesa), negativo = pagamento recebido/estorno (Receita) — o próprio arquivo
+   já resolve o tipo, sem depender de sugestão por palavra-chave (ver uso em buildParsedFromMap). Mesmo
+   formato de linha de retorno da fatura .xlsx-pb ([data, descrição, valor, moedaInfo, tipo,
+   parcelaExplicita]) para reaproveitar exatamente o mesmo tratamento posterior — esta exportação não traz
+   parcelamento nem compra internacional, então esses dois campos ficam sempre null. */
+function parseCSVNuCartaoFatura(texto){
+  const semBOM = texto.replace(/^\uFEFF/, '');
+  const parsed = Papa.parse(semBOM.trim(), { header:true, skipEmptyLines:true });
+  const out = [];
+  (parsed.data||[]).forEach(linha=>{
+    const porChave = {};
+    Object.keys(linha).forEach(k=>{ porChave[normalizarTexto(k)] = linha[k]; });
+    const data = parseDataTexto(porChave['date']);
+    const descricao = String(porChave['title']||'').trim();
+    if(!data || !descricao) return;
+    const valor = parseValorNuCartaoCSV(porChave['amount']);
+    out.push([data, descricao, valor, null, valor<0 ? 'Receita' : 'Despesa', null]);
+  });
+  return out;
+}
+/* ---- Extrato da NuConta (Nubank) — formato CSV alternativo ao .ofx para esta conta (ver
+   ehContaCorrenteNubank/handleFile): cabeçalho "Data,Valor,Identificador,Descrição" — data em DD/MM/AAAA,
+   valor já em ponto decimal com o sinal original do banco (negativo = saída, positivo = entrada — mesma
+   convenção do .ofx desta conta, tratada pelo mesmo fallback padrão de buildParsedFromMap quando não há
+   tipoExplicito). O Identificador (FITID do próprio banco) não é usado por este parser nem gravado no
+   lançamento — a detecção de duplicidade já existente na aplicação usa data+descrição+valor+conta, igual a
+   qualquer outra importação, então este CSV produz exatamente os mesmos lançamentos que o .ofx da mesma
+   conta e período. */
+function parseCSVNuContaExtrato(texto){
+  const semBOM = texto.replace(/^\uFEFF/, '');
+  const parsed = Papa.parse(semBOM.trim(), { header:true, skipEmptyLines:true });
+  const out = [];
+  (parsed.data||[]).forEach(linha=>{
+    const porChave = {};
+    Object.keys(linha).forEach(k=>{ porChave[normalizarTexto(k)] = linha[k]; });
+    const data = parseDataTexto(porChave['data']);
+    const descricao = String(porChave['descricao']||'').trim();
+    const valor = parseFloat(String(porChave['valor']??'').trim().replace(',', '.'));
+    if(!data || !descricao || isNaN(valor)) return;
+    out.push([data, descricao, valor]);
+  });
+  return out;
 }
 function parseOFXText(text){
   const rows = [];
@@ -16440,13 +16522,30 @@ function handleFile(file){
     alert('Arquivo não suportado. A importação de arquivo do banco aceita .ofx, .xlsx, .pdf ou, para contas do tipo Reserva de Emergência, .csv.');
     return;
   }
-  const ehContaReservaEmergencia = STATE.contaTipos[UI.importMap.contaDestino]==='Reserva de Emergência';
+  const contaDestino = UI.importMap.contaDestino;
+  const ehContaReservaEmergencia = STATE.contaTipos[contaDestino]==='Reserva de Emergência';
+  // NuCartão (Nubank): a fatura só é exportada em .csv, num formato próprio (data já em AAAA-MM-DD, valor
+  // entre aspas em formato brasileiro) — nunca .ofx/.xlsx/.pdf, que os demais cartões desta aplicação usam
+  // (ver parseCSVNuCartaoFatura/ehCartaoNubank).
+  const ehCartaoNu = ehCartaoNubank(contaDestino);
+  if(ehCartaoNu && UI.importFileType!=='csv'){
+    alert('O NuCartão (Nubank) aceita somente a fatura exportada em .csv.');
+    return;
+  }
+  // NuConta (Nubank): o extrato é exportado em .ofx (formato padrão, já suportado) ou em .csv, num formato
+  // próprio (cabeçalho "Data,Valor,Identificador,Descrição") — nunca .xlsx/.pdf (ver
+  // parseCSVNuContaExtrato/ehContaCorrenteNubank).
+  const ehContaNu = ehContaCorrenteNubank(contaDestino);
+  if(ehContaNu && UI.importFileType!=='ofx' && UI.importFileType!=='csv'){
+    alert('A NuConta (Nubank) aceita somente extrato em .ofx ou .csv.');
+    return;
+  }
   if(ehContaReservaEmergencia && UI.importFileType!=='csv'){
     alert('Para uma conta do tipo Reserva de Emergência, a importação de arquivo do banco aceita somente arquivos .csv.');
     return;
   }
-  if(!ehContaReservaEmergencia && UI.importFileType==='csv'){
-    alert('Arquivos .csv só são aceitos para uma conta do tipo Reserva de Emergência.');
+  if(UI.importFileType==='csv' && !ehContaReservaEmergencia && !ehCartaoNu && !ehContaNu){
+    alert('Arquivos .csv só são aceitos para uma conta do tipo Reserva de Emergência, para o NuCartão ou para a NuConta (Nubank).');
     return;
   }
   if(UI.importFileType==='csv'){
@@ -16454,8 +16553,16 @@ function handleFile(file){
     reader.onload = (e)=>{
       try{
         const texto = decodeFileBuffer(e.target.result);
-        const rows = parseCSVReservaEmergencia(texto);
-        UI.importRaw = { type:'csv-reserva', headers:['Data','Descrição','Valor'], rows };
+        if(ehCartaoNu){
+          const rows = parseCSVNuCartaoFatura(texto);
+          UI.importRaw = { type:'csv-nucartao', headers:['Data','Descrição','Valor'], rows };
+        } else if(ehContaNu){
+          const rows = parseCSVNuContaExtrato(texto);
+          UI.importRaw = { type:'csv-nuconta', headers:['Data','Descrição','Valor'], rows };
+        } else {
+          const rows = parseCSVReservaEmergencia(texto);
+          UI.importRaw = { type:'csv-reserva', headers:['Data','Descrição','Valor'], rows };
+        }
         UI.importIsContracheque = false;
       }catch(err){ alert('Não foi possível ler este arquivo CSV: '+err.message); UI.importStep=2; render(); return; }
       UI.importStep = 3; render();
@@ -16802,15 +16909,16 @@ function atualizarModalDuplicidadeSeAberto(){
 function buildParsedFromMap(){
   const raw = UI.importRaw;
   let entries = [];
-  if(raw.type==='ofx' || raw.type==='pdf' || raw.type==='xlsx-pb' || raw.type==='csv-reserva'){
+  if(raw.type==='ofx' || raw.type==='pdf' || raw.type==='xlsx-pb' || raw.type==='csv-reserva' || raw.type==='csv-nucartao' || raw.type==='csv-nuconta'){
     // r[4], quando presente, é a classificação Despesa/Receita já determinada pelo parser a partir da
     // própria estrutura da fatura (sinal do valor, seção etc.) — prevalece sobre qualquer sugestão por
     // palavra-chave, conforme a regra "em caso de dúvida, prevalece a classificação da própria fatura".
     // r[6], só presente no extrato CSV da Reserva de Emergência, é a subcategoria já determinada com
     // certeza pelo Tipo do lançamento (ver classificarLancamentoReservaEmergencia) — igualmente prevalece.
     // r[4], para OFX, é o TRNTYPE bruto do arquivo (CREDIT/PAYMENT/DEBIT/...) — não o mesmo "tipoExplicito"
-    // usado pelos outros parsers nesse mesmo índice (fatura PDF/XLSX-PB), por isso tratado à parte via
-    // e.trntype (ver árvore de classificação abaixo) e nunca lido como tipoExplicito para esse formato.
+    // usado pelos outros parsers nesse mesmo índice (fatura PDF/XLSX-PB/CSV do NuCartão), por isso tratado
+    // à parte via e.trntype (ver árvore de classificação abaixo) e nunca lido como tipoExplicito para esse
+    // formato.
     // r[4], para o PDF do contracheque TRT, é o código da rubrica (não o "tipoExplicito" usado pelos
     // demais formatos nesse mesmo índice) — por isso lido à parte em codigoRubrica (ver
     // RUBRICA_TRT_CODIGO_CATEGORIA, usado logo abaixo para classificar cada rubrica). O tipo de cada
@@ -16820,6 +16928,9 @@ function buildParsedFromMap(){
     // já vem definido pelo sinal do valor para todo PDF (a importação de PDF só existe para conta do tipo
     // Contracheque), igual em espírito ao TRNTYPE do OFX ou ao sinal já determinado da fatura PDF/XLSX-PB.
     // Isso prevalece sobre qualquer sugestão de tipo por palavra-chave da descrição mais abaixo.
+    // O extrato CSV da NuConta (raw.type==='csv-nuconta') não traz r[4] nenhum — tipoExplicito/trntype ficam
+    // null e o tipo é determinado pelo mesmo fallback padrão do sinal do valor (ver árvore abaixo), igual ao
+    // .ofx da mesma conta.
     entries = raw.rows.map(r=>({ data:r[0], descricao:r[1], valor:r[2], tipoExplicito: raw.type==='pdf' ? (r[2]<0 ? 'Despesa' : 'Receita') : (raw.type==='ofx' ? null : (r[4]||null)), trntype: raw.type==='ofx' ? (r[4]||null) : null, parcelaExplicita: r[5]||null, parcelasRestantes: raw.type==='pdf' ? (r[3]||0) : 0, categoriaExplicita: r[6]||null, codigoRubrica: raw.type==='pdf' ? (r[4]||null) : null }));
   } else {
     let rows = raw.rows;
