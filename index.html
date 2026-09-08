@@ -7669,16 +7669,26 @@ function dadosFaturaAtualPorCartao(competencia){
    already usado no modal "Ver Fatura" e no detalhamento de cada mês em "Ver Próximas Faturas" — sempre
    calculado em tempo real a partir de STATE.transactions, nunca armazenado. O total usa exatamente
    faturaPorCompetencia (a mesma função de todo o resto do app) para nunca divergir do valor exibido na
-   tabela principal. */
+   tabela principal.
+
+   `itens` traz TODOS os lançamentos da competência nesta conta (requisito explícito: a tabela do modal
+   "Ver Fatura" deve mostrar todos, sem esconder nenhum) — inclusive os de categoria CATEGORIAS_FATURA
+   (ex.: "Recebimento por Pagamento de Fatura", quando o próprio pagamento de uma fatura ANTERIOR aparece
+   como um lançamento dentro do arquivo importado desta competência, como no extrato do NuCartão). Os
+   totais (totalParcelado/totalAvista/totalCreditos) continuam calculados só sobre os itens que de fato
+   COMPÕEM o valor da fatura (itensQueCompoemFatura, a mesma exclusão de sempre) — nunca somando o
+   pagamento da própria fatura como se fosse mais uma compra/crédito da competência, para nunca divergir
+   de `total` (faturaPorCompetencia, que já exclui essas categorias da mesma forma). */
 function itensFatura(conta, competencia){
   const itens = aplicarOrdemManual(STATE.transactions
-    .filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia===competencia && !CATEGORIAS_FATURA.includes(t.categoria))
+    .filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia===competencia)
     .slice()
     .sort((a,b)=> compararDataCronologica(a.data, b.data) || (a.id||'').localeCompare(b.id||'')));
-  const totalParcelado = itens.filter(t=>t.tipo==='Despesa' && Number(t.totalParcelas)>1).reduce((s,t)=>s+(Number(t.valor)||0),0);
-  const totalAvista = itens.filter(t=>t.tipo==='Despesa' && !(Number(t.totalParcelas)>1)).reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const itensQueCompoemFatura = itens.filter(t=>!CATEGORIAS_FATURA.includes(t.categoria));
+  const totalParcelado = itensQueCompoemFatura.filter(t=>t.tipo==='Despesa' && Number(t.totalParcelas)>1).reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const totalAvista = itensQueCompoemFatura.filter(t=>t.tipo==='Despesa' && !(Number(t.totalParcelas)>1)).reduce((s,t)=>s+(Number(t.valor)||0),0);
   // Estornos são tratados como créditos em toda a aba Contas e Cartões — um único total, sem distinção.
-  const totalCreditos = itens.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const totalCreditos = itensQueCompoemFatura.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
   return { itens, qtd: itens.length, totalParcelado, totalAvista, totalCreditos, total: faturaPorCompetencia(conta, competencia) };
 }
 /* Próximas faturas de um cartão (modal 👁), a partir do mês seguinte ao selecionado no topo
@@ -8048,17 +8058,18 @@ function priorizarSaldoAnteriorPrimeiraLinha(itens, dataDia1){
   return [...itens.filter(ehPrioritario), ...itens.filter(t=>!ehPrioritario(t))];
 }
 /* Empurra o(s) lançamento(s) de BB Rende Fácil (aplicação/resgate automático do saldo ocioso — ver
-   ehMovimentoRendeFacilBB) para o FIM de cada dia que tiver mais de um lançamento, na EXIBIÇÃO do Extrato
-   — requisito explícito: é um movimento automático do próprio banco, nunca uma ação deliberada do
-   usuário naquele momento do dia, então deve aparecer sempre depois dos demais lançamentos daquele mesmo
-   dia. `itens` já chega ordenado cronologicamente (mesma sequência usada para calcular saldoAcumulado em
-   itensExtratoConta — nunca recalculada aqui), então dias iguais formam sempre um trecho CONTÍGUO do
-   array: percorre uma única vez, fecha cada grupo de dia ao trocar de data, e dentro dele reparte em "não
-   Rende Fácil" + "Rende Fácil" (cada bloco preservando sua própria ordem relativa original — nunca uma
-   nova ordenação por tipo/id dentro do bloco). Só reordena a POSIÇÃO na lista, nunca o saldoAcumulado já
-   atribuído a cada item — mesmo espírito de priorizarSaldoAnteriorPrimeiraLinha, e chamada só na
-   ordenação padrão (nunca com ordem manual ou ordenação por clique ativa, que sempre prevalecem
-   integralmente sobre esta prioridade). */
+   ehMovimentoRendeFacilBB) para o FIM de cada dia que tiver mais de um lançamento — requisito explícito:
+   é um movimento automático do próprio banco, processado depois de tudo o mais naquele dia, nunca uma
+   ação deliberada do usuário num momento específico do dia. Usada em itensExtratoConta ANTES do cálculo
+   do saldo (nunca só na exibição, depois — bug corrigido nesta rodada: reordenar só a exibição sem
+   recalcular o saldo na mesma ordem fazia a coluna Saldo parecer errada, já que o Rende Fácil nem sempre
+   é o último da sequência cronológica real quando calculado separadamente), então esta função define a
+   própria ordem de cálculo, não só a de exibição — o saldo final do dia nunca muda com isso (soma é
+   comutativa), só os valores intermediários de cada linha. `itens` já chega ordenado cronologicamente,
+   então dias iguais formam sempre um trecho CONTÍGUO do array: percorre uma única vez, fecha cada grupo
+   de dia ao trocar de data, e dentro dele reparte em "não Rende Fácil" + "Rende Fácil" (cada bloco
+   preservando sua própria ordem relativa original — nunca uma nova ordenação por tipo/id dentro do
+   bloco). */
 function priorizarRendeFacilUltimaLinhaDoDia(itens){
   const resultado = [];
   let dataGrupoAtual = null, grupoAtual = [];
@@ -8087,30 +8098,41 @@ function itensExtratoConta(conta, ano, mes){
     .sort((a,b)=> compararDataCronologica(a.data, b.data) || ordemTipo(a,b) || (a.id||'').localeCompare(b.id||''));
   // O Saldo de cada linha é SEMPRE calculado pela sequência cronológica real (por data), nunca pela ordem
   // de EXIBIÇÃO — drag-and-drop e ordenação por clique só mudam como a lista aparece na tela, nunca o
-  // valor do saldo de cada lançamento. Por isso é calculado uma única vez aqui, sobre itensPeriodo (já na
-  // ordem cronológica), e o resultado (saldoAcumulado já atribuído a cada item) é reaproveitado tal e qual
-  // por qualquer ordem de exibição escolhida abaixo — nenhuma outra função deste app deve recalculá-lo a
-  // partir da posição visual das linhas (ver também renderExtratoContaModal, que não recalcula mais nada).
-  const comSaldoCronologico = recalcularSaldosSequenciais(itensPeriodo, s.saldoInicial, 'saldoAcumulado');
-  // Ordem de EXIBIÇÃO (de cima para baixo) — independente do saldo já calculado acima. Ordem manual
-  // (drag-and-drop, seção 8.1 do requisito): quando o usuário já reordenou este período, a ordem escolhida
-  // por ele passa a ser a própria ordem de exibição, sem tocar no saldo de nenhuma linha (aplicarOrdemManual
-  // só reordena o array). Sem ordem manual, a exibição é a ordem cronológica, com duas exceções: primeiro
-  // o(s) lançamento(s) de BB Rende Fácil de cada dia vão para o fim daquele mesmo dia (ver
-  // priorizarRendeFacilUltimaLinhaDoDia), depois o Saldo Anterior do dia 1 (ver
-  // priorizarSaldoAnteriorPrimeiraLinha) sobe para a primeira linha de toda a lista — nessa ordem, para o
-  // Saldo Anterior nunca ficar "preso" atrás de um Rende Fácil do próprio dia 1. Isso só vale enquanto a
-  // ordenação por clique do cabeçalho ('extrato') também estiver no estado original — assim que o usuário
-  // ordenar por qualquer coluna (inclusive Data), essas prioridades são desativadas e a ordenação escolhida
-  // é respeitada integralmente (ver aplicarOrdenacaoClique/renderExtratoContaModal, chamado depois deste
-  // ponto). Saldo Anterior e Rende Fácil participam normalmente de ambas — ordem manual e ordenação por
-  // clique — como qualquer outro lançamento (ver checkbox/drag habilitados em renderExtratoContaModal).
+  // valor do saldo de cada lançamento. Dentro de cada dia, o(s) lançamento(s) de BB Rende Fácil (aplicação/
+  // resgate automático — ver priorizarRendeFacilUltimaLinhaDoDia) entram nessa sequência sempre por ÚLTIMO,
+  // já para o próprio CÁLCULO (não só para a exibição): é um requisito sobre a ordem em que o banco
+  // efetivamente processa o dia (o próprio movimento automático, depois de tudo o mais), não uma preferência
+  // cosmética — bug corrigido nesta rodada em que reordenar só a exibição, sem recalcular o saldo na mesma
+  // ordem, fazia a coluna Saldo parecer errada (o valor da última linha exibida deixava de bater com "saldo
+  // da linha de cima ± valor desta linha", já que o Rende Fácil nem sempre é o último da sequência
+  // cronológica real quando calculado separadamente). O saldo final do dia nunca muda com isso (soma é
+  // comutativa) — só os valores INTERMEDIÁRIOS de cada linha daquele dia. Calculado uma única vez aqui,
+  // sobre itensPeriodo já nessa ordem, e o resultado (saldoAcumulado já atribuído a cada item) é
+  // reaproveitado tal e qual por qualquer ordem de exibição escolhida abaixo — nenhuma outra função deste
+  // app deve recalculá-lo a partir da posição visual das linhas (ver também renderExtratoContaModal, que
+  // não recalcula mais nada).
+  const itensPeriodoParaSaldo = priorizarRendeFacilUltimaLinhaDoDia(itensPeriodo);
+  const comSaldoCronologico = recalcularSaldosSequenciais(itensPeriodoParaSaldo, s.saldoInicial, 'saldoAcumulado');
+  // Ordem de EXIBIÇÃO (de cima para baixo) — já é a mesma ordem usada acima para o saldo (Rende Fácil por
+  // último no dia incluído), então a coluna Saldo sempre lê como uma sequência conectada de cima para
+  // baixo. Ordem manual (drag-and-drop, seção 8.1 do requisito): quando o usuário já reordenou este
+  // período, a ordem escolhida por ele passa a ser a própria ordem de exibição, sem tocar no saldo de
+  // nenhuma linha (aplicarOrdemManual só reordena o array) — aí sim a coluna Saldo pode legitimamente não
+  // ler como sequência conectada, já que é uma reordenação deliberada e explícita do usuário. Sem ordem
+  // manual, a exibição é a ordem de comSaldoCronologico, com uma exceção: o Saldo Anterior do dia 1 (ver
+  // priorizarSaldoAnteriorPrimeiraLinha) sobe para a primeira linha de toda a lista. Isso só vale enquanto
+  // a ordenação por clique do cabeçalho ('extrato') também estiver no estado original — assim que o
+  // usuário ordenar por qualquer coluna (inclusive Data), essa prioridade é desativada e a ordenação
+  // escolhida é respeitada integralmente (ver aplicarOrdenacaoClique/renderExtratoContaModal, chamado
+  // depois deste ponto). Saldo Anterior e Rende Fácil participam normalmente de ambas — ordem manual e
+  // ordenação por clique — como qualquer outro lançamento (ver checkbox/drag habilitados em
+  // renderExtratoContaModal).
   const temOrdemManual = itensPeriodo.some(t=>t.ordemExibicao!==undefined && t.ordemExibicao!==null);
   const itensOrdemExibicao = temOrdemManual
     ? aplicarOrdemManual(comSaldoCronologico)
     : (estadoOrdenacaoTabela('extrato').campo
         ? comSaldoCronologico // ordenação por clique ativa: aplicarOrdenacaoClique reordena por conta própria
-        : priorizarSaldoAnteriorPrimeiraLinha(priorizarRendeFacilUltimaLinhaDoDia(comSaldoCronologico), inicioISO));
+        : priorizarSaldoAnteriorPrimeiraLinha(comSaldoCronologico, inicioISO));
   const qtdPeriodo = itensPeriodo.filter(t=>!ehSaldoAnterior(t)).length;
   return {
     itens: itensOrdemExibicao,
@@ -12880,10 +12902,16 @@ function renderFaturaAtualModal(){
     const fb = fBusca.trim().toLowerCase();
     itensFiltrados = itensFiltrados.filter(t=>(t.descricao||'').toLowerCase().includes(fb));
   }
-  const totalFatFiltrado = itensFiltrados.reduce((s,t)=> s + (t.tipo==='Receita' ? -(Number(t.valor)||0) : (Number(t.valor)||0)), 0);
-  const totalParceladoFiltrado = itensFiltrados.filter(t=>t.tipo==='Despesa' && Number(t.totalParcelas)>1).reduce((s,t)=>s+(Number(t.valor)||0),0);
-  const totalAvistaFiltrado = itensFiltrados.filter(t=>t.tipo==='Despesa' && !(Number(t.totalParcelas)>1)).reduce((s,t)=>s+(Number(t.valor)||0),0);
-  const totalCreditosFiltrado = itensFiltrados.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
+  // Mesma exclusão de CATEGORIAS_FATURA já aplicada em itensFatura para os totais oficiais (o pagamento da
+  // própria fatura, quando aparece como um lançamento a mais dentro da competência — ver comentário de
+  // itensFatura —, nunca compõe o valor total/parcelado/à vista/créditos, mesmo aparecendo normalmente na
+  // tabela abaixo) — para totalFatFiltrado etc. continuarem batendo com os valores oficiais quando nenhum
+  // filtro da UI está ativo, exatamente como o comentário acima já promete.
+  const itensFiltradosQueCompoemFatura = itensFiltrados.filter(t=>!CATEGORIAS_FATURA.includes(t.categoria));
+  const totalFatFiltrado = itensFiltradosQueCompoemFatura.reduce((s,t)=> s + (t.tipo==='Receita' ? -(Number(t.valor)||0) : (Number(t.valor)||0)), 0);
+  const totalParceladoFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Despesa' && Number(t.totalParcelas)>1).reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const totalAvistaFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Despesa' && !(Number(t.totalParcelas)>1)).reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const totalCreditosFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
   const filtrosAtivos = filtrosPadraoAtivos(f, [{campo:'tipo'},{campo:'parcela'}]) || !!fBusca.trim();
   const camposFiltroFatura = [
     {campo:'tipo', label:'Tipo', options:[{value:'Receita',label:'Receita'},{value:'Despesa',label:'Despesa'}]},
