@@ -6654,6 +6654,14 @@ function txPassaFiltrosIntel(t, f){
     && passaFiltroMultiSel(f.categoria, t.categoria || '__sem_categoria__')
     && passaFiltroMultiSel(f.tipo, t.tipo);
 }
+/* Base para as opções em cascata da barra de filtros da Inteligência Financeira (ver
+   camposFiltroIntelCascata, seção "Motor de opções em CASCATA"): todos os lançamentos dentro da janela de
+   meses do período selecionado (f.periodoMeses), ANTES de aplicar conta/grupo/categoria/tipo — os mesmos
+   meses que calcInteligenciaFinanceira/calcMesIntel usam como histórico. */
+function itensIntelBase(f){
+  const mesesHist = mesesAnteriores(UI.ano, UI.mes, f.periodoMeses);
+  return STATE.transactions.filter(t=> mesesHist.some(m=>txInPeriod(t, m.ano, m.mes)));
+}
 /* Classificação de um mês respeitando EXATAMENTE as mesmas regras de calcDashboard (receita/despesa
    corrente NUNCA inclui Transação Interna entre Contas, grupo "Economias" — aportes/uso de patrimônio —
    nem pagamento/recebimento de fatura, ver CATEGORIAS_FATURA), só que filtrável por
@@ -7475,6 +7483,34 @@ function statusPagamentoFatura(conta, competencia){
    Nunca sobrescreve nem apaga nada: só ACRESCENTA o lado que faltava. Roda automaticamente ao carregar os
    arquivos .cfg/.log, depois de importar um extrato e depois de salvar manualmente um lançamento — sempre
    de forma idempotente. */
+/* Fatura(s) de cartão cuja janela de fechamento e saldo residual batem EXATAMENTE com uma despesa
+   "Pagamento de Fatura de Cartão de Crédito" (nunca por proximidade/valor aproximado) — extraído de dentro
+   de reconciliarPagamentosFatura para ser reutilizado também pela identificação automática do campo Cartão
+   no modal de edição (ver detectarCartaoPagamentoFatura), garantindo que os dois usem sempre o mesmo
+   critério de correspondência, sem duas versões podendo divergir. */
+function candidatosCartaoFaturaParaPagamento(despesa){
+  const candidatos = [];
+  STATE.cartoes.forEach(cartao=>{
+    const cfg = STATE.cardConfig[cartao];
+    if(!cfg || !cfg.fechamento) return;
+    const competenciasDoCartao = new Set(STATE.transactions.filter(t=>t.conta===cartao && t.pgto==='Cartão de Crédito' && t.competencia).map(t=>t.competencia));
+    competenciasDoCartao.forEach(competencia=>{
+      const janela = janelaPagamentoFatura(cartao, competencia);
+      if(!janela) return;
+      if(!(despesa.data && despesa.data > janela.fechIni && (!janela.fechFim || despesa.data <= janela.fechFim))) return;
+      const total = faturaPorCompetencia(cartao, competencia);
+      const pagoCartaoAtual = STATE.transactions.filter(t=>
+        t.conta===cartao && t.pgto==='Cartão de Crédito' && t.tipo==='Receita' && t.categoria==='Recebimento por Pagamento de Fatura'
+        && t.data && t.data > janela.fechIni && (!janela.fechFim || t.data <= janela.fechFim)
+      ).reduce((s,t)=>s+(Number(t.valor)||0),0);
+      const restante = total - pagoCartaoAtual;
+      if(restante > EPSILON_FATURA && Math.abs((Number(despesa.valor)||0) - restante) <= EPSILON_FATURA){
+        candidatos.push({ cartao, competencia });
+      }
+    });
+  });
+  return candidatos;
+}
 function reconciliarPagamentosFatura(){
   if(!STATE.transactions?.length || !STATE.cartoes?.length) return 0;
   let criados = 0;
@@ -7482,26 +7518,7 @@ function reconciliarPagamentosFatura(){
     t.tipo==='Despesa' && t.categoria==='Pagamento de Fatura de Cartão de Crédito'
     && !STATE.cartoes.includes(t.conta) && !t.transferenciaVinculoId);
   despesasNaoEspelhadas.forEach(despesa=>{
-    const candidatos = [];
-    STATE.cartoes.forEach(cartao=>{
-      const cfg = STATE.cardConfig[cartao];
-      if(!cfg || !cfg.fechamento) return;
-      const competenciasDoCartao = new Set(STATE.transactions.filter(t=>t.conta===cartao && t.pgto==='Cartão de Crédito' && t.competencia).map(t=>t.competencia));
-      competenciasDoCartao.forEach(competencia=>{
-        const janela = janelaPagamentoFatura(cartao, competencia);
-        if(!janela) return;
-        if(!(despesa.data && despesa.data > janela.fechIni && (!janela.fechFim || despesa.data <= janela.fechFim))) return;
-        const total = faturaPorCompetencia(cartao, competencia);
-        const pagoCartaoAtual = STATE.transactions.filter(t=>
-          t.conta===cartao && t.pgto==='Cartão de Crédito' && t.tipo==='Receita' && t.categoria==='Recebimento por Pagamento de Fatura'
-          && t.data && t.data > janela.fechIni && (!janela.fechFim || t.data <= janela.fechFim)
-        ).reduce((s,t)=>s+(Number(t.valor)||0),0);
-        const restante = total - pagoCartaoAtual;
-        if(restante > EPSILON_FATURA && Math.abs((Number(despesa.valor)||0) - restante) <= EPSILON_FATURA){
-          candidatos.push({ cartao, competencia });
-        }
-      });
-    });
+    const candidatos = candidatosCartaoFaturaParaPagamento(despesa);
     if(candidatos.length!==1) return; // sem correspondência, ou ambígua (mais de uma bateria) — não arrisca
     const { cartao, competencia } = candidatos[0];
     const vinculoId = uid();
@@ -7520,6 +7537,24 @@ function reconciliarPagamentosFatura(){
     criados++;
   });
   return criados;
+}
+/* Identificação automática do Cartão de um lançamento já classificado como "Pagamento de Fatura de Cartão
+   de Crédito" (campo Cartão do modal de edição — ver renderTxModal/camposCartaoFatura). Preferência, na
+   ordem:
+   1) Lançamento espelho já vinculado (t.transferenciaVinculoId, criado por reconciliarPagamentosFatura ou
+      por uma edição manual anterior) — a conta do espelho É o cartão, correspondência inequívoca por
+      construção, nunca recalculada por aproximação.
+   2) Sem espelho: mesmo critério de candidatosCartaoFaturaParaPagamento (valor do pagamento batendo
+      EXATAMENTE com o saldo residual de uma única fatura, dentro da janela real de fechamento dela) — só
+      devolve um cartão quando a correspondência é ÚNICA; ambígua (mais de um cartão bate) ou nenhuma
+      correspondência devolve null, para o campo ficar sem seleção e a escolha ser sempre manual. */
+function detectarCartaoPagamentoFatura(t){
+  if(t.transferenciaVinculoId){
+    const espelho = STATE.transactions.find(o=> o.id!==t.id && o.transferenciaVinculoId===t.transferenciaVinculoId);
+    if(espelho && STATE.cartoes.includes(espelho.conta)) return espelho.conta;
+  }
+  const cartoesCandidatos = [...new Set(candidatosCartaoFaturaParaPagamento(t).map(c=>c.cartao))];
+  return cartoesCandidatos.length===1 ? cartoesCandidatos[0] : null;
 }
 /* ---------- Diagnóstico e rastreabilidade (auditoria) ----------
    Reconstrói, para um cartão+competência, exatamente por que a aplicação considera (ou não) a fatura paga
@@ -8309,8 +8344,6 @@ function renderExtratoContaModal(){
   // refletir exatamente o cenário atual real da conta.
   const f = UI.extratoContaModal.filtros;
   const fBusca = UI.extratoContaModal.busca || '';
-  const gruposUsados = Array.from(new Set(det.itens.filter(t=>t.grupo).map(t=>t.grupo))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  const temSemGrupo = det.itens.some(t=>!t.grupo);
   // Data (período livre) + Grupo/Tipo (seleção múltipla, OR dentro do filtro / AND entre filtros).
   let itensFiltrados = det.itens.filter(t=> passaFiltroData(t.data, f)
     && passaFiltroMultiSel(f.grupo, t.grupo || '__sem_grupo__')
@@ -8328,10 +8361,7 @@ function renderExtratoContaModal(){
   // Filtros do mobile funcionam como em Registros (item do requisito): um único botão "Filtros" abre uma
   // folha inferior com os campos — camposFiltroExtrato/qtdAtivosExtrato hoisted para servir tanto o badge
   // do botão quanto renderBarraFiltrosPadrao, sem duplicar a lista de campos.
-  const camposFiltroExtrato = [
-    {campo:'grupo', label:'Grupo', options:[...(temSemGrupo?[{value:'__sem_grupo__',label:'Sem Grupo'}]:[]), ...gruposUsados.map(g=>({value:g,label:g}))]},
-    {campo:'tipo', label:'Tipo', options:[{value:'Receita',label:'Receita'},{value:'Despesa',label:'Despesa'}]},
-  ];
+  const camposFiltroExtrato = camposFiltroExtratoCascata(det.itens, f);
   const qtdAtivosExtrato = contarFiltrosPadraoAtivos(f, camposFiltroExtrato);
   // Uma vez definida, a ordem manual (arrastar-e-soltar) persiste indefinidamente — inclusive depois de
   // fechar e reabrir o modal — e sempre prevalece sobre a ordenação padrão por data (ver
@@ -8480,9 +8510,7 @@ function renderFuturosContaModal(){
   const efeitoFiltrado = futurosFiltrados.reduce((s,t)=> s + (t.tipo==='Receita' ? (Number(t.valor)||0) : -(Number(t.valor)||0)), 0);
   const saldoProjetadoFiltrado = saldoAtual + efeitoFiltrado;
   const filtrosAtivos = filtrosPadraoAtivos(f, [{campo:'tipo'}]) || !!fBusca.trim();
-  const camposFiltroFuturos = [
-    {campo:'tipo', label:'Tipo', options:[{value:'Receita',label:'Receita'},{value:'Despesa',label:'Despesa'}]},
-  ];
+  const camposFiltroFuturos = camposFiltroFuturosCascata(futuros, f);
   const qtdAtivosFuturos = contarFiltrosPadraoAtivos(f, camposFiltroFuturos);
   // Ver o mesmo comentário em renderExtratoContaModal — ordem manual persiste indefinidamente e prevalece
   // sobre a ordenação padrão por data.
@@ -11053,9 +11081,6 @@ function renderMapaCalorDiaModal(){
   // Grupo e Conta continuam com o mesmo motor genérico de seleção múltipla usado no resto do app.
   const f = UI.mapaCalorDiaModal.filtros;
   const fBusca = UI.mapaCalorDiaModal.busca || '';
-  const gruposUsados = Array.from(new Set(itensBase.filter(t=>t.grupo).map(t=>t.grupo))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  const temSemGrupo = itensBase.some(t=>!t.grupo);
-  const contasUsadas = Array.from(new Set(itensBase.filter(t=>t.conta).map(t=>t.conta))).sort(compararContasComContrachequePorUltimo);
   let itensFiltrados = itensBase.filter(t=> passaFiltroMultiSel(f.grupo, t.grupo || '__sem_grupo__')
     && passaFiltroMultiSel(f.conta, t.conta));
   if(fBusca.trim()){
@@ -11063,10 +11088,7 @@ function renderMapaCalorDiaModal(){
     itensFiltrados = itensFiltrados.filter(t=>(t.descricao||'').toLowerCase().includes(fb));
   }
   const totalFiltrado = itensFiltrados.reduce((s,t)=>s+(Number(t.valor)||0),0);
-  const camposFiltroMapaCalor = [
-    {campo:'grupo', label:'Grupo', options:[...(temSemGrupo?[{value:'__sem_grupo__',label:'Sem Grupo'}]:[]), ...gruposUsados.map(g=>({value:g,label:g}))]},
-    {campo:'conta', label:'Conta', options:contasUsadas.map(c=>({value:c,label:c}))},
-  ];
+  const camposFiltroMapaCalor = camposFiltroMapaCalorCascata(itensBase, f);
   const filtrosAtivos = camposFiltroMapaCalor.some(c=>f[c.campo].size>0) || !!fBusca.trim();
   const qtdAtivosMapaCalor = camposFiltroMapaCalor.filter(c=>f[c.campo].size>0).length;
   itensFiltrados = aplicarOrdenacaoClique(itensFiltrados, 'mapaCalorDia', {
@@ -11772,6 +11794,128 @@ function passaFiltroData(dataISO, f){
   return true;
 }
 function passaFiltroMultiSel(selected, valor){ return selected.size===0 || selected.has(valor); }
+/* ---------- Motor de opções em CASCATA para os filtros de seleção múltipla (Data + multi-select) ----------
+   Requisito: os filtros de uma mesma tabela/modal se comportam de forma encadeada/cumulativa — escolher
+   uma opção num filtro restringe dinamicamente as opções disponíveis nos DEMAIS filtros àquelas que
+   realmente existem dentro da interseção do que já está selecionado (nunca as opções do conjunto
+   completo, sem filtro nenhum). Um filtro nunca reduz as PRÓPRIAS opções por causa da sua própria seleção
+   — senão desmarcar uma opção já escolhida ficaria impossível — só é afetado pelos OUTROS filtros já
+   ativos (Data incluída, quando a tabela tiver esse filtro). A interseção nunca "reinicia" nem substitui
+   nenhum filtro já ativo: cada campo continua guardando sua própria seleção normalmente (ver
+   criarFiltrosPadrao/passaFiltroMultiSel) — só as OPÇÕES exibidas em cada um são recalculadas.
+
+   `itensBase`: o conjunto ORIGINAL da tabela/modal (o mesmo que alimentaria a lista filtrada antes de
+   qualquer .filter desta barra — pode já vir de um recorte fixo, como a competência ou um único dia, isso
+   não muda). `f`: o objeto de estado dos filtros (criarFiltrosPadrao). `definicoes`: um item por campo de
+   seleção múltipla desta mesma barra, {campo, valor(t)=>string} — o mesmo valor comparado por
+   passaFiltroMultiSel em cada filtro (inclusive os sentinelas tipo '__sem_grupo__', quando usados).
+   `comData` (default true): false nos poucos modais sem filtro de Data (ex.: Mapa de Calor de um único
+   dia) — aí a interseção usa só os demais campos de seleção múltipla. */
+function itensElegiveisFiltroCascata(itensBase, f, definicoes, campoIgnorado, comData){
+  return itensBase.filter(t=>{
+    if(comData!==false && !passaFiltroData(t.data, f)) return false;
+    return definicoes.every(d=> d.campo===campoIgnorado || passaFiltroMultiSel(f[d.campo], d.valor(t)));
+  });
+}
+/* Valores distintos (não vazios) de UM campo, dentre os itens já elegíveis PARA ELE (ver
+   itensElegiveisFiltroCascata acima) — a base a partir da qual cada site monta suas próprias opções
+   (rótulo, ordenação e sentinelas do tipo "Sem Grupo" continuam sendo decisão de quem chama, exatamente
+   como antes desta cascata; só a PRESENÇA de cada valor passa a ser calculada dentro da interseção). */
+function valoresCascataCampo(itensBase, f, definicoes, campo, comData){
+  const def = definicoes.find(d=>d.campo===campo);
+  const elegiveis = itensElegiveisFiltroCascata(itensBase, f, definicoes, campo, comData);
+  const vistos = new Set();
+  elegiveis.forEach(t=>{ const v = def.valor(t); if(v!==''&&v!=null) vistos.add(v); });
+  return vistos;
+}
+/* ---------- Definições de filtro em cascata de cada tabela/modal — uma função por tabela, chamada tanto
+   pelo render (alimenta renderBarraFiltrosPadrao/contarFiltrosPadraoAtivos/filtrosPadraoAtivos) quanto
+   pelo bind (alimenta bindFiltrosPadrao) — fonte ÚNICA de {campo,options}, para as opções exibidas e as
+   opções realmente "clicáveis"/usadas por "Selecionar todos" nunca poderem divergir uma da outra. Cada
+   uma preserva exatamente os mesmos sentinelas ('__sem_grupo__' etc.), rótulos e critérios de ordenação já
+   usados antes desta cascata — só a base a partir da qual cada opção é considerada "existente" muda: antes
+   era sempre `itensBase` inteiro, agora é `itensBase` restrito à interseção dos DEMAIS filtros já ativos
+   (ver valoresCascataCampo/itensElegiveisFiltroCascata acima). */
+function camposFiltroExtratoCascata(itensBase, f){
+  const defs = [ {campo:'grupo', valor:t=>t.grupo||'__sem_grupo__'}, {campo:'tipo', valor:t=>t.tipo} ];
+  const valoresGrupo = valoresCascataCampo(itensBase, f, defs, 'grupo');
+  const gruposUsados = Array.from(valoresGrupo).filter(v=>v!=='__sem_grupo__').sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const temSemGrupo = valoresGrupo.has('__sem_grupo__');
+  const valoresTipo = valoresCascataCampo(itensBase, f, defs, 'tipo');
+  return [
+    {campo:'grupo', label:'Grupo', options:[...(temSemGrupo?[{value:'__sem_grupo__',label:'Sem Grupo'}]:[]), ...gruposUsados.map(g=>({value:g,label:g}))]},
+    {campo:'tipo', label:'Tipo', options:['Receita','Despesa'].filter(tp=>valoresTipo.has(tp)).map(tp=>({value:tp,label:tp}))},
+  ];
+}
+function camposFiltroFuturosCascata(itensBase, f){
+  const defs = [ {campo:'tipo', valor:t=>t.tipo} ];
+  const valoresTipo = valoresCascataCampo(itensBase, f, defs, 'tipo');
+  return [ {campo:'tipo', label:'Tipo', options:['Receita','Despesa'].filter(tp=>valoresTipo.has(tp)).map(tp=>({value:tp,label:tp}))} ];
+}
+function camposFiltroMapaCalorCascata(itensBase, f){
+  const defs = [ {campo:'grupo', valor:t=>t.grupo||'__sem_grupo__'}, {campo:'conta', valor:t=>t.conta} ];
+  const valoresGrupo = valoresCascataCampo(itensBase, f, defs, 'grupo', false);
+  const gruposUsados = Array.from(valoresGrupo).filter(v=>v!=='__sem_grupo__').sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const temSemGrupo = valoresGrupo.has('__sem_grupo__');
+  const contasUsadas = Array.from(valoresCascataCampo(itensBase, f, defs, 'conta', false)).sort(compararContasComContrachequePorUltimo);
+  return [
+    {campo:'grupo', label:'Grupo', options:[...(temSemGrupo?[{value:'__sem_grupo__',label:'Sem Grupo'}]:[]), ...gruposUsados.map(g=>({value:g,label:g}))]},
+    {campo:'conta', label:'Conta', options:contasUsadas.map(c=>({value:c,label:c}))},
+  ];
+}
+function camposFiltroRegistrosCascata(itensBase, f){
+  const defs = [
+    {campo:'grupo', valor:t=>t.grupo||'__sem_grupo__'}, {campo:'natureza', valor:t=>t.natureza},
+    {campo:'tipo', valor:t=>t.tipo}, {campo:'conta', valor:t=>t.conta}, {campo:'fatura', valor:t=>t.competencia},
+  ];
+  const valoresGrupo = valoresCascataCampo(itensBase, f, defs, 'grupo');
+  const gruposUsados = Array.from(valoresGrupo).filter(v=>v!=='__sem_grupo__').sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const temSemGrupo = valoresGrupo.has('__sem_grupo__');
+  const valoresNatureza = valoresCascataCampo(itensBase, f, defs, 'natureza');
+  const valoresTipo = valoresCascataCampo(itensBase, f, defs, 'tipo');
+  const contasUsadas = Array.from(valoresCascataCampo(itensBase, f, defs, 'conta')).sort(compararContasComContrachequePorUltimo);
+  const faturasUsadas = Array.from(valoresCascataCampo(itensBase, f, defs, 'fatura')).sort();
+  return [
+    {campo:'grupo', label:'Grupo', options:[...(temSemGrupo?[{value:'__sem_grupo__',label:'Sem Grupo'}]:[]), ...gruposUsados.map(g=>({value:g,label:`${iconeGrupo(g)} ${g}`}))]},
+    {campo:'natureza', label:'Natureza', options:['Fixo','Variável'].filter(n=>valoresNatureza.has(n)).map(n=>({value:n,label:n}))},
+    {campo:'tipo', label:'Tipo', options:['Despesa','Receita'].filter(tp=>valoresTipo.has(tp)).map(tp=>({value:tp,label:tp}))},
+    {campo:'conta', label:'Conta', options:contasUsadas.map(c=>({value:c,label:c}))},
+    {campo:'fatura', label:'Fatura/Competência', options:faturasUsadas.map(c=>({value:c,label:competenciaLabel(c)}))},
+  ];
+}
+/* Usada tanto por Ver Fatura quanto por Ver Próximas Faturas — os dois têm exatamente os mesmos campos
+   (Tipo/Parcela), com o mesmo critério de valor em cada um. */
+function camposFiltroTipoParcelaCascata(itensBase, f){
+  const defs = [ {campo:'tipo', valor:t=>t.tipo}, {campo:'parcela', valor:t=> Number(t.totalParcelas)>1 ? 'parcelado' : 'avista'} ];
+  const valoresTipo = valoresCascataCampo(itensBase, f, defs, 'tipo');
+  const valoresParcela = valoresCascataCampo(itensBase, f, defs, 'parcela');
+  return [
+    {campo:'tipo', label:'Tipo', options:['Receita','Despesa'].filter(tp=>valoresTipo.has(tp)).map(tp=>({value:tp,label:tp}))},
+    {campo:'parcela', label:'Parcela', options:[['parcelado','Parcelado'],['avista','À vista']].filter(([v])=>valoresParcela.has(v)).map(([v,l])=>({value:v,label:l}))},
+  ];
+}
+/* Inteligência Financeira não tem barra de Data padrão (usa período/horizonte em meses — ver
+   itensIntelBase) — cascata roda só sobre os 4 campos de seleção múltipla (comData=false). Mantém
+   exatamente os mesmos rótulos/ordenação/ausência de sentinela "Sem Grupo"/"Sem Categoria" na lista de
+   opções que o código já usava antes desta cascata (ver txPassaFiltrosIntel: os sentinelas só servem para
+   o CASAMENTO de lançamentos sem grupo/categoria, nunca viram uma opção clicável). */
+function camposFiltroIntelCascata(itensBase, f){
+  const defs = [
+    {campo:'conta', valor:t=>t.conta}, {campo:'grupo', valor:t=>t.grupo||'__sem_grupo__'},
+    {campo:'categoria', valor:t=>t.categoria||'__sem_categoria__'}, {campo:'tipo', valor:t=>t.tipo},
+  ];
+  const contasUsadas = Array.from(valoresCascataCampo(itensBase, f, defs, 'conta', false)).sort(compararContasComContrachequePorUltimo);
+  const valoresGrupo = valoresCascataCampo(itensBase, f, defs, 'grupo', false);
+  const gruposUsados = todosGrupos().filter(g=>valoresGrupo.has(g));
+  const categoriasUsadas = Array.from(valoresCascataCampo(itensBase, f, defs, 'categoria', false)).filter(c=>c!=='__sem_categoria__').sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const valoresTipo = valoresCascataCampo(itensBase, f, defs, 'tipo', false);
+  return [
+    {campo:'conta', label:'Conta', options:contasUsadas.map(c=>({value:c,label:c}))},
+    {campo:'grupo', label:'Grupo', options:gruposUsados.map(g=>({value:g,label:`${iconeGrupo(g)} ${g}`}))},
+    {campo:'categoria', label:'Categoria', options:categoriasUsadas.map(c=>({value:c,label:c}))},
+    {campo:'tipo', label:'Tipo', options:['Receita','Despesa'].filter(tp=>valoresTipo.has(tp)).map(tp=>({value:tp,label:tp}))},
+  ];
+}
 function dataRangeLabel(f){
   if(!f.dataInicio && !f.dataFim) return 'Data: Todos os registros';
   const pdef = FILTRO_PRESETS_DATA.find(p=>p.id===f.dataPreset);
@@ -12369,10 +12513,6 @@ function renderRegistros(){
     conta:{tipo:'texto', valor:t=>t.conta}, fatura:{tipo:'texto', valor:t=>t.competencia}, valor:{tipo:'moeda', valor:t=>t.valor},
   });
   const todasTransacoes = STATE.transactions;
-  const contasUsadas = [...new Set(todasTransacoes.map(t=>t.conta))].filter(Boolean).sort(compararContasComContrachequePorUltimo);
-  const gruposUsados = [...new Set(todasTransacoes.map(t=>t.grupo))].filter(Boolean).sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  const faturasUsadas = [...new Set(todasTransacoes.map(t=>t.competencia))].filter(Boolean).sort();
-  const temSemGrupo = todasTransacoes.some(t=>!t.grupo);
   // Só para os cards desta tela (Receitas, Despesas e Saldo do período filtrado): transferências internas
   // entre contas e ajustes de conciliação (positivos e negativos) TAMBÉM entram na soma — ao contrário do
   // Dashboard (calcDashboard), que continua excluindo os dois normalmente, sem nenhuma mudança.
@@ -12395,13 +12535,7 @@ function renderRegistros(){
   // porque o botão "Filtros" agora mora fisicamente dentro de .reg-toolbar-acoes (junto dos outros dois),
   // não mais dentro de .filtros-mobile-toolbar; a barra de filtros (.filtros-barra) continua exatamente
   // onde estava, só sem o botão que a abre no mobile.
-  const camposFiltroReg = [
-    {campo:'grupo', label:'Grupo', options:[...(temSemGrupo?[{value:'__sem_grupo__',label:'Sem Grupo'}]:[]), ...gruposUsados.map(g=>({value:g,label:`${iconeGrupo(g)} ${g}`}))]},
-    {campo:'natureza', label:'Natureza', options:[{value:'Fixo',label:'Fixo'},{value:'Variável',label:'Variável'}]},
-    {campo:'tipo', label:'Tipo', options:[{value:'Despesa',label:'Despesa'},{value:'Receita',label:'Receita'}]},
-    {campo:'conta', label:'Conta', options:contasUsadas.map(c=>({value:c,label:c}))},
-    {campo:'fatura', label:'Fatura/Competência', options:faturasUsadas.map(c=>({value:c,label:competenciaLabel(c)}))},
-  ];
+  const camposFiltroReg = camposFiltroRegistrosCascata(todasTransacoes, f);
   const qtdAtivos = contarFiltrosPadraoAtivos(f, camposFiltroReg);
   return `
   <div class="panel">
@@ -12923,10 +13057,7 @@ function renderFaturaAtualModal(){
   const totalAvistaFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Despesa' && !(Number(t.totalParcelas)>1)).reduce((s,t)=>s+(Number(t.valor)||0),0);
   const totalCreditosFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
   const filtrosAtivos = filtrosPadraoAtivos(f, [{campo:'tipo'},{campo:'parcela'}]) || !!fBusca.trim();
-  const camposFiltroFatura = [
-    {campo:'tipo', label:'Tipo', options:[{value:'Receita',label:'Receita'},{value:'Despesa',label:'Despesa'}]},
-    {campo:'parcela', label:'Parcela', options:[{value:'parcelado',label:'Parcelado'},{value:'avista',label:'À vista'}]},
-  ];
+  const camposFiltroFatura = camposFiltroTipoParcelaCascata(det.itens, f);
   const qtdAtivosFatura = contarFiltrosPadraoAtivos(f, camposFiltroFatura);
   // Ver o mesmo comentário em renderExtratoContaModal — ordem manual persiste indefinidamente e prevalece
   // sobre a ordenação padrão por data.
@@ -13036,10 +13167,7 @@ function renderProjecaoFaturaModal(){
     itens = itens.filter(t=>(t.descricao||'').toLowerCase().includes(fb));
   }
   const filtrosAtivos = filtrosPadraoAtivos(f, [{campo:'tipo'},{campo:'parcela'}]) || !!fBusca.trim();
-  const camposFiltroProjecao = [
-    {campo:'tipo', label:'Tipo', options:[{value:'Receita',label:'Receita'},{value:'Despesa',label:'Despesa'}]},
-    {campo:'parcela', label:'Parcela', options:[{value:'parcelado',label:'Parcelado'},{value:'avista',label:'À vista'}]},
-  ];
+  const camposFiltroProjecao = camposFiltroTipoParcelaCascata(itensBase, f);
   const qtdAtivosProjecao = contarFiltrosPadraoAtivos(f, camposFiltroProjecao);
   // Ver o mesmo comentário em renderExtratoContaModal — ordem manual persiste indefinidamente e prevalece
   // sobre a ordenação padrão por data. Verificado sobre TODAS as competências (não só a selecionada), já
@@ -13458,20 +13586,13 @@ function renderInteligencia(){
   if(!UI.intelFiltros) UI.intelFiltros = intelFiltrosPadrao();
   const f = UI.intelFiltros;
   const ctx = calcInteligenciaFinanceira(f);
-  const contasOpcoes = [...STATE.contas].sort(compararContasComContrachequePorUltimo).map(c=>({value:c,label:c}));
-  const gruposOpcoes = todosGrupos().map(g=>({value:g,label:`${iconeGrupo(g)} ${g}`}));
-  const categoriasOpcoes = [...new Set(CATEGORIAS.map(c=>c[0]))].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(c=>({value:c,label:c}));
-  const tipoOpcoes = [{value:'Receita',label:'Receita'},{value:'Despesa',label:'Despesa'}];
   const CONF_COR = { Alta:'#1e8e5a', Média:'#c98a00', Baixa:'#c0392b' };
   // Item 4 do requisito: mesmo padrão de filtros global (agrupamento mobile, botão "Restaurar filtros
   // padrão" só quando há algo selecionado, chips abaixo da barra) usado em Registros e nos 4 modais de
   // lançamento — período/horizonte (selects) não entram na contagem por não serem filtros "limpáveis".
-  const camposFiltroIntel = [
-    {campo:'conta', label:'Conta', options:contasOpcoes},
-    {campo:'grupo', label:'Grupo', options:gruposOpcoes},
-    {campo:'categoria', label:'Categoria', options:categoriasOpcoes},
-    {campo:'tipo', label:'Tipo', options:tipoOpcoes},
-  ];
+  // Opções em cascata (ver camposFiltroIntelCascata): cada campo mostra só o que existe dentro da
+  // interseção dos demais já ativos, sempre dentro da janela de meses do período selecionado.
+  const camposFiltroIntel = camposFiltroIntelCascata(itensIntelBase(f), f);
   const qtdAtivosIntel = contarFiltrosPadraoAtivos(f, camposFiltroIntel);
   const filtrosAtivosIntel = filtrosPadraoAtivos(f, camposFiltroIntel);
 
@@ -13523,10 +13644,7 @@ function renderInteligencia(){
         <select id="intelHorizonte" class="mini">
           ${[3,6,12].map(n=>`<option value="${n}" ${f.horizonte===n?'selected':''}>Projeção: ${n} meses</option>`).join('')}
         </select>
-        ${renderFiltroMultiSelect(f,'Intel','conta','Conta',contasOpcoes)}
-        ${renderFiltroMultiSelect(f,'Intel','grupo','Grupo',gruposOpcoes)}
-        ${renderFiltroMultiSelect(f,'Intel','categoria','Categoria',categoriasOpcoes)}
-        ${renderFiltroMultiSelect(f,'Intel','tipo','Tipo',tipoOpcoes)}
+        ${camposFiltroIntel.map(c=>renderFiltroMultiSelect(f, 'Intel', c.campo, c.label, c.options)).join('')}
         <div class="filtros-barra-acoes-mobile"><button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileIntel">Aplicar</button></div>
       </div>
       ${UI.filtrosMobileAberto==='Intel' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropIntel"></div>` : ''}
@@ -15501,6 +15619,14 @@ function renderTxModal(){
   const categorias = categoriasDoGrupo(grupoAtual, tipoAtual);
   const subcategorias = subcategoriasDaCategoria(grupoAtual, categoriaAtual, tipoAtual);
   const isCartao = t.pgto === 'Cartão de Crédito' && STATE.cartoes.includes(t.conta);
+  // Campo Cartão (só para a categoria "Pagamento de Fatura de Cartão de Crédito" — requisito do modal de
+  // edição): identifica a QUAL cartão cadastrado este pagamento se refere, já que a categoria sozinha não
+  // diz isso (o pagamento normalmente é lançado numa conta corrente, nunca no próprio cartão). Sentinela
+  // '__cartao_nao_cadastrado__' = escolha explícita "Cartão não cadastrado" (permanece classificado como
+  // pagamento de fatura, só sem vínculo com um cartão da lista); string vazia = ainda não resolvido (só
+  // nesse caso a identificação automática roda de novo ao reabrir — ver detectarCartaoPagamentoFatura no
+  // handler de [data-edit]).
+  const ehPagamentoFaturaCartao = t.categoria === 'Pagamento de Fatura de Cartão de Crédito';
   // Fatura/Competência: campo geral, disponível na edição de QUALQUER lançamento (não só cartão de
   // crédito — ver requisito). Ao editar um lançamento já existente, respeita a competência que já está
   // salva (ex.: preenchida automaticamente na importação, ou definida manualmente antes) — só recalcula
@@ -15539,6 +15665,14 @@ function renderTxModal(){
             </div>
             <div class="tx-row">
               <div class="field"><label>Valor ${(podeParcelar && !t.id && Number(t.parcelas||1)>1) ? 'total ' : ''}(R$)</label><input type="number" step="0.01" id="fValor" value="${t.valor||''}"></div>
+              ${ehPagamentoFaturaCartao ? `
+              <div class="field"><label>Cartão</label>
+                <select id="fCartaoFatura">
+                  <option value="" ${!t.cartaoFatura?'selected':''}>— selecionar —</option>
+                  ${[...STATE.cartoes].sort(compararContasComContrachequePorUltimo).map(c=>`<option value="${escapeHtml(c)}" ${t.cartaoFatura===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
+                  <option value="__cartao_nao_cadastrado__" ${t.cartaoFatura==='__cartao_nao_cadastrado__'?'selected':''}>Cartão não cadastrado</option>
+                </select>
+              </div>` : ''}
               ${(podeParcelar && !t.id) ? `
               <div class="field"><label>Parcelas</label>
                 <select id="fParcelas">${Array.from({length:24},(_,i)=>i+1).map(n=>`<option value="${n}" ${Number(t.parcelas||1)===n?'selected':''}>${n}x${n===1?' (à vista)':''}</option>`).join('')}</select>
@@ -15834,6 +15968,29 @@ function passaFiltrosImportacao(f, r){
     && passaFiltroMultiSel(f.responsavel, r.responsavel || '__sem_responsavel__')
     && passaFiltroMultiSel(f.status, statusImportacaoLinha(r));
 }
+/* Opções em cascata da barra de filtros do passo 4 (ver "Motor de opções em CASCATA" acima) — sem filtro
+   de Data, então comData=false; itensBase é sempre UI.importParsed (as linhas desta importação, nunca o
+   catálogo geral da aplicação — já era assim antes desta cascata). Mesmos sentinelas/rótulos/ordenação
+   ("Sem X" sempre por último) já usados antes. */
+function camposFiltroImportCascata(itensBase, f){
+  const defs = [
+    {campo:'categoria', valor:r=> catInfo(r.categoria).subgrupo || '__sem_categoria__'},
+    {campo:'subcategoria', valor:r=> r.categoria || '__sem_subcategoria__'},
+    {campo:'responsavel', valor:r=> r.responsavel || '__sem_responsavel__'},
+    {campo:'status', valor:r=> statusImportacaoLinha(r)},
+  ];
+  const ordenar = (vals, semValor)=> Array.from(vals).sort((a,b)=> a===semValor?1:b===semValor?-1:a.localeCompare(b,'pt-BR'));
+  const categorias = ordenar(valoresCascataCampo(itensBase, f, defs, 'categoria', false), '__sem_categoria__');
+  const subcategorias = ordenar(valoresCascataCampo(itensBase, f, defs, 'subcategoria', false), '__sem_subcategoria__');
+  const responsaveis = ordenar(valoresCascataCampo(itensBase, f, defs, 'responsavel', false), '__sem_responsavel__');
+  const statusPresentes = Array.from(valoresCascataCampo(itensBase, f, defs, 'status', false));
+  return [
+    { campo:'categoria', label:'Categoria', options: categorias.map(v=>({value:v, label: v==='__sem_categoria__'?'Sem categoria':v})) },
+    { campo:'subcategoria', label:'Subcategoria', options: subcategorias.map(v=>({value:v, label: v==='__sem_subcategoria__'?'Sem subcategoria':v})) },
+    { campo:'responsavel', label:'Responsável', options: responsaveis.map(v=>({value:v, label: v==='__sem_responsavel__'?'Sem responsável':v})) },
+    { campo:'status', label:'Status', options: statusPresentes.map(v=>({value:v, label:STATUS_IMPORTACAO_LABEL[v]})) },
+  ];
+}
 /* Linhas da revisão (passo 4) após os filtros ativos, preservando o ÍNDICE ORIGINAL de cada uma em
    UI.importParsed — todo o resto da tela (checkboxes, inputs, exclusão, abrir o modal de categoria) já
    referencia as linhas por esse índice original (data-imp="i"), então filtrar a EXIBIÇÃO nunca pode
@@ -15848,18 +16005,10 @@ function renderImportStep3(){
   const qtdProvaveis = UI.importParsed.filter(r=>r.duplicata==='provavel').length;
   if(!UI.importFiltros) UI.importFiltros = criarFiltrosImportacaoPadrao();
   const f = UI.importFiltros;
-  // Opções de cada filtro refletem só o que está realmente presente nas linhas extraídas desta importação
-  // (mesmo critério já usado no filtro "Tipo" do histórico de Backup) — nunca o catálogo inteiro da aplicação.
-  const categoriasPresentes = Array.from(new Set(UI.importParsed.map(r=> catInfo(r.categoria).subgrupo || '__sem_categoria__'))).sort((a,b)=> a==='__sem_categoria__'?1:b==='__sem_categoria__'?-1:a.localeCompare(b,'pt-BR'));
-  const subcategoriasPresentes = Array.from(new Set(UI.importParsed.map(r=> r.categoria || '__sem_subcategoria__'))).sort((a,b)=> a==='__sem_subcategoria__'?1:b==='__sem_subcategoria__'?-1:a.localeCompare(b,'pt-BR'));
-  const responsaveisPresentes = Array.from(new Set(UI.importParsed.map(r=> r.responsavel || '__sem_responsavel__'))).sort((a,b)=> a==='__sem_responsavel__'?1:b==='__sem_responsavel__'?-1:a.localeCompare(b,'pt-BR'));
-  const statusPresentes = Array.from(new Set(UI.importParsed.map(statusImportacaoLinha)));
-  const camposFiltroImport = [
-    { campo:'categoria', label:'Categoria', options: categoriasPresentes.map(v=>({value:v, label: v==='__sem_categoria__'?'Sem categoria':v})) },
-    { campo:'subcategoria', label:'Subcategoria', options: subcategoriasPresentes.map(v=>({value:v, label: v==='__sem_subcategoria__'?'Sem subcategoria':v})) },
-    { campo:'responsavel', label:'Responsável', options: responsaveisPresentes.map(v=>({value:v, label: v==='__sem_responsavel__'?'Sem responsável':v})) },
-    { campo:'status', label:'Status', options: statusPresentes.map(v=>({value:v, label:STATUS_IMPORTACAO_LABEL[v]})) },
-  ];
+  // Opções em cascata (ver camposFiltroImportCascata): cada campo mostra só o que existe dentro da
+  // interseção dos demais já ativos, dentre as linhas extraídas desta importação — nunca o catálogo
+  // inteiro da aplicação.
+  const camposFiltroImport = camposFiltroImportCascata(UI.importParsed, f);
   const qtdAtivosImport = contarFiltrosPadraoAtivos(f, camposFiltroImport);
   const linhas = linhasImportFiltradas();
   return `
@@ -17308,16 +17457,8 @@ function bindEvents(){
   // um filtro (Data ou um dos multi-selects) fica aberto por vez. `resetPagina` volta para a página 1
   // sempre que a seleção efetivamente muda a lista (não ao só abrir/fechar um painel).
   {
-    const contasUsadasReg = [...new Set(STATE.transactions.map(t=>t.conta))].filter(Boolean);
-    const gruposUsadosReg = [...new Set(STATE.transactions.map(t=>t.grupo))].filter(Boolean);
-    const faturasUsadasReg = [...new Set(STATE.transactions.map(t=>t.competencia))].filter(Boolean);
-    bindFiltrosPadrao(UI.regFiltros, 'Reg', [
-      {campo:'grupo', options:[{value:'__sem_grupo__'}, ...gruposUsadosReg.map(g=>({value:g}))]},
-      {campo:'natureza', options:[{value:'Fixo'},{value:'Variável'}]},
-      {campo:'tipo', options:[{value:'Despesa'},{value:'Receita'}]},
-      {campo:'conta', options:contasUsadasReg.map(c=>({value:c}))},
-      {campo:'fatura', options:faturasUsadasReg.map(c=>({value:c}))},
-    ], resetPagina=>{ if(resetPagina) UI.regPagina = 1; render(); });
+    bindFiltrosPadrao(UI.regFiltros, 'Reg', camposFiltroRegistrosCascata(STATE.transactions, UI.regFiltros),
+      resetPagina=>{ if(resetPagina) UI.regPagina = 1; render(); });
     bindChipsFiltrosAtivos(UI.regFiltros, 'Reg', ()=>{ UI.regPagina = 1; render(); });
   }
   // Rodapé de paginação: trocar a quantidade por página recalcula tudo e volta para a 1ª página (evita
@@ -17329,13 +17470,9 @@ function bindEvents(){
   // calcInteligenciaFinanceira já é barato o suficiente para rodar a cada interação nesta escala de dados.
   if(UI.tab==='inteligencia' && UI.intelFiltros){
     const f = UI.intelFiltros;
-    ['conta','grupo','categoria','tipo'].forEach(campo=>{
-      const opcoes = campo==='conta' ? [...STATE.contas].map(c=>({value:c}))
-        : campo==='grupo' ? todosGrupos().map(g=>({value:g}))
-        : campo==='categoria' ? [...new Set(CATEGORIAS.map(c=>c[0]))].map(c=>({value:c}))
-        : [{value:'Receita'},{value:'Despesa'}];
-      bindFiltroMultiSelect(f, 'Intel', campo, opcoes, ()=>render());
-    });
+    // Opções em cascata (ver camposFiltroIntelCascata) — mesma fonte única usada em renderInteligencia,
+    // para nunca divergir do que está desenhado na barra.
+    camposFiltroIntelCascata(itensIntelBase(f), f).forEach(c=> bindFiltroMultiSelect(f, 'Intel', c.campo, c.options, ()=>render()));
     document.getElementById('intelPeriodoMeses')?.addEventListener('change', e=>{ f.periodoMeses = Number(e.target.value); render(); });
     document.getElementById('intelHorizonte')?.addEventListener('change', e=>{ f.horizonte = Number(e.target.value); render(); });
     document.getElementById('btnRestaurarFiltrosIntel')?.addEventListener('click', ()=>{ UI.intelFiltros = intelFiltrosPadrao(); render(); });
@@ -17499,6 +17636,14 @@ function bindEvents(){
       const espelho = STATE.transactions.find(t=>t.id!==tx.id && t.transferenciaVinculoId===tx.transferenciaVinculoId);
       if(espelho) tx.contaTransferencia = espelho.conta;
     }
+    // Campo Cartão (só para "Pagamento de Fatura de Cartão de Crédito" — ver renderTxModal): se o
+    // lançamento já tem um cartão associado (inclusive a escolha explícita "Cartão não cadastrado"),
+    // preserva tal e qual — nunca roda uma nova tentativa de identificação automática por cima do que o
+    // usuário (ou uma reconciliação anterior) já definiu. Só tenta identificar quando o campo ainda está
+    // vazio (nunca resolvido antes).
+    if(tx.categoria==='Pagamento de Fatura de Cartão de Crédito' && !tx.cartaoFatura){
+      tx.cartaoFatura = detectarCartaoPagamentoFatura(tx) || '';
+    }
     UI.editingTx = tx; render();
   }));
   document.querySelectorAll('[data-duplicar]').forEach(b=> b.addEventListener('click', ()=>{
@@ -17629,10 +17774,10 @@ function bindEvents(){
   // Filtros da Projeção (Data por período + seleção múltipla de Tipo/Parcela), mesmo motor genérico da
   // aba Registros — ver bindFiltrosPadrao.
   if(UI.projecaoFaturaModal){
-    bindFiltrosPadrao(UI.projecaoFaturaModal.filtros, 'Projecao', [
-      {campo:'tipo', options:[{value:'Receita'},{value:'Despesa'}]},
-      {campo:'parcela', options:[{value:'parcelado'},{value:'avista'}]},
-    ], resetPagina=>{ if(resetPagina) UI.projecaoFaturaModal.pagina = 1; render(); });
+    const selecionadaProjecaoAtual = UI.projecaoFaturaModal.competenciaSelecionada || null;
+    const itensProjecaoAtual = itensFaturasFuturas(UI.projecaoFaturaModal.conta).filter(t=> !selecionadaProjecaoAtual || t.competencia===selecionadaProjecaoAtual);
+    bindFiltrosPadrao(UI.projecaoFaturaModal.filtros, 'Projecao', camposFiltroTipoParcelaCascata(itensProjecaoAtual, UI.projecaoFaturaModal.filtros),
+      resetPagina=>{ if(resetPagina) UI.projecaoFaturaModal.pagina = 1; render(); });
     bindChipsFiltrosAtivos(UI.projecaoFaturaModal.filtros, 'Projecao', ()=>{ UI.projecaoFaturaModal.pagina = 1; render(); });
     bindSelecaoLote('Projecao', UI.projecaoFaturaModal.selecionados, ()=>render());
   }
@@ -17677,10 +17822,9 @@ function bindEvents(){
   // Filtros da Fatura (Data por período + seleção múltipla de Tipo/Parcela), mesmo motor genérico da aba
   // Registros — ver bindFiltrosPadrao.
   if(UI.faturaAtualModal){
-    bindFiltrosPadrao(UI.faturaAtualModal.filtros, 'Fatura', [
-      {campo:'tipo', options:[{value:'Receita'},{value:'Despesa'}]},
-      {campo:'parcela', options:[{value:'parcelado'},{value:'avista'}]},
-    ], resetPagina=>{ if(resetPagina) UI.faturaAtualModal.pagina = 1; render(); }, limitesCompetenciaISO(chaveMes(UI.ano, UI.mes)));
+    const itensFaturaAtual = itensFatura(UI.faturaAtualModal.conta, chaveMes(UI.ano, UI.mes)).itens;
+    bindFiltrosPadrao(UI.faturaAtualModal.filtros, 'Fatura', camposFiltroTipoParcelaCascata(itensFaturaAtual, UI.faturaAtualModal.filtros),
+      resetPagina=>{ if(resetPagina) UI.faturaAtualModal.pagina = 1; render(); }, limitesCompetenciaISO(chaveMes(UI.ano, UI.mes)));
     bindChipsFiltrosAtivos(UI.faturaAtualModal.filtros, 'Fatura', ()=>{ UI.faturaAtualModal.pagina = 1; render(); });
     bindSelecaoLote('Fatura', UI.faturaAtualModal.selecionados, ()=>render());
   }
@@ -17726,11 +17870,8 @@ function bindEvents(){
   // Registros — ver bindFiltrosPadrao.
   if(UI.extratoContaModal){
     const itensExtratoAtual = itensExtratoConta(UI.extratoContaModal.conta, UI.ano, UI.mes).itens;
-    const gruposExtratoAtual = [...new Set(itensExtratoAtual.filter(t=>t.grupo).map(t=>t.grupo))];
-    bindFiltrosPadrao(UI.extratoContaModal.filtros, 'Extrato', [
-      {campo:'grupo', options:[{value:'__sem_grupo__'}, ...gruposExtratoAtual.map(g=>({value:g}))]},
-      {campo:'tipo', options:[{value:'Receita'},{value:'Despesa'}]},
-    ], resetPagina=>{ if(resetPagina) UI.extratoContaModal.pagina = 1; render(); }, limitesCompetenciaISO(chaveMes(UI.ano, UI.mes)));
+    bindFiltrosPadrao(UI.extratoContaModal.filtros, 'Extrato', camposFiltroExtratoCascata(itensExtratoAtual, UI.extratoContaModal.filtros),
+      resetPagina=>{ if(resetPagina) UI.extratoContaModal.pagina = 1; render(); }, limitesCompetenciaISO(chaveMes(UI.ano, UI.mes)));
     bindChipsFiltrosAtivos(UI.extratoContaModal.filtros, 'Extrato', ()=>{ UI.extratoContaModal.pagina = 1; render(); });
     bindSelecaoLote('Extrato', UI.extratoContaModal.selecionados, ()=>render());
   }
@@ -17814,9 +17955,9 @@ function bindEvents(){
   // Filtros de Lançamentos futuros (Data por período + seleção múltipla de Tipo), mesmo motor genérico da
   // aba Registros — ver bindFiltrosPadrao.
   if(UI.futurosContaModal){
-    bindFiltrosPadrao(UI.futurosContaModal.filtros, 'Futuros', [
-      {campo:'tipo', options:[{value:'Receita'},{value:'Despesa'}]},
-    ], resetPagina=>{ if(resetPagina) UI.futurosContaModal.pagina = 1; render(); });
+    const futurosAtual = lancamentosFuturosConta(UI.futurosContaModal.conta);
+    bindFiltrosPadrao(UI.futurosContaModal.filtros, 'Futuros', camposFiltroFuturosCascata(futurosAtual, UI.futurosContaModal.filtros),
+      resetPagina=>{ if(resetPagina) UI.futurosContaModal.pagina = 1; render(); });
     bindChipsFiltrosAtivos(UI.futurosContaModal.filtros, 'Futuros', ()=>{ UI.futurosContaModal.pagina = 1; render(); });
     bindSelecaoLote('Futuros', UI.futurosContaModal.selecionados, ()=>render());
   }
@@ -17872,12 +18013,7 @@ function bindEvents(){
     const { ano:mcAno, mes:mcMes, dia:mcDia } = UI.mapaCalorDiaModal;
     const mcDataISO = `${mcAno}-${pad2(mcMes)}-${pad2(mcDia)}`;
     const itensMapaCalorAtual = STATE.transactions.filter(t=> ehDespesaOrcamento(t) && dataEfetivaMapaCalorDespesa(t)===mcDataISO);
-    const gruposMapaCalorAtual = [...new Set(itensMapaCalorAtual.filter(t=>t.grupo).map(t=>t.grupo))];
-    const contasMapaCalorAtual = [...new Set(itensMapaCalorAtual.filter(t=>t.conta).map(t=>t.conta))];
-    const camposFiltroMapaCalorBind = [
-      {campo:'grupo', options:[{value:'__sem_grupo__'}, ...gruposMapaCalorAtual.map(g=>({value:g}))]},
-      {campo:'conta', options:contasMapaCalorAtual.map(c=>({value:c}))},
-    ];
+    const camposFiltroMapaCalorBind = camposFiltroMapaCalorCascata(itensMapaCalorAtual, UI.mapaCalorDiaModal.filtros);
     camposFiltroMapaCalorBind.forEach(c=> bindFiltroMultiSelect(UI.mapaCalorDiaModal.filtros, 'MapaCalor', c.campo, c.options, resetPagina=>{ if(resetPagina) UI.mapaCalorDiaModal.pagina = 1; render(); }));
     bindChipsFiltrosAtivos(UI.mapaCalorDiaModal.filtros, 'MapaCalor', ()=>{ UI.mapaCalorDiaModal.pagina = 1; render(); });
     bindSelecaoLote('MapaCalor', UI.mapaCalorDiaModal.selecionados, ()=>render());
@@ -19181,6 +19317,7 @@ function bindEvents(){
     if(g('fConta')) UI.editingTx.conta = g('fConta').value;
     if(g('fPgto')) UI.editingTx.pgto = g('fPgto').value;
     if(g('fSubcategoriaSel')) UI.editingTx.categoria = g('fSubcategoriaSel').value;
+    if(g('fCartaoFatura')) UI.editingTx.cartaoFatura = g('fCartaoFatura').value;
     if(g('fParcelas')) UI.editingTx.parcelas = Number(g('fParcelas').value);
     if(g('fParcelaAtual')) UI.editingTx.parcelaAtual = g('fParcelaAtual').value ? Number(g('fParcelaAtual').value) : null;
     if(g('fTotalParcelas')) UI.editingTx.totalParcelas = g('fTotalParcelas').value ? Number(g('fTotalParcelas').value) : null;
@@ -19194,6 +19331,7 @@ function bindEvents(){
     UI.editingTx._grupo = gruposComTipo('Despesa')[0];
     UI.editingTx._categoria = categoriasDoGrupo(UI.editingTx._grupo,'Despesa')[0];
     UI.editingTx.categoria = '';
+    UI.editingTx.cartaoFatura = ''; // classificação mudou — o vínculo com o cartão só faz sentido para "Pagamento de Fatura de Cartão de Crédito"
     render();
   });
   document.getElementById('btnTipoReceita')?.addEventListener('click', ()=>{
@@ -19201,6 +19339,7 @@ function bindEvents(){
     UI.editingTx._grupo = gruposComTipo('Receita')[0];
     UI.editingTx._categoria = categoriasDoGrupo(UI.editingTx._grupo,'Receita')[0];
     UI.editingTx.categoria = '';
+    UI.editingTx.cartaoFatura = ''; // classificação mudou — o vínculo com o cartão só faz sentido para "Pagamento de Fatura de Cartão de Crédito"
     UI.editingTx.pgto = 'Débito em Conta';
     render();
   });
@@ -19210,18 +19349,26 @@ function bindEvents(){
     UI.editingTx._grupo = e.target.value;
     UI.editingTx._categoria = categoriasDoGrupo(UI.editingTx._grupo, tipoAtual)[0] || '';
     UI.editingTx.categoria = '';
+    UI.editingTx.cartaoFatura = ''; // classificação mudou — o vínculo com o cartão só faz sentido para "Pagamento de Fatura de Cartão de Crédito"
     render();
   });
   document.getElementById('fCategoriaSel')?.addEventListener('change', e=>{
     syncTxForm();
     UI.editingTx._categoria = e.target.value;
     UI.editingTx.categoria = '';
+    UI.editingTx.cartaoFatura = ''; // classificação mudou — o vínculo com o cartão só faz sentido para "Pagamento de Fatura de Cartão de Crédito"
     render();
   });
   document.getElementById('fSubcategoriaSel')?.addEventListener('change', ()=>{
     syncTxForm();
     const predefinido = responsavelPredefinidoDaSubcategoria(UI.editingTx.categoria);
     if(predefinido) UI.editingTx.responsavel = predefinido;
+    // Trocou para outra classificação que não "Pagamento de Fatura de Cartão de Crédito": o vínculo com o
+    // cartão deixa de fazer sentido, então é removido (requisito: "Caso o tipo seja alterado... o vínculo
+    // com o cartão deve ser removido"). Trocar PARA essa classificação, ao vivo dentro do modal, deixa o
+    // campo sem seleção para escolha manual — a identificação automática roda só ao ABRIR a edição de um
+    // lançamento já salvo (ver handler de [data-edit]).
+    if(UI.editingTx.categoria!=='Pagamento de Fatura de Cartão de Crédito') UI.editingTx.cartaoFatura = '';
     render();
   });
   document.getElementById('fData')?.addEventListener('change', ()=>{ syncTxForm(); render(); });
@@ -19272,6 +19419,7 @@ function bindEvents(){
     atualizarBotaoSalvar();
   });
   document.getElementById('fContaTransferencia')?.addEventListener('change', e=>{ UI.editingTx.contaTransferencia = e.target.value; });
+  document.getElementById('fCartaoFatura')?.addEventListener('change', e=>{ UI.editingTx.cartaoFatura = e.target.value; });
   /* Botão Salvar fica desabilitado até os campos obrigatórios estarem preenchidos. As checagens leem o
      DOM diretamente e não chamam render(), para não recriar os campos de texto enquanto o usuário digita
      (o que faria o cursor voltar ao início a cada tecla). */
@@ -19346,7 +19494,8 @@ function bindEvents(){
         valor: valorParcela, categoria, grupo:info.grupo, subgrupo:info.subgrupo, tipo:info.tipo, natureza:info.natureza,
         conta, pgto, competencia: ehCartaoDespesaParcela ? competenciaFatura(dataV, conta) : '',
         parcelaAtual: 1, totalParcelas: parcelas, parcelamentoId, responsavel: UI.editingTx.responsavel||'', entreFamilia: !!UI.editingTx.entreFamilia,
-        internacional: internacionalFinal, taxaConversao: internacionalFinal ? taxaConversaoFinal : null
+        internacional: internacionalFinal, taxaConversao: internacionalFinal ? taxaConversaoFinal : null,
+        cartaoFatura: categoria==='Pagamento de Fatura de Cartão de Crédito' ? (UI.editingTx.cartaoFatura||'') : ''
       };
       STATE.transactions.push(primeira);
       sincronizarParcelasFuturas(primeira);
@@ -19398,7 +19547,12 @@ function bindEvents(){
         responsavel: info.grupo==='Renda Familiar' ? (UI.editingTx.responsavel||'') : '',
         entreFamilia: !!UI.editingTx.entreFamilia,
         transferenciaInterna: !!UI.editingTx.transferenciaInterna, transferenciaVinculoId: UI.editingTx.transferenciaVinculoId||'',
-        internacional: internacionalFinal, taxaConversao: internacionalFinal ? taxaConversaoFinal : null
+        internacional: internacionalFinal, taxaConversao: internacionalFinal ? taxaConversaoFinal : null,
+        // Cartão (só quando a subcategoria salva é "Pagamento de Fatura de Cartão de Crédito" — requisito:
+        // "Para os demais tipos de lançamento, o campo Cartão deve permanecer oculto ou desabilitado...
+        // o vínculo com o cartão deve ser removido"). Preserva a escolha do usuário tal e qual, inclusive
+        // "__cartao_nao_cadastrado__"; string vazia = ainda não identificado.
+        cartaoFatura: (!UI.editingTx.transferenciaInterna && categoria==='Pagamento de Fatura de Cartão de Crédito') ? (UI.editingTx.cartaoFatura||'') : ''
       };
       // Lançamento existente que faz parte de uma compra parcelada: antes de salvar, pergunta ao usuário
       // se a alteração deve valer só para esta parcela, também para as futuras (comportamento padrão de
@@ -19526,16 +19680,10 @@ function bindEvents(){
   // paralelo. Só ligado quando o passo 4 está de fato na tela.
   if(UI.importStep===4 && UI.importFiltros){
     const fImport = UI.importFiltros;
-    // Mesmas opções "presentes nos dados" calculadas em renderImportStep3() — precisam bater exatamente
-    // (usadas aqui só pelo "Selecionar todos" de cada filtro, ver bindFiltroMultiSelect).
-    const opcoesImport = {
-      categoria: Array.from(new Set(UI.importParsed.map(r=> catInfo(r.categoria).subgrupo || '__sem_categoria__'))).map(v=>({value:v})),
-      subcategoria: Array.from(new Set(UI.importParsed.map(r=> r.categoria || '__sem_subcategoria__'))).map(v=>({value:v})),
-      responsavel: Array.from(new Set(UI.importParsed.map(r=> r.responsavel || '__sem_responsavel__'))).map(v=>({value:v})),
-      status: Array.from(new Set(UI.importParsed.map(statusImportacaoLinha))).map(v=>({value:v})),
-    };
-    ['categoria','subcategoria','responsavel','status'].forEach(campo=>
-      bindFiltroMultiSelect(fImport, 'Import', campo, opcoesImport[campo], ()=> render()));
+    // Opções em cascata (ver camposFiltroImportCascata) — mesma fonte única usada em renderImportStep3,
+    // para nunca divergir do que está desenhado na barra.
+    camposFiltroImportCascata(UI.importParsed, fImport).forEach(c=>
+      bindFiltroMultiSelect(fImport, 'Import', c.campo, c.options, ()=> render()));
     bindChipsFiltrosAtivos(fImport, 'Import', ()=> render());
     bindFiltrosMobileToggle('Import');
     document.getElementById('btnLimparFiltrosImport')?.addEventListener('click', ()=>{ UI.importFiltros = criarFiltrosImportacaoPadrao(); render(); });
