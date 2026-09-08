@@ -807,55 +807,43 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 
 table{width:100%;border-collapse:collapse;font-size:11px;}
 /* =====================================================================================
-   DOCUMENTAÇÃO — Largura das colunas da tabela do Fluxo de Caixa (Dia/Descrição/Tipo/Valor/Saldo)
+   DOCUMENTAÇÃO — Largura das colunas da tabela do Fluxo de Caixa (Dia/Descrição/Tipo/Valor/Saldo/Ações)
    =====================================================================================
    Este é um app de arquivo único: não há arquivos .css/.html separados — tudo (HTML, CSS e JS) vive
-   neste mesmo index.html. Os dois pontos que juntos definem a largura de cada coluna são:
-
-   1) CSS (aqui, classe .tabela-fluxo, linhas abaixo): define o ESPAÇAMENTO INTERNO de cada célula
-      (padding) e o comportamento de quebra de texto da coluna Descrição (2ª coluna). NÃO define a
-      largura de cada coluna em si — isso é calculado dinamicamente em JavaScript (ver item 2).
-
-   2) JavaScript — função renderPainelProjecao() (busque por esse nome na área de código desta página): é
-      onde a largura de CADA coluna é efetivamente calculada e escrita como "width:XX%;" inline no
-      <th> de cada coluna, toda vez que o painel é desenhado. A lógica:
-        a) cada coluna recebe um "peso" em unidades de caractere (ch): Dia=5, Tipo=14 (fixos); Ações
-           também é fixo, mas com DOIS valores possíveis — 7 quando nenhuma linha do painel está
-           conciliada (2 ícones: ✏️/🗑️) ou 11 quando pelo menos uma linha já está (3 ícones: 🔓/✏️/🗑️,
-           ver seloConciliacaoProjecao/renderLinhaProjecao) — o 🔓 de "desfazer conciliação" só aparece
-           nesse caso, então a coluna só precisa ficar mais larga quando ele realmente existe, evitando
-           desperdiçar espaço enquanto nenhuma linha do mês foi conciliada ainda;
-           Valor e Saldo são calculados a partir do maior valor monetário realmente exibido naquele
-           mês (fmtBRL(...).length + 1.5 de folga) — por isso currency alta não quebra linha nem corta;
-           Descrição recebe 30% da soma das outras colunas (nem domina a tabela, nem fica curta demais),
-           com um mínimo de 20ch para nunca ficar espremida quando as demais colunas são todas estreitas.
-        b) todos os pesos são somados (chTotal) e cada coluna vira uma PORCENTAGEM desse total
-           (pct = ch/chTotal*100) — a soma das 6 colunas é sempre exatamente 100%, o que é o que
-           evita a rolagem horizontal (table-layout:fixed misturando % com ch/px podia somar mais que
-           100% e vazar para fora do painel — por isso o cálculo é feito só em % desde o início). Como
-           Ações também entra nessa mesma soma antes de virar %, aumentá-la (quando há 🔓) nunca faz a
-           tabela ultrapassar 100% nem precisar de overflow-x — só redistribui um pouco as demais.
-        c) essas porcentagens são escritas em cada <th style="width:XX%"> no HTML gerado.
-
-   PARA ALTERAR A LARGURA DE UMA COLUNA:
-      Vá até renderPainelProjecao() e ajuste as constantes chDia / chTipo, os dois valores possíveis de
-      chAcoes (sem/com 🔓 — variável temLinhaConciliada decide qual usar), ou o multiplicador 0.30 usado em
-      chDescricao (quanto maior, mais espaço a Descrição ocupa relativo às demais). Não é necessário tocar
-      neste bloco de CSS para isso — as classes abaixo só cuidam de espaçamento (padding) e quebra de texto,
-      não de largura. Qualquer alteração nos pesos continua garantindo soma=100% automaticamente (o cálculo
-      percentual é sempre relativo ao total).
+   neste mesmo index.html. Requisito explícito: proporção FIXA (não mais calculada dinamicamente a partir
+   do maior valor/saldo exibido no mês, como antes desta mudança) — sempre a mesma em toda tabela do Fluxo
+   de Caixa, em toda competência, com ou sem ícones extras (cadeado 🔓) na coluna Ações:
+        Dia        6,5%
+        Descrição  30,20%
+        Tipo       13%
+        Valor      17%
+        Saldo      19%
+        Ações      14,30%
+        Total      100%
+   Definida como constante LARGURAS_COLUNAS_FLUXO logo acima de renderPainelProjecao() (busque por esse
+   nome) e escrita em cada <th style="width:XX%"> — thead e tbody usam a mesma <table style="table-layout:
+   fixed"> e portanto herdam automaticamente a mesma largura por coluna, sem precisar repetir a proporção
+   em cada <td>. A coluna Ações nunca cresce por causa de mais ícones/cadeado: o espaçamento (gap/padding)
+   dos controles é que se ajusta para caber nos 14,30% (ver .tabela-fluxo td.tabela-fluxo-acoes abaixo),
+   nunca o contrário — isso é o que elimina a rolagem horizontal (table-layout:fixed com a soma das
+   colunas sempre exatamente 100% nunca "vaza" para fora do painel).
+   PARA ALTERAR A LARGURA DE UMA COLUNA: ajuste LARGURAS_COLUNAS_FLUXO (a soma deve continuar somando
+   100). Não é necessário tocar neste bloco de CSS para isso — as classes abaixo só cuidam de espaçamento
+   (padding) e quebra de texto, não de largura.
    ===================================================================================== */
 .tabela-fluxo{min-width:520px;}
 .tabela-fluxo td{padding:5px 8px;font-size:11.5px;}
 .tabela-fluxo th{padding:6px 8px;}
 .tabela-fluxo td:nth-child(2){overflow-wrap:break-word;word-break:break-word;}
-.tabela-fluxo .icon-btn{padding:2px;font-size:12px;}
+.tabela-fluxo .icon-btn{padding:1px;font-size:12px;}
 /* Coluna Ações (desktop): botões sempre alinhados à direita, espaçamento uniforme entre eles e nunca em
    mais de uma linha — display:flex resolve os três de uma vez (flex-wrap:nowrap é redundante com
    white-space:nowrap do <td>, mas documenta a intenção mesmo se o white-space inline for removido no
-   futuro). A largura da própria coluna já é calculada à parte (ver renderPainelProjecao/chAcoes) para
-   sempre caber os 3 ícones (inclusive o 🔓 pós-conciliação) sem estourar a tabela. */
-.tabela-fluxo td.tabela-fluxo-acoes{display:flex;justify-content:flex-end;align-items:center;gap:4px;flex-wrap:nowrap;}
+   futuro). A largura da própria coluna é sempre 14,30% fixos (ver LARGURAS_COLUNAS_FLUXO) — nunca cresce
+   por causa de mais ícones/cadeado; é o espaçamento interno (gap reduzido, padding horizontal próprio,
+   mais estreito que o das demais colunas) que se ajusta para os 3 ícones (inclusive o 🔓 pós-conciliação)
+   sempre caberem sem quebra de linha nem overflow-x. */
+.tabela-fluxo td.tabela-fluxo-acoes{display:flex;justify-content:flex-end;align-items:center;gap:2px;flex-wrap:nowrap;padding-left:2px;padding-right:4px;}
 /* Selo de status de conciliação (ver seloConciliacaoProjecao): só o ícone, sem badge/fundo/borda — o
    significado fica só no tooltip (title) e no aria-label, nunca em texto visível na tabela. */
 .selo-conciliacao{display:inline-block;font-size:12px;cursor:default;line-height:1;vertical-align:middle;}
@@ -9380,29 +9368,74 @@ function idsJaVinculadosOutrasCompetencias(item, competenciaAtual){
   Object.keys(item.vinculosExtrato).forEach(c=>{ if(c!==competenciaAtual) ids.push(...vinculosDaCompetencia(item, c)); });
   return new Set(ids);
 }
+/* IDs de lançamentos reais do Extrato já vinculados a QUALQUER OUTRO item de STATE.projecoes (em
+   qualquer competência dele) — requisito 10 desta rodada: "um registro do Extrato já vinculado a
+   determinado lançamento do Fluxo de Caixa não deve ser utilizado simultaneamente para outro lançamento,
+   salvo se existir uma regra explícita de compartilhamento" — não existe, nesta versão, nenhuma regra de
+   compartilhamento, então a exclusão é sempre incondicional. Usada tanto pela conciliação automática
+   quanto pelo modal manual (candidatosConciliacaoProjecao/candidatosConciliacaoModal), para nunca listar
+   nem vincular sozinha um registro que já pertence à realização de outro previsto. */
+function idsVinculadosAOutrosLancamentos(itemAtual){
+  const ids = [];
+  STATE.projecoes.forEach(p=>{
+    if(p.id===itemAtual.id || !p.vinculosExtrato) return;
+    Object.keys(p.vinculosExtrato).forEach(c=> ids.push(...vinculosDaCompetencia(p, c)));
+  });
+  return new Set(ids);
+}
 /* Candidatos plausíveis (pontuação >= LIMIAR_CONCILIACAO) para conciliar este item nesta competência,
    excluindo os já descartados manualmente (item.candidatosIgnorados[competencia] — ver
    renderConciliarProjecaoModal), os já vinculados a este mesmo item em outra competência (ver
-   idsJaVinculadosOutrasCompetencias) e os já vinculados a ele NESTA MESMA competência (vinculosDaCompetencia
+   idsJaVinculadosOutrasCompetencias), os já vinculados a ele NESTA MESMA competência (vinculosDaCompetencia
    — um registro já conciliado não deve aparecer de novo na lista de "restantes" a escolher, mesmo que o
-   previsto aceite outros registros adicionais), do melhor para o pior. Itens de cartão nunca usam esta
-   conciliação (o valor da fatura já vem de faturaPorCompetencia, uma fonte própria e exata). O previsto
-   "Contracheque TRT" também nunca usa esta conciliação — voltou a ser uma exceção (ver
-   calcProjecoesMes/statusConciliacaoProjecao): sua data/valor vêm exclusivamente de existir ou não um
-   contracheque importado na competência (contrachequeCompetenciaImportada/dataCreditoContracheque/
-   resumoContrachequeCompetencia), nunca de um vínculo com o Extrato — mesmo o lançamento "Recebimento de
-   Proventos..." não deve ser usado para determinar esse valor (requisito explícito: não depender da
-   conciliação com o Extrato). */
+   previsto aceite outros registros adicionais) e os já vinculados a QUALQUER OUTRO lançamento previsto
+   (idsVinculadosAOutrosLancamentos — requisito 10/11: nunca duplicar o uso do mesmo registro real), do
+   melhor para o pior. Itens de cartão nunca usam esta conciliação (o valor da fatura já vem de
+   faturaPorCompetencia, uma fonte própria e exata). O previsto "Contracheque TRT" também nunca usa esta
+   conciliação — voltou a ser uma exceção (ver calcProjecoesMes/statusConciliacaoProjecao): sua data/valor
+   vêm exclusivamente de existir ou não um contracheque importado na competência
+   (contrachequeCompetenciaImportada/dataCreditoContracheque/resumoContrachequeCompetencia), nunca de um
+   vínculo com o Extrato — mesmo o lançamento "Recebimento de Proventos..." não deve ser usado para
+   determinar esse valor (requisito explícito: não depender da conciliação com o Extrato). */
 function candidatosConciliacaoProjecao(item, competencia){
   if(item.cartao || normalizarTexto(item.descricao)==='contrachequetrt') return [];
   const ignorados = new Set((item.candidatosIgnorados && item.candidatosIgnorados[competencia]) || []);
   const jaVinculadosOutraCompetencia = idsJaVinculadosOutrasCompetencias(item, competencia);
   const jaVinculadosMesmaCompetencia = new Set(vinculosDaCompetencia(item, competencia));
+  const jaVinculadosOutroLancamento = idsVinculadosAOutrosLancamentos(item);
   return STATE.transactions
-    .filter(t=>!ignorados.has(t.id) && !jaVinculadosOutraCompetencia.has(t.id) && !jaVinculadosMesmaCompetencia.has(t.id))
+    .filter(t=>!ignorados.has(t.id) && !jaVinculadosOutraCompetencia.has(t.id) && !jaVinculadosMesmaCompetencia.has(t.id) && !jaVinculadosOutroLancamento.has(t.id))
     .map(t=>({ t, pontos: pontuarCandidatoConciliacao(item, t, competencia) }))
     .filter(x=>x.pontos>=LIMIAR_CONCILIACAO)
     .sort((a,b)=>b.pontos-a.pontos);
+}
+/* Candidatos apresentados no MODAL de conciliação manual (renderConciliarProjecaoModal) — requisitos 3/4
+   desta rodada. Quando o item tem uma Conta provável definida, TODOS os lançamentos do Extrato daquela
+   conta na competência da própria tabela do Fluxo de Caixa ficam disponíveis para conciliação — nunca
+   limitados ao 1º encontrado, nunca limitados em quantidade, nunca pré-filtrados por data ou pelo valor
+   projetado (ex.: um arrendamento pago em várias parcelas bem menores que o valor total projetado, cada
+   uma sem nenhuma semelhança de valor isoladamente). Sem Conta provável definida, usa só os candidatos já
+   pontuados (candidatosConciliacaoProjecao) — mesmo comportamento de antes desta mudança, preservando o
+   LIMIAR_CONCILIACAO como filtro nesse caso. Em ambos os casos, um registro já vinculado (a este mesmo
+   item, a outra competência dele, ou a qualquer outro lançamento — requisito 10/11) ou já descartado
+   manualmente nesta competência nunca aparece. A lista final é sempre ordenada do melhor para o pior pela
+   mesma pontuação usada na conciliação automática — aqui, porém, essa pontuação NUNCA corta a lista
+   (LIMIAR_CONCILIACAO só filtra a automática/candidatosConciliacaoProjecao), só decide a ordem. */
+function candidatosConciliacaoModal(item, competencia){
+  if(item.cartao || normalizarTexto(item.descricao)==='contrachequetrt') return [];
+  const pontuados = candidatosConciliacaoProjecao(item, competencia);
+  if(!item.contaProvavelId) return pontuados;
+  const ignorados = new Set((item.candidatosIgnorados && item.candidatosIgnorados[competencia]) || []);
+  const jaVinculadosOutraCompetencia = idsJaVinculadosOutrasCompetencias(item, competencia);
+  const jaVinculadosMesmaCompetencia = new Set(vinculosDaCompetencia(item, competencia));
+  const jaVinculadosOutroLancamento = idsVinculadosAOutrosLancamentos(item);
+  const idsJaListados = new Set(pontuados.map(c=>c.t.id));
+  const todosDaContaProvavel = STATE.transactions
+    .filter(t=> t.conta===item.contaProvavelId && t.data && t.data.slice(0,7)===competencia
+      && !ignorados.has(t.id) && !jaVinculadosOutraCompetencia.has(t.id) && !jaVinculadosMesmaCompetencia.has(t.id)
+      && !jaVinculadosOutroLancamento.has(t.id) && !idsJaListados.has(t.id))
+    .map(t=>({ t, pontos: pontuarCandidatoConciliacao(item, t, competencia) }));
+  return [...pontuados, ...todosDaContaProvavel].sort((a,b)=>b.pontos-a.pontos);
 }
 /* "Projetado" (ainda sem candidato plausível), "pendente" (2+ candidatos plausíveis, mas nenhum vínculo
    automático seguro o suficiente — precisa de escolha manual), "conciliado" (1+ vínculos estabelecidos, o(s)
@@ -13042,39 +13075,12 @@ function renderLinhaSaldoAtual(l){
 function renderPainelProjecao(m, idx){
   const linhasHtml = m.linhas.length ? m.linhas.map(l=> l.especial==='saldo-dia' ? renderLinhaSaldoAtual(l) : renderLinhaProjecao(l)).join('') : `<tr><td colspan="6" class="hint" style="text-align:center;padding:14px;">Nenhum lançamento previsto ainda. Use "+ Novo lançamento previsto" para começar.</td></tr>`;
   // DOCUMENTAÇÃO — ver o comentário completo junto à classe CSS ".tabela-fluxo" (procure por
-  // "DOCUMENTAÇÃO — Largura das colunas" no <style> desta página) para a explicação de ponta a ponta de
-  // como Dia/Descrição/Tipo/Valor/Saldo são dimensionados e como ajustá-los.
-  // Resumo: todas as colunas são dimensionadas em "unidades de caractere" (ch) e depois convertidas para
-  // PERCENTUAL do total — a soma das colunas é sempre exatamente 100% da largura do painel, o que
-  // elimina a rolagem horizontal (table-layout:fixed misturando % com ch/px podia somar mais que 100%
-  // e "vazar" para fora do painel). Valor e Saldo usam o maior conteúdo realmente exibido nesta
-  // competência (não um tamanho fixo) — evita quebra de linha/corte em valores altos e desperdício de
-  // espaço quando os valores são baixos; recalculado a cada troca de mês/ano, já que o painel é
-  // reconstruído do zero a cada renderização.
-  const valores = m.linhas.filter(l=>!l.especial).map(l => l.valorCalculado);
-  const saldos = m.linhas.map(l => l.saldo);
-  // chTipo aumentado (9→14): "Despesa"/"Receita" (dentro do badge .tag) precisam de espaço suficiente para
-  // nunca quebrar em duas linhas — com 9 a coluna ficava estreita demais em telas menores que a largura
-  // total da tabela, mesmo com table-layout:fixed. Só afeta o layout de tabela (desktop/tablet); no mobile
-  // (≤700px) a tabela vira lista de cards e essas larguras deixam de valer (ver @media(max-width:700px)).
-  const chDia = 5, chTipo = 14; // colunas de largura fixa — altere aqui para mudar Dia/Tipo
-  // Ações: largura fixa, mas com 2 variantes — ter algum vínculo com o Extrato (conciliado, antecipado ou
-  // postecipado — ver seloConciliacaoProjecao/renderLinhaProjecao) acrescenta um 3º ícone (🔓 "desfazer
-  // conciliação") ao lado de ✏️/🗑️, então a coluna precisa de mais espaço só quando isso realmente
-  // acontece; do contrário sobra espaço desperdiçado o tempo todo. Sem esse ajuste, o 🔓 de uma linha
-  // conciliada não cabia nos 7ch fixos de antes e "vazava" — table-layout:fixed then preferia quebrar linha
-  // na célula ou estourar a largura total da tabela (rolagem horizontal indevida, já que a soma das colunas
-  // deixava de bater 100%). Recalculado a cada renderização do painel, junto com chValor/chSaldo, então
-  // nunca fica desatualizado quando uma linha é conciliada/desvinculada.
-  const temLinhaComVinculo = m.linhas.some(l=>!l.especial && ['conciliado','antecipado','postecipado'].includes(l.statusConciliacao));
-  const chAcoes = temLinhaComVinculo ? 11 : 7;
-  const chValor = Math.max(8, ...valores.map(v=>fmtBRL(v).length)) + 1.5;
-  const chSaldo = Math.max(8, ...saldos.map(v=>fmtBRL(v).length)) + 1.5;
-  // Descrição recebe um espaço moderado — nem domina a tabela, nem fica curta demais — proporcional ao
-  // total das demais colunas, com um mínimo confortável para descrições típicas.
-  const chDescricao = Math.max(20, (chDia+chTipo+chValor+chSaldo+chAcoes)*0.30);
-  const chTotal = chDia + chDescricao + chTipo + chValor + chSaldo + chAcoes;
-  const pct = ch => (ch/chTotal*100).toFixed(2);
+  // "DOCUMENTAÇÃO — Largura das colunas" no <style> desta página). Proporção FIXA (requisito explícito):
+  // sempre a mesma em toda tabela/competência, nunca recalculada a partir do maior valor/saldo exibido
+  // no mês (como antes desta mudança) nem alterada pela presença do cadeado 🔓/outros ícones em Ações —
+  // isso é o que garante a mesma "grade" visual (thead/tbody perfeitamente alinhados) em todos os meses.
+  const LARGURAS_COLUNAS_FLUXO = { dia:6.5, descricao:30.20, tipo:13, valor:17, saldo:19, acoes:14.30 };
+  const pct = LARGURAS_COLUNAS_FLUXO;
   // Item 14 do requisito de responsividade: cada mês vira um card colapsável — cabeçalho clicável (título +
   // resumo do mês, sempre visíveis) e o detalhe (tabela de lançamentos + saldo final projetado) só aparece
   // quando expandido. Usa <details>/<summary> nativos (mesmo padrão já usado nos Grupos de Configurações —
@@ -13096,12 +13102,12 @@ function renderPainelProjecao(m, idx){
       <div class="fluxo-mes-corpo">
         <div class="table-wrap tabela-fluxo-wrap" style="overflow-x:auto;"><table class="tabela-fluxo" style="table-layout:fixed;width:100%;">
           <thead><tr>
-            <th style="text-align:center;width:${pct(chDia)}%;">Dia</th>
-            <th style="text-align:left;width:${pct(chDescricao)}%;">Descrição</th>
-            <th style="text-align:center;width:${pct(chTipo)}%;">Tipo</th>
-            <th style="text-align:right;width:${pct(chValor)}%;">Valor</th>
-            <th style="text-align:right;width:${pct(chSaldo)}%;">Saldo</th>
-            <th style="width:${pct(chAcoes)}%;"></th>
+            <th style="text-align:center;width:${pct.dia}%;">Dia</th>
+            <th style="text-align:left;width:${pct.descricao}%;">Descrição</th>
+            <th style="text-align:center;width:${pct.tipo}%;">Tipo</th>
+            <th style="text-align:right;width:${pct.valor}%;">Valor</th>
+            <th style="text-align:right;width:${pct.saldo}%;">Saldo</th>
+            <th style="text-align:right;width:${pct.acoes}%;">Ações</th>
           </tr></thead>
           <tbody>${linhasHtml}</tbody>
         </table></div>
@@ -13675,7 +13681,7 @@ function renderConciliarProjecaoModal(){
   if(!item){ return ''; } // item pode ter sido excluído enquanto o modal estava aberto
   const vinculoIds = vinculosDaCompetencia(item, cfg.competencia);
   const reaisVinculados = vinculoIds.map(id=>STATE.transactions.find(t=>t.id===id)).filter(Boolean);
-  const candidatos = candidatosConciliacaoProjecao(item, cfg.competencia); // já exclui os de reaisVinculados
+  const candidatos = candidatosConciliacaoModal(item, cfg.competencia); // já exclui os de reaisVinculados; sem corte de pontuação quando há Conta provável
   const selecionados = cfg.selecionados || [];
   const candidatosSelecionados = candidatos.filter(c=>selecionados.includes(c.t.id));
   const valorProjetado = Number(valorProjecaoItem(item, cfg.competencia))||0;
@@ -17856,7 +17862,7 @@ function bindEvents(){
     if(item){
       if(!item.candidatosIgnorados) item.candidatosIgnorados = {};
       const jaIgnorados = item.candidatosIgnorados[cfg.competencia] || [];
-      const candidatosAtuais = candidatosConciliacaoProjecao(item, cfg.competencia).map(c=>c.t.id);
+      const candidatosAtuais = candidatosConciliacaoModal(item, cfg.competencia).map(c=>c.t.id);
       item.candidatosIgnorados[cfg.competencia] = [...new Set([...jaIgnorados, ...candidatosAtuais])];
       scheduleSave();
     }
