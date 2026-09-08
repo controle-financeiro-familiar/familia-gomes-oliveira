@@ -4132,10 +4132,20 @@ function migrarCompetenciaParaVencimento(){
 
    Regras por origem do lançamento:
    1) Parcelamento de cartão de crédito (mesmo parcelamentoId, totalParcelas>1): a parcela de MENOR número
-      da cadeia é a referência — sua competencia é recalculada por competenciaFatura a partir da própria
-      Data (nunca da Data de outra parcela) — e as demais avançam a partir dela via
-      incrementarCompetencia(referência, nº da parcela − nº da referência), a mesma regra já usada por
-      sincronizarParcelasFuturas/corrigirCompetenciaParcelasFuturas.
+      da cadeia é a referência, e as demais avançam a partir dela via incrementarCompetencia(referência,
+      nº da parcela − nº da referência), a mesma regra já usada por
+      sincronizarParcelasFuturas/corrigirCompetenciaParcelasFuturas. A competência da PRÓPRIA referência só
+      é recalculada por competenciaFatura a partir da sua Data quando ela é de fato a parcela 1 — só nesse
+      caso a Data realmente representa a compra original, e a fórmula por dia de fechamento resolve a
+      fatura certa. Quando a referência é uma parcela POSTERIOR (>1) — ex.: um lançamento importado já a
+      partir da parcela 9/12, sem que as parcelas 1-8 (faturadas antes do período importado) tenham sido
+      trazidas para o app — a Data de TODAS as parcelas continua sendo a da compra ORIGINAL (convenção do
+      próprio banco no arquivo exportado), então nunca representa a fatura desta parcela específica:
+      recalcular por competenciaFatura(data,...) devolveria sempre a competência da 1ª parcela, jogando
+      fora a informação de "parcela atual" que o próprio arquivo trouxe (bug relatado: uma parcela 9/12
+      importada como Janeiro/2026 virava Abril/2025, a competência da 1ª parcela). Nesse caso a competência
+      já atribuída à referência (na importação, ou editada manualmente) é mantida intocada — só cai de
+      volta para o cálculo por Data se por algum motivo ainda estiver vazia.
    2) Compra/despesa avulsa de cartão de crédito (fora de um parcelamento >1x): competencia =
       competenciaFatura(data, conta).
    3) Pagamento/recebimento da própria fatura (categorias em CATEGORIAS_FATURA): PROPOSITALMENTE não
@@ -4172,7 +4182,7 @@ function corrigirCompetenciaTransacoes(){
   const jaCorrigidos = new Set();
   Object.values(porParcelamento).forEach(grupo=>{
     const ref = grupo.reduce((a,b)=> Number(b.parcelaAtual)<Number(a.parcelaAtual) ? b : a);
-    ref.competencia = competenciaFatura(ref.data, ref.conta);
+    if(Number(ref.parcelaAtual)===1 || !ref.competencia) ref.competencia = competenciaFatura(ref.data, ref.conta);
     jaCorrigidos.add(ref.id);
     grupo.forEach(t=>{
       if(t.id===ref.id) return;
