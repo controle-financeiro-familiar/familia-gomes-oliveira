@@ -7850,14 +7850,24 @@ function dadosFaturaAtualPorCartao(competencia){
    COMPÕEM o valor da fatura (itensQueCompoemFatura, a mesma exclusão de sempre) — nunca somando o
    pagamento da própria fatura como se fosse mais uma compra/crédito da competência, para nunca divergir
    de `total` (faturaPorCompetencia, que já exclui essas categorias da mesma forma). */
+/* Uma Despesa de cartão de crédito conta como "compra parcelada" no resumo Compras à Vista/Compras
+   Parceladas da fatura (cards do modal Fatura/Próximas Faturas) quando tem mais de uma parcela — EXCETO
+   a anuidade parcelada (categoria "Anuidade de Cartão de Crédito"): é um encargo cobrado em parcelas
+   fixas mensais, não uma compra a prazo, e o próprio resumo do banco a soma em "Compras à Vista" (ver
+   auditoria do BB Elo Nanquim, Jan/2026: "Anuidade Titular" parcela 9/12 R$88,00 estava deslocando R$88,00
+   de Compras à Vista para Compras Parceladas — mesmo critério já usado por saldoParceladoEmAberto/
+   detalheSaldoParceladoEmAberto para excluir a anuidade do saldo parcelado em aberto). */
+function ehCompraParceladaDeFatura(t){
+  return Number(t.totalParcelas)>1 && t.categoria!=='Anuidade de Cartão de Crédito';
+}
 function itensFatura(conta, competencia){
   const itens = aplicarOrdemManual(STATE.transactions
     .filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia===competencia)
     .slice()
     .sort((a,b)=> compararDataCronologica(a.data, b.data) || (a.id||'').localeCompare(b.id||'')));
   const itensQueCompoemFatura = itens.filter(t=>!CATEGORIAS_FATURA.includes(t.categoria));
-  const totalParcelado = itensQueCompoemFatura.filter(t=>t.tipo==='Despesa' && Number(t.totalParcelas)>1).reduce((s,t)=>s+(Number(t.valor)||0),0);
-  const totalAvista = itensQueCompoemFatura.filter(t=>t.tipo==='Despesa' && !(Number(t.totalParcelas)>1)).reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const totalParcelado = itensQueCompoemFatura.filter(t=>t.tipo==='Despesa' && ehCompraParceladaDeFatura(t)).reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const totalAvista = itensQueCompoemFatura.filter(t=>t.tipo==='Despesa' && !ehCompraParceladaDeFatura(t)).reduce((s,t)=>s+(Number(t.valor)||0),0);
   // Estornos são tratados como créditos em toda a aba Contas e Cartões — um único total, sem distinção.
   const totalCreditos = itensQueCompoemFatura.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
   return { itens, qtd: itens.length, totalParcelado, totalAvista, totalCreditos, total: faturaPorCompetencia(conta, competencia) };
@@ -13181,8 +13191,8 @@ function renderFaturaAtualModal(){
   // filtro da UI está ativo, exatamente como o comentário acima já promete.
   const itensFiltradosQueCompoemFatura = itensFiltrados.filter(t=>!CATEGORIAS_FATURA.includes(t.categoria));
   const totalFatFiltrado = itensFiltradosQueCompoemFatura.reduce((s,t)=> s + (t.tipo==='Receita' ? -(Number(t.valor)||0) : (Number(t.valor)||0)), 0);
-  const totalParceladoFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Despesa' && Number(t.totalParcelas)>1).reduce((s,t)=>s+(Number(t.valor)||0),0);
-  const totalAvistaFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Despesa' && !(Number(t.totalParcelas)>1)).reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const totalParceladoFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Despesa' && ehCompraParceladaDeFatura(t)).reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const totalAvistaFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Despesa' && !ehCompraParceladaDeFatura(t)).reduce((s,t)=>s+(Number(t.valor)||0),0);
   const totalCreditosFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
   const filtrosAtivos = filtrosPadraoAtivos(f, [{campo:'tipo'},{campo:'parcela'}]) || !!fBusca.trim();
   const camposFiltroFatura = camposFiltroTipoParcelaCascata(det.itens, f);
@@ -13310,8 +13320,8 @@ function renderProjecaoFaturaModal(){
   // "Ver Fatura" (valor total, parceladas, à vista, créditos), recalculado a partir dos itens já filtrados
   // acima (não apenas qtd/qtdParcelas).
   const totalSelFiltrado = selecionada ? itens.reduce((s,t)=> s + (t.tipo==='Receita' ? -(Number(t.valor)||0) : (Number(t.valor)||0)), 0) : 0;
-  const totalParceladoSelFiltrado = selecionada ? itens.filter(t=>t.tipo==='Despesa' && Number(t.totalParcelas)>1).reduce((s,t)=>s+(Number(t.valor)||0),0) : 0;
-  const totalAvistaSelFiltrado = selecionada ? itens.filter(t=>t.tipo==='Despesa' && !(Number(t.totalParcelas)>1)).reduce((s,t)=>s+(Number(t.valor)||0),0) : 0;
+  const totalParceladoSelFiltrado = selecionada ? itens.filter(t=>t.tipo==='Despesa' && ehCompraParceladaDeFatura(t)).reduce((s,t)=>s+(Number(t.valor)||0),0) : 0;
+  const totalAvistaSelFiltrado = selecionada ? itens.filter(t=>t.tipo==='Despesa' && !ehCompraParceladaDeFatura(t)).reduce((s,t)=>s+(Number(t.valor)||0),0) : 0;
   const totalCreditosSelFiltrado = selecionada ? itens.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0) : 0;
   // Paginação da tabela — mesmo padrão/componente da tabela de Registros/Ver Extrato/Lançamentos
   // futuros/Ver Fatura (ver renderRodapePaginacaoGenerica).
