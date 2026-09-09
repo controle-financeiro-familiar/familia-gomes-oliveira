@@ -78,7 +78,7 @@ button{font-family:var(--sans);cursor:pointer;}
 input,select{font-family:var(--sans);}
 .app{display:flex;flex-direction:column;min-height:100vh;}
 
-.sticky-top{position:sticky;top:0;z-index:200;box-shadow:0 4px 14px rgba(11,42,94,.18);}
+.sticky-top{position:sticky;top:0;z-index:200;box-shadow:0 4px 14px rgba(11,42,94,.18);background: var(--navy-800);}
 .tela-inicial{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:74px 24px 24px;background:linear-gradient(180deg,var(--navy-50,#f4f7fc),#fff);}
 .tela-inicial-card{max-width:1000px;width:100%;background:#fff;border:1px solid var(--line);border-radius:20px;padding:36px 40px;box-shadow:0 20px 60px rgba(16,64,141,.14);}
 .tela-inicial-card button:disabled{opacity:.5;cursor:not-allowed;}
@@ -330,7 +330,7 @@ input,select{font-family:var(--sans);}
 .banner b{color:#5c3d00;}
 .pwa-banner{background:var(--navy-900);color:#fff;font-size:12.5px;padding:8px 16px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;text-align:center;}
 
-.tabbar{display:flex;gap:2px;background:var(--navy-800);padding:0 20px;overflow:hidden;flex-wrap:nowrap;}
+.tabbar{max-width:1280px;margin:0 auto;display:flex;justify-content:space-around;gap:2px;padding:0 20px;overflow:hidden;flex-wrap:nowrap;}
 /* Item 20 do requisito: a tabbar NUNCA pode rolar horizontalmente nem ficar cortada — quando as abas não
    cabem numa única linha, mesmo acima de 700px (ex.: janela do navegador redimensionada), a aplicação troca
    para bottom-nav via classe .forcar-nav-mobile no <html> (ver ajustarNavResponsiva/UI.forcarNavMobile),
