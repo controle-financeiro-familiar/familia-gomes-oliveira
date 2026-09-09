@@ -557,13 +557,24 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
   margin:0 0 14px;font-size:14px;letter-spacing:.4px;text-transform:uppercase;color:var(--navy-800);
   font-family:var(--mono);font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
 }
-/* Item 1 do requisito "Ajustes no Extrato Consolidado": título (à esquerda) e seletor de período (à
+/* Item 1 do requisito "Ajustes no Extrato Consolidado": título (à esquerda) e seletor(es) de período (à
    direita) na mesma linha do h2 — reaproveita o próprio display:flex/justify-content:space-between já
    existente em .panel h2 (2 filhos diretos: o <span> do título e este <span> dos controles), sem CSS
    paralelo. Os próprios controles (label+select) usam texto normal/minúsculo (nunca o mono/uppercase do
-   h2), para não parecerem parte do título. */
-.extrato-periodo-inline{display:flex;align-items:center;gap:8px;font-family:var(--sans);font-weight:400;text-transform:none;letter-spacing:normal;font-size:12.5px;color:#5b6b85;}
-.extrato-periodo-inline select{font-family:var(--sans);font-size:12.5px;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--ink);}
+   h2), para não parecerem parte do título. Quando "Período personalizado" está selecionado, os seletores
+   De/Até entram neste MESMO <span> (nunca uma 2ª linha) — flex-wrap é só uma rede de segurança para telas
+   muito estreitas, nunca o comportamento normal em desktop. */
+.extrato-periodo-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:var(--sans);font-weight:400;text-transform:none;letter-spacing:normal;font-size:12.5px;color:#5b6b85;}
+/* Item 2 do requisito: os 3 selects (período principal, De, Até) e os 2 inputs de ano (que ficam ao lado
+   dos selects De/Até) precisam ter EXATAMENTE a mesma altura — <select> e <input type="number"> têm chrome
+   nativo de altura ligeiramente diferente por padrão (o spinner do number, principalmente), então altura
+   fixa + box-sizing:border-box + padding só horizontal é o que garante a mesma altura entre os dois tipos
+   de elemento, não só entre selects. */
+.extrato-periodo-inline select,.extrato-periodo-inline input[type="number"]{
+  font-family:var(--sans);font-size:12.5px;height:30px;padding:0 8px;border-radius:6px;
+  border:1px solid var(--line);background:#fff;color:var(--ink);box-sizing:border-box;
+}
+.extrato-periodo-inline input[type="number"]{width:70px;}
 .grid-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
 .panel-desc{margin:-8px 0 14px;font-size:11px;color:#6a7a97;font-weight:400;text-transform:none;letter-spacing:normal;font-family:var(--sans);}
 .mini-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
@@ -2273,11 +2284,13 @@ tr.linha-saldo-hoje .saldo-destaque{background:var(--gold);color:var(--navy-950)
 /* Linha "Lançamentos não listados" (ver calcProjecoesMes/renderLinhaNaoListados) — visual de linha-resumo
    (mesmo espírito de .linha-grupo-competencia), nunca confundida com um lançamento comum: fundo neutro,
    itálico, sem ícone/negrito de destaque. */
-tr.linha-nao-listados{background:var(--navy-50,#f4f7fc);cursor:pointer;}
-tr.linha-nao-listados:hover{background:var(--navy-100,#e8eef8);}
-tr.linha-nao-listados td{font-style:italic;color:#5b6b85;}
+/* Item 6 do requisito "Ajustes no Extrato Consolidado #3": sem itálico — mesma tipografia/estilo normal
+   das demais linhas; a diferenciação visual fica só por conta do fundo (abaixo), do texto/ícone de Status
+   e do botão de ação 🔍 (nunca mais um "cursor:pointer"/hover na linha inteira — item 5, só o botão abre
+   o modal). */
+tr.linha-nao-listados{background:var(--navy-50,#f4f7fc);}
+tr.linha-nao-listados td{color:#5b6b85;}
 tr.linha-nao-listados .linha-nao-listados-label{white-space:nowrap;}
-tr.linha-nao-listados .val-cell{font-style:normal;}
 </style>
 </head>
 <body>
@@ -5097,10 +5110,10 @@ let UI = {
   fluxoMesesFechados: new Set(), // chaves "ano-mes" recolhidas manualmente no Extrato Consolidado (item 14) — vazio por padrão = todos expandidos, igual ao comportamento anterior
   fluxoMesesInicializados: false, // true depois da 1ª renderização do Extrato Consolidado — no mobile, a 1ª vez recolhe todos os meses por padrão (item 8 do requisito); depois disso, respeita só a interação do usuário
   // Seletor de período do Extrato Consolidado (requisito "Extrato Consolidado" seção 2): 'mesAtual' |
-  // 'proximos30dias' | 'proximos3meses' (padrão) | 'personalizado'. 'proximos3meses' preserva exatamente o
+  // 'proximoMes' | 'proximos3meses' (padrão) | 'personalizado'. 'proximos3meses' preserva exatamente o
   // comportamento já existente (mês selecionado no topo + os 3 seguintes — ver calcProjecoesMultiMes),
-  // nunca uma segunda lógica de projeção paralela (requisito 10) — só decide QUANTOS meses calcular e,
-  // no caso de "30 dias", filtra a exibição das linhas dentro da mesma janela já calculada.
+  // nunca uma segunda lógica de projeção paralela (requisito 10) — só decide QUANTOS meses calcular
+  // (mesAtual=1, proximoMes=2, proximos3meses=4).
   extratoPeriodo: 'proximos3meses',
   extratoPeriodoPersonalizado: null, // { anoIni, mesIni, anoFim, mesFim } — só usado quando extratoPeriodo==='personalizado'; null até o usuário abrir o seletor pela 1ª vez (ver mesesParaExtratoConsolidado, que aplica o padrão mês atual→mês atual nesse caso)
   ajudaFluxoAberta: false,
@@ -5117,7 +5130,7 @@ let UI = {
   textModal: null, // { tipo, nome, original, grupo } — modal genérico de nome único (conta, cartão, meio, grupo, categoria)
   novaProjecaoModal: null, // { ano, mes } — escolha do mês a partir do qual um novo lançamento previsto passa a aparecer
   conciliarProjecaoModal: null, // { itemId, competencia, selecionados, pagina, porPagina } — revisão manual dos candidatos de conciliação de um previsto "pendente"/já conciliado (ver renderConciliarProjecaoModal) — selecionados: ids marcados nos checkboxes, ainda não confirmados; pagina/porPagina paginam a tabela de candidatos (mesmo padrão da tabela de Registros), sem nunca limitar o conjunto de candidatos calculado (só a exibição) — a ordenação por clique usa o mecanismo genérico de UI.ordenacaoTabelas (idTabela 'conciliarCandidatos'), não precisa de estado próprio aqui
-  naoListadosModal: null, // { ano, mes, diaIni, diaFim } — auditoria/rastreabilidade de uma linha "Lançamentos não listados" do Extrato Consolidado: mostra os registros individuais somados nela (ver renderNaoListadosModal/registrosNaoListadosDoIntervalo), somente consulta, nunca edição
+  naoListadosModal: null, // { ano, mes, diaIni, diaFim, pagina, porPagina } — auditoria/rastreabilidade de uma linha "Lançamentos não listados" do Extrato Consolidado: mostra os registros individuais somados nela (ver renderNaoListadosModal/registrosNaoListadosDoIntervalo), somente consulta, nunca edição; pagina/porPagina paginam a tabela (mesmo componente/padrão de Ver Extrato/Mapa de Calor)
   confirmDelProjecao: null, // { itemId, competencia } — pergunta se a exclusão de um lançamento previsto deve valer só para esta competência (ver STATE.projecaoExclusoesPorCompetencia) ou para o lançamento inteiro (todas as competências)
   confirmDelParcela: null, // { id } — pergunta se a exclusão de uma parcela deve incluir as parcelas futuras da mesma compra
   pendingEdicaoParcela: null, // { novo, antigo, conta } — edição já validada de uma parcela existente, aguardando o usuário escolher o escopo de propagação (ver confirmEditarParcela) antes de ser efetivamente salva
@@ -10059,17 +10072,26 @@ function calcProjecoesMes(ano, mes, saldoInicial){
       return { ...item, competencia, valorCalculado, dia, valorProjecaoPendente, dataPrevista: item.dia, valorPrevisto: valorProjecaoItem(item, competencia), dataReal, qtdVinculos, statusConciliacao, contaReal };
     })
     .sort((a,b)=>(Number(a.dia)||0)-(Number(b.dia)||0));
-  // ---------- Lançamentos não listados (Regras do Fluxo de Caixa, seções 2 a 9) ----------
+  // ---------- Lançamentos não listados ----------
   // Intercala, entre os lançamentos listados acima, linhas agrupadas "Lançamentos não listados": a soma de
   // toda movimentação real das contas elegíveis (Conta Corrente/PJ/Poupança) desta competência que NÃO
   // tem nenhuma linha própria nesta tabela — nem como projeção nem como realização de nenhum item de
   // STATE.projecoes ativo neste mês (ver idsJaRepresentadosNoFluxoCaixa/transacoesNaoListadasNoIntervalo).
-  // Sempre uma linha antes do 1º dia listado (dias 1..dia-1, só quando o 1º lançamento não é já no dia 1),
-  // uma entre CADA par de dias listados consecutivos (dia+1..próximo-1 — sempre criada, mesmo quando os
-  // dois dias são consecutivos no calendário e o intervalo dá vazio, R$0,00: reproduz o layout de
-  // referência, com uma linha entre todo par de dias) e uma depois do último dia listado (dia+1..fim do
-  // mês, só quando o último lançamento não é já no último dia do mês). Sem NENHUM lançamento listado no
-  // mês inteiro, todo o período (dia 1 ao último dia do mês) vira uma única linha.
+  // Regra (requisito "Ajustes no Extrato Consolidado" #2, item 3): o agrupamento entre dois dias listados
+  // consecutivos (A e B) cobre [A, B-1] — começa NO PRÓPRIO dia listado anterior (A), não em A+1. Isso
+  // parece contra-intuitivo à primeira vista, mas é o que resolve corretamente o caso em que existe mais de
+  // um lançamento real no mesmo dia A e só UM deles corresponde a um item listado: a(s) transação(ões)
+  // "sobrando" nesse mesmo dia A não pertencem nem ao agrupamento ANTERIOR (que já termina em A-1, antes do
+  // próprio dia A) nem ficariam representadas em lugar nenhum se o próximo agrupamento só começasse em
+  // A+1 — por isso ele precisa incluir A. As transações que DE FATO já viraram a linha listada do dia A
+  // continuam excluídas normalmente (idsExcluidos, calculado uma única vez para o mês inteiro,
+  // independente de qual agrupamento as engloba), então incluir o dia A aqui nunca duplica o que a própria
+  // linha de A já mostra — só captura o que sobra. Quando A e B são consecutivos no calendário (B=A+1), o
+  // agrupamento vira um único dia "A" (nunca uma faixa nem o dia B). O agrupamento final (depois do último
+  // dia listado) segue a mesma regra: começa no próprio último dia listado, até o fim do mês. Já o
+  // agrupamento INICIAL (antes do 1º dia listado) não tem "dia anterior" nenhum para incluir — continua
+  // exatamente 1..(1º dia listado − 1), como antes. Sem NENHUM lançamento listado no mês inteiro, todo o
+  // período (dia 1 ao último dia do mês) vira uma única linha. */
   const { max: ultimoDiaMesISO } = limitesCompetenciaISO(competencia);
   const ultimoDiaMes = Number(ultimoDiaMesISO.slice(8,10));
   const idsExcluidos = idsJaRepresentadosNoFluxoCaixa(linhas, competencia);
@@ -10088,10 +10110,10 @@ function calcProjecoesMes(ano, mes, saldoInicial){
       linhas.filter(l=>Math.min(31, Math.max(1, Number(l.dia)||1))===dia).forEach(l=>linhasComNaoListados.push(l));
       const proximoDia = diasOrdenados[idx+1];
       if(proximoDia!==undefined){
-        linhasComNaoListados.push(criarLinhaNaoListados(dia+1, proximoDia-1, `entre-${dia}-${proximoDia}`, proximoDia));
+        linhasComNaoListados.push(criarLinhaNaoListados(dia, proximoDia-1, `entre-${dia}-${proximoDia}`, proximoDia));
       }
     });
-    if(diaMax<ultimoDiaMes) linhasComNaoListados.push(criarLinhaNaoListados(diaMax+1, ultimoDiaMes, 'final', diaMax+1));
+    if(diaMax<ultimoDiaMes) linhasComNaoListados.push(criarLinhaNaoListados(diaMax, ultimoDiaMes, 'final', diaMax+1));
   }
   // ---------- Saldo sequencial linha a linha (Regras do Fluxo de Caixa, seção 7) ----------
   // Ponto de partida: Saldo Inicial do mês. Cada lançamento Receita soma, Despesa subtrai; cada linha de
@@ -10125,7 +10147,22 @@ function idsJaRepresentadosNoFluxoCaixa(linhas, competencia){
     Object.values(item.vinculosExtrato).forEach(lista=>(lista||[]).forEach(id=>ids.add(id)));
   });
   linhas.filter(l=>l.cartao).forEach(l=>{
-    pagamentosCandidatosFatura(l.cartao, competencia).forEach(t=>ids.add(t.id));
+    pagamentosCandidatosFatura(l.cartao, competencia).forEach(t=>{
+      ids.add(t.id);
+      // Requisito "Ajustes no Extrato Consolidado #3" item 4: um pagamento de fatura já listado
+      // individualmente (a própria linha l.cartao) nunca pode também entrar em "Lançamentos não listados".
+      // Quando reconciliarPagamentosFatura já espelhou esse pagamento (criou o lançamento "Recebimento por
+      // Pagamento de Fatura" na conta do cartão e marcou os dois lados com o mesmo transferenciaVinculoId),
+      // pagamentosCandidatosFatura devolve só o lado do CARTÃO (t acima) — o lado original, na conta
+      // ELEGÍVEL que efetivamente pagou, para de aparecer nesse retorno (deixa de bater no filtro
+      // "!t.transferenciaVinculoId" de pagamentosCandidatosFatura) e, sem este bloco, continuaria contando
+      // como uma movimentação "sem linha própria" na conta elegível — bug real encontrado por teste.
+      // Mesmo critério de busca do "origem" já usado em pagamentoFaturaElegivelDetalhes.
+      if(t.transferenciaVinculoId){
+        const origem = STATE.transactions.find(o=>o.id!==t.id && o.transferenciaVinculoId===t.transferenciaVinculoId);
+        if(origem) ids.add(origem.id);
+      }
+    });
   });
   STATE.transactions.forEach(t=>{ if(t.contrachequeOrigemId) ids.add(t.id); });
   return ids;
@@ -10250,15 +10287,13 @@ function calcProjecoesMultiMes(anoBase, mesBase, qtdMeses){
    Decide, a partir de UI.extratoPeriodo, quantos meses calcular a partir do mês selecionado no topo do app
    (UI.ano/UI.mes) — sempre reaproveitando calcProjecoesMultiMes/calcProjecoesMes, nunca uma segunda lógica
    de projeção paralela (requisito 10). 'proximos3meses' (padrão) preserva exatamente os 4 meses já
-   calculados antes deste requisito (o mês selecionado + os 3 seguintes). 'proximos30dias' calcula meses
-   suficientes para cobrir 30 dias a partir de hoje (mesmo perto da virada do mês) e depois FILTRA a
-   exibição (ver filtrarMesesParaJanelaDeDias) — o saldo de cada linha continua exato porque já é a soma
-   sequencial desde o dia 1 do mês (ver calcProjecoesMes), então ocultar linhas anteriores à janela não
-   muda o significado das que permanecem visíveis. 'personalizado' usa o intervalo de mês/ano escolhido em
+   calculados antes deste requisito (o mês selecionado + os 3 seguintes). 'proximoMes' mostra só o mês
+   selecionado + o seguinte (2 meses). 'personalizado' usa o intervalo de mês/ano escolhido em
    UI.extratoPeriodoPersonalizado (mês atual→mês atual enquanto o usuário não abriu o seletor). */
 function mesesParaExtratoConsolidado(){
   const modo = UI.extratoPeriodo || 'proximos3meses';
   if(modo==='mesAtual') return calcProjecoesMultiMes(UI.ano, UI.mes, 1);
+  if(modo==='proximoMes') return calcProjecoesMultiMes(UI.ano, UI.mes, 2);
   if(modo==='personalizado'){
     const p = UI.extratoPeriodoPersonalizado || { anoIni:UI.ano, mesIni:UI.mes, anoFim:UI.ano, mesFim:UI.mes };
     const anoIni = Number(p.anoIni)||UI.ano, mesIni = Number(p.mesIni)||UI.mes;
@@ -10266,35 +10301,7 @@ function mesesParaExtratoConsolidado(){
     const qtd = Math.max(1, (anoFim-anoIni)*12 + (mesFim-mesIni) + 1);
     return calcProjecoesMultiMes(anoIni, mesIni, qtd);
   }
-  if(modo==='proximos30dias'){
-    const hoje = new Date(hojeISO()+'T00:00:00');
-    const fimJanela = new Date(hoje); fimJanela.setDate(fimJanela.getDate()+30);
-    const isoFim = `${fimJanela.getFullYear()}-${pad2(fimJanela.getMonth()+1)}-${pad2(fimJanela.getDate())}`;
-    const qtd = Math.max(1, (fimJanela.getFullYear()-UI.ano)*12 + (fimJanela.getMonth()+1-UI.mes) + 1);
-    const meses = calcProjecoesMultiMes(UI.ano, UI.mes, qtd);
-    return filtrarMesesParaJanelaDeDias(meses, hojeISO(), isoFim);
-  }
   return calcProjecoesMultiMes(UI.ano, UI.mes, 4);
-}
-/* Filtra as linhas de cada mês já calculado (ver mesesParaExtratoConsolidado/'proximos30dias') para as que
-   caem dentro de [isoIni, isoFim] (inclusive), mantendo saldoInicial/saldoFinal originais do mês — o saldo
-   de cada linha remanescente já é a soma sequencial exata desde o dia 1 (ver calcProjecoesMes), então
-   ocultar linhas fora da janela não altera o significado das que continuam visíveis — e descartando meses
-   que ficam sem nenhuma linha na janela. Uma linha de "Lançamentos não listados" que cruza a borda da
-   janela (ex.: intervalo 25–31 com corte no dia 28) é mantida inteira se qualquer parte dela cair dentro da
-   janela — simplificação assumida de propósito, já que o intervalo exato aparece sempre no rótulo/tooltip
-   da própria linha. */
-function filtrarMesesParaJanelaDeDias(meses, isoIni, isoFim){
-  return meses.map(m=>{
-    const linhas = m.linhas.filter(l=>{
-      const diaIni = l.especial==='nao-listados' ? l.diaIni : (Number(l.dia)||1);
-      const diaFim = l.especial==='nao-listados' ? l.diaFim : (Number(l.dia)||1);
-      const isoLinhaIni = `${m.ano}-${pad2(m.mes)}-${pad2(Math.min(31,Math.max(1,diaIni)))}`;
-      const isoLinhaFim = `${m.ano}-${pad2(m.mes)}-${pad2(Math.min(31,Math.max(1,diaFim)))}`;
-      return isoLinhaFim>=isoIni && isoLinhaIni<=isoFim;
-    });
-    return { ...m, linhas };
-  }).filter(m=>m.linhas.length>0);
 }
 /* Resumo agregado do período selecionado no Extrato Consolidado (requisito "Extrato Consolidado" seção
    12): Saldo Atual (saldo real no início da projeção — o próprio saldoInicial do 1º mês incluído),
@@ -10483,7 +10490,7 @@ function exportarRelatorioMensalPDF(){
       ${tabelaSecao('📆 Últimos 6 meses', 4,
         '<th style="text-align:left;">Mês</th><th style="text-align:right;">Receitas</th><th style="text-align:right;">Despesas</th><th style="text-align:right;">Saldo</th>',
         historicoHtml)}
-      ${rm.lista.length ? tabelaSecao('🎯 Metas de Gastos', 2, '', `
+      ${rm.lista.length ? tabelaSecao('🎯 Planejamento Financeiro', 2, '', `
         <tr><td>✅ Metas cumpridas</td><td style="text-align:right;">${rm.cumpridas}</td></tr>
         <tr><td>🚨 Metas ultrapassadas</td><td style="text-align:right;">${rm.ultrapassadas}</td></tr>
         <tr><td>📊 % do orçamento utilizado</td><td style="text-align:right;">${fmtPercentSmart(rm.pctConsumido)}</td></tr>
@@ -11282,21 +11289,28 @@ const TABS_PRINCIPAIS_DESC = {
   dashboard: 'Resumo do mês, saldo atual e indicadores',
   inteligencia: 'Análises, tendências e projeções financeiras',
   resumo: 'Extrato consolidado com saldo real e projetado, mês a mês',
-  metas: 'Acompanhamento das metas de gastos',
+  metas: 'Planejamento financeiro e acompanhamento de metas de gastos',
   registros: 'Lançamentos de receitas e despesas',
 };
+/* Ordem das abas (item explícito de pedido "Ordem das abas da aplicação"): 1. Painel Financeiro,
+   2. Inteligência Financeira, 3. Planejamento Financeiro, 4. Extrato Consolidado, 5. Contas e Cartões,
+   6. Registros, 7. Configurações. Desktop (.tabbar, ver renderTabbar) e o painel mobile "Painéis"
+   (TABS_PAINEIS_MOBILE) usam SEMPRE a ordem de TABS_TODAS (nunca a de TABS_PRINCIPAIS/TABS_SECUNDARIAS
+   isoladamente, que só servem de tabela de consulta por id — ver TABS_PAINEIS_MOBILE), então mudar a
+   posição aqui já basta para as duas telas ficarem consistentes. TABS_PRINCIPAIS é mantida na MESMA ordem
+   visual só por clareza do código — Contas e Cartões/Configurações (TABS_SECUNDARIAS) não entram nela. */
 const TABS_PRINCIPAIS = [
   ["dashboard","📊","Painel Financeiro","Painel"],
   ["inteligencia","🧠","Inteligência Financeira","Inteligência"],
+  ["metas","🎯","Planejamento Financeiro","Planejamento"],
   ["resumo","📆","Extrato Consolidado","Extrato"],
-  ["metas","🎯","Metas de Gastos","Metas"],
   ["registros","📒","Registros","Registros"],
 ];
 const TABS_SECUNDARIAS = [
   ["cartoes","💳","Contas e Cartões","Saldos, limites e faturas das suas contas e cartões"],
   ["categorias","⚙️","Configurações","Categorias, backups, conta Microsoft e preferências"],
 ];
-const TABS_TODAS = [["dashboard","📊 Painel Financeiro"],["inteligencia","🧠 Inteligência Financeira"],["cartoes","💳 Contas e Cartões"],["resumo","📆 Extrato Consolidado"],["metas","🎯 Metas de Gastos"],["registros","📒 Registros"],["categorias","⚙️ Configurações"]];
+const TABS_TODAS = [["dashboard","📊 Painel Financeiro"],["inteligencia","🧠 Inteligência Financeira"],["metas","🎯 Planejamento Financeiro"],["resumo","📆 Extrato Consolidado"],["cartoes","💳 Contas e Cartões"],["registros","📒 Registros"],["categorias","⚙️ Configurações"]];
 /* Item 7 do requisito: o painel "Painéis" do mobile precisa listar TODAS as abas na MESMA ordem do
    desktop (TABS_TODAS) — em vez de "principais primeiro, secundárias depois" (ordem antiga do "Mais"),
    monta-se aqui um único array combinando TABS_PRINCIPAIS + TABS_SECUNDARIAS e reordenando pelos ids de
@@ -11573,7 +11587,7 @@ function renderDashboard(){
     <summary>ℹ️ Informações sobre esta tela</summary>
     <div class="ajuda-fluxo-conteudo">
       <p><b>💰 Receitas, 💸 Despesas e ⚖️ Saldo</b>: somam todos os lançamentos da competência selecionada no topo da página (mês/ano). O <b>🐖 % Poupança</b> é a fração da receita do mês que sobrou como saldo positivo.</p>
-      <p><b>🎯 Metas de Gastos</b>: aparece somente quando existem metas cadastradas para o mês; clique no card para abrir a aba Metas de Gastos com o detalhe de cada uma.</p>
+      <p><b>🎯 Planejamento Financeiro</b>: aparece somente quando existem metas cadastradas para o mês; clique no card para abrir a aba Planejamento Financeiro com o detalhe de cada uma.</p>
       <p><b>👪 Renda Familiar</b>: distribui a receita do mês por fonte (subcategoria) e por responsável, sempre a partir dos lançamentos — nunca de um valor fixo.</p>
       <p><b>🪙 Economias</b> e <b>💳 Fatura atual por cartão</b>: usam os mesmos cálculos das abas Contas e Cartões e Extrato Consolidado, então ficam sempre consistentes entre si.</p>
       <p><b>🔥 Mapa de Calor de Despesas</b>: uma célula por dia (7 meses — 3 antes e 3 depois do mês selecionado no cabeçalho, sempre no centro), com a cor mais forte quanto maior o total de despesas naquele dia. Clique num dia com despesas para abrir a lista de lançamentos daquele dia, com filtros e seleção em lote própria — sem precisar trocar de aba.</p>
@@ -11585,7 +11599,7 @@ function renderDashboard(){
     if(!rm.lista.length) return '';
     return `
     <div class="panel" id="cardMetasDashboard" style="cursor:pointer;">
-      <h2>🎯 Metas de Gastos <span class="hint" style="margin:0;">clique para abrir</span></h2>
+      <h2>🎯 Planejamento Financeiro <span class="hint" style="margin:0;">clique para abrir</span></h2>
       <div class="grid-cards" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin-bottom:0;">
         <div class="kpi receita" style="border:none;"><div class="bar"></div><div class="lbl">✅ Metas cumpridas</div><div class="val">${rm.cumpridas}</div></div>
         <div class="kpi despesa" style="border:none;"><div class="bar"></div><div class="lbl">🚨 Metas ultrapassadas</div><div class="val">${rm.ultrapassadas}</div></div>
@@ -13905,6 +13919,9 @@ function renderLinhaNaoListados(l){
   const intervaloCompacto = diaIniExibicao===diaFimExibicao ? pad2(diaIniExibicao) : `${pad2(diaIniExibicao)}–${pad2(diaFimExibicao)}`;
   const intervalo = diaIniExibicao===diaFimExibicao ? `dia ${pad2(diaIniExibicao)}` : `dias ${pad2(diaIniExibicao)} a ${pad2(diaFimExibicao)}`;
   const titulo = `Soma de ${l.qtd} lançamento${l.qtd===1?'':'s'} ${l.qtd===1?'real':'reais'} das contas do Extrato Consolidado (${intervalo}) sem linha própria nesta tabela`;
+  // "Ajustes no Extrato Consolidado #3" item 5: a linha em si NÃO é mais clicável — só o botão de ação abre
+  // o modal de auditoria (ver bindEvents, [data-nao-listados-abrir]). Os data-attributes com o intervalo
+  // continuam na própria linha (não no botão) só para o botão ler via closest('tr'), sem duplicar o valor.
   return `
     <tr class="linha-nao-listados" title="${escapeHtml(titulo)}" data-nao-listados-dia-ini="${diaIniExibicao}" data-nao-listados-dia-fim="${diaFimExibicao}" data-nao-listados-ano="${l.ano}" data-nao-listados-mes="${l.mes}">
       <td data-label="Dia" style="text-align:center;font-family:var(--mono);">${intervaloCompacto}</td>
@@ -13915,7 +13932,7 @@ function renderLinhaNaoListados(l){
       <td data-label="Valor" class="val-cell ${l.valor<0?'neg':(l.valor>0?'pos':'')}" style="text-align:right;">${fmtBRL(l.valor)}</td>
       <td data-label="Saldo" class="val-cell saldo-destaque" style="text-align:right;">${fmtBRL(l.saldo)}</td>
       <td data-label="" class="tabela-fluxo-acoes" style="white-space:nowrap;">
-        <button type="button" class="icon-btn" title="Ver os lançamentos que compõem este total">🔍</button>
+        <button type="button" class="icon-btn" data-nao-listados-abrir title="Ver os lançamentos que compõem este total">🔍</button>
       </td>
     </tr>`;
 }
@@ -13931,6 +13948,17 @@ function renderNaoListadosModal(){
   const itens = registrosNaoListadosDoIntervalo(ano, mes, diaIni, diaFim).slice().sort((a,b)=> a.data<b.data?-1:(a.data>b.data?1:0));
   const total = itens.reduce((s,t)=> s + (t.tipo==='Receita' ? (Number(t.valor)||0) : (t.tipo==='Despesa' ? -(Number(t.valor)||0) : 0)), 0);
   const intervaloTexto = diaIni===diaFim ? `dia ${pad2(diaIni)}` : `dias ${pad2(diaIni)} a ${pad2(diaFim)}`;
+  // Paginação (requisito "Ajustes no Extrato Consolidado #3" item 5) — mesmo componente/padrão já usado em
+  // Ver Extrato/Lançamentos futuros/Mapa de Calor (renderRodapePaginacaoGenerica), nunca uma lógica própria.
+  const porPagina = cfg.porPagina || 10;
+  const totalPaginas = porPagina==='TODOS' ? 1 : Math.max(1, Math.ceil(itens.length/porPagina));
+  if(!cfg.pagina || cfg.pagina<1) cfg.pagina = 1;
+  else if(cfg.pagina>totalPaginas) cfg.pagina = totalPaginas;
+  const inicioIdx = porPagina==='TODOS' ? 0 : (cfg.pagina-1)*porPagina;
+  const fimIdx = porPagina==='TODOS' ? itens.length : Math.min(inicioIdx+porPagina, itens.length);
+  const itensPagina = itens.slice(inicioIdx, fimIdx);
+  const rodapePaginacao = renderRodapePaginacaoGenerica(itens.length, porPagina, cfg.pagina, totalPaginas, inicioIdx, fimIdx,
+    { selectId:'naoListadosPorPagina', dataAttr:'nao-listados-pagina', unidade:'lançamentos' });
   return `
   <div class="overlay" id="ovNaoListadosModal" ${attrZIndexModal('naoListadosModal')}>
     <div class="modal" style="width:100%;max-width:900px;">
@@ -13938,20 +13966,21 @@ function renderNaoListadosModal(){
       <div class="modal-body">
         <p class="hint" style="margin-top:0;">Registros reais das contas do Extrato Consolidado neste intervalo, sem linha própria na tabela (nem projeção, nem realização de nenhum lançamento previsto), somados na linha "Lançamentos não listados". Somente consulta — para editar ou excluir um lançamento, use a aba Registros.</p>
         ${itens.length ? `
-        <div class="table-wrap" style="overflow-x:auto;"><table style="width:100%;table-layout:fixed;">
+        <div class="table-wrap" style="overflow:visible;max-height:none;"><table class="tabela-cards-mobile" style="width:100%;table-layout:fixed;">
           <thead><tr>
             <th style="width:12%;">Data</th><th style="width:32%;">Descrição</th><th style="width:18%;">Conta</th>
             <th style="width:18%;">Categoria</th><th style="width:10%;">Tipo</th><th style="width:10%;text-align:right;">Valor</th>
           </tr></thead>
-          <tbody>${itens.map(t=>`<tr>
-            <td>${fmtData(t.data)}</td>
-            <td>${escapeHtml(t.descricao)}</td>
-            <td>${escapeHtml(t.conta)}</td>
-            <td>${escapeHtml(t.categoria||'—')}</td>
-            <td><span class="tag ${t.tipo}" style="font-size:9px;">${t.tipo}</span></td>
-            <td style="text-align:right;" class="val-cell ${t.tipo==='Despesa'?'neg':'pos'}">${fmtBRL(t.valor)}</td>
+          <tbody>${itensPagina.map(t=>`<tr>
+            <td data-label="Data">${fmtData(t.data)}</td>
+            <td data-label="Descrição">${escapeHtml(t.descricao)}</td>
+            <td data-label="Conta">${escapeHtml(t.conta)}</td>
+            <td data-label="Categoria">${escapeHtml(t.categoria||'—')}</td>
+            <td data-label="Tipo"><span class="tag ${t.tipo}" style="font-size:9px;">${t.tipo}</span></td>
+            <td data-label="Valor" style="text-align:right;" class="val-cell ${t.tipo==='Despesa'?'neg':'pos'}">${fmtBRL(t.valor)}</td>
           </tr>`).join('')}</tbody>
         </table></div>
+        <div class="registros-rodape">${rodapePaginacao}</div>
         <div class="saldo-final-projetado ${classeSinalMoeda(total)}" style="margin-top:10px;"><span>Soma (${itens.length} lançamento${itens.length===1?'':'s'})</span><span class="val">${fmtBRL(total)}</span></div>
         ` : `<div class="empty-state"><div class="big">🧾</div>Nenhum lançamento encontrado neste intervalo.</div>`}
       </div>
@@ -14012,7 +14041,7 @@ function renderPainelProjecao(m, idx){
           </tr></thead>
           <tbody>${linhasHtml}</tbody>
         </table></div>
-        <div class="saldo-final-projetado ${classeSinalMoeda(m.saldoFinal)}"><span>Saldo final projetado</span><span class="val">${fmtBRL(m.saldoFinal)}</span></div>
+        <div class="saldo-final-projetado ${classeSinalMoeda(m.saldoFinal)}"><span>Saldo final</span><span class="val">${fmtBRL(m.saldoFinal)}</span></div>
       </div>
     </details>
   </div>`;
@@ -14393,7 +14422,7 @@ function drawChartsInteligencia(){
    único lugar que precisa mudar se novas opções forem adicionadas no futuro. */
 const OPCOES_PERIODO_EXTRATO = [
   ['mesAtual', 'Mês atual'],
-  ['proximos30dias', 'Próximos 30 dias'],
+  ['proximoMes', 'Próximo mês'],
   ['proximos3meses', 'Próximos 3 meses'],
   ['personalizado', 'Período personalizado'],
 ];
@@ -14416,7 +14445,7 @@ function renderResumo(){
   // Edição do Saldo Inicial (renderEditarSaldoInicialFluxoCaixaModal) sempre atua sobre a competência
   // selecionada no topo do app (UI.ano/UI.mes — mesma fonte usada em toda a aplicação, ver painel Contas).
   // Só faz sentido oferecer o lápis de edição quando o 1º mês efetivamente exibido é essa mesma competência
-  // (sempre o caso em 'mesAtual'/'proximos30dias'/'proximos3meses'; em 'personalizado' só quando o início
+  // (sempre o caso em 'mesAtual'/'proximoMes'/'proximos3meses'; em 'personalizado' só quando o início
   // escolhido coincide) — nos demais casos o valor abaixo continua exibido corretamente (vem do próprio
   // 1º mês calculado), só sem o atalho de edição, para nunca editar o saldo do mês errado sem avisar.
   const primeiroMesEhCompetenciaAtual = meses[0] && meses[0].ano===UI.ano && meses[0].mes===UI.mes;
@@ -14427,23 +14456,16 @@ function renderResumo(){
       <span class="extrato-periodo-inline">
         <label for="selExtratoPeriodo">Período</label>
         <select id="selExtratoPeriodo">${OPCOES_PERIODO_EXTRATO.map(([v,nome])=>`<option value="${v}" ${modoPeriodo===v?'selected':''}>${nome}</option>`).join('')}</select>
+        ${modoPeriodo==='personalizado' ? `
+        <label for="selExtratoPeriodoMesIni">De</label>
+        <select id="selExtratoPeriodoMesIni">${MESES.map((n,i)=>`<option value="${i+1}" ${Number(pPersonalizado.mesIni)===i+1?'selected':''}>${n}</option>`).join('')}</select>
+        <input type="number" step="1" id="inpExtratoPeriodoAnoIni" value="${pPersonalizado.anoIni}">
+        <label for="selExtratoPeriodoMesFim">Até</label>
+        <select id="selExtratoPeriodoMesFim">${MESES.map((n,i)=>`<option value="${i+1}" ${Number(pPersonalizado.mesFim)===i+1?'selected':''}>${n}</option>`).join('')}</select>
+        <input type="number" step="1" id="inpExtratoPeriodoAnoFim" value="${pPersonalizado.anoFim}">
+        ` : ''}
       </span>
     </h2>
-    ${modoPeriodo==='personalizado' ? `
-    <div class="saldo-inicial-row" style="flex-wrap:wrap;gap:14px;">
-      <div class="field" style="margin-bottom:0;"><label>De</label>
-        <div class="year-nav">
-          <select id="selExtratoPeriodoMesIni">${MESES.map((n,i)=>`<option value="${i+1}" ${Number(pPersonalizado.mesIni)===i+1?'selected':''}>${n}</option>`).join('')}</select>
-          <input type="number" step="1" id="inpExtratoPeriodoAnoIni" style="width:76px;" value="${pPersonalizado.anoIni}">
-        </div>
-      </div>
-      <div class="field" style="margin-bottom:0;"><label>Até</label>
-        <div class="year-nav">
-          <select id="selExtratoPeriodoMesFim">${MESES.map((n,i)=>`<option value="${i+1}" ${Number(pPersonalizado.mesFim)===i+1?'selected':''}>${n}</option>`).join('')}</select>
-          <input type="number" step="1" id="inpExtratoPeriodoAnoFim" style="width:76px;" value="${pPersonalizado.anoFim}">
-        </div>
-      </div>
-    </div>` : ''}
     <div class="grid-cards">
       <div class="kpi">
         <div class="bar"></div>
@@ -18524,7 +18546,10 @@ function bindEvents(){
   document.getElementById('closeConfirmDelParcela')?.addEventListener('click', ()=>{ UI.confirmDelParcela=null; render(); });
   document.getElementById('closeConfirmDelParcela2')?.addEventListener('click', ()=>{ UI.confirmDelParcela=null; render(); });
   document.querySelectorAll('[data-projecao-cartao]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.projecaoFaturaModal = { conta: b.dataset.projecaoCartao, competenciaSelecionada: null, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    // porPagina inicial = 5 (só neste modal — requisito explícito "Paginação — Modal Próximas Faturas"):
+    // os demais modais de lançamento (Ver Extrato/Lançamentos futuros/Ver Fatura) continuam com o padrão
+    // de 10, inalterado. O usuário pode trocar livremente pelo seletor "Exibir" já existente no rodapé.
+    UI.projecaoFaturaModal = { conta: b.dataset.projecaoCartao, competenciaSelecionada: null, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:5, selecionados:new Set() };
     render();
   }));
   document.getElementById('closeProjecaoFatura')?.addEventListener('click', ()=>{ UI.projecaoFaturaModal=null; render(); });
@@ -19177,18 +19202,33 @@ function bindEvents(){
     delete item.vinculosExtrato[competencia];
     scheduleSave(); render();
   }));
-  /* ---- Extrato Consolidado: clique numa linha "Lançamentos não listados" abre o modal de auditoria
-     (requisito "Ajustes no Extrato Consolidado" item 7) — a linha inteira é clicável (não só o ícone 🔍),
-     mesmo padrão de área de clique generosa já usado no selo de conciliação. ---- */
-  document.querySelectorAll('tr.linha-nao-listados').forEach(tr=> tr.addEventListener('click', ()=>{
+  /* ---- Extrato Consolidado: o botão de ação 🔍 (nunca a linha inteira — "Ajustes no Extrato Consolidado
+     #3" item 5) abre o modal de auditoria de uma linha "Lançamentos não listados". Os dados do intervalo
+     ficam no dataset da própria <tr> (ver renderLinhaNaoListados); o botão só lê via closest('tr'). ---- */
+  document.querySelectorAll('[data-nao-listados-abrir]').forEach(btn=> btn.addEventListener('click', ()=>{
+    const tr = btn.closest('tr');
     UI.naoListadosModal = {
       ano: Number(tr.dataset.naoListadosAno), mes: Number(tr.dataset.naoListadosMes),
       diaIni: Number(tr.dataset.naoListadosDiaIni), diaFim: Number(tr.dataset.naoListadosDiaFim),
+      pagina: 1, porPagina: 10,
     };
     render();
   }));
   document.getElementById('closeNaoListadosModal')?.addEventListener('click', ()=>{ UI.naoListadosModal=null; render(); });
   document.getElementById('cancelNaoListadosModal')?.addEventListener('click', ()=>{ UI.naoListadosModal=null; render(); });
+  document.getElementById('naoListadosPorPagina')?.addEventListener('change', e=>{
+    const v = e.target.value;
+    UI.naoListadosModal.porPagina = v==='TODOS' ? 'TODOS' : Number(v);
+    UI.naoListadosModal.pagina = 1;
+    render();
+  });
+  document.querySelectorAll('[data-nao-listados-pagina]').forEach(b=> b.addEventListener('click', ()=>{
+    const v = b.dataset.naoListadosPagina;
+    if(v==='prev') UI.naoListadosModal.pagina = Math.max(1, UI.naoListadosModal.pagina-1);
+    else if(v==='next') UI.naoListadosModal.pagina = UI.naoListadosModal.pagina+1; // clamp final em renderNaoListadosModal()
+    else UI.naoListadosModal.pagina = Number(v);
+    render();
+  }));
   /* ---- Modal: revisão manual da conciliação (multi-seleção) ---- */
   document.getElementById('closeConciliarProjecao')?.addEventListener('click', ()=>{ UI.conciliarProjecaoModal=null; render(); });
   document.getElementById('cancelConciliarProjecao')?.addEventListener('click', ()=>{ UI.conciliarProjecaoModal=null; render(); });
