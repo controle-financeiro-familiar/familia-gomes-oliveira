@@ -657,6 +657,14 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 @media(max-width:480px){.mini-card-grid{grid-template-columns:1fr;}}
 .dash-row-2col{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;align-items:start;margin-bottom:16px;}
 @media(max-width:900px){.dash-row-2col{grid-template-columns:1fr;}}
+/* "Painel Renda Familiar — gráfico e dimensionamento": piso de 500px tanto para o painel Renda Familiar
+   quanto para a coluna à direita dele (Economias + Fatura Atual por Cartão), para os dois nunca ficarem
+   visualmente reduzidos/desalinhados quando há poucos dados — nunca um teto, só um piso; o conteúdo real
+   continua livre para crescer além disso normalmente (ver ajustarAlturaFaturaCartao, que já cresce/encolhe
+   a coluna direita para fechar exatamente a altura da esquerda — com o piso, as duas nunca ficam abaixo de
+   500px). Em telas estreitas (.dash-row-2col empilhada, colunas 1fr) o piso continua valendo por painel,
+   sem nenhuma mudança de layout responsivo — largura/disposição das colunas inalteradas. */
+#painelRendaFamiliar,#colunaDireitaRendaFamiliar{min-height:500px;box-sizing:border-box;}
 /* Variante com os dois painéis sempre na mesma altura (Comportamento Sazonal/Alertas Analíticos e Previsão
    Financeira/Simulação de Cenários, na aba Inteligência Financeira) — o painel mais curto estica até a
    altura do mais alto, em vez de cada um assumir só a altura do próprio conteúdo. */
@@ -7528,6 +7536,24 @@ function calcRendaFamiliar(ano, mes){
   });
   return { total, porSubcategoria, porResponsavel };
 }
+/* "Painel Renda Familiar — gráfico e dimensionamento" (gráfico de barras do Dashboard): sempre Ariana e
+   Bruno, nesta ordem fixa — mais uma 3ª série "Ambos", exibida SÓ quando existe alguma renda do período
+   cuja atribuição (campo Responsável do lançamento) não seja exclusivamente Ariana nem Bruno (em branco,
+   "Sem responsável definido", ou qualquer outro nome eventualmente cadastrado em Configurações). "Ambos" é
+   sempre TOTAL − ARIANA − BRUNO — nunca uma soma paralela dos "outros" responsáveis — então a inclusão
+   dela nunca altera os valores de Ariana/Bruno nem o total da Renda Familiar (eles continuam vindo direto
+   de rf.porResponsavel/rf.total, intocados). Único ponto que decide quantas/quais barras aparecem — usado
+   tanto para dimensionar o painel (renderDashboard) quanto para desenhar o gráfico (drawCharts), então os
+   dois nunca podem divergir. */
+function seriesRendaFamiliarPorResponsavel(rf){
+  const ariana = rf.porResponsavel['Ariana'] || 0;
+  const bruno = rf.porResponsavel['Bruno'] || 0;
+  const ambos = rf.total - ariana - bruno;
+  const labels = ['Ariana', 'Bruno'];
+  const valores = [ariana, bruno];
+  if(ambos > 0.01){ labels.push('Ambos'); valores.push(ambos); }
+  return { labels, valores };
+}
 /* Paleta revisada para maior contraste entre fatias vizinhas — evita tons parecidos (o antigo conjunto
    tinha 3 variações de laranja/dourado lado a lado). Mistura o azul-marinho e o dourado da identidade do
    app com tons bem distintos entre si (vermelho, verde, roxo, petróleo, magenta, oliva, terracota,
@@ -11633,8 +11659,7 @@ function renderDashboard(){
       <h2>👪 Renda Familiar — ${MESES[UI.mes-1]}/${UI.ano}</h2>
       ${(()=>{
         const rf = calcRendaFamiliar(UI.ano, UI.mes);
-        const respFixos = [...STATE.responsaveis].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-        const alturaBarra = Math.max(120, 46 + respFixos.length*44);
+        const alturaBarra = Math.max(120, 46 + seriesRendaFamiliarPorResponsavel(rf).labels.length*44);
         const subsOrdenadas = Object.keys(rf.porSubcategoria).sort((a,b)=>rf.porSubcategoria[b]-rf.porSubcategoria[a]);
         return `
         <div style="display:flex;flex-direction:column;gap:16px;">
@@ -11674,7 +11699,7 @@ function renderDashboard(){
 </div>`;
       })()}
     </div>
-    <div style="display:flex;flex-direction:column;gap:16px;">
+    <div id="colunaDireitaRendaFamiliar" style="display:flex;flex-direction:column;gap:16px;">
       <div class="panel" id="painelInvestimentos" style="margin-bottom:0;">
         <h2>🏦 Economias <button class="btn btn-ghost btn-sm no-print" id="btnVerAportes" title="Ver detalhamento dos aportes" style="float:right;">👁️ Ver detalhes</button></h2>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch;">
@@ -12015,13 +12040,12 @@ function drawCharts(){
   }
   const elRB = document.getElementById('chartRendaBarra');
   if(elRB){
-    // Ordem fixa (alfabética, igual às demais listas de responsáveis do app) — não muda de mês a mês
-    // mesmo que os valores mudem, para facilitar a comparação visual entre períodos. Todos os
-    // responsáveis cadastrados aparecem, mesmo com renda R$ 0,00 (barra de comprimento zero). A barra
-    // já é dimensionada pelo percentual de participação (não pelo valor em R$), então o comprimento é
-    // sempre proporcional à participação — e o rótulo mostra esse mesmo percentual, como na referência.
-    const respFixos = [...STATE.responsaveis].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-    const valoresResp = respFixos.map(r=> rf.porResponsavel[r] || 0);
+    // Ordem fixa (Ariana, Bruno, + "Ambos" só quando aplicável — ver seriesRendaFamiliarPorResponsavel):
+    // não muda de mês a mês mesmo que os valores mudem, para facilitar a comparação visual entre períodos.
+    // Ariana e Bruno sempre aparecem, mesmo com renda R$ 0,00 (barra de comprimento zero). A barra já é
+    // dimensionada pelo percentual de participação (não pelo valor em R$), então o comprimento é sempre
+    // proporcional à participação — e o rótulo mostra esse mesmo percentual, como na referência.
+    const { labels: respFixos, valores: valoresResp } = seriesRendaFamiliarPorResponsavel(rf);
     const percentuaisResp = valoresResp.map(v=> pctSeguro(v, rf.total));
     chartInstances.push(new Chart(elRB, {
       type:'bar',
