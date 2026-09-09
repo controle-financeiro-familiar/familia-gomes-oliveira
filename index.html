@@ -5436,6 +5436,7 @@ function loadCSVRegistros(text){
   reconciliarPagamentosFatura(); // cria os espelhos de pagamento de fatura que ainda faltarem (ver função)
   conciliarProjecoesComExtrato(); // vincula lançamentos previstos do Fluxo de Caixa aos seus correspondentes reais no Extrato (ver função)
   corrigirCompetenciaTransacoes(); // depois de reconciliarPagamentosFatura, para corrigir também os espelhos recém-criados
+  aplicarAntecipacoesDeParcelas(); // depois de competências/duplicidades saneadas: remove parcela futura já quitada por antecipação (ver função)
   corrigirLancamentosSemClassificacao(); // por último: só sobra sem grupo/categoria quem nenhuma correção acima resolveu
 }
 /* Corrige, para compras já cadastradas antes da correção deste bug, a competência das parcelas futuras
@@ -5703,6 +5704,7 @@ function loadCSVConfig(text){
   reconciliarPagamentosFatura(); // cartões/fechamentos podem ter chegado só agora — reconcilia de novo (idempotente)
   conciliarProjecoesComExtrato(); // idem — lançamentos previstos podem ter novos candidatos no Extrato recém-carregado
   corrigirCompetenciaTransacoes(); // idem — cardConfig/contaTipos podem ter chegado só agora com este arquivo
+  aplicarAntecipacoesDeParcelas(); // idem — remove parcela futura já quitada por antecipação (ver função)
 }
 function mesclarLista(doArquivo, padrao){
   if(!doArquivo.length) return [...padrao];
@@ -17280,6 +17282,136 @@ function diagnosticoDuplicatasDeParcelas(){
   return identificarDuplicatasDeParcelas();
 }
 if(typeof window!=='undefined') window.diagnosticoDuplicatasDeParcelas = diagnosticoDuplicatasDeParcelas;
+/* Antecipação/quitação antecipada de parcelas futuras de cartão de crédito: quando o banco cobra de uma
+   vez, numa fatura, uma ou mais parcelas que só venceriam em faturas seguintes (ex.: "ANTEC 02/05-..."
+   pagando adiantado o que só venceria em Fevereiro), a parcela FUTURA sintética que sincronizarParcelasFuturas
+   já tinha gerado para aquele mês deixa de representar um compromisso real — mas nada, até aqui, detectava
+   isso: consolidarDuplicatasDeParcelas só reconhece cópias da MESMA identidade (chaveIdentidadeParcela,
+   que depende da descrição normalizada), e a descrição de uma antecipação quase nunca bate com a da compra
+   original (ver auditoria do saldo parcelado do BB Elo Nanquim, Jan/2026: "PG AUTHENTIC PARC 01/05" x
+   "ANTEC 02/05-PG AUTHENTIC FE 551199" — mesma compra, texto diferente).
+   IDENTIFICAÇÃO — nunca por igualdade textual. Para cada parcela futura sintética (parcelaFutura:true,
+   Despesa, parcela N de TOTAL, de um parcelamento G), procura no restante dos lançamentos uma evidência de
+   que ela já foi cobrada adiantada: mesma conta + mesma Data da compra original (convenção do app: igual em
+   toda parcela/antecipação da mesma compra) + mesmo total de parcelas + o MESMO número de parcela N + valor
+   dentro de uma pequena tolerância (a antecipação costuma vir com um pequeno desconto de juros) + já ter
+   sido efetivamente cobrada (Despesa real, nunca outra projeção) numa competência ANTERIOR à que a parcela
+   projetada ocuparia. Essa última condição é a prova estrutural de antecipação (a mesma posição do
+   cronograma já foi cobrada numa fatura anterior à que teria normalmente) — funciona tanto para antecipação
+   na própria fatura quanto em competência posterior, e não depende de as duas descrições terem qualquer
+   semelhança. A descrição só entra no relatório, nunca no critério de decisão.
+   SEGURANÇA — só age quando existe EXATAMENTE UMA evidência inequívoca para aquela parcela: nenhuma
+   candidata deixa a parcela intocada (comportamento atual, preservado); mais de uma candidata é ambíguo e
+   também não move nada — fica só registrado em `ambiguos`, para revisão manual, nunca decidido por
+   proximidade/heurística. Cada parcela futura é avaliada independentemente, então uma antecipação parcial
+   (só algumas das parcelas restantes) remove só as que têm evidência, preservando as demais.
+   DISPUTA ENTRE COMPRAS DIFERENTES — mesma conta e mesmo dia costumam ter mais de uma compra parcelada
+   (ex.: duas compras no mesmo cartão, no mesmo dia, ambas em 5x, com valores de parcela próximos):
+   se a MESMA evidência de antecipação bate, pelos critérios acima, com parcelas futuras de MAIS DE UM
+   parcelamento original diferente, nenhuma reivindicação tem segurança suficiente para agir sozinha — a
+   descrição normalizada (sem número de parcela) entra aqui só como critério de DESEMPATE, nunca como
+   condição de entrada: quando um dos parcelamentos disputantes compartilha claramente mais texto com a
+   evidência do que os demais, fica com ela; havendo empate (inclusive nenhuma sobreposição em nenhum dos
+   lados), todos os disputantes ficam em `ambiguos`, sem remover nada. */
+function identificarAntecipacoesDeParcelas(){
+  const toleranciaValor = v => Math.max(2, v*0.03);
+  // Tokeniza ANTES de normalizar — normalizarTexto remove todo caractere não alfanumérico, inclusive
+  // espaços, então normalizar a frase inteira primeiro juntaria as palavras num único bloco.
+  const tokensDescricao = desc => new Set(
+    String(limparDescricaoParcelamento(desc||'')).split(/\s+/).map(w=>normalizarTexto(w)).filter(w=>w.length>=3));
+  const sobreposicao = (a,b) => { let n=0; a.forEach(w=>{ if(b.has(w)) n++; }); return n; };
+  const porParcelamento = {};
+  STATE.transactions.forEach(t=>{
+    if(t.pgto==='Cartão de Crédito' && STATE.cartoes.includes(t.conta) && Number(t.totalParcelas)>1){
+      (porParcelamento[t.parcelamentoId] = porParcelamento[t.parcelamentoId] || []).push(t);
+    }
+  });
+  // 1ª passada: para cada parcela futura, levanta as candidatas (critérios puramente estruturais).
+  const pendentes = [];
+  Object.values(porParcelamento).forEach(grupo=>{
+    const total = Number(grupo[0].totalParcelas);
+    grupo.filter(t=> t.parcelaFutura && t.tipo==='Despesa').forEach(v=>{
+      const n = Number(v.parcelaAtual);
+      const valorV = Number(v.valor)||0;
+      const candidatos = STATE.transactions.filter(m=>
+        m.parcelamentoId!==v.parcelamentoId && !m.parcelaFutura && m.tipo==='Despesa'
+        && m.pgto==='Cartão de Crédito' && m.conta===v.conta && m.data===v.data
+        && Number(m.totalParcelas)===total && Number(m.parcelaAtual)===n
+        && Math.abs((Number(m.valor)||0)-valorV) <= toleranciaValor(valorV)
+        && m.competencia && v.competencia && m.competencia < v.competencia);
+      pendentes.push({ v, n, total, candidatos });
+    });
+  });
+  // 2ª passada: para cada parcela futura com mais de uma candidata, reduz a UMA só (a de maior
+  // sobreposição de texto com a própria descrição da parcela futura) — só um desempate, nunca decide
+  // sozinho: sem sobreposição, ou empate entre as candidatas, continua sem nenhuma candidata escolhida.
+  const escolhaPorVitima = pendentes.map(p=>{
+    if(p.candidatos.length===0) return { ...p, escolhida:null };
+    if(p.candidatos.length===1) return { ...p, escolhida:p.candidatos[0] };
+    const tokensV = tokensDescricao(p.v.descricao);
+    const pontuadas = p.candidatos.map(m=>({ m, pontos: sobreposicao(tokensV, tokensDescricao(m.descricao)) }))
+      .sort((a,b)=> b.pontos-a.pontos);
+    const empatada = pontuadas[1].pontos===pontuadas[0].pontos;
+    return { ...p, escolhida: (pontuadas[0].pontos>0 && !empatada) ? pontuadas[0].m : null };
+  });
+  // 3ª passada: entre as vítimas que convergiram para a MESMA evidência (disputa entre parcelamentos
+  // ORIGINAIS diferentes — ex.: duas compras no mesmo cartão/dia, mesmo total de parcelas, valor
+  // parecido), decide UMA só vez, comparando a sobreposição de texto de TODAS as disputantes contra a
+  // evidência: só vence quem tiver, sozinha, a maior pontuação — em empate (inclusive 0 a 0), nenhuma
+  // das disputantes tem segurança suficiente, e todas ficam para revisão manual.
+  const porEvidenciaEscolhida = {};
+  escolhaPorVitima.forEach(p=>{ if(p.escolhida) (porEvidenciaEscolhida[p.escolhida.id] = porEvidenciaEscolhida[p.escolhida.id] || []).push(p); });
+  const vitoriaFinal = new Map(); // parcelamentoId+id da parcela futura -> evidência vencedora
+  Object.values(porEvidenciaEscolhida).forEach(disputantes=>{
+    if(disputantes.length===1){ vitoriaFinal.set(disputantes[0].v.id, disputantes[0].escolhida); return; }
+    const tokensM = tokensDescricao(disputantes[0].escolhida.descricao);
+    const pontuadas = disputantes.map(p=>({ p, pontos: sobreposicao(tokensDescricao(p.v.descricao), tokensM) }))
+      .sort((a,b)=> b.pontos-a.pontos);
+    const empatada = pontuadas[1].pontos===pontuadas[0].pontos;
+    if(pontuadas[0].pontos>0 && !empatada) vitoriaFinal.set(pontuadas[0].p.v.id, pontuadas[0].p.escolhida);
+  });
+  const quitadas = [], ambiguos = [];
+  escolhaPorVitima.forEach(({v, n, total, candidatos})=>{
+    if(!candidatos.length) return; // nenhuma evidência: comportamento atual, preservado
+    const vencedora = vitoriaFinal.get(v.id);
+    if(vencedora){
+      quitadas.push({ id:v.id, conta:v.conta, descricao:v.descricao, parcela:`${n}/${total}`,
+        valor:v.valor, competenciaProjetada:v.competencia, parcelamentoId:v.parcelamentoId,
+        evidenciaId:vencedora.id, evidenciaDescricao:vencedora.descricao, evidenciaCompetencia:vencedora.competencia, evidenciaValor:vencedora.valor });
+    } else {
+      ambiguos.push({ id:v.id, conta:v.conta, descricao:v.descricao, parcela:`${n}/${total}`,
+        valor:v.valor, competenciaProjetada:v.competencia, parcelamentoId:v.parcelamentoId,
+        candidatos: candidatos.map(m=>({id:m.id, descricao:m.descricao, competencia:m.competencia, valor:m.valor})) });
+    }
+  });
+  return { quitadas, ambiguos };
+}
+/* Remove, de STATE.transactions, exatamente as parcelas futuras que identificarAntecipacoesDeParcelas
+   comprovou terem sido quitadas antecipadamente — nunca as ambíguas. Idempotente: como
+   sincronizarParcelasFuturas volta a gerar a mesma parcela futura a cada carregamento (a partir da
+   parcela de referência, que nunca é alterada por esta função), esta rotina roda de novo a cada
+   carregamento, sempre chegando ao mesmo resultado final. Chamada no mesmo ponto do pipeline de
+   saneamento automático que consolidarDuplicatasDeParcelas/corrigirCompetenciaTransacoes, sempre depois
+   delas (depende de competências e duplicidades já saneadas). */
+function aplicarAntecipacoesDeParcelas(){
+  const { quitadas } = identificarAntecipacoesDeParcelas();
+  if(quitadas.length){
+    const ids = new Set(quitadas.map(q=>q.id));
+    STATE.transactions = STATE.transactions.filter(t=>!ids.has(t.id));
+  }
+  return quitadas;
+}
+/* Versão somente leitura — mesma detecção, sem remover nada; devolve { quitadas, ambiguos } para conferir
+   o alcance da correção ANTES dela rodar de verdade. Chamável a qualquer momento, inclusive pelo console:
+   diagnosticoAntecipacoesDeParcelas(). */
+function diagnosticoAntecipacoesDeParcelas(){
+  return identificarAntecipacoesDeParcelas();
+}
+if(typeof window!=='undefined'){
+  window.identificarAntecipacoesDeParcelas = identificarAntecipacoesDeParcelas;
+  window.aplicarAntecipacoesDeParcelas = aplicarAntecipacoesDeParcelas;
+  window.diagnosticoAntecipacoesDeParcelas = diagnosticoAntecipacoesDeParcelas;
+}
 /* `contaFiltro`, quando informado, restringe a varredura aos lançamentos daquela conta/cartão — usado
    quando "Verificar duplicidade" é aberto de dentro de um modal da aba Contas e Cartões (o contexto já
    deixa claro qual conta está sendo analisada, então não faz sentido comparar as demais). Sem o filtro,
