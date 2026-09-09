@@ -814,19 +814,22 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 
 table{width:100%;border-collapse:collapse;font-size:11px;}
 /* =====================================================================================
-   DOCUMENTAÇÃO — Largura das colunas da tabela do Fluxo de Caixa (Dia/Descrição/Tipo/Valor/Saldo/Ações)
+   DOCUMENTAÇÃO — Largura das colunas da tabela do Extrato Consolidado
+   (Dia/Descrição/Conta-Cartão/Tipo/Status/Valor/Saldo/Ações)
    =====================================================================================
    Este é um app de arquivo único: não há arquivos .css/.html separados — tudo (HTML, CSS e JS) vive
    neste mesmo index.html. Requisito explícito: proporção FIXA (não mais calculada dinamicamente a partir
-   do maior valor/saldo exibido no mês, como antes desta mudança) — sempre a mesma em toda tabela do Fluxo
-   de Caixa, em toda competência, com ou sem ícones extras (cadeado 🔓) na coluna Ações:
-        Dia        6,5%
-        Descrição  30,20%
-        Tipo       13%
-        Valor      17%
-        Saldo      19%
-        Ações      14,30%
-        Total      100%
+   do maior valor/saldo exibido no mês, como antes desta mudança) — sempre a mesma em toda tabela do
+   Extrato Consolidado, em toda competência, com ou sem ícones extras (cadeado 🔓) na coluna Ações:
+        Dia            5,5%
+        Descrição      18%
+        Conta/Cartão   11,5%
+        Tipo           12%
+        Status         13,5%
+        Valor          12,5%
+        Saldo          12,7%
+        Ações          14,30%
+        Total          100%
    Definida como constante LARGURAS_COLUNAS_FLUXO logo acima de renderPainelProjecao() (busque por esse
    nome) e escrita em cada <th style="width:XX%"> — thead e tbody usam a mesma <table style="table-layout:
    fixed"> e portanto herdam automaticamente a mesma largura por coluna, sem precisar repetir a proporção
@@ -841,7 +844,7 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
 .tabela-fluxo{min-width:520px;}
 .tabela-fluxo td{padding:5px 8px;font-size:11.5px;}
 .tabela-fluxo th{padding:6px 8px;}
-.tabela-fluxo td:nth-child(2){overflow-wrap:break-word;word-break:break-word;}
+.tabela-fluxo td:nth-child(2),.tabela-fluxo td:nth-child(3){overflow-wrap:break-word;word-break:break-word;}
 .tabela-fluxo .icon-btn{padding:1px;font-size:12px;}
 /* Coluna Ações (desktop): botões sempre alinhados à direita, espaçamento uniforme entre eles e nunca em
    mais de uma linha — display:flex resolve os três de uma vez (flex-wrap:nowrap é redundante com
@@ -855,6 +858,11 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
    significado fica só no tooltip (title) e no aria-label, nunca em texto visível na tabela. */
 .selo-conciliacao{display:inline-block;font-size:12px;cursor:default;line-height:1;vertical-align:middle;}
 .selo-conciliacao[data-clicavel]{cursor:pointer;}
+/* Coluna Status do Extrato Consolidado (ver statusExtratoConsolidado/badgeStatusExtratoConsolidado):
+   🟢 Realizado / 🔵 Projetado / 🟡 Conciliado / 🔴 Divergente — o emoji já carrega a cor por si só (mesma
+   convenção de acessibilidade do restante da tabela: nunca só uma cor de fundo/borda sem texto/ícone
+   equivalente), então o texto ao lado só reforça visualmente, sem depender de cor para ser lido. */
+.status-extrato{font-size:11px;}
 /* Fluxo de Caixa no mobile (item 13 do requisito de responsividade): a mesma tabela vira uma lista
    vertical de cards — cada <tr> um card, cada <td> uma linha "rótulo: valor" — sem tocar no cálculo da
    projeção nem duplicar a lógica de renderPainelProjecao/renderLinhaProjecao, só a apresentação. As linhas
@@ -5072,8 +5080,15 @@ let UI = {
   moverSubcategoriaModal: null, // { nome, tipo, grupo, categoria, grupoDestino, categoriaDestino } — mover uma subcategoria para outra categoria/grupo
   posicaoModal: null, // { nivel:'grupo'|'categoria'|'subcategoria', grupo, categoria, nome } — reposicionar (início/fim/depois de)
   gruposAbertos: new Set(),
-  fluxoMesesFechados: new Set(), // chaves "ano-mes" recolhidas manualmente no Fluxo de Caixa (item 14) — vazio por padrão = todos expandidos, igual ao comportamento anterior
-  fluxoMesesInicializados: false, // true depois da 1ª renderização do Fluxo de Caixa — no mobile, a 1ª vez recolhe todos os meses por padrão (item 8 do requisito); depois disso, respeita só a interação do usuário
+  fluxoMesesFechados: new Set(), // chaves "ano-mes" recolhidas manualmente no Extrato Consolidado (item 14) — vazio por padrão = todos expandidos, igual ao comportamento anterior
+  fluxoMesesInicializados: false, // true depois da 1ª renderização do Extrato Consolidado — no mobile, a 1ª vez recolhe todos os meses por padrão (item 8 do requisito); depois disso, respeita só a interação do usuário
+  // Seletor de período do Extrato Consolidado (requisito "Extrato Consolidado" seção 2): 'mesAtual' |
+  // 'proximos30dias' | 'proximos3meses' (padrão) | 'personalizado'. 'proximos3meses' preserva exatamente o
+  // comportamento já existente (mês selecionado no topo + os 3 seguintes — ver calcProjecoesMultiMes),
+  // nunca uma segunda lógica de projeção paralela (requisito 10) — só decide QUANTOS meses calcular e,
+  // no caso de "30 dias", filtra a exibição das linhas dentro da mesma janela já calculada.
+  extratoPeriodo: 'proximos3meses',
+  extratoPeriodoPersonalizado: null, // { anoIni, mesIni, anoFim, mesFim } — só usado quando extratoPeriodo==='personalizado'; null até o usuário abrir o seletor pela 1ª vez (ver mesesParaExtratoConsolidado, que aplica o padrão mês atual→mês atual nesse caso)
   ajudaFluxoAberta: false,
   ajudaCartoesAberta: false,
   ajudaDashboardAberta: false,
@@ -10176,6 +10191,82 @@ function calcProjecoesMultiMes(anoBase, mesBase, qtdMeses){
   }
   return meses;
 }
+/* ---------- Seletor de período do Extrato Consolidado ----------
+   Decide, a partir de UI.extratoPeriodo, quantos meses calcular a partir do mês selecionado no topo do app
+   (UI.ano/UI.mes) — sempre reaproveitando calcProjecoesMultiMes/calcProjecoesMes, nunca uma segunda lógica
+   de projeção paralela (requisito 10). 'proximos3meses' (padrão) preserva exatamente os 4 meses já
+   calculados antes deste requisito (o mês selecionado + os 3 seguintes). 'proximos30dias' calcula meses
+   suficientes para cobrir 30 dias a partir de hoje (mesmo perto da virada do mês) e depois FILTRA a
+   exibição (ver filtrarMesesParaJanelaDeDias) — o saldo de cada linha continua exato porque já é a soma
+   sequencial desde o dia 1 do mês (ver calcProjecoesMes), então ocultar linhas anteriores à janela não
+   muda o significado das que permanecem visíveis. 'personalizado' usa o intervalo de mês/ano escolhido em
+   UI.extratoPeriodoPersonalizado (mês atual→mês atual enquanto o usuário não abriu o seletor). */
+function mesesParaExtratoConsolidado(){
+  const modo = UI.extratoPeriodo || 'proximos3meses';
+  if(modo==='mesAtual') return calcProjecoesMultiMes(UI.ano, UI.mes, 1);
+  if(modo==='personalizado'){
+    const p = UI.extratoPeriodoPersonalizado || { anoIni:UI.ano, mesIni:UI.mes, anoFim:UI.ano, mesFim:UI.mes };
+    const anoIni = Number(p.anoIni)||UI.ano, mesIni = Number(p.mesIni)||UI.mes;
+    const anoFim = Number(p.anoFim)||anoIni, mesFim = Number(p.mesFim)||mesIni;
+    const qtd = Math.max(1, (anoFim-anoIni)*12 + (mesFim-mesIni) + 1);
+    return calcProjecoesMultiMes(anoIni, mesIni, qtd);
+  }
+  if(modo==='proximos30dias'){
+    const hoje = new Date(hojeISO()+'T00:00:00');
+    const fimJanela = new Date(hoje); fimJanela.setDate(fimJanela.getDate()+30);
+    const isoFim = `${fimJanela.getFullYear()}-${pad2(fimJanela.getMonth()+1)}-${pad2(fimJanela.getDate())}`;
+    const qtd = Math.max(1, (fimJanela.getFullYear()-UI.ano)*12 + (fimJanela.getMonth()+1-UI.mes) + 1);
+    const meses = calcProjecoesMultiMes(UI.ano, UI.mes, qtd);
+    return filtrarMesesParaJanelaDeDias(meses, hojeISO(), isoFim);
+  }
+  return calcProjecoesMultiMes(UI.ano, UI.mes, 4);
+}
+/* Filtra as linhas de cada mês já calculado (ver mesesParaExtratoConsolidado/'proximos30dias') para as que
+   caem dentro de [isoIni, isoFim] (inclusive), mantendo saldoInicial/saldoFinal originais do mês — o saldo
+   de cada linha remanescente já é a soma sequencial exata desde o dia 1 (ver calcProjecoesMes), então
+   ocultar linhas fora da janela não altera o significado das que continuam visíveis — e descartando meses
+   que ficam sem nenhuma linha na janela. Uma linha de "Lançamentos não listados" que cruza a borda da
+   janela (ex.: intervalo 25–31 com corte no dia 28) é mantida inteira se qualquer parte dela cair dentro da
+   janela — simplificação assumida de propósito, já que o intervalo exato aparece sempre no rótulo/tooltip
+   da própria linha. */
+function filtrarMesesParaJanelaDeDias(meses, isoIni, isoFim){
+  return meses.map(m=>{
+    const linhas = m.linhas.filter(l=>{
+      const diaIni = l.especial==='nao-listados' ? l.diaIni : (Number(l.dia)||1);
+      const diaFim = l.especial==='nao-listados' ? l.diaFim : (Number(l.dia)||1);
+      const isoLinhaIni = `${m.ano}-${pad2(m.mes)}-${pad2(Math.min(31,Math.max(1,diaIni)))}`;
+      const isoLinhaFim = `${m.ano}-${pad2(m.mes)}-${pad2(Math.min(31,Math.max(1,diaFim)))}`;
+      return isoLinhaFim>=isoIni && isoLinhaIni<=isoFim;
+    });
+    return { ...m, linhas };
+  }).filter(m=>m.linhas.length>0);
+}
+/* Resumo agregado do período selecionado no Extrato Consolidado (requisito "Extrato Consolidado" seção
+   12): Saldo Atual (saldo real no início da projeção — o próprio saldoInicial do 1º mês incluído),
+   Entradas/Saídas Projetadas (soma de todo o período, incluindo as linhas de "Lançamentos não listados"
+   pelo sinal do valor líquido já consolidado) e Saldo Projetado (saldoFinal do ÚLTIMO mês incluído). Não
+   recalcula nada por conta própria — só agrega os valores que calcProjecoesMes/calcProjecoesMultiMes já
+   calcularam, nunca uma segunda lógica de projeção paralela (requisito 10). */
+function resumoExtratoConsolidado(meses){
+  let entradas = 0, saidas = 0;
+  meses.forEach(m=>{
+    m.linhas.forEach(l=>{
+      if(l.especial==='nao-listados'){
+        if(l.valor>=0) entradas += l.valor; else saidas += -l.valor;
+      } else if(l.tipo==='Receita'){
+        entradas += l.valorCalculado;
+      } else {
+        saidas += l.valorCalculado;
+      }
+    });
+  });
+  return {
+    saldoAtual: meses[0] ? meses[0].saldoInicial : 0,
+    entradas: arredondarMoeda(entradas),
+    saidas: arredondarMoeda(saidas),
+    saldoProjetado: meses.length ? meses[meses.length-1].saldoFinal : 0,
+  };
+}
 /* Validação/diagnóstico automático do Fluxo de Caixa: para cada mês já calculado (recebe o resultado
    pronto de calcProjecoesMultiMes/calcProjecoesMes — nunca recalcula nada por conta própria, para sempre
    auditar exatamente os mesmos números exibidos na tela), compara o Saldo do Dia (m.saldoPorDia — saldo
@@ -11134,14 +11225,14 @@ function renderFileBanner(){
 const TABS_PRINCIPAIS_DESC = {
   dashboard: 'Resumo do mês, saldo atual e indicadores',
   inteligencia: 'Análises, tendências e projeções financeiras',
-  resumo: 'Projeção de entradas e saídas mês a mês',
+  resumo: 'Extrato consolidado com saldo real e projetado, mês a mês',
   metas: 'Acompanhamento das metas de gastos',
   registros: 'Lançamentos de receitas e despesas',
 };
 const TABS_PRINCIPAIS = [
   ["dashboard","📊","Painel Financeiro","Painel"],
   ["inteligencia","🧠","Inteligência Financeira","Inteligência"],
-  ["resumo","📆","Fluxo de Caixa","Fluxo"],
+  ["resumo","📆","Extrato Consolidado","Extrato"],
   ["metas","🎯","Metas de Gastos","Metas"],
   ["registros","📒","Registros","Registros"],
 ];
@@ -11149,7 +11240,7 @@ const TABS_SECUNDARIAS = [
   ["cartoes","💳","Contas e Cartões","Saldos, limites e faturas das suas contas e cartões"],
   ["categorias","⚙️","Configurações","Categorias, backups, conta Microsoft e preferências"],
 ];
-const TABS_TODAS = [["dashboard","📊 Painel Financeiro"],["inteligencia","🧠 Inteligência Financeira"],["cartoes","💳 Contas e Cartões"],["resumo","📆 Fluxo de Caixa"],["metas","🎯 Metas de Gastos"],["registros","📒 Registros"],["categorias","⚙️ Configurações"]];
+const TABS_TODAS = [["dashboard","📊 Painel Financeiro"],["inteligencia","🧠 Inteligência Financeira"],["cartoes","💳 Contas e Cartões"],["resumo","📆 Extrato Consolidado"],["metas","🎯 Metas de Gastos"],["registros","📒 Registros"],["categorias","⚙️ Configurações"]];
 /* Item 7 do requisito: o painel "Painéis" do mobile precisa listar TODAS as abas na MESMA ordem do
    desktop (TABS_TODAS) — em vez de "principais primeiro, secundárias depois" (ordem antiga do "Mais"),
    monta-se aqui um único array combinando TABS_PRINCIPAIS + TABS_SECUNDARIAS e reordenando pelos ids de
@@ -11428,7 +11519,7 @@ function renderDashboard(){
       <p><b>💰 Receitas, 💸 Despesas e ⚖️ Saldo</b>: somam todos os lançamentos da competência selecionada no topo da página (mês/ano). O <b>🐖 % Poupança</b> é a fração da receita do mês que sobrou como saldo positivo.</p>
       <p><b>🎯 Metas de Gastos</b>: aparece somente quando existem metas cadastradas para o mês; clique no card para abrir a aba Metas de Gastos com o detalhe de cada uma.</p>
       <p><b>👪 Renda Familiar</b>: distribui a receita do mês por fonte (subcategoria) e por responsável, sempre a partir dos lançamentos — nunca de um valor fixo.</p>
-      <p><b>🪙 Economias</b> e <b>💳 Fatura atual por cartão</b>: usam os mesmos cálculos das abas Contas e Cartões e Fluxo de Caixa, então ficam sempre consistentes entre si.</p>
+      <p><b>🪙 Economias</b> e <b>💳 Fatura atual por cartão</b>: usam os mesmos cálculos das abas Contas e Cartões e Extrato Consolidado, então ficam sempre consistentes entre si.</p>
       <p><b>🔥 Mapa de Calor de Despesas</b>: uma célula por dia (7 meses — 3 antes e 3 depois do mês selecionado no cabeçalho, sempre no centro), com a cor mais forte quanto maior o total de despesas naquele dia. Clique num dia com despesas para abrir a lista de lançamentos daquele dia, com filtros e seleção em lote própria — sem precisar trocar de aba.</p>
       <p style="margin-bottom:0;"><b>📊 Visão Geral</b>: mostra como a despesa do mês se distribui entre os grupos (gráfico de barras), a proporção entre despesas e saldo positivo dentro da receita (donut) e a evolução de receitas e despesas nos últimos 6 meses — para comparar o mês atual com o comportamento recente sem precisar trocar de aba. Para uma análise mais aprofundada (tendência, sazonalidade, projeções), use a aba <b>🧠 Inteligência Financeira</b>.</p>
     </div>
@@ -13631,6 +13722,48 @@ function seloConciliacaoProjecao(l){
   if(l.statusConciliacao==='pendente') return clicavel('⏳', 'Conciliação pendente - Existem possíveis correspondências no Extrato, clique para revisar e vincular manualmente');
   return '';
 }
+/* Coluna Status do Extrato Consolidado (requisito "Extrato Consolidado" seção 4) — deriva os 4 estados
+   exigidos a partir dos campos já calculados por calcProjecoesMes, nunca uma classificação paralela:
+     realizado  — linha "Lançamentos não listados": sempre movimentação real, nunca uma projeção.
+     projetado  — item de STATE.projecoes ainda sem nenhum vínculo confirmado no Extrato (inclui
+                  'pendente', que já tem candidatos mas nenhum vínculo automático seguro) e fatura de
+                  cartão ainda não paga.
+     conciliado — projeção com vínculo confirmado no Extrato (ou fatura de cartão já paga) cujo valor bate
+                  com o previsto, dentro da tolerância já usada em toda a aplicação (EPSILON_FATURA).
+     divergente — o mesmo caso acima, mas com o valor efetivamente identificado diferente do previsto além
+                  dessa tolerância (requisito 6: nunca um 2º lançamento para a diferença, só a classificação
+                  desta mesma linha muda). */
+function statusExtratoConsolidado(l){
+  if(l.especial==='nao-listados') return 'realizado';
+  const temValorReal = l.cartao
+    ? l.qtdVinculos>0
+    : ['conciliado','antecipado','postecipado','contracheque-importado'].includes(l.statusConciliacao);
+  if(!temValorReal) return 'projetado';
+  const diferenca = Math.abs((Number(l.valorCalculado)||0) - (Number(l.valorPrevisto)||0));
+  return diferenca > EPSILON_FATURA ? 'divergente' : 'conciliado';
+}
+const CONFIG_STATUS_EXTRATO = {
+  realizado:  { icone:'🟢', texto:'Realizado' },
+  projetado:  { icone:'🔵', texto:'Projetado' },
+  conciliado: { icone:'🟡', texto:'Conciliado' },
+  divergente: { icone:'🔴', texto:'Divergente' },
+};
+function badgeStatusExtratoConsolidado(l){
+  const status = statusExtratoConsolidado(l);
+  const cfg = CONFIG_STATUS_EXTRATO[status];
+  const tituloDivergencia = status==='divergente' ? ` (previsto ${fmtBRL(l.valorPrevisto)}, identificado ${fmtBRL(l.valorCalculado)})` : '';
+  return `<span class="status-extrato" title="${escapeHtml(cfg.texto+tituloDivergencia)}">${cfg.icone} ${cfg.texto}</span>`;
+}
+/* Coluna Conta/Cartão do Extrato Consolidado (requisito seção 3) — reutiliza os mesmos campos já usados
+   pelo resto da tabela (l.cartao / Conta provável do lançamento previsto), nunca uma estrutura nova em
+   paralelo (requisito explícito de reaproveitar um campo já existente). Linhas de "Lançamentos não
+   listados" somam movimentações de mais de uma conta elegível — não há uma única conta para mostrar. */
+function contaOuCartaoDaLinha(l){
+  if(l.especial==='nao-listados') return '—';
+  if(l.cartao) return `💳 ${escapeHtml(l.cartao)}`;
+  if(l.contaProvavelId) return escapeHtml(l.contaProvavelId);
+  return '—';
+}
 function renderLinhaProjecao(l){
   const tagTipo = l.tipo==='Receita' ? 'Receita' : 'Despesa';
   const statusComValorReal = ['conciliado','antecipado','postecipado','contracheque-importado'].includes(l.statusConciliacao);
@@ -13645,8 +13778,10 @@ function renderLinhaProjecao(l){
   return `
     <tr data-proj-id="${l.id}">
       <td data-label="Dia" style="text-align:center;font-family:var(--mono);">${pad2(l.dia)}</td>
-      <td data-label="Descrição">${escapeHtml(l.descricao)}${l.cartao ? ' 💳' : ''}${seloConciliacaoProjecao(l)}</td>
+      <td data-label="Descrição">${escapeHtml(l.descricao)}${seloConciliacaoProjecao(l)}</td>
+      <td data-label="Conta/Cartão">${contaOuCartaoDaLinha(l)}</td>
       <td data-label="Tipo"><span class="tag ${tagTipo}">${tagTipo}</span></td>
+      <td data-label="Status">${badgeStatusExtratoConsolidado(l)}</td>
       <td data-label="Valor" class="val-cell ${l.tipo==='Despesa'?'neg':'pos'}" style="text-align:right;">
         ${l.cartao
           ? (l.qtdVinculos>0
@@ -13674,7 +13809,7 @@ function renderLinhaSaldoAtual(l){
   return `
     <tr class="linha-saldo-atual${l.ehHoje ? ' linha-saldo-hoje' : ''}" data-saldo-dia="${l.dia}">
       <td data-label="Dia" style="text-align:center;font-family:var(--mono);">${pad2(l.dia)}</td>
-      <td colspan="3" class="linha-saldo-atual-label">${l.ehHoje ? '📍 Saldo Atual (Hoje)' : '📅 Saldo do Dia'}</td>
+      <td colspan="5" class="linha-saldo-atual-label">${l.ehHoje ? '📍 Saldo Atual (Hoje)' : '📅 Saldo do Dia'}</td>
       <td data-label="Saldo" class="val-cell saldo-destaque" style="text-align:right;">${fmtBRL(l.saldo)}</td>
       <td data-label=""></td>
     </tr>`;
@@ -13687,11 +13822,11 @@ function renderLinhaSaldoAtual(l){
 function renderLinhaNaoListados(l){
   const intervaloCompacto = l.diaIni===l.diaFim ? pad2(l.diaIni) : `${pad2(l.diaIni)}–${pad2(l.diaFim)}`;
   const intervalo = l.diaIni===l.diaFim ? `dia ${pad2(l.diaIni)}` : `dias ${pad2(l.diaIni)} a ${pad2(l.diaFim)}`;
-  const titulo = `Soma de ${l.qtd} lançamento${l.qtd===1?'':'s'} real${l.qtd===1?'':'is'} das contas do Fluxo de Caixa (${intervalo}) sem linha própria nesta tabela`;
+  const titulo = `Soma de ${l.qtd} lançamento${l.qtd===1?'':'s'} real${l.qtd===1?'':'is'} das contas do Extrato Consolidado (${intervalo}) sem linha própria nesta tabela`;
   return `
     <tr class="linha-nao-listados" title="${escapeHtml(titulo)}">
       <td data-label="Dia" style="text-align:center;font-family:var(--mono);">${intervaloCompacto}</td>
-      <td colspan="2" class="linha-nao-listados-label">Lançamentos não listados</td>
+      <td colspan="4" class="linha-nao-listados-label">Lançamentos não listados ${badgeStatusExtratoConsolidado(l)}</td>
       <td data-label="Valor" class="val-cell ${l.valor<0?'neg':(l.valor>0?'pos':'')}" style="text-align:right;">${fmtBRL(l.valor)}</td>
       <td data-label="Saldo" class="val-cell saldo-destaque" style="text-align:right;">${fmtBRL(l.saldo)}</td>
       <td data-label=""></td>
@@ -13708,13 +13843,13 @@ function renderPainelProjecao(m, idx){
     l.especial==='saldo-dia' ? renderLinhaSaldoAtual(l)
     : l.especial==='nao-listados' ? renderLinhaNaoListados(l)
     : renderLinhaProjecao(l)
-  ).join('') : `<tr><td colspan="6" class="hint" style="text-align:center;padding:14px;">Nenhum lançamento previsto ainda. Use "+ Novo lançamento previsto" para começar.</td></tr>`;
+  ).join('') : `<tr><td colspan="8" class="hint" style="text-align:center;padding:14px;">Nenhum lançamento previsto ainda. Use "+ Novo lançamento previsto" para começar.</td></tr>`;
   // DOCUMENTAÇÃO — ver o comentário completo junto à classe CSS ".tabela-fluxo" (procure por
   // "DOCUMENTAÇÃO — Largura das colunas" no <style> desta página). Proporção FIXA (requisito explícito):
   // sempre a mesma em toda tabela/competência, nunca recalculada a partir do maior valor/saldo exibido
   // no mês (como antes desta mudança) nem alterada pela presença do cadeado 🔓/outros ícones em Ações —
   // isso é o que garante a mesma "grade" visual (thead/tbody perfeitamente alinhados) em todos os meses.
-  const LARGURAS_COLUNAS_FLUXO = { dia:6.5, descricao:30.20, tipo:13, valor:17, saldo:19, acoes:14.30 };
+  const LARGURAS_COLUNAS_FLUXO = { dia:5.5, descricao:18, conta:11.5, tipo:12, status:13.5, valor:12.5, saldo:12.7, acoes:14.30 };
   const pct = LARGURAS_COLUNAS_FLUXO;
   // Item 14 do requisito de responsividade: cada mês vira um card colapsável — cabeçalho clicável (título +
   // resumo do mês, sempre visíveis) e o detalhe (tabela de lançamentos + saldo final projetado) só aparece
@@ -13739,7 +13874,9 @@ function renderPainelProjecao(m, idx){
           <thead><tr>
             <th style="text-align:center;width:${pct.dia}%;">Dia</th>
             <th style="text-align:left;width:${pct.descricao}%;">Descrição</th>
+            <th style="text-align:left;width:${pct.conta}%;">Conta/Cartão</th>
             <th style="text-align:center;width:${pct.tipo}%;">Tipo</th>
+            <th style="text-align:center;width:${pct.status}%;">Status</th>
             <th style="text-align:right;width:${pct.valor}%;">Valor</th>
             <th style="text-align:right;width:${pct.saldo}%;">Saldo</th>
             <th style="text-align:right;width:${pct.acoes}%;">Ações</th>
@@ -13766,9 +13903,9 @@ function renderEditarSaldoInicialFluxoCaixaModal(){
   return `
   <div class="overlay" id="ovEditarSaldoInicialFluxoCaixa" ${attrZIndexModal('editarSaldoInicialFluxoCaixaModal')}>
     <div class="modal" style="width:460px;">
-      <div class="modal-head"><h3>✏️ Saldo Inicial — Fluxo de Caixa</h3><button class="close-x" id="closeEditarSaldoInicialFluxoCaixa">✕</button></div>
+      <div class="modal-head"><h3>✏️ Saldo Inicial — Extrato Consolidado</h3><button class="close-x" id="closeEditarSaldoInicialFluxoCaixa">✕</button></div>
       <div class="modal-body">
-        <p class="hint" style="margin-top:0;">O Saldo Inicial do Fluxo de Caixa é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança em <b>${MESES[UI.mes-1]}/${UI.ano}</b>. Edite cada conta abaixo — o total não pode ser alterado diretamente.</p>
+        <p class="hint" style="margin-top:0;">O Saldo Inicial do Extrato Consolidado é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança em <b>${MESES[UI.mes-1]}/${UI.ano}</b>. Edite cada conta abaixo — o total não pode ser alterado diretamente.</p>
         ${contas.length ? `<table style="width:100%;" data-ordenar-tabela="saldoInicialFC">
           <thead><tr>${thOrdenavel('saldoInicialFC','conta','Conta')}${thOrdenavel('saldoInicialFC','valor','Saldo Inicial',{style:'text-align:right;'})}</tr></thead>
           <tbody>
@@ -14123,8 +14260,18 @@ function drawChartsInteligencia(){
     }));
   }
 }
+/* Rótulos/descrições do seletor de período do Extrato Consolidado (ver mesesParaExtratoConsolidado) —
+   único lugar que precisa mudar se novas opções forem adicionadas no futuro. */
+const OPCOES_PERIODO_EXTRATO = [
+  ['mesAtual', 'Mês atual'],
+  ['proximos30dias', 'Próximos 30 dias'],
+  ['proximos3meses', 'Próximos 3 meses'],
+  ['personalizado', 'Período personalizado'],
+];
 function renderResumo(){
-  const meses = calcProjecoesMultiMes(UI.ano, UI.mes, 4);
+  const modoPeriodo = UI.extratoPeriodo || 'proximos3meses';
+  const meses = mesesParaExtratoConsolidado();
+  const resumoTopo = resumoExtratoConsolidado(meses);
   // validarConsistenciaSaldoFluxoCaixa não é mais chamada aqui: seu propósito (detectar lançamentos reais
   // sem nenhuma linha correspondente na tabela) agora é resolvido de forma explícita e visível pelas
   // próprias linhas de "Lançamentos não listados" (ver calcProjecoesMes) — não sobra mais nenhuma
@@ -14136,35 +14283,77 @@ function renderResumo(){
     if(window.innerWidth<=700){ meses.forEach(m=> UI.fluxoMesesFechados.add(`${m.ano}-${m.mes}`)); }
     UI.fluxoMesesInicializados = true;
   }
+  const pPersonalizado = UI.extratoPeriodoPersonalizado || { anoIni:UI.ano, mesIni:UI.mes, anoFim:UI.ano, mesFim:UI.mes };
+  // Edição do Saldo Inicial (renderEditarSaldoInicialFluxoCaixaModal) sempre atua sobre a competência
+  // selecionada no topo do app (UI.ano/UI.mes — mesma fonte usada em toda a aplicação, ver painel Contas).
+  // Só faz sentido oferecer o lápis de edição quando o 1º mês efetivamente exibido é essa mesma competência
+  // (sempre o caso em 'mesAtual'/'proximos30dias'/'proximos3meses'; em 'personalizado' só quando o início
+  // escolhido coincide) — nos demais casos o valor abaixo continua exibido corretamente (vem do próprio
+  // 1º mês calculado), só sem o atalho de edição, para nunca editar o saldo do mês errado sem avisar.
+  const primeiroMesEhCompetenciaAtual = meses[0] && meses[0].ano===UI.ano && meses[0].mes===UI.mes;
   return `
   <div class="panel">
-    <h2><span>Fluxo de Caixa</span></h2>
+    <h2><span>Extrato Consolidado</span></h2>
+    <div class="saldo-inicial-row" style="flex-wrap:wrap;gap:14px;">
+      <div class="field" style="margin-bottom:0;">
+        <label>Período</label>
+        <select id="selExtratoPeriodo">${OPCOES_PERIODO_EXTRATO.map(([v,nome])=>`<option value="${v}" ${modoPeriodo===v?'selected':''}>${nome}</option>`).join('')}</select>
+      </div>
+      ${modoPeriodo==='personalizado' ? `
+      <div class="field" style="margin-bottom:0;"><label>De</label>
+        <div class="year-nav">
+          <select id="selExtratoPeriodoMesIni">${MESES.map((n,i)=>`<option value="${i+1}" ${Number(pPersonalizado.mesIni)===i+1?'selected':''}>${n}</option>`).join('')}</select>
+          <input type="number" step="1" id="inpExtratoPeriodoAnoIni" style="width:76px;" value="${pPersonalizado.anoIni}">
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:0;"><label>Até</label>
+        <div class="year-nav">
+          <select id="selExtratoPeriodoMesFim">${MESES.map((n,i)=>`<option value="${i+1}" ${Number(pPersonalizado.mesFim)===i+1?'selected':''}>${n}</option>`).join('')}</select>
+          <input type="number" step="1" id="inpExtratoPeriodoAnoFim" style="width:76px;" value="${pPersonalizado.anoFim}">
+        </div>
+      </div>` : ''}
+    </div>
     <div class="grid-cards">
-      ${meses.map(m=>`
-        <div class="kpi ${classeReceitaDespesaMoeda(m.saldoFinal)}">
-          <div class="bar"></div>
-          <div class="lbl">📆 Saldo em ${MESES[m.mes-1]}/${m.ano}</div>
-          <div class="val">${fmtBRL(m.saldoFinal)}</div>
-        </div>`).join('')}
+      <div class="kpi">
+        <div class="bar"></div>
+        <div class="lbl">💰 Saldo Atual</div>
+        <div class="val">${fmtBRL(resumoTopo.saldoAtual)}</div>
+      </div>
+      <div class="kpi receita">
+        <div class="bar"></div>
+        <div class="lbl">⬆️ Entradas Projetadas</div>
+        <div class="val">${fmtBRL(resumoTopo.entradas)}</div>
+      </div>
+      <div class="kpi despesa">
+        <div class="bar"></div>
+        <div class="lbl">⬇️ Saídas Projetadas</div>
+        <div class="val">${fmtBRL(resumoTopo.saidas)}</div>
+      </div>
+      <div class="kpi ${classeReceitaDespesaMoeda(resumoTopo.saldoProjetado)}">
+        <div class="bar"></div>
+        <div class="lbl">📆 Saldo Projetado</div>
+        <div class="val">${fmtBRL(resumoTopo.saldoProjetado)}</div>
+      </div>
     </div>
     <details class="ajuda-fluxo" data-ajuda-fluxo ${UI.ajudaFluxoAberta?'open':''}>
       <summary>ℹ️ Como funciona a projeção</summary>
       <div class="ajuda-fluxo-conteudo">
-        <p>O <b>Saldo Inicial</b> da competência selecionada no topo da página é calculado automaticamente a partir do saldo de cada conta cadastrada; use o ícone <b>✏️</b> ao lado do valor para ajustar o saldo inicial de cada conta individualmente. A projeção será gerada para esse mês e para os <b>três meses subsequentes</b>.</p>
+        <p>O <b>Saldo Atual</b> é calculado automaticamente a partir do saldo de cada conta cadastrada; use o ícone <b>✏️</b> ao lado do campo "Saldo Inicial" abaixo para ajustar o saldo inicial de cada conta individualmente. Use o seletor <b>Período</b> para escolher o intervalo exibido — o padrão é <b>Próximos 3 meses</b> (o mês atual e os três meses seguintes).</p>
         <p>Utilize o botão <b>+ Novo Lançamento Previsto</b> para incluir novos lançamentos e os ícones <b>✏️ Editar</b> e <b>🗑️ Excluir</b> para alterar ou remover lançamentos existentes. Os <b>lançamentos previstos</b> (Dia, Descrição, Tipo e Valor) são recorrentes e, por padrão, são replicados automaticamente em todos os meses da projeção, exceto quando um <b>mês de início específico</b> for definido no momento do cadastro. Para lançamentos vinculados a <b>cartões de crédito</b>, o campo <b>Valor</b> é calculado automaticamente com base no valor total da fatura correspondente a cada competência, não sendo necessária edição manual. O campo <b>Saldo</b> é sempre calculado automaticamente e não pode ser editado.</p>
         <p style="margin-bottom:6px;">O cálculo segue a seguinte lógica:</p>
         <ul>
-          <li>O <b>Saldo Inicial</b> do primeiro mês é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança cadastrada (não inclui Contracheque, Reserva de Emergência nem cartões de crédito) — o mesmo valor já calculado no painel Contas;</li>
-          <li>Acumula o efeito de cada lançamento em ordem cronológica;</li>
-          <li>O <b>saldo final</b> de cada mês torna-se automaticamente o <b>saldo inicial</b> do mês seguinte, garantindo a continuidade da projeção financeira.</li>
-          <li>Toda data que já possui algum lançamento nesta tabela ganha sua própria linha <b>📅 Saldo do Dia</b> (o dia de hoje aparece com destaque adicional como <b>📍 Saldo Atual (Hoje)</b>) — combinando o saldo real do Extrato das contas Corrente, PJ e Poupança com os lançamentos daquele dia que ainda não estão refletidos nesse Extrato. Um lançamento já existente no Extrato usa o valor exato registrado nele, nunca o valor previsto; um lançamento ainda não realizado entra como projeção pelo valor previsto. Nada é contado duas vezes.</li>
+          <li>O <b>Saldo Atual</b> do primeiro mês do período é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança cadastrada (não inclui Contracheque, Reserva de Emergência nem cartões de crédito) — o mesmo valor já calculado no painel Contas;</li>
+          <li>Acumula o efeito de cada lançamento em ordem cronológica — cada linha mostra o <b>Saldo Consolidado</b> exatamente até aquele ponto, nunca a simples soma de receitas e despesas do período;</li>
+          <li>O <b>saldo final</b> de cada mês torna-se automaticamente o <b>saldo inicial</b> do mês seguinte, garantindo a continuidade da projeção financeira;</li>
+          <li>A coluna <b>Status</b> indica 🟢 Realizado (movimentação real sem projeção associada), 🔵 Projetado (ainda não identificado no Extrato), 🟡 Conciliado (projeção já localizada e confirmada no Extrato) ou 🔴 Divergente (conciliado, mas com valor diferente do projetado);</li>
+          <li>Todo período entre lançamentos individualizados que tenha movimentação real sem linha própria nesta tabela ganha uma linha agrupada <b>Lançamentos não listados</b> — nunca conta a mesma movimentação duas vezes.</li>
         </ul>
       </div>
     </details>
     <div class="saldo-inicial-row">
       <div class="field" style="margin-bottom:0;">
         <label>Saldo Inicial (R$)</label>
-        <div class="saldo-inicial-somente-leitura">${fmtBRL(getSaldoInicialBase(UI.ano,UI.mes))} <button type="button" class="icon-btn" id="btnEditarSaldoInicialFluxoCaixa" title="Editar os saldos iniciais das contas">✏️</button></div>
+        <div class="saldo-inicial-somente-leitura">${fmtBRL(meses[0]?.saldoInicial ?? 0)} ${primeiroMesEhCompetenciaAtual ? `<button type="button" class="icon-btn" id="btnEditarSaldoInicialFluxoCaixa" title="Editar os saldos iniciais das contas">✏️</button>` : ''}</div>
       </div>
       <button class="btn btn-primary btn-sm" id="btnNovaProjecao">+ Novo lançamento previsto</button>
     </div>
@@ -14420,7 +14609,7 @@ function renderConfirmDelProjecaoModal(){
     <div class="modal" style="width:460px;">
       <div class="modal-head"><h3>🗑️ Excluir lançamento previsto</h3><button class="close-x" id="closeConfirmDelProjecao">✕</button></div>
       <div class="modal-body">
-        <div class="info-card warn" style="margin-top:0;"><span class="info-card-icon">⚠️</span><span>"${escapeHtml(item.descricao)}" é um lançamento recorrente, que também aparece nas demais competências do Fluxo de Caixa. O que você deseja excluir?</span></div>
+        <div class="info-card warn" style="margin-top:0;"><span class="info-card-icon">⚠️</span><span>"${escapeHtml(item.descricao)}" é um lançamento recorrente, que também aparece nas demais competências do Extrato Consolidado. O que você deseja excluir?</span></div>
       </div>
       <div class="modal-foot" style="flex-wrap:wrap;gap:8px;">
         <button class="btn btn-ghost" id="closeConfirmDelProjecao2">Cancelar</button>
@@ -14619,7 +14808,7 @@ function renderMetas(){
       <p><b>Orçamento Total, Gasto Atual e Saldo Disponível</b>: somam todas as metas cadastradas para a competência selecionada no topo da página (mês/ano).</p>
       <p><b>Nível da meta</b>: uma meta pode valer para um Grupo inteiro, uma Categoria específica ou uma Subcategoria específica — quanto mais específico, mais preciso o acompanhamento.</p>
       <p><b>Recorrência</b>: metas mensais/trimestrais/semestrais/anuais se repetem automaticamente a partir do período inicial, sem precisar recriá-las a cada competência.</p>
-      <p style="margin-bottom:0;"><b>Situação</b>: compara o gasto já lançado (mesmo critério usado no Painel Financeiro e no Fluxo de Caixa) com o valor da meta, sinalizando quando ela está próxima do limite ou já foi ultrapassada.</p>
+      <p style="margin-bottom:0;"><b>Situação</b>: compara o gasto já lançado (mesmo critério usado no Painel Financeiro e no Extrato Consolidado) com o valor da meta, sinalizando quando ela está próxima do limite ou já foi ultrapassada.</p>
     </div>
   </details>
   ${renderAlertasMetas(r.lista)}
@@ -18524,6 +18713,22 @@ function bindEvents(){
     const inp = document.getElementById('fTextModalSaldoInicial');
     if(inp){ inp.focus(); inp.select(); }
   }));
+  // Seletor de período do Extrato Consolidado (ver mesesParaExtratoConsolidado/OPCOES_PERIODO_EXTRATO).
+  document.getElementById('selExtratoPeriodo')?.addEventListener('change', e=>{
+    UI.extratoPeriodo = e.target.value;
+    if(UI.extratoPeriodo==='personalizado' && !UI.extratoPeriodoPersonalizado){
+      UI.extratoPeriodoPersonalizado = { anoIni:UI.ano, mesIni:UI.mes, anoFim:UI.ano, mesFim:UI.mes };
+    }
+    render();
+  });
+  const atualizarPeriodoPersonalizado = (campo, valor)=>{
+    UI.extratoPeriodoPersonalizado = { ...(UI.extratoPeriodoPersonalizado||{ anoIni:UI.ano, mesIni:UI.mes, anoFim:UI.ano, mesFim:UI.mes }), [campo]: valor };
+    render();
+  };
+  document.getElementById('selExtratoPeriodoMesIni')?.addEventListener('change', e=> atualizarPeriodoPersonalizado('mesIni', Number(e.target.value)));
+  document.getElementById('inpExtratoPeriodoAnoIni')?.addEventListener('change', e=> atualizarPeriodoPersonalizado('anoIni', Number(e.target.value)));
+  document.getElementById('selExtratoPeriodoMesFim')?.addEventListener('change', e=> atualizarPeriodoPersonalizado('mesFim', Number(e.target.value)));
+  document.getElementById('inpExtratoPeriodoAnoFim')?.addEventListener('change', e=> atualizarPeriodoPersonalizado('anoFim', Number(e.target.value)));
   document.getElementById('btnEditarSaldoInicialFluxoCaixa')?.addEventListener('click', ()=>{
     UI.editarSaldoInicialFluxoCaixaModal = true; render();
   });
