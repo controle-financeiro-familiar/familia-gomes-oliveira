@@ -13218,9 +13218,9 @@ function renderFaturaAtualModal(){
         </div>
         <div class="cartoes-resumo-grid">
           <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(totalFatFiltrado)}</div><div class="lbl">valor total da fatura</div></div></div>
-          <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(totalParceladoFiltrado)}</div><div class="lbl">compras parceladas</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">🛒</span><div><div class="val">${fmtBRL(totalAvistaFiltrado)}</div><div class="lbl">compras à vista</div></div></div>
-          ${totalCreditosFiltrado>0 ? `<div class="cartoes-resumo-item"><span class="ico">➕</span><div><div class="val">${fmtBRL(totalCreditosFiltrado)}</div><div class="lbl">créditos</div></div></div>` : ''}
+          <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(totalParceladoFiltrado)}</div><div class="lbl">compras parceladas</div></div></div>
+          ${totalCreditosFiltrado>0 ? `<div class="cartoes-resumo-item"><span class="ico">➕</span><div><div class="val">${fmtBRL(totalCreditosFiltrado)}</div><div class="lbl">Créditos e Pagamentos</div></div></div>` : ''}
         </div>
         ${det.itens.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
