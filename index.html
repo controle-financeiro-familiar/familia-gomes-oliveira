@@ -557,6 +557,13 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
   margin:0 0 14px;font-size:14px;letter-spacing:.4px;text-transform:uppercase;color:var(--navy-800);
   font-family:var(--mono);font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
 }
+/* Item 1 do requisito "Ajustes no Extrato Consolidado": título (à esquerda) e seletor de período (à
+   direita) na mesma linha do h2 — reaproveita o próprio display:flex/justify-content:space-between já
+   existente em .panel h2 (2 filhos diretos: o <span> do título e este <span> dos controles), sem CSS
+   paralelo. Os próprios controles (label+select) usam texto normal/minúsculo (nunca o mono/uppercase do
+   h2), para não parecerem parte do título. */
+.extrato-periodo-inline{display:flex;align-items:center;gap:8px;font-family:var(--sans);font-weight:400;text-transform:none;letter-spacing:normal;font-size:12.5px;color:#5b6b85;}
+.extrato-periodo-inline select{font-family:var(--sans);font-size:12.5px;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--ink);}
 .grid-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
 .panel-desc{margin:-8px 0 14px;font-size:11px;color:#6a7a97;font-weight:400;text-transform:none;letter-spacing:normal;font-family:var(--sans);}
 .mini-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
@@ -1817,7 +1824,13 @@ summary::marker{content:'';}
    vizinho nem acontece nenhum corte/scroll (.tabela-fluxo-wrap já não tem max-height — ver comentário
    próprio a ela). Recalculado automaticamente a cada render, então funciona também quando a quantidade de
    lançamentos de qualquer mês muda dinamicamente. */
-.resumo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:16px;align-items:stretch;}
+/* Item 2 do requisito "Ajustes no Extrato Consolidado": cada mês ocupa 100% da largura disponível,
+   empilhados um abaixo do outro — nunca lado a lado em colunas de grid (era o comportamento anterior, útil
+   quando existiam poucas colunas por linha, mas deixava "área vazia" ao lado de cada tabela em telas
+   largas). Como cada painel de mês (.panel, dentro de renderPainelProjecao) já é um bloco 100% largura por
+   padrão, um simples empilhamento vertical com espaçamento uniforme (sem nenhuma coluna) já garante colunas
+   sempre alinhadas entre os meses, pois todas as tabelas usam exatamente a mesma LARGURAS_COLUNAS_FLUXO. */
+.resumo-grid{display:flex;flex-direction:column;gap:16px;}
 @media(max-width:480px){.grid-cards{grid-template-columns:1fr;}}
 .saldo-final-projetado{
   display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding:10px 14px;
@@ -2260,7 +2273,8 @@ tr.linha-saldo-hoje .saldo-destaque{background:var(--gold);color:var(--navy-950)
 /* Linha "Lançamentos não listados" (ver calcProjecoesMes/renderLinhaNaoListados) — visual de linha-resumo
    (mesmo espírito de .linha-grupo-competencia), nunca confundida com um lançamento comum: fundo neutro,
    itálico, sem ícone/negrito de destaque. */
-tr.linha-nao-listados{background:var(--navy-50,#f4f7fc);}
+tr.linha-nao-listados{background:var(--navy-50,#f4f7fc);cursor:pointer;}
+tr.linha-nao-listados:hover{background:var(--navy-100,#e8eef8);}
 tr.linha-nao-listados td{font-style:italic;color:#5b6b85;}
 tr.linha-nao-listados .linha-nao-listados-label{white-space:nowrap;}
 tr.linha-nao-listados .val-cell{font-style:normal;}
@@ -5103,6 +5117,7 @@ let UI = {
   textModal: null, // { tipo, nome, original, grupo } — modal genérico de nome único (conta, cartão, meio, grupo, categoria)
   novaProjecaoModal: null, // { ano, mes } — escolha do mês a partir do qual um novo lançamento previsto passa a aparecer
   conciliarProjecaoModal: null, // { itemId, competencia, selecionados, pagina, porPagina } — revisão manual dos candidatos de conciliação de um previsto "pendente"/já conciliado (ver renderConciliarProjecaoModal) — selecionados: ids marcados nos checkboxes, ainda não confirmados; pagina/porPagina paginam a tabela de candidatos (mesmo padrão da tabela de Registros), sem nunca limitar o conjunto de candidatos calculado (só a exibição) — a ordenação por clique usa o mecanismo genérico de UI.ordenacaoTabelas (idTabela 'conciliarCandidatos'), não precisa de estado próprio aqui
+  naoListadosModal: null, // { ano, mes, diaIni, diaFim } — auditoria/rastreabilidade de uma linha "Lançamentos não listados" do Extrato Consolidado: mostra os registros individuais somados nela (ver renderNaoListadosModal/registrosNaoListadosDoIntervalo), somente consulta, nunca edição
   confirmDelProjecao: null, // { itemId, competencia } — pergunta se a exclusão de um lançamento previsto deve valer só para esta competência (ver STATE.projecaoExclusoesPorCompetencia) ou para o lançamento inteiro (todas as competências)
   confirmDelParcela: null, // { id } — pergunta se a exclusão de uma parcela deve incluir as parcelas futuras da mesma compra
   pendingEdicaoParcela: null, // { novo, antigo, conta } — edição já validada de uma parcela existente, aguardando o usuário escolher o escopo de propagação (ver confirmEditarParcela) antes de ser efetivamente salva
@@ -5182,6 +5197,7 @@ const CAMADAS_MODAL = [
   'modalEmpateCartao',                 // painel Cartões — escolher manualmente o melhor cartão
   'novaProjecaoModal',                 // Fluxo de Caixa — novo/editar lançamento previsto
   'conciliarProjecaoModal',            // Fluxo de Caixa — escolher manualmente o lançamento do Extrato que concilia um previsto pendente
+  'naoListadosModal',                  // Extrato Consolidado — auditoria dos registros de uma linha "Lançamentos não listados"
   'textModal',                         // Configurações (conta/meio/responsável/grupo/categoria) — também
                                         // pode ser aberto de dentro do import (criar conta nova na hora)
 
@@ -9868,15 +9884,21 @@ function pagamentoFaturaElegivelDetalhes(cartao, competencia){
   const contasElegiveis = new Set(contasElegiveisFluxoCaixa());
   const itens = [];
   pagamentosCandidatosFatura(cartao, competencia).forEach(t=>{
-    if(contasElegiveis.has(t.conta)){ itens.push({ valor: Number(t.valor)||0, data: t.data }); return; } // "só na conta corrente" (ver pagamentosCandidatosFatura)
-    if(t.transferenciaVinculoId){ // "espelhado": confere a conta de origem pelo vínculo, e usa a Data DELA
+    if(contasElegiveis.has(t.conta)){ itens.push({ valor: Number(t.valor)||0, data: t.data, conta: t.conta }); return; } // "só na conta corrente" (ver pagamentosCandidatosFatura)
+    if(t.transferenciaVinculoId){ // "espelhado": confere a conta de origem pelo vínculo, e usa a Data e a CONTA dela
       const origem = STATE.transactions.find(o=>o.id!==t.id && o.transferenciaVinculoId===t.transferenciaVinculoId);
-      if(origem && contasElegiveis.has(origem.conta)) itens.push({ valor: Number(t.valor)||0, data: origem.data });
+      if(origem && contasElegiveis.has(origem.conta)) itens.push({ valor: Number(t.valor)||0, data: origem.data, conta: origem.conta });
     }
   });
+  // itemMaisRecente: também a fonte da conta ELEGÍVEL onde o pagamento foi efetivamente realizado (requisito
+  // "Ajustes no Extrato Consolidado" item 6) — exibida na coluna Conta/Cartão em vez do cartão original uma
+  // vez que a fatura é conciliada, sem perder a referência ao cartão (que continua em item.cartao/l.cartao,
+  // sempre disponível para rastreabilidade — ver contaOuCartaoDaLinha).
+  const itemMaisRecente = itens.length ? itens.reduce((a,b)=> (b.data>=a.data ? b : a)) : null;
   return {
     valor: itens.reduce((s,x)=>s+x.valor, 0),
-    dataMaisRecente: itens.map(x=>x.data).sort().slice(-1)[0] || null,
+    dataMaisRecente: itemMaisRecente ? itemMaisRecente.data : null,
+    contaMaisRecente: itemMaisRecente ? itemMaisRecente.conta : null,
     qtd: itens.length,
     ids: pagamentosCandidatosFatura(cartao, competencia).map(t=>t.id), // todos os lados (cartão+corrente), para nunca duplicar em "Lançamentos não listados"
   };
@@ -9920,7 +9942,11 @@ function calcProjecoesMes(ano, mes, saldoInicial){
       // vinculosDaCompetencia) — usados pela linha (tooltip/selo) para mostrar a data real mais recente e
       // quantos registros compõem a realização, sem afetar dia/valorCalculado quando a realização caiu fora
       // do mês desta própria competência (ver bloco abaixo).
-      let dataReal = null, qtdVinculos = 0;
+      // contaReal: conta/cartão ELEGÍVEL onde o evento financeiro efetivamente ocorreu, uma vez conciliado
+      // (requisito "Ajustes no Extrato Consolidado" item 6) — exibida na coluna Conta/Cartão em vez do
+      // cartão/conta provável original; null enquanto ainda é só projeção (contaOuCartaoDaLinha cai de
+      // volta no item.cartao/contaProvavelId nesse caso — nunca perde a referência original).
+      let dataReal = null, qtdVinculos = 0, contaReal = null;
       if(item.cartao){
         // A fatura nunca está "no Extrato" enquanto não for paga (a conta do cartão não é uma das 3
         // elegíveis) — só a parte AINDA não paga a partir de uma conta elegível continua como projeção.
@@ -9941,6 +9967,7 @@ function calcProjecoesMes(ano, mes, saldoInicial){
           dataReal = detalhesPagamento.dataMaisRecente;
           qtdVinculos = detalhesPagamento.qtd;
           valorCalculado = detalhesPagamento.valor;
+          contaReal = detalhesPagamento.contaMaisRecente;
           if(dataReal && dataReal.slice(0,7)===competencia) dia = Number(dataReal.slice(8,10));
         }
       } else if(normalizarTexto(item.descricao)==='contrachequetrt'){
@@ -9996,6 +10023,9 @@ function calcProjecoesMes(ano, mes, saldoInicial){
           // data real verdadeira, independentemente de onde a linha está posicionada.
           const dataRealMaisRecente = reais.map(t=>t.data).sort().slice(-1)[0];
           dataReal = dataRealMaisRecente;
+          // Conta real do lançamento mais recente (requisito item 6) — em caso de empate de data, o
+          // último da ordem original de STATE.transactions (mesmo critério informal já usado alhures).
+          contaReal = reais.filter(t=>t.data===dataRealMaisRecente).slice(-1)[0]?.conta || null;
           if(dataRealMaisRecente.slice(0,7)===competencia) dia = Number(dataRealMaisRecente.slice(8,10));
           // Só considera "já no Extrato elegível" (requisito 8/9 do pedido) quando o lançamento vinculado
           // está numa das 3 contas elegíveis e NÃO é ele mesmo um lançamento-espelho de transferência
@@ -10026,7 +10056,7 @@ function calcProjecoesMes(ano, mes, saldoInicial){
       // "projetado" para itens comuns, "contracheque-importado" para o Contracheque TRT quando há
       // contracheque na competência, null para itens de cartão (não se aplica).
       const statusConciliacao = statusConciliacaoProjecao(item, competencia);
-      return { ...item, competencia, valorCalculado, dia, valorProjecaoPendente, dataPrevista: item.dia, valorPrevisto: valorProjecaoItem(item, competencia), dataReal, qtdVinculos, statusConciliacao };
+      return { ...item, competencia, valorCalculado, dia, valorProjecaoPendente, dataPrevista: item.dia, valorPrevisto: valorProjecaoItem(item, competencia), dataReal, qtdVinculos, statusConciliacao, contaReal };
     })
     .sort((a,b)=>(Number(a.dia)||0)-(Number(b.dia)||0));
   // ---------- Lançamentos não listados (Regras do Fluxo de Caixa, seções 2 a 9) ----------
@@ -10046,7 +10076,7 @@ function calcProjecoesMes(ano, mes, saldoInicial){
   const diasOrdenados = [...new Set(linhas.map(l=>Math.min(31, Math.max(1, Number(l.dia)||1))))].sort((a,b)=>a-b);
   const criarLinhaNaoListados = (diaIni, diaFim, sufixoId, diaPosicao) => {
     const { valor, qtd } = transacoesNaoListadasNoIntervalo(diaIni, diaFim, ano, mes, idsExcluidos);
-    return { id:`nao-listados-${competencia}-${sufixoId}`, especial:'nao-listados', diaIni, diaFim, valor, qtd, dia: diaPosicao };
+    return { id:`nao-listados-${competencia}-${sufixoId}`, especial:'nao-listados', diaIni, diaFim, valor, qtd, dia: diaPosicao, ano, mes, competencia };
   };
   const linhasComNaoListados = [];
   if(!diasOrdenados.length){
@@ -10100,26 +10130,51 @@ function idsJaRepresentadosNoFluxoCaixa(linhas, competencia){
   STATE.transactions.forEach(t=>{ if(t.contrachequeOrigemId) ids.add(t.id); });
   return ids;
 }
-/* Soma líquida (Receita soma, Despesa subtrai) dos lançamentos reais das contas elegíveis do Fluxo de
-   Caixa, no intervalo [diaIni, diaFim] (inclusive) do mês/ano informado, que ainda não estão em
-   idsExcluidos — a composição de UMA linha de "Lançamentos não listados" (ver calcProjecoesMes). Exclui
-   sempre: o marcador de Saldo Anterior (não é uma movimentação do período — já compõe saldoInicial) e
-   BB Rende Fácil (ehMovimentoRendeFacilBB — mesmo critério já usado por saldoRealConsolidadoAteData; não é
-   uma decisão financeira da família, é o banco varrendo o saldo ocioso todo fim de dia). Transferências
-   entre duas contas elegíveis não precisam de nenhuma exclusão especial: os dois lados aparecem
-   normalmente e se cancelam sozinhos na soma (mesmo raciocínio já documentado em
-   saldoRealConsolidadoAteData). diaIni>diaFim (intervalo vazio, ex.: dois lançamentos listados em dias
-   calendário consecutivos) sempre devolve zero, sem consultar STATE.transactions. */
-function transacoesNaoListadasNoIntervalo(diaIni, diaFim, ano, mes, idsExcluidos){
-  if(diaIni>diaFim) return { valor:0, qtd:0 };
+/* Lançamentos reais das contas elegíveis do Fluxo de Caixa, no intervalo [diaIni, diaFim] (inclusive) do
+   mês/ano informado, que ainda não estão em idsExcluidos — a composição de UMA linha de "Lançamentos não
+   listados" (ver calcProjecoesMes/transacoesNaoListadasNoIntervalo, que soma este mesmo resultado, e
+   registrosNaoListadosDoIntervalo/renderModalNaoListados, que o exibe individualmente para auditoria —
+   requisito "Ajustes no Extrato Consolidado" item 7). Exclui sempre:
+     - o marcador de Saldo Anterior (não é uma movimentação do período — já compõe saldoInicial);
+     - BB Rende Fácil (ehMovimentoRendeFacilBB — mesmo critério já usado por saldoRealConsolidadoAteData;
+       não é uma decisão financeira da família, é o banco varrendo o saldo ocioso todo fim de dia);
+     - transferências internas entre contas próprias (t.transferenciaInterna — requisito explícito: uma
+       transferência não é entrada nem saída consolidada de verdade, e cada lado sozinho NÃO pode inflar o
+       valor deste agrupamento; isso cobre tanto o caso em que os dois lados caem no mesmo intervalo quanto
+       quando ficam em intervalos diferentes ou um dos lados é de uma conta NÃO elegível, ex. Reserva de
+       Emergência — nesses casos os dois lados não se cancelariam sozinhos na soma).
+   diaIni>diaFim (intervalo vazio, ex.: dois lançamentos listados em dias calendário consecutivos) sempre
+   devolve lista vazia, sem consultar STATE.transactions. */
+function transacoesNaoListadasLista(diaIni, diaFim, ano, mes, idsExcluidos){
+  if(diaIni>diaFim) return [];
   const contasElegiveis = new Set(contasElegiveisFluxoCaixa());
   const dataIniISO = `${ano}-${pad2(mes)}-${pad2(Math.max(1,diaIni))}`;
   const dataFimISO = `${ano}-${pad2(mes)}-${pad2(Math.min(31,diaFim))}`;
-  const txs = STATE.transactions.filter(t=>
+  return STATE.transactions.filter(t=>
     contasElegiveis.has(t.conta) && t.data>=dataIniISO && t.data<=dataFimISO
-    && !ehSaldoAnterior(t) && !ehMovimentoRendeFacilBB(t) && !idsExcluidos.has(t.id));
+    && !ehSaldoAnterior(t) && !ehMovimentoRendeFacilBB(t) && !t.transferenciaInterna && !idsExcluidos.has(t.id));
+}
+/* Soma líquida (Receita soma, Despesa subtrai) da mesma lista de transacoesNaoListadasLista — o valor
+   exibido na linha "Lançamentos não listados" (ver calcProjecoesMes) é sempre exatamente a soma dos
+   registros que o modal de auditoria mostra (requisito item 7: "o valor apresentado... deve ser exatamente
+   igual à soma dos registros apresentados ao abrir/expandir o agrupamento"), nunca um cálculo em paralelo. */
+function transacoesNaoListadasNoIntervalo(diaIni, diaFim, ano, mes, idsExcluidos){
+  const txs = transacoesNaoListadasLista(diaIni, diaFim, ano, mes, idsExcluidos);
   const valor = txs.reduce((s,t)=> s + (t.tipo==='Receita' ? (Number(t.valor)||0) : (t.tipo==='Despesa' ? -(Number(t.valor)||0) : 0)), 0);
   return { valor: arredondarMoeda(valor), qtd: txs.length };
+}
+/* Recompõe, para um dado ano/mês/intervalo de dias, a mesma lista de registros individuais que
+   transacoesNaoListadasNoIntervalo somou (ver comentário acima) — usada pelo modal de auditoria (requisito
+   item 7). Reconstrói idsExcluidos da mesma forma que calcProjecoesMes (as linhas individualmente listadas
+   desse mês, antes de qualquer linha "Lançamentos não listados" ser inserida — ver
+   idsJaRepresentadosNoFluxoCaixa), sem duplicar nenhuma outra regra de cálculo — só leitura, nunca altera
+   STATE. */
+function registrosNaoListadosDoIntervalo(ano, mes, diaIni, diaFim){
+  const competencia = chaveMes(ano, mes);
+  const m = calcProjecoesMes(ano, mes, 0); // saldoInicial é irrelevante aqui — só precisamos das linhas/ids
+  const linhasOriginais = m.linhas.filter(l=>l.especial!=='nao-listados');
+  const idsExcluidos = idsJaRepresentadosNoFluxoCaixa(linhasOriginais, competencia);
+  return transacoesNaoListadasLista(diaIni, diaFim, ano, mes, idsExcluidos);
 }
 /* Replica a mesma tabela para o mês selecionado e os 3 meses seguintes: o saldo final de cada mês vira o
    saldo inicial do próximo (só o primeiro mês tem Saldo Inicial editável — os demais são sempre o
@@ -10674,6 +10729,7 @@ function render(){
     ${UI.textModal!==null ? renderTextModal() : ""}
     ${UI.novaProjecaoModal!==null ? renderNovaProjecaoModal() : ""}
     ${UI.conciliarProjecaoModal!==null ? renderConciliarProjecaoModal() : ""}
+    ${UI.naoListadosModal!==null ? renderNaoListadosModal() : ""}
     ${UI.confirmDelProjecao!==null ? renderConfirmDelProjecaoModal() : ""}
     ${UI.confirmDelParcela!==null ? renderConfirmDelParcelaModal() : ""}
     ${UI.confirmEditarParcela!==null ? renderConfirmEditarParcelaModal() : ""}
@@ -13722,14 +13778,18 @@ function seloConciliacaoProjecao(l){
   if(l.statusConciliacao==='pendente') return clicavel('⏳', 'Conciliação pendente - Existem possíveis correspondências no Extrato, clique para revisar e vincular manualmente');
   return '';
 }
-/* Coluna Status do Extrato Consolidado (requisito "Extrato Consolidado" seção 4) — deriva os 4 estados
-   exigidos a partir dos campos já calculados por calcProjecoesMes, nunca uma classificação paralela:
+/* Coluna Status do Extrato Consolidado (requisito "Ajustes no Extrato Consolidado" itens 9/10 — substitui
+   o antigo rótulo "Conciliado") — deriva os 4 estados exigidos a partir dos campos já calculados por
+   calcProjecoesMes, nunca uma classificação paralela:
      realizado  — linha "Lançamentos não listados": sempre movimentação real, nunca uma projeção.
      projetado  — item de STATE.projecoes ainda sem nenhum vínculo confirmado no Extrato (inclui
                   'pendente', que já tem candidatos mas nenhum vínculo automático seguro) e fatura de
                   cartão ainda não paga.
-     conciliado — projeção com vínculo confirmado no Extrato (ou fatura de cartão já paga) cujo valor bate
-                  com o previsto, dentro da tolerância já usada em toda a aplicação (EPSILON_FATURA).
+     conforme   — projeção com vínculo confirmado no Extrato (ou fatura de cartão já paga) cujo valor bate
+                  com o previsto, dentro da tolerância já usada em toda a aplicação (EPSILON_FATURA). Já
+                  existe um selo (🔗/⏪/⏩) ao lado da Descrição indicando QUE houve conciliação (ver
+                  seloConciliacaoProjecao) — "Conforme" aqui indica o RESULTADO dela (bateu com o previsto),
+                  sem repetir a mesma informação com outro nome.
      divergente — o mesmo caso acima, mas com o valor efetivamente identificado diferente do previsto além
                   dessa tolerância (requisito 6: nunca um 2º lançamento para a diferença, só a classificação
                   desta mesma linha muda). */
@@ -13740,26 +13800,38 @@ function statusExtratoConsolidado(l){
     : ['conciliado','antecipado','postecipado','contracheque-importado'].includes(l.statusConciliacao);
   if(!temValorReal) return 'projetado';
   const diferenca = Math.abs((Number(l.valorCalculado)||0) - (Number(l.valorPrevisto)||0));
-  return diferenca > EPSILON_FATURA ? 'divergente' : 'conciliado';
+  return diferenca > EPSILON_FATURA ? 'divergente' : 'conforme';
 }
 const CONFIG_STATUS_EXTRATO = {
   realizado:  { icone:'🟢', texto:'Realizado' },
   projetado:  { icone:'🔵', texto:'Projetado' },
-  conciliado: { icone:'🟡', texto:'Conciliado' },
+  conforme:   { icone:'🟡', texto:'Conforme', tooltip:'Lançamento realizado conforme o previsto' },
   divergente: { icone:'🔴', texto:'Divergente' },
 };
 function badgeStatusExtratoConsolidado(l){
   const status = statusExtratoConsolidado(l);
   const cfg = CONFIG_STATUS_EXTRATO[status];
   const tituloDivergencia = status==='divergente' ? ` (previsto ${fmtBRL(l.valorPrevisto)}, identificado ${fmtBRL(l.valorCalculado)})` : '';
-  return `<span class="status-extrato" title="${escapeHtml(cfg.texto+tituloDivergencia)}">${cfg.icone} ${cfg.texto}</span>`;
+  const titulo = cfg.tooltip || (cfg.texto+tituloDivergencia);
+  return `<span class="status-extrato" title="${escapeHtml(titulo)}">${cfg.icone} ${cfg.texto}</span>`;
 }
 /* Coluna Conta/Cartão do Extrato Consolidado (requisito seção 3) — reutiliza os mesmos campos já usados
    pelo resto da tabela (l.cartao / Conta provável do lançamento previsto), nunca uma estrutura nova em
    paralelo (requisito explícito de reaproveitar um campo já existente). Linhas de "Lançamentos não
    listados" somam movimentações de mais de uma conta elegível — não há uma única conta para mostrar. */
+/* Ajustes no Extrato Consolidado — item 6: uma vez conciliado (l.contaReal preenchido em calcProjecoesMes),
+   a coluna passa a mostrar a conta/cartão onde o pagamento/recebimento foi EFETIVAMENTE identificado —
+   nunca mais o cartão original (fatura) ou a Conta provável estimada. A referência ao cartão/lançamento
+   original nunca é perdida: continua em l.cartao/l.descricao e fica disponível no tooltip, para
+   rastreabilidade (nunca só visualmente — como em todo o resto desta tabela). */
 function contaOuCartaoDaLinha(l){
   if(l.especial==='nao-listados') return '—';
+  if(l.contaReal){
+    const origemTexto = l.cartao
+      ? `Pagamento identificado nesta conta — fatura de 💳 ${l.cartao}`
+      : `Lançamento identificado nesta conta — previsto: "${l.descricao}"`;
+    return `<span title="${escapeHtml(origemTexto)}">${escapeHtml(l.contaReal)}</span>`;
+  }
   if(l.cartao) return `💳 ${escapeHtml(l.cartao)}`;
   if(l.contaProvavelId) return escapeHtml(l.contaProvavelId);
   return '—';
@@ -13815,22 +13887,79 @@ function renderLinhaSaldoAtual(l){
     </tr>`;
 }
 /* Linha especial "Lançamentos não listados" (ver calcProjecoesMes/idsJaRepresentadosNoFluxoCaixa) — mesma
-   estrutura de 6 colunas das demais linhas, sem botões de editar/excluir (não é um lançamento previsto,
-   é a soma de movimentações reais das contas elegíveis sem linha própria nesta tabela). Sem "Dia" único
-   (representa um intervalo de dias — ver l.diaIni/l.diaFim), a coluna Dia fica em branco; o intervalo
-   aparece só no tooltip. O sinal (positivo/negativo) segue o mesmo valor líquido já consolidado. */
+   estrutura de colunas das demais linhas (Dia/Descrição/Conta-Cartão/Tipo/Status/Valor/Saldo/Ações), sem
+   botões de editar/excluir (não é um lançamento previsto, é a soma de movimentações reais das contas
+   elegíveis sem linha própria nesta tabela) e sem colspan mesclando colunas — cada coluna tem sua própria
+   célula, inclusive Status (requisito explícito: o status vive DENTRO da coluna Status, nunca embutido no
+   texto da Descrição). Sem "Dia" único (representa um intervalo de dias — ver l.diaIni/l.diaFim), a coluna
+   Dia mostra o intervalo compacto; Conta/Cartão e Tipo ficam em branco (agregam possivelmente mais de uma
+   conta/tipo, sem um único valor discreto para mostrar). O sinal (positivo/negativo) segue o mesmo valor
+   líquido já consolidado.
+   diaIniExibicao/diaFimExibicao: l.diaIni/l.diaFim podem chegar invertidos quando o intervalo representa o
+   "vão" entre dois dias listados CONSECUTIVOS no calendário (ex.: dias 8 e 9 — diaIni=9, diaFim=8, ver
+   criarLinhaNaoListados em calcProjecoesMes) — a busca em transacoesNaoListadasNoIntervalo já trata isso
+   como intervalo vazio (retorna zero) independente da ordem, mas a EXIBIÇÃO sempre usa min/max para nunca
+   mostrar o maior dia antes do menor (requisito explícito: "08–09", nunca "09–08"). */
 function renderLinhaNaoListados(l){
-  const intervaloCompacto = l.diaIni===l.diaFim ? pad2(l.diaIni) : `${pad2(l.diaIni)}–${pad2(l.diaFim)}`;
-  const intervalo = l.diaIni===l.diaFim ? `dia ${pad2(l.diaIni)}` : `dias ${pad2(l.diaIni)} a ${pad2(l.diaFim)}`;
-  const titulo = `Soma de ${l.qtd} lançamento${l.qtd===1?'':'s'} real${l.qtd===1?'':'is'} das contas do Extrato Consolidado (${intervalo}) sem linha própria nesta tabela`;
+  const diaIniExibicao = Math.min(l.diaIni, l.diaFim), diaFimExibicao = Math.max(l.diaIni, l.diaFim);
+  const intervaloCompacto = diaIniExibicao===diaFimExibicao ? pad2(diaIniExibicao) : `${pad2(diaIniExibicao)}–${pad2(diaFimExibicao)}`;
+  const intervalo = diaIniExibicao===diaFimExibicao ? `dia ${pad2(diaIniExibicao)}` : `dias ${pad2(diaIniExibicao)} a ${pad2(diaFimExibicao)}`;
+  const titulo = `Soma de ${l.qtd} lançamento${l.qtd===1?'':'s'} ${l.qtd===1?'real':'reais'} das contas do Extrato Consolidado (${intervalo}) sem linha própria nesta tabela`;
   return `
-    <tr class="linha-nao-listados" title="${escapeHtml(titulo)}">
+    <tr class="linha-nao-listados" title="${escapeHtml(titulo)}" data-nao-listados-dia-ini="${diaIniExibicao}" data-nao-listados-dia-fim="${diaFimExibicao}" data-nao-listados-ano="${l.ano}" data-nao-listados-mes="${l.mes}">
       <td data-label="Dia" style="text-align:center;font-family:var(--mono);">${intervaloCompacto}</td>
-      <td colspan="4" class="linha-nao-listados-label">Lançamentos não listados ${badgeStatusExtratoConsolidado(l)}</td>
+      <td data-label="Descrição" class="linha-nao-listados-label">Lançamentos não listados</td>
+      <td data-label="Conta/Cartão"></td>
+      <td data-label="Tipo"></td>
+      <td data-label="Status">${badgeStatusExtratoConsolidado(l)}</td>
       <td data-label="Valor" class="val-cell ${l.valor<0?'neg':(l.valor>0?'pos':'')}" style="text-align:right;">${fmtBRL(l.valor)}</td>
       <td data-label="Saldo" class="val-cell saldo-destaque" style="text-align:right;">${fmtBRL(l.saldo)}</td>
-      <td data-label=""></td>
+      <td data-label="" class="tabela-fluxo-acoes" style="white-space:nowrap;">
+        <button type="button" class="icon-btn" title="Ver os lançamentos que compõem este total">🔍</button>
+      </td>
     </tr>`;
+}
+/* Modal de auditoria/rastreabilidade de UMA linha "Lançamentos não listados" (requisito "Ajustes no
+   Extrato Consolidado" item 7) — mostra os registros individuais que compõem a soma exibida naquela linha,
+   reaproveitando exatamente a mesma função que já calculou o valor (registrosNaoListadosDoIntervalo, que
+   por sua vez usa transacoesNaoListadasLista — a MESMA fonte de transacoesNaoListadasNoIntervalo), então o
+   total mostrado aqui é sempre idêntico ao da linha, nunca um cálculo em paralelo. Somente consulta: sem
+   nenhuma ação de editar/excluir (usar a aba Registros para isso, se necessário) — o objetivo é auditoria. */
+function renderNaoListadosModal(){
+  const cfg = UI.naoListadosModal;
+  const { ano, mes, diaIni, diaFim } = cfg;
+  const itens = registrosNaoListadosDoIntervalo(ano, mes, diaIni, diaFim).slice().sort((a,b)=> a.data<b.data?-1:(a.data>b.data?1:0));
+  const total = itens.reduce((s,t)=> s + (t.tipo==='Receita' ? (Number(t.valor)||0) : (t.tipo==='Despesa' ? -(Number(t.valor)||0) : 0)), 0);
+  const intervaloTexto = diaIni===diaFim ? `dia ${pad2(diaIni)}` : `dias ${pad2(diaIni)} a ${pad2(diaFim)}`;
+  return `
+  <div class="overlay" id="ovNaoListadosModal" ${attrZIndexModal('naoListadosModal')}>
+    <div class="modal" style="width:100%;max-width:900px;">
+      <div class="modal-head"><h3>🧾 Lançamentos não listados — ${intervaloTexto} de ${MESES[mes-1]}/${ano}</h3><button class="close-x" id="closeNaoListadosModal">✕</button></div>
+      <div class="modal-body">
+        <p class="hint" style="margin-top:0;">Registros reais das contas do Extrato Consolidado neste intervalo, sem linha própria na tabela (nem projeção, nem realização de nenhum lançamento previsto), somados na linha "Lançamentos não listados". Somente consulta — para editar ou excluir um lançamento, use a aba Registros.</p>
+        ${itens.length ? `
+        <div class="table-wrap" style="overflow-x:auto;"><table style="width:100%;table-layout:fixed;">
+          <thead><tr>
+            <th style="width:12%;">Data</th><th style="width:32%;">Descrição</th><th style="width:18%;">Conta</th>
+            <th style="width:18%;">Categoria</th><th style="width:10%;">Tipo</th><th style="width:10%;text-align:right;">Valor</th>
+          </tr></thead>
+          <tbody>${itens.map(t=>`<tr>
+            <td>${fmtData(t.data)}</td>
+            <td>${escapeHtml(t.descricao)}</td>
+            <td>${escapeHtml(t.conta)}</td>
+            <td>${escapeHtml(t.categoria||'—')}</td>
+            <td><span class="tag ${t.tipo}" style="font-size:9px;">${t.tipo}</span></td>
+            <td style="text-align:right;" class="val-cell ${t.tipo==='Despesa'?'neg':'pos'}">${fmtBRL(t.valor)}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+        <div class="saldo-final-projetado ${classeSinalMoeda(total)}" style="margin-top:10px;"><span>Soma (${itens.length} lançamento${itens.length===1?'':'s'})</span><span class="val">${fmtBRL(total)}</span></div>
+        ` : `<div class="empty-state"><div class="big">🧾</div>Nenhum lançamento encontrado neste intervalo.</div>`}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="cancelNaoListadosModal">Fechar</button>
+      </div>
+    </div>
+  </div>`;
 }
 /* Um painel/mês da projeção, replicando exatamente a mesma estrutura de tabela — inclusive o "Saldo
    inicial" no cabeçalho (fluxo-mes-resumo), mostrado da mesma forma em TODOS os painéis, sem exceção (item
@@ -14293,13 +14422,15 @@ function renderResumo(){
   const primeiroMesEhCompetenciaAtual = meses[0] && meses[0].ano===UI.ano && meses[0].mes===UI.mes;
   return `
   <div class="panel">
-    <h2><span>Extrato Consolidado</span></h2>
-    <div class="saldo-inicial-row" style="flex-wrap:wrap;gap:14px;">
-      <div class="field" style="margin-bottom:0;">
-        <label>Período</label>
+    <h2>
+      <span>Extrato Consolidado</span>
+      <span class="extrato-periodo-inline">
+        <label for="selExtratoPeriodo">Período</label>
         <select id="selExtratoPeriodo">${OPCOES_PERIODO_EXTRATO.map(([v,nome])=>`<option value="${v}" ${modoPeriodo===v?'selected':''}>${nome}</option>`).join('')}</select>
-      </div>
-      ${modoPeriodo==='personalizado' ? `
+      </span>
+    </h2>
+    ${modoPeriodo==='personalizado' ? `
+    <div class="saldo-inicial-row" style="flex-wrap:wrap;gap:14px;">
       <div class="field" style="margin-bottom:0;"><label>De</label>
         <div class="year-nav">
           <select id="selExtratoPeriodoMesIni">${MESES.map((n,i)=>`<option value="${i+1}" ${Number(pPersonalizado.mesIni)===i+1?'selected':''}>${n}</option>`).join('')}</select>
@@ -14311,8 +14442,8 @@ function renderResumo(){
           <select id="selExtratoPeriodoMesFim">${MESES.map((n,i)=>`<option value="${i+1}" ${Number(pPersonalizado.mesFim)===i+1?'selected':''}>${n}</option>`).join('')}</select>
           <input type="number" step="1" id="inpExtratoPeriodoAnoFim" style="width:76px;" value="${pPersonalizado.anoFim}">
         </div>
-      </div>` : ''}
-    </div>
+      </div>
+    </div>` : ''}
     <div class="grid-cards">
       <div class="kpi">
         <div class="bar"></div>
@@ -14345,7 +14476,7 @@ function renderResumo(){
           <li>O <b>Saldo Atual</b> do primeiro mês do período é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança cadastrada (não inclui Contracheque, Reserva de Emergência nem cartões de crédito) — o mesmo valor já calculado no painel Contas;</li>
           <li>Acumula o efeito de cada lançamento em ordem cronológica — cada linha mostra o <b>Saldo Consolidado</b> exatamente até aquele ponto, nunca a simples soma de receitas e despesas do período;</li>
           <li>O <b>saldo final</b> de cada mês torna-se automaticamente o <b>saldo inicial</b> do mês seguinte, garantindo a continuidade da projeção financeira;</li>
-          <li>A coluna <b>Status</b> indica 🟢 Realizado (movimentação real sem projeção associada), 🔵 Projetado (ainda não identificado no Extrato), 🟡 Conciliado (projeção já localizada e confirmada no Extrato) ou 🔴 Divergente (conciliado, mas com valor diferente do projetado);</li>
+          <li>A coluna <b>Status</b> indica 🟢 Realizado (movimentação real sem projeção associada), 🔵 Projetado (ainda não identificado no Extrato), 🟡 Conforme (já conciliado com o Extrato — ver o selo 🔗/⏪/⏩ ao lado da descrição — e com valor igual ao previsto) ou 🔴 Divergente (também já conciliado, mas com valor diferente do previsto);</li>
           <li>Todo período entre lançamentos individualizados que tenha movimentação real sem linha própria nesta tabela ganha uma linha agrupada <b>Lançamentos não listados</b> — nunca conta a mesma movimentação duas vezes.</li>
         </ul>
       </div>
@@ -19046,6 +19177,18 @@ function bindEvents(){
     delete item.vinculosExtrato[competencia];
     scheduleSave(); render();
   }));
+  /* ---- Extrato Consolidado: clique numa linha "Lançamentos não listados" abre o modal de auditoria
+     (requisito "Ajustes no Extrato Consolidado" item 7) — a linha inteira é clicável (não só o ícone 🔍),
+     mesmo padrão de área de clique generosa já usado no selo de conciliação. ---- */
+  document.querySelectorAll('tr.linha-nao-listados').forEach(tr=> tr.addEventListener('click', ()=>{
+    UI.naoListadosModal = {
+      ano: Number(tr.dataset.naoListadosAno), mes: Number(tr.dataset.naoListadosMes),
+      diaIni: Number(tr.dataset.naoListadosDiaIni), diaFim: Number(tr.dataset.naoListadosDiaFim),
+    };
+    render();
+  }));
+  document.getElementById('closeNaoListadosModal')?.addEventListener('click', ()=>{ UI.naoListadosModal=null; render(); });
+  document.getElementById('cancelNaoListadosModal')?.addEventListener('click', ()=>{ UI.naoListadosModal=null; render(); });
   /* ---- Modal: revisão manual da conciliação (multi-seleção) ---- */
   document.getElementById('closeConciliarProjecao')?.addEventListener('click', ()=>{ UI.conciliarProjecaoModal=null; render(); });
   document.getElementById('cancelConciliarProjecao')?.addEventListener('click', ()=>{ UI.conciliarProjecaoModal=null; render(); });
