@@ -1868,6 +1868,12 @@ summary::marker{content:'';}
    qualquer largura (desktop ou mobile), já que é o mesmo flex-wrap em ambos. */
 .cartoes-resumo-grid-flex-fill{display:flex;flex-wrap:wrap;}
 .cartoes-resumo-grid-flex-fill .cartoes-resumo-item{flex:1 1 140px;}
+/* Painel de Contas (aba Contas e Cartões): 5 cards-resumo (conta(s)/saldo inicial/saldo líquido/entradas/
+   saídas) — no desktop, sempre numa única linha (nunca quebrando para uma segunda, mesmo com o card novo
+   "saldo inicial no período"); abaixo de 900px, volta ao mesmo grid responsivo (auto-fit/minmax) já usado
+   por todo o restante do app, preservando o empilhamento/adaptação existente no mobile. */
+.cartoes-resumo-grid-contas{grid-template-columns:repeat(5,1fr);}
+@media(max-width:900px){ .cartoes-resumo-grid-contas{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));} }
 /* Modal "Ver detalhes" de Economias — agrupamento Categoria → Subcategoria → lançamentos. */
 .aportes-categoria-bloco{margin-bottom:14px;}
 .aportes-categoria-bloco:last-child{margin-bottom:0;}
@@ -8187,7 +8193,7 @@ function resumoContasBancarias(ano, mes){
   // contas (qtdContas) continua sobre TODAS as contas bancárias, sem essa exclusão (não é um total
   // financeiro, só uma quantidade).
   const contasParaTotais = contas.filter(c=> STATE.contaTipos[c]!=='Contracheque');
-  let saldoTotal = 0, entradasTotal = 0, saidasTotal = 0;
+  let saldoTotal = 0, entradasTotal = 0, saidasTotal = 0, saldoInicialTotal = 0;
   contasParaTotais.forEach(c=>{
     const s = calcSaldoConta(c, ano, mes);
     // Saldo líquido do período = saldoInicial + liquidoRealizado, a MESMA fórmula já usada no card de cada
@@ -8196,8 +8202,9 @@ function resumoContasBancarias(ano, mes){
     saldoTotal += s.saldoInicial + s.liquidoRealizado;
     entradasTotal += s.entradasRealizadas;
     saidasTotal += s.saidasRealizadas;
+    saldoInicialTotal += s.saldoInicial;
   });
-  return { qtdContas: contas.length, saldoTotal, entradasTotal, saidasTotal };
+  return { qtdContas: contas.length, saldoTotal, entradasTotal, saidasTotal, saldoInicialTotal };
 }
 /* Lançamentos do período com saldo acumulado — calculado e exibido em ordem cronológica (a partir do
    saldo inicial do período), do mais antigo para o mais recente. Esse saldoAcumulado é só o ponto de
@@ -13004,8 +13011,9 @@ function renderPainelContasBancarias(ano, mes){
   const resumo = resumoContasBancarias(ano, mes);
   return `
   <div class="panel">
-    <div class="cartoes-resumo-grid">
+    <div class="cartoes-resumo-grid cartoes-resumo-grid-contas">
       <div class="cartoes-resumo-item"><span class="ico">🏦</span><div><div class="val">${resumo.qtdContas}</div><div class="lbl">conta${resumo.qtdContas===1?'':'s'}</div></div></div>
+      <div class="cartoes-resumo-item"><span class="ico">🏁</span><div><div class="val">${fmtBRL(resumo.saldoInicialTotal)}</div><div class="lbl">saldo inicial no período</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(resumo.saldoTotal)}</div><div class="lbl">saldo líquido no período</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">📈</span><div><div class="val">${fmtBRL(resumo.entradasTotal)}</div><div class="lbl">entradas no período</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">📉</span><div><div class="val">${fmtBRL(resumo.saidasTotal)}</div><div class="lbl">saídas no período</div></div></div>
@@ -13220,7 +13228,7 @@ function renderFaturaAtualModal(){
           <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(totalFatFiltrado)}</div><div class="lbl">valor total da fatura</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">🛒</span><div><div class="val">${fmtBRL(totalAvistaFiltrado)}</div><div class="lbl">compras à vista</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(totalParceladoFiltrado)}</div><div class="lbl">compras parceladas</div></div></div>
-          ${totalCreditosFiltrado>0 ? `<div class="cartoes-resumo-item"><span class="ico">➕</span><div><div class="val">${fmtBRL(totalCreditosFiltrado)}</div><div class="lbl">Créditos e Pagamentos</div></div></div>` : ''}
+          ${totalCreditosFiltrado>0 ? `<div class="cartoes-resumo-item"><span class="ico">➕</span><div><div class="val">${fmtBRL(totalCreditosFiltrado)}</div><div class="lbl">créditos e pagamentos</div></div></div>` : ''}
         </div>
         ${det.itens.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
@@ -13340,9 +13348,9 @@ function renderProjecaoFaturaModal(){
         ${selecionada ? `
         <div class="cartoes-resumo-grid resumo-competencia-selecionada-print" style="margin-top:14px;">
           <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(totalSelFiltrado)}</div><div class="lbl">valor total da fatura</div></div></div>
-          <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(totalParceladoSelFiltrado)}</div><div class="lbl">compras parceladas</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">🛒</span><div><div class="val">${fmtBRL(totalAvistaSelFiltrado)}</div><div class="lbl">compras à vista</div></div></div>
-          ${totalCreditosSelFiltrado>0 ? `<div class="cartoes-resumo-item"><span class="ico">➕</span><div><div class="val">${fmtBRL(totalCreditosSelFiltrado)}</div><div class="lbl">créditos</div></div></div>` : ''}
+          <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(totalParceladoSelFiltrado)}</div><div class="lbl">compras parceladas</div></div></div>
+          ${totalCreditosSelFiltrado>0 ? `<div class="cartoes-resumo-item"><span class="ico">➕</span><div><div class="val">${fmtBRL(totalCreditosSelFiltrado)}</div><div class="lbl">créditos e pagamentos</div></div></div>` : ''}
         </div>` : ''}
         <p class="hint no-print" style="margin:12px 0 8px;">Valores calculados em tempo real a partir de todos os lançamentos (à vista, parcelados e créditos — estornos incluídos como crédito) já registrados para cada competência futura. Clique numa competência para ver só os lançamentos daquele mês.</p>
         ${competencias.length ? `
