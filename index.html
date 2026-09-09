@@ -7592,41 +7592,58 @@ function janelaPagamentoFatura(conta, competencia){
   return { fechIni, fechFim: fechFim || null };
 }
 /* Lançamentos que realmente correspondem ao pagamento desta fatura. A auditoria com dados reais mostrou
-   que pagamentos aparecem de DUAS formas diferentes na base, e a regra precisa reconhecer as duas:
+   que pagamentos aparecem de TRÊS formas diferentes na base, e a regra precisa reconhecer todas:
    (a) "espelhado": um crédito na própria conta do cartão, categoria "Recebimento por Pagamento de
        Fatura" (Receita) — permite parciais e múltiplos lançamentos somados, pois cada um já é
        inequivocamente ligado a este cartão por t.conta;
-   (b) "só na conta corrente" (rede de segurança, ver reconciliarPagamentosFatura): uma despesa
-       "Pagamento de Fatura de Cartão de Crédito" lançada diretamente na conta corrente usada para pagar,
-       SEM nenhum lançamento espelho do lado do cartão — só é aceita quando bate EXATAMENTE (nunca
-       "parecido") com o saldo ainda devido da fatura e cai dentro da janela real de fechamento, e nunca
-       quando já existe um espelho real (t.transferenciaVinculoId), para não contar em dobro. */
+   (b) "vinculado por t.cartaoFatura": uma despesa "Pagamento de Fatura de Cartão de Crédito" lançada
+       numa conta corrente, SEM espelho, mas com o campo Cartão do próprio lançamento (t.cartaoFatura —
+       escolhido pelo usuário ao lançar/editar, ou identificado automaticamente quando só há um candidato
+       possível) apontando explicitamente para este cartão — o vínculo por si só já identifica sem
+       ambiguidade a qual fatura o pagamento pertence, então PERMITE parciais e múltiplos lançamentos
+       somados, exatamente como o caso (a) (ver "Cálculo automático do limite disponível após pagamento
+       de fatura": um pagamento parcial precisa liberar exatamente o valor pago, nunca exigir que o
+       lançamento cubra a fatura inteira);
+   (c) "só na conta corrente, sem vínculo" (rede de segurança, ver reconciliarPagamentosFatura): uma
+       despesa "Pagamento de Fatura de Cartão de Crédito" lançada diretamente na conta corrente, SEM
+       espelho e SEM t.cartaoFatura preenchido — só é aceita quando bate EXATAMENTE (nunca "parecido")
+       com o saldo ainda devido da fatura (já descontados os casos (a) e (b) acima) e cai dentro da
+       janela real de fechamento; nunca quando já existe um espelho real (t.transferenciaVinculoId), para
+       não contar em dobro. */
 function pagamentosCandidatosFatura(conta, competencia){
   const total = faturaPorCompetencia(conta, competencia);
   const janela = janelaPagamentoFatura(conta, competencia);
   const naJanela = data => janela ? (data && data > janela.fechIni && (!janela.fechFim || data <= janela.fechFim)) : false;
+  // Cartão sem dia de fechamento configurado: não há como calcular a janela real, então cai no único
+  // sinal disponível (o campo t.competencia do próprio lançamento) — mesmo assim, nunca por
+  // proximidade/valor.
+  const dentroDaFatura = t => janela ? naJanela(t.data) : t.competencia===competencia;
 
   const doCartao = STATE.transactions.filter(t=>{
     const base = t.conta===conta && t.pgto==='Cartão de Crédito' && t.tipo==='Receita' && t.categoria==='Recebimento por Pagamento de Fatura';
-    if(!base) return false;
-    // Cartão sem dia de fechamento configurado: não há como calcular a janela real, então cai no único
-    // sinal disponível (o campo t.competencia do próprio lançamento) — mesmo assim, nunca por
-    // proximidade/valor.
-    return janela ? naJanela(t.data) : t.competencia===competencia;
+    return base && dentroDaFatura(t);
   });
   const pagoCartao = doCartao.reduce((s,t)=> s + (Number(t.valor)||0), 0);
 
-  const restante = total - pagoCartao;
-  let doCorrente = [];
+  const doCorrenteVinculado = STATE.transactions.filter(t=>
+    t.tipo==='Despesa' && t.categoria==='Pagamento de Fatura de Cartão de Crédito'
+    && !STATE.cartoes.includes(t.conta) && !t.transferenciaVinculoId
+    && t.cartaoFatura===conta && dentroDaFatura(t)
+  );
+  const pagoVinculado = doCorrenteVinculado.reduce((s,t)=> s + (Number(t.valor)||0), 0);
+
+  const restante = total - pagoCartao - pagoVinculado;
+  let doCorrenteSemVinculo = [];
   if(janela && restante > EPSILON_FATURA){
-    doCorrente = STATE.transactions.filter(t=>
+    doCorrenteSemVinculo = STATE.transactions.filter(t=>
       t.tipo==='Despesa' && t.categoria==='Pagamento de Fatura de Cartão de Crédito'
       && !STATE.cartoes.includes(t.conta) && !t.transferenciaVinculoId
+      && !t.cartaoFatura
       && naJanela(t.data)
       && Math.abs((Number(t.valor)||0) - restante) <= EPSILON_FATURA
     );
   }
-  return [...doCartao, ...doCorrente];
+  return [...doCartao, ...doCorrenteVinculado, ...doCorrenteSemVinculo];
 }
 /* Quanto já foi efetivamente pago de uma fatura: soma dos lançamentos identificados por
    pagamentosCandidatosFatura (ver ali a regra completa de correspondência, incluindo os dois formatos
