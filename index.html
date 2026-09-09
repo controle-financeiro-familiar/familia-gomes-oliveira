@@ -851,10 +851,11 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
 /* Fluxo de Caixa no mobile (item 13 do requisito de responsividade): a mesma tabela vira uma lista
    vertical de cards — cada <tr> um card, cada <td> uma linha "rótulo: valor" — sem tocar no cálculo da
    projeção nem duplicar a lógica de renderPainelProjecao/renderLinhaProjecao, só a apresentação. As linhas
-   "Saldo do Dia"/"Saldo Atual (Hoje)" continuam na posição calculada dinamicamente para cada dia com
-   movimentação real (ver aplicarLinhasSaldoDiario). "Saldo do Dia" (outros dias) usa o mesmo cartão/borda/
-   fundo de qualquer outra linha, só com negrito e ícone; só "Saldo Atual (Hoje)" (.linha-saldo-hoje) mantém
-   também a borda/fundo de destaque próprios (ver regra logo abaixo). */
+   especiais "Lançamentos não listados" (ver calcProjecoesMes/renderLinhaNaoListados) continuam na posição
+   calculada dinamicamente entre os lançamentos listados, com o mesmo cartão/borda desta lista, só com fundo
+   neutro/itálico (ver regra própria logo abaixo). A linha "Saldo do Dia"/"Saldo Atual (Hoje)"
+   (aplicarLinhasSaldoDiario/.linha-saldo-atual) não é mais usada nesta tabela — as regras abaixo continuam
+   valendo para ela só por compatibilidade, caso volte a ser usada em algum outro lugar. */
 @media(max-width:700px){
   .tabela-fluxo{min-width:0;width:100%;display:block;}
   .tabela-fluxo thead{display:none;}
@@ -876,6 +877,7 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
   .tabela-fluxo td.tabela-fluxo-acoes{justify-content:flex-end;gap:14px;}
   .tabela-fluxo td.tabela-fluxo-acoes .icon-btn{min-width:var(--touch-min);font-size:16px;}
   .tabela-fluxo .linha-saldo-atual-label{display:block;padding:5px 0;font-weight:700;}
+  .tabela-fluxo .linha-nao-listados-label{display:block;padding:5px 0;}
   /* Item 8 do requisito: a primeira linha do card (coluna "Dia") fica inteira em negrito — rótulo e valor —
      não só o valor da data — e com um background de destaque, sangrando até as bordas do card (a mesma
      margin negativa do padding do card, ver .tabela-fluxo tr acima) para ler como um "cabeçalho" da linha,
@@ -2240,6 +2242,13 @@ tr.linha-saldo-hoje{background:#fff8e6;}
 tr.linha-saldo-hoje td{border-top:2px solid var(--gold);border-bottom:2px solid var(--gold);}
 tr.linha-saldo-hoje .linha-saldo-atual-label{color:var(--gold-dark);}
 tr.linha-saldo-hoje .saldo-destaque{background:var(--gold);color:var(--navy-950);}
+/* Linha "Lançamentos não listados" (ver calcProjecoesMes/renderLinhaNaoListados) — visual de linha-resumo
+   (mesmo espírito de .linha-grupo-competencia), nunca confundida com um lançamento comum: fundo neutro,
+   itálico, sem ícone/negrito de destaque. */
+tr.linha-nao-listados{background:var(--navy-50,#f4f7fc);}
+tr.linha-nao-listados td{font-style:italic;color:#5b6b85;}
+tr.linha-nao-listados .linha-nao-listados-label{white-space:nowrap;}
+tr.linha-nao-listados .val-cell{font-style:normal;}
 </style>
 </head>
 <body>
@@ -9516,10 +9525,10 @@ function saldoContaAteDataSemRendeFacilBB(conta, dataLimiteISO){
   });
   return saldo;
 }
-/* Saldo REAL consolidado das contas elegíveis do Fluxo de Caixa (PJ/Corrente/Poupança) até uma data —
-   fonte ÚNICA de "saldo real" usada tanto pelo saldo de cada lançamento (calcProjecoesMes) quanto pela
-   linha "Saldo do Dia" (aplicarLinhasSaldoDiario), para que os dois nunca possam divergir por usarem
-   fórmulas diferentes (requisito de correção definitiva do cálculo de saldos). Cartões de crédito nunca
+/* Saldo REAL consolidado das contas elegíveis do Fluxo de Caixa (PJ/Corrente/Poupança) até uma data. Não
+   é mais usada por calcProjecoesMes/aplicarLinhasSaldoDiario (o saldo sequencial linha a linha, incluindo
+   as linhas de "Lançamentos não listados", já é sempre exato — ver calcProjecoesMes) — mantida por
+   compatibilidade, caso volte a ser útil em algum outro contexto. Cartões de crédito nunca
    entram (contasElegiveisFluxoCaixa já os exclui, junto com Contracheque/Reserva de Emergência/qualquer
    outro tipo de conta). Registros-espelho de transferência entre contas próprias (entreFamilia) SÃO
    somados normalmente aqui — cada lado é uma movimentação real na SUA PRÓPRIA conta; ao consolidar as
@@ -9823,21 +9832,35 @@ function calcProjecoesMultiMesCompetencias(anoBase, mesBase, qtdMeses){
   return competencias;
 }
 /* Quanto de uma fatura de cartão já foi pago a partir de uma conta ELEGÍVEL do Fluxo de Caixa (Conta
-   Corrente/PJ/Poupança) — usado só pela linha "Saldo do Dia" (ver calcProjecoesMes/valorProjecaoPendente),
-   nunca pelo restante da reconciliação de faturas (pagamentoFaturaValor, sem essa restrição de conta,
-   continua sendo a fonte de verdade do status "Paga"/"Atrasada" exibido em Contas e Cartões). Um pagamento
-   "espelhado" (crédito na própria conta do cartão) só conta aqui quando a ORIGEM do vínculo
-   (transferenciaVinculoId) é uma dessas 3 contas — sem isso, não há como saber de onde saiu o dinheiro. */
-function pagamentoFaturaValorElegivel(cartao, competencia){
+   Corrente/PJ/Poupança) — usado tanto pelo valor pendente quanto pela conciliação da própria linha do
+   cartão (ver calcProjecoesMes), nunca pelo restante da reconciliação de faturas (pagamentoFaturaValor,
+   sem essa restrição de conta, continua sendo a fonte de verdade do status "Paga"/"Atrasada" exibido em
+   Contas e Cartões). Um pagamento "espelhado" (crédito na própria conta do cartão) só conta aqui quando a
+   ORIGEM do vínculo (transferenciaVinculoId) é uma dessas 3 contas — sem isso, não há como saber de onde
+   saiu o dinheiro. Devolve também a Data (do lado elegível — a da própria conta corrente/PJ/poupança,
+   nunca a do espelho no cartão) mais recente e a quantidade de lançamentos somados, para a linha do
+   cartão no Fluxo de Caixa poder exibir a data/valor REAIS do pagamento, exatamente como já acontece com
+   os demais lançamentos previstos conciliados com o Extrato (ver requisito "Regras do Fluxo de Caixa" —
+   seção 1: a fatura projetada passa a representar o pagamento efetivamente realizado). */
+function pagamentoFaturaElegivelDetalhes(cartao, competencia){
   const contasElegiveis = new Set(contasElegiveisFluxoCaixa());
-  return pagamentosCandidatosFatura(cartao, competencia).reduce((s,t)=>{
-    if(contasElegiveis.has(t.conta)) return s + (Number(t.valor)||0); // "só na conta corrente" (ver pagamentosCandidatosFatura)
-    if(t.transferenciaVinculoId){ // "espelhado": confere a conta de origem pelo vínculo
+  const itens = [];
+  pagamentosCandidatosFatura(cartao, competencia).forEach(t=>{
+    if(contasElegiveis.has(t.conta)){ itens.push({ valor: Number(t.valor)||0, data: t.data }); return; } // "só na conta corrente" (ver pagamentosCandidatosFatura)
+    if(t.transferenciaVinculoId){ // "espelhado": confere a conta de origem pelo vínculo, e usa a Data DELA
       const origem = STATE.transactions.find(o=>o.id!==t.id && o.transferenciaVinculoId===t.transferenciaVinculoId);
-      if(origem && contasElegiveis.has(origem.conta)) return s + (Number(t.valor)||0);
+      if(origem && contasElegiveis.has(origem.conta)) itens.push({ valor: Number(t.valor)||0, data: origem.data });
     }
-    return s;
-  }, 0);
+  });
+  return {
+    valor: itens.reduce((s,x)=>s+x.valor, 0),
+    dataMaisRecente: itens.map(x=>x.data).sort().slice(-1)[0] || null,
+    qtd: itens.length,
+    ids: pagamentosCandidatosFatura(cartao, competencia).map(t=>t.id), // todos os lados (cartão+corrente), para nunca duplicar em "Lançamentos não listados"
+  };
+}
+function pagamentoFaturaValorElegivel(cartao, competencia){
+  return pagamentoFaturaElegivelDetalhes(cartao, competencia).valor;
 }
 /* Monta a projeção de um único mês a partir de um saldo inicial já dado (usado tanto para o mês
    selecionado no topo do app quanto para cada um dos meses seguintes, encadeados).
@@ -9879,7 +9902,25 @@ function calcProjecoesMes(ano, mes, saldoInicial){
       if(item.cartao){
         // A fatura nunca está "no Extrato" enquanto não for paga (a conta do cartão não é uma das 3
         // elegíveis) — só a parte AINDA não paga a partir de uma conta elegível continua como projeção.
-        valorProjecaoPendente = Math.max(0, valorCalculado - pagamentoFaturaValorElegivel(item.cartao, competencia));
+        // Regras do Fluxo de Caixa, seção 1: sem pagamento identificado, a linha continua mostrando o
+        // valor total da fatura + a data prevista de pagamento (dia/valorCalculado já inicializados assim
+        // no topo desta função — nada a fazer). Assim que existe pagamento identificado a partir de uma
+        // conta ELEGÍVEL (pagamentoFaturaElegivelDetalhes — mesma restrição de sempre: só o lado
+        // corrente/PJ/poupança, nunca o espelho no próprio cartão nem um pagamento saído de uma conta não
+        // elegível, ex. Reserva de Emergência), a linha passa a representar esse pagamento de verdade —
+        // Data e Valor reais do Extrato, exatamente como já acontece com os demais lançamentos previstos
+        // conciliados (bloco `else` abaixo) — nunca uma saída independente (ver idsJaRepresentadosNoFluxoCaixa,
+        // que exclui essa(s) mesma(s) transação(ões) de "Lançamentos não listados" para nunca duplicar).
+        // valorPrevisto (abaixo, fora deste bloco) continua sendo sempre o total da fatura — a referência
+        // histórica da projeção original, preservada mesmo depois de conciliada.
+        const detalhesPagamento = pagamentoFaturaElegivelDetalhes(item.cartao, competencia);
+        valorProjecaoPendente = Math.max(0, valorCalculado - detalhesPagamento.valor);
+        if(detalhesPagamento.valor > EPSILON_FATURA){
+          dataReal = detalhesPagamento.dataMaisRecente;
+          qtdVinculos = detalhesPagamento.qtd;
+          valorCalculado = detalhesPagamento.valor;
+          if(dataReal && dataReal.slice(0,7)===competencia) dia = Number(dataReal.slice(8,10));
+        }
       } else if(normalizarTexto(item.descricao)==='contrachequetrt'){
         // Fonte de verdade EXCLUSIVA: existe ou não um contracheque importado NESTA competência (ver
         // contrachequeCompetenciaImportada) — nunca a conciliação com o Extrato, nem o lançamento
@@ -9966,66 +10007,97 @@ function calcProjecoesMes(ano, mes, saldoInicial){
       return { ...item, competencia, valorCalculado, dia, valorProjecaoPendente, dataPrevista: item.dia, valorPrevisto: valorProjecaoItem(item, competencia), dataReal, qtdVinculos, statusConciliacao };
     })
     .sort((a,b)=>(Number(a.dia)||0)-(Number(b.dia)||0));
-  // Saldo de cada lançamento (correção definitiva do cálculo de saldos): acumulador SEQUENCIAL dentro de
-  // cada dia, somando o valorCalculado (valor total do item, com sinal de Receita/Despesa) de cada linha
-  // NA PRÓPRIA ORDEM da tabela — nunca um mesmo valor repetido para todos os lançamentos do dia (bug
-  // relatado: dois lançamentos conciliados no mesmo dia mostravam idêntico "Saldo do Dia" em vez do saldo
-  // passo a passo). Ao virar o dia, o acumulador reinicia sempre a partir do Saldo do Dia VERDADEIRO do dia
-  // CALENDÁRIO anterior (saldoRealConsolidadoAteData(diaAnteriorISO(dia)) + pendenteAcumulado até ali) —
-  // nunca do saldoRealConsolidadoAteData do PRÓPRIO dia (que já embutiria o dia inteiro no início dele) nem
-  // do saldo do último dia COM LANÇAMENTO NESTA TABELA (que pode ficar desatualizado quando existe um "dia
-  // vazio" nesta tabela — sem nenhuma linha própria — mas com lançamentos reais nas contas elegíveis: usar
-  // diaAnteriorISO, em vez de "o dia anterior com lançamento", garante que esses dias vazios nunca fiquem de
-  // fora do saldo real usado como ponto de partida do dia seguinte).
-  //
-  // Saldo do Dia (linha especial injetada por aplicarLinhasSaldoDiario, guardada aqui em saldoPorDia):
-  // calculado À PARTE do total sequencial acima, de propósito — é sempre saldoRealConsolidadoAteData(dia)
-  // (saldo real das contas elegíveis, já sem a Aplicação Automática do BB Rende Fácil do próprio dia) mais
-  // os pendentes (valorProjecaoPendente, com sinal de Receita/Despesa) acumulados desde o início desta
-  // tabela, nunca zerados ao virar o dia (para um pendente de um dia anterior continuar refletido nos dias
-  // seguintes até ser efetivamente conciliado). Por ser independente do total sequencial das linhas
-  // listadas, o Saldo do Dia pode legitimamente DIVERGIR desse total quando existem lançamentos reais nas
-  // contas elegíveis, naquela data, sem nenhuma linha correspondente nesta tabela (ex.: um Pix avulso sem
-  // item previsto) — é exatamente esse cenário que validarConsistenciaSaldoFluxoCaixa investiga e reporta,
-  // nunca um valor a "ajustar" para coincidir. O ajuste de pendente ainda não resolvido, herdado do(s)
-  // mês(es) anterior(es) da cadeia (calcProjecoesMultiMes), entra como o valor inicial deste acumulador —
-  // para o 1º mês da cadeia (saldoInicial já é o saldo real de getSaldoInicialBase) esse ajuste é sempre
-  // zero. saldoRealAntesDoMes usa getSaldoInicialBase (não saldoRealConsolidadoAteData num "dia anterior ao
-  // mês") de propósito: um lançamento de Saldo Anterior é sempre datado no dia 1 do próprio mês a que se
-  // refere (ver aplicarSaldoAnteriorConta), nunca no último dia do mês anterior — só
-  // getSaldoInicialBase/calcSaldoConta usa exatamente esse mesmo corte (<=, incluindo o dia 1), garantindo
-  // que o ajuste dê zero de verdade no 1º mês da cadeia. Pela mesma razão, saldoInicial (que já é
-  // saldoRealAntesDoMes + esse ajuste herdado) é usado — em vez de diaAnteriorISO — como o ponto de partida
-  // do acumulador sequencial só para o 1º dia com lançamento do próprio mês (diaAnteriorISO cruzaria para o
-  // mês anterior, cuja própria referência de Saldo Anterior é outra).
-  const saldoRealAntesDoMes = getSaldoInicialBase(ano, mes);
-  let pendenteAcumulado = saldoInicial - saldoRealAntesDoMes;
-  const saldoPorDia = new Map();
+  // ---------- Lançamentos não listados (Regras do Fluxo de Caixa, seções 2 a 9) ----------
+  // Intercala, entre os lançamentos listados acima, linhas agrupadas "Lançamentos não listados": a soma de
+  // toda movimentação real das contas elegíveis (Conta Corrente/PJ/Poupança) desta competência que NÃO
+  // tem nenhuma linha própria nesta tabela — nem como projeção nem como realização de nenhum item de
+  // STATE.projecoes ativo neste mês (ver idsJaRepresentadosNoFluxoCaixa/transacoesNaoListadasNoIntervalo).
+  // Sempre uma linha antes do 1º dia listado (dias 1..dia-1, só quando o 1º lançamento não é já no dia 1),
+  // uma entre CADA par de dias listados consecutivos (dia+1..próximo-1 — sempre criada, mesmo quando os
+  // dois dias são consecutivos no calendário e o intervalo dá vazio, R$0,00: reproduz o layout de
+  // referência, com uma linha entre todo par de dias) e uma depois do último dia listado (dia+1..fim do
+  // mês, só quando o último lançamento não é já no último dia do mês). Sem NENHUM lançamento listado no
+  // mês inteiro, todo o período (dia 1 ao último dia do mês) vira uma única linha.
+  const { max: ultimoDiaMesISO } = limitesCompetenciaISO(competencia);
+  const ultimoDiaMes = Number(ultimoDiaMesISO.slice(8,10));
+  const idsExcluidos = idsJaRepresentadosNoFluxoCaixa(linhas, competencia);
   const diasOrdenados = [...new Set(linhas.map(l=>Math.min(31, Math.max(1, Number(l.dia)||1))))].sort((a,b)=>a-b);
-  diasOrdenados.forEach(dia=>{
-    const dataAtualISO = `${ano}-${pad2(mes)}-${pad2(dia)}`;
-    // dia===1: diaAnteriorISO cruzaria para o mês anterior, cuja própria referência de Saldo Anterior é
-    // outra — usa saldoInicial diretamente (já é o saldo real do início deste mês + pendente herdado da
-    // cadeia). Qualquer outro dia (2 a 31): diaAnteriorISO continua dentro do mesmo mês, então recalcular a
-    // partir dele é sempre seguro e corrige o "dia vazio" descrito acima — inclusive quando o 1º dia COM
-    // LANÇAMENTO nesta tabela não é o dia 1 do mês.
-    const anchorDoDia = dia===1 ? saldoInicial : (saldoRealConsolidadoAteData(diaAnteriorISO(dataAtualISO)) + pendenteAcumulado);
-    let saldoSequencial = anchorDoDia;
-    linhas.filter(l=>Math.min(31, Math.max(1, Number(l.dia)||1))===dia).forEach(l=>{
-      saldoSequencial += (l.tipo==='Receita' ? l.valorCalculado : -l.valorCalculado);
-      l.saldo = saldoSequencial;
-      pendenteAcumulado += (l.tipo==='Receita' ? l.valorProjecaoPendente : -l.valorProjecaoPendente);
+  const criarLinhaNaoListados = (diaIni, diaFim, sufixoId, diaPosicao) => {
+    const { valor, qtd } = transacoesNaoListadasNoIntervalo(diaIni, diaFim, ano, mes, idsExcluidos);
+    return { id:`nao-listados-${competencia}-${sufixoId}`, especial:'nao-listados', diaIni, diaFim, valor, qtd, dia: diaPosicao };
+  };
+  const linhasComNaoListados = [];
+  if(!diasOrdenados.length){
+    linhasComNaoListados.push(criarLinhaNaoListados(1, ultimoDiaMes, 'unico', ultimoDiaMes));
+  } else {
+    const diaMin = diasOrdenados[0], diaMax = diasOrdenados[diasOrdenados.length-1];
+    if(diaMin>1) linhasComNaoListados.push(criarLinhaNaoListados(1, diaMin-1, 'inicial', diaMin));
+    diasOrdenados.forEach((dia, idx)=>{
+      linhas.filter(l=>Math.min(31, Math.max(1, Number(l.dia)||1))===dia).forEach(l=>linhasComNaoListados.push(l));
+      const proximoDia = diasOrdenados[idx+1];
+      if(proximoDia!==undefined){
+        linhasComNaoListados.push(criarLinhaNaoListados(dia+1, proximoDia-1, `entre-${dia}-${proximoDia}`, proximoDia));
+      }
     });
-    const saldoDoDia = saldoRealConsolidadoAteData(dataAtualISO) + pendenteAcumulado;
-    saldoPorDia.set(dia, saldoDoDia);
+    if(diaMax<ultimoDiaMes) linhasComNaoListados.push(criarLinhaNaoListados(diaMax+1, ultimoDiaMes, 'final', diaMax+1));
+  }
+  // ---------- Saldo sequencial linha a linha (Regras do Fluxo de Caixa, seção 7) ----------
+  // Ponto de partida: Saldo Inicial do mês. Cada lançamento Receita soma, Despesa subtrai; cada linha de
+  // "Lançamentos não listados" soma/subtrai o valor líquido já consolidado. Como toda movimentação real
+  // das contas elegíveis agora vira ou uma linha listada ou uma linha "não listados", a soma sequencial
+  // pura é sempre exata — não depende mais de reancorar no saldo real a cada dia (ver histórico desta
+  // função antes desta regra).
+  let saldoCorrente = saldoInicial;
+  linhasComNaoListados.forEach(l=>{
+    saldoCorrente = arredondarMoeda(saldoCorrente + (l.especial==='nao-listados' ? l.valor : (l.tipo==='Receita' ? l.valorCalculado : -l.valorCalculado)));
+    l.saldo = saldoCorrente;
   });
-  // saldoFinal: o Saldo do Dia VERDADEIRO do último dia com lançamento (nunca o saldo sequencial "ingênuo"
-  // da última linha, que pode divergir dele — ver acima) — ou, quando o mês não tem nenhum lançamento, o
-  // saldo real puro no último dia do mês (nunca o saldoInicial repassado sem verificação, mesmo numa tabela
-  // vazia). Encadeado para o mês seguinte por calcProjecoesMultiMes (m.saldoFinal vira o saldoInicial de lá).
-  const { max: ultimoDiaMes } = limitesCompetenciaISO(competencia);
-  const saldoFinal = diasOrdenados.length ? saldoPorDia.get(diasOrdenados[diasOrdenados.length-1]) : saldoRealConsolidadoAteData(ultimoDiaMes);
-  return { ano, mes, saldoInicial, linhas, saldoFinal, saldoPorDia };
+  return { ano, mes, saldoInicial, linhas: linhasComNaoListados, saldoFinal: saldoCorrente };
+}
+/* IDs de lançamentos reais (STATE.transactions) já "usados" por algum item de STATE.projecoes desta
+   tabela — nunca podem compor uma linha de "Lançamentos não listados" (regra de não-duplicidade, seção 8).
+   Cobre os 3 mecanismos de conciliação existentes: (1) vinculosExtrato — todos os vínculos de TODOS os
+   itens, em QUALQUER competência (um mesmo registro do Extrato nunca pode ser vinculado a mais de um
+   lançamento previsto — ver idsVinculadosAOutrosLancamentos — então o conjunto global é sempre seguro,
+   sem precisar filtrar por item/competência); (2) pagamentosCandidatosFatura — a(s) transação(ões) que já
+   representam o pagamento de cada fatura de cartão LISTADA neste mês (dos dois lados possíveis: o espelho
+   na própria conta do cartão, que nunca seria elegível de qualquer forma, e a Despesa na conta
+   corrente/PJ/poupança que efetivamente paga a fatura — ver pagamentoFaturaElegivelDetalhes/calcProjecoesMes,
+   seção 1 do requisito: "o pagamento identificado no extrato não deve ser lançado como uma nova saída
+   independente"); (3) contrachequeOrigemId — o espelho de crédito do líquido do contracheque, já
+   representado pela própria linha "Contracheque TRT". */
+function idsJaRepresentadosNoFluxoCaixa(linhas, competencia){
+  const ids = new Set();
+  STATE.projecoes.forEach(item=>{
+    if(!item.vinculosExtrato) return;
+    Object.values(item.vinculosExtrato).forEach(lista=>(lista||[]).forEach(id=>ids.add(id)));
+  });
+  linhas.filter(l=>l.cartao).forEach(l=>{
+    pagamentosCandidatosFatura(l.cartao, competencia).forEach(t=>ids.add(t.id));
+  });
+  STATE.transactions.forEach(t=>{ if(t.contrachequeOrigemId) ids.add(t.id); });
+  return ids;
+}
+/* Soma líquida (Receita soma, Despesa subtrai) dos lançamentos reais das contas elegíveis do Fluxo de
+   Caixa, no intervalo [diaIni, diaFim] (inclusive) do mês/ano informado, que ainda não estão em
+   idsExcluidos — a composição de UMA linha de "Lançamentos não listados" (ver calcProjecoesMes). Exclui
+   sempre: o marcador de Saldo Anterior (não é uma movimentação do período — já compõe saldoInicial) e
+   BB Rende Fácil (ehMovimentoRendeFacilBB — mesmo critério já usado por saldoRealConsolidadoAteData; não é
+   uma decisão financeira da família, é o banco varrendo o saldo ocioso todo fim de dia). Transferências
+   entre duas contas elegíveis não precisam de nenhuma exclusão especial: os dois lados aparecem
+   normalmente e se cancelam sozinhos na soma (mesmo raciocínio já documentado em
+   saldoRealConsolidadoAteData). diaIni>diaFim (intervalo vazio, ex.: dois lançamentos listados em dias
+   calendário consecutivos) sempre devolve zero, sem consultar STATE.transactions. */
+function transacoesNaoListadasNoIntervalo(diaIni, diaFim, ano, mes, idsExcluidos){
+  if(diaIni>diaFim) return { valor:0, qtd:0 };
+  const contasElegiveis = new Set(contasElegiveisFluxoCaixa());
+  const dataIniISO = `${ano}-${pad2(mes)}-${pad2(Math.max(1,diaIni))}`;
+  const dataFimISO = `${ano}-${pad2(mes)}-${pad2(Math.min(31,diaFim))}`;
+  const txs = STATE.transactions.filter(t=>
+    contasElegiveis.has(t.conta) && t.data>=dataIniISO && t.data<=dataFimISO
+    && !ehSaldoAnterior(t) && !ehMovimentoRendeFacilBB(t) && !idsExcluidos.has(t.id));
+  const valor = txs.reduce((s,t)=> s + (t.tipo==='Receita' ? (Number(t.valor)||0) : (t.tipo==='Despesa' ? -(Number(t.valor)||0) : 0)), 0);
+  return { valor: arredondarMoeda(valor), qtd: txs.length };
 }
 /* Replica a mesma tabela para o mês selecionado e os 3 meses seguintes: o saldo final de cada mês vira o
    saldo inicial do próximo (só o primeiro mês tem Saldo Inicial editável — os demais são sempre o
@@ -10086,8 +10158,11 @@ function calcProjecoesMultiMes(anoBase, mesBase, qtdMeses){
   const meses = [];
   let ano = anoBase, mes = mesBase, saldoInicial = getSaldoInicialBase(anoBase, mesBase);
   for(let i=0;i<qtdMeses;i++){
-    let m = calcProjecoesMes(ano, mes, saldoInicial);
-    m = aplicarLinhasSaldoDiario(m);
+    // Não injeta mais a linha especial "Saldo do Dia"/"Saldo Atual (Hoje)" (aplicarLinhasSaldoDiario): com
+    // as linhas de "Lançamentos não listados" (ver calcProjecoesMes), toda movimentação real já vira uma
+    // linha própria da tabela — o saldo sequencial já é sempre exato, sem precisar reancorar no saldo real
+    // do banco a cada dia.
+    const m = calcProjecoesMes(ano, mes, saldoInicial);
     meses.push(m);
     saldoInicial = m.saldoFinal;
     ({ano, mes} = proximoMes(ano, mes));
@@ -13564,7 +13639,10 @@ function renderLinhaProjecao(l){
       <td data-label="Descrição">${escapeHtml(l.descricao)}${l.cartao ? ' 💳' : ''}${seloConciliacaoProjecao(l)}</td>
       <td data-label="Tipo"><span class="tag ${tagTipo}">${tagTipo}</span></td>
       <td data-label="Valor" class="val-cell ${l.tipo==='Despesa'?'neg':'pos'}" style="text-align:right;">
-        ${l.cartao ? `<span title="Calculado automaticamente pelo total atual da fatura deste cartão no mês">${fmtBRL(l.valorCalculado)}</span>`
+        ${l.cartao
+          ? (l.qtdVinculos>0
+              ? `<span title="Valor efetivamente pago no Extrato (fatura projetada: ${fmtBRL(l.valorPrevisto)})">${fmtBRL(l.valorCalculado)}</span>`
+              : `<span title="Calculado automaticamente pelo total atual da fatura deste cartão no mês">${fmtBRL(l.valorCalculado)}</span>`)
           : statusComValorReal ? `<span title="${escapeHtml(tituloValorReal)}">${fmtBRL(l.valorCalculado)}</span>`
           : fmtBRL(l.valorCalculado)}
       </td>
@@ -13592,6 +13670,24 @@ function renderLinhaSaldoAtual(l){
       <td data-label=""></td>
     </tr>`;
 }
+/* Linha especial "Lançamentos não listados" (ver calcProjecoesMes/idsJaRepresentadosNoFluxoCaixa) — mesma
+   estrutura de 6 colunas das demais linhas, sem botões de editar/excluir (não é um lançamento previsto,
+   é a soma de movimentações reais das contas elegíveis sem linha própria nesta tabela). Sem "Dia" único
+   (representa um intervalo de dias — ver l.diaIni/l.diaFim), a coluna Dia fica em branco; o intervalo
+   aparece só no tooltip. O sinal (positivo/negativo) segue o mesmo valor líquido já consolidado. */
+function renderLinhaNaoListados(l){
+  const intervaloCompacto = l.diaIni===l.diaFim ? pad2(l.diaIni) : `${pad2(l.diaIni)}–${pad2(l.diaFim)}`;
+  const intervalo = l.diaIni===l.diaFim ? `dia ${pad2(l.diaIni)}` : `dias ${pad2(l.diaIni)} a ${pad2(l.diaFim)}`;
+  const titulo = `Soma de ${l.qtd} lançamento${l.qtd===1?'':'s'} real${l.qtd===1?'':'is'} das contas do Fluxo de Caixa (${intervalo}) sem linha própria nesta tabela`;
+  return `
+    <tr class="linha-nao-listados" title="${escapeHtml(titulo)}">
+      <td data-label="Dia" style="text-align:center;font-family:var(--mono);">${intervaloCompacto}</td>
+      <td colspan="2" class="linha-nao-listados-label">Lançamentos não listados</td>
+      <td data-label="Valor" class="val-cell ${l.valor<0?'neg':(l.valor>0?'pos':'')}" style="text-align:right;">${fmtBRL(l.valor)}</td>
+      <td data-label="Saldo" class="val-cell saldo-destaque" style="text-align:right;">${fmtBRL(l.saldo)}</td>
+      <td data-label=""></td>
+    </tr>`;
+}
 /* Um painel/mês da projeção, replicando exatamente a mesma estrutura de tabela — inclusive o "Saldo
    inicial" no cabeçalho (fluxo-mes-resumo), mostrado da mesma forma em TODOS os painéis, sem exceção (item
    do requisito de padronização visual). O 1º painel (idx 0) é o mês selecionado no topo do app; além desse
@@ -13599,7 +13695,11 @@ function renderLinhaSaldoAtual(l){
    única vez acima de todos os painéis (ver renderResumo) — os 3 painéis seguintes encadeiam o saldo final
    do painel anterior como saldo inicial, sempre só exibido. */
 function renderPainelProjecao(m, idx){
-  const linhasHtml = m.linhas.length ? m.linhas.map(l=> l.especial==='saldo-dia' ? renderLinhaSaldoAtual(l) : renderLinhaProjecao(l)).join('') : `<tr><td colspan="6" class="hint" style="text-align:center;padding:14px;">Nenhum lançamento previsto ainda. Use "+ Novo lançamento previsto" para começar.</td></tr>`;
+  const linhasHtml = m.linhas.length ? m.linhas.map(l=>
+    l.especial==='saldo-dia' ? renderLinhaSaldoAtual(l)
+    : l.especial==='nao-listados' ? renderLinhaNaoListados(l)
+    : renderLinhaProjecao(l)
+  ).join('') : `<tr><td colspan="6" class="hint" style="text-align:center;padding:14px;">Nenhum lançamento previsto ainda. Use "+ Novo lançamento previsto" para começar.</td></tr>`;
   // DOCUMENTAÇÃO — ver o comentário completo junto à classe CSS ".tabela-fluxo" (procure por
   // "DOCUMENTAÇÃO — Largura das colunas" no <style> desta página). Proporção FIXA (requisito explícito):
   // sempre a mesma em toda tabela/competência, nunca recalculada a partir do maior valor/saldo exibido
@@ -14016,7 +14116,10 @@ function drawChartsInteligencia(){
 }
 function renderResumo(){
   const meses = calcProjecoesMultiMes(UI.ano, UI.mes, 4);
-  validarConsistenciaSaldoFluxoCaixa(meses); // só loga no console em caso de divergência — nunca altera o que é exibido
+  // validarConsistenciaSaldoFluxoCaixa não é mais chamada aqui: seu propósito (detectar lançamentos reais
+  // sem nenhuma linha correspondente na tabela) agora é resolvido de forma explícita e visível pelas
+  // próprias linhas de "Lançamentos não listados" (ver calcProjecoesMes) — não sobra mais nenhuma
+  // divergência silenciosa para diagnosticar.
   // Item 8 do requisito: no mobile, todos os meses iniciam recolhidos (nenhum abre automaticamente) — só
   // na 1ª renderização desta aba na sessão, para não recolher de novo um mês que o usuário já reabriu
   // manualmente. Desktop mantém o comportamento padrão de sempre (todos abertos).
