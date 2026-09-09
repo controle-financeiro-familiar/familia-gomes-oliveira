@@ -1856,11 +1856,19 @@ summary::marker{content:'';}
 /* "Organização das tabelas por abas mensais": um único painel/container para a tabela do Extrato
    Consolidado — nunca mais de uma tabela mensal empilhada na tela ao mesmo tempo. As abas abaixo (uma por
    mês do período selecionado, ver renderAbasMesesExtrato) só trocam qual mês é exibido em
-   .fluxo-mes-corpo (renderTabelaMesExtrato) — layout simples de "pills" que rola horizontalmente quando
-   não cabe (nunca quebra em várias linhas nem corta uma aba pela metade). */
+   .fluxo-mes-corpo (renderTabelaMesExtrato).
+   "Abas mensais — adaptação à largura do painel": NUNCA cria rolagem horizontal (nem no painel nem na
+   página) — ver ajustarAbasMesesExtrato. .extrato-abas-meses-viewport recorta (overflow:hidden) o trilho
+   de abas (.extrato-abas-meses); o trilho é deslocado só via transform:translateX (nunca scrollLeft/
+   scrollbar), decidido em JS depois de medir a largura real: nomes completos primeiro, abreviados
+   ("Mmm/AA") só se não couberem, e setas de navegação (.extrato-aba-seta) só se nem abreviado couber.
+   As setas ficam posicionadas ABSOLUTAS sobre o viewport (nunca ocupam espaço no fluxo do flex) — assim
+   escondê-las/mostrá-las nunca muda a largura disponível para medir, evitando um loop de recálculo. */
+.extrato-abas-meses-wrap{position:relative;margin:14px 0 12px;}
+.extrato-abas-meses-viewport{overflow:hidden;border-bottom:1px solid var(--line);}
 .extrato-abas-meses{
-  display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin:14px 0 12px;padding-bottom:2px;
-  border-bottom:1px solid var(--line);
+  display:flex;gap:6px;flex-wrap:nowrap;padding-bottom:2px;
+  transition:transform .18s ease;will-change:transform;
 }
 .extrato-aba-mes{
   flex:0 0 auto;border:1px solid var(--line);border-bottom:none;background:#f4f6fb;color:var(--navy-800);
@@ -1869,6 +1877,14 @@ summary::marker{content:'';}
 }
 .extrato-aba-mes:hover:not(.ativa){background:#e8edf7;}
 .extrato-aba-mes.ativa{background:var(--paper);color:var(--navy-900);border-color:var(--line);border-bottom:1px solid var(--paper);font-weight:700;}
+.extrato-aba-seta{
+  position:absolute;top:0;bottom:2px;width:26px;display:flex;align-items:center;z-index:2;
+  border:none;background:none;cursor:pointer;color:var(--navy-800);font-size:15px;font-weight:700;padding:0;
+}
+.extrato-aba-seta:hover{color:var(--navy-900);}
+.extrato-aba-seta[hidden]{display:none;}
+.extrato-aba-seta-esq{left:0;justify-content:flex-start;background:linear-gradient(to right,var(--paper) 55%,transparent);}
+.extrato-aba-seta-dir{right:0;justify-content:flex-end;background:linear-gradient(to left,var(--paper) 55%,transparent);}
 .fluxo-mes-cabecalho{display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;margin:0 0 4px;}
 .fluxo-mes-titulo{
   font-size:14px;letter-spacing:.4px;text-transform:uppercase;color:var(--navy-800);font-family:var(--mono);
@@ -5121,6 +5137,7 @@ let UI = {
   // depender de um handler específico em cada campo que possa afetar o período.
   extratoAbaMes: null,
   extratoAbaAssinaturaPeriodo: null,
+  extratoAbasOffset: 0, // deslocamento (px) do trilho de abas mensais — ver ajustarAbasMesesExtrato ("Abas mensais — adaptação à largura do painel")
   // Seletor de período do Extrato Consolidado (requisito "Extrato Consolidado" seção 2): 'mesAtual' |
   // 'proximoMes' | 'proximos3meses' (padrão) | 'personalizado'. 'proximos3meses' preserva exatamente o
   // comportamento já existente (mês selecionado no topo + os 3 seguintes — ver calcProjecoesMultiMes),
@@ -10826,6 +10843,7 @@ function render(){
   requestAnimationFrame(ajustarFonteCartoesResumo);
   requestAnimationFrame(ajustarFonteContaFinanceiraSaldo);
   requestAnimationFrame(ajustarAlturaContaFinanceiraGrid);
+  requestAnimationFrame(ajustarAbasMesesExtrato);
 }
 /* Item 20 do requisito: decide se a tabbar cabe numa única linha na largura atual — se não couber (mesmo
    acima do breakpoint fixo de 700px, ex.: janela do navegador estreitada), força bottom-nav via classe no
@@ -10968,7 +10986,7 @@ function ajustarAgrupamentoFiltros(){
 let ajustarNavResponsivaTimer=null;
 window.addEventListener('resize', ()=>{
   clearTimeout(ajustarNavResponsivaTimer);
-  ajustarNavResponsivaTimer = setTimeout(()=>{ ajustarNavResponsiva(); ajustarAgrupamentoFiltros(); ajustarFonteCartoesResumo(); ajustarFonteContaFinanceiraSaldo(); ajustarAlturaContaFinanceiraGrid(); }, 120);
+  ajustarNavResponsivaTimer = setTimeout(()=>{ ajustarNavResponsiva(); ajustarAgrupamentoFiltros(); ajustarFonteCartoesResumo(); ajustarFonteContaFinanceiraSaldo(); ajustarAlturaContaFinanceiraGrid(); ajustarAbasMesesExtrato(); }, 120);
 });
 /* Tela inicial: exibida sempre que a sessão está zerada (nenhum arquivo .cfg/.log conectado ainda) — ao
    abrir a aplicação, ou depois de desconectar/fechar a sessão. Modelo semelhante a softwares tradicionais
@@ -14042,14 +14060,27 @@ function renderNaoListadosModal(){
    [data-extrato-aba-mes]) só altera UI.extratoAbaMes e re-renderiza — nenhum cálculo é refeito, o
    encadeamento de saldo entre meses (saldoFinal de um vira saldoInicial do seguinte) já vem pronto de
    calcProjecoesMultiMes independente de qual aba está selecionada. */
+/* "Abas mensais — adaptação à largura do painel": cada aba nasce com o nome COMPLETO ("Setembro/2026") e
+   carrega também a versão abreviada ("Set/26" — mesmo formato Mmm/AA já usado em todo o resto do app, ver
+   MESES[...].slice(0,3)) em data-aba-mes-label-abrev; qual delas fica visível (e se as setas aparecem) é
+   decidido depois, em ajustarAbasMesesExtrato, medindo a largura real já renderizada — nunca aqui, onde
+   ainda não há como saber se cabe. */
 function renderAbasMesesExtrato(meses, chaveAtiva){
   return `
-  <div class="extrato-abas-meses" role="tablist">
-    ${meses.map(m=>{
-      const chave = `${m.ano}-${m.mes}`;
-      const ativa = chave===chaveAtiva;
-      return `<button type="button" class="extrato-aba-mes ${ativa?'ativa':''}" data-extrato-aba-mes="${chave}" role="tab" aria-selected="${ativa}">${MESES[m.mes-1]}/${m.ano}</button>`;
-    }).join('')}
+  <div class="extrato-abas-meses-wrap">
+    <button type="button" class="extrato-aba-seta extrato-aba-seta-esq" data-extrato-aba-seta="esq" aria-label="Meses anteriores" hidden>‹</button>
+    <div class="extrato-abas-meses-viewport">
+      <div class="extrato-abas-meses" role="tablist">
+        ${meses.map(m=>{
+          const chave = `${m.ano}-${m.mes}`;
+          const ativa = chave===chaveAtiva;
+          const completo = `${MESES[m.mes-1]}/${m.ano}`;
+          const abrev = `${MESES[m.mes-1].slice(0,3)}/${String(m.ano).slice(2)}`;
+          return `<button type="button" class="extrato-aba-mes ${ativa?'ativa':''}" data-extrato-aba-mes="${chave}" data-aba-mes-label-completo="${completo}" data-aba-mes-label-abrev="${abrev}" role="tab" aria-selected="${ativa}">${completo}</button>`;
+        }).join('')}
+      </div>
+    </div>
+    <button type="button" class="extrato-aba-seta extrato-aba-seta-dir" data-extrato-aba-seta="dir" aria-label="Meses seguintes" hidden>›</button>
   </div>`;
 }
 function renderTabelaMesExtrato(m){
@@ -14086,6 +14117,54 @@ function renderTabelaMesExtrato(m){
     </table></div>
     <div class="saldo-final-projetado ${classeSinalMoeda(m.saldoFinal)}"><span>Saldo final</span><span class="val">${fmtBRL(m.saldoFinal)}</span></div>
   </div>`;
+}
+/* "Abas mensais — adaptação à largura do painel": desloca (via transform) o trilho de abas do Extrato
+   Consolidado dentro do seu viewport, e atualiza as setas — nunca chama render(), só manipula o DOM já
+   existente, exatamente como o drag-and-drop de reordenação manual já faz por perto ("nenhum render() a
+   cada pixel movido"). offsetPx já vem sempre pré-clampado entre 0 e o offset máximo (ver
+   ajustarAbasMesesExtrato) por quem chama esta função. */
+function aplicarOffsetAbasMesesExtrato(viewport, trilho, offsetPx){
+  UI.extratoAbasOffset = offsetPx;
+  trilho.style.transform = `translateX(-${offsetPx}px)`;
+  const max = Math.max(0, trilho.scrollWidth - viewport.clientWidth);
+  const setaEsq = document.querySelector('[data-extrato-aba-seta="esq"]');
+  const setaDir = document.querySelector('[data-extrato-aba-seta="dir"]');
+  if(setaEsq) setaEsq.hidden = offsetPx <= 0.5;
+  if(setaDir) setaDir.hidden = offsetPx >= max - 0.5;
+}
+/* Decide se os nomes completos dos meses cabem na largura disponível do painel; se não, abrevia para
+   "Mmm/AA" (ver renderAbasMesesExtrato); se mesmo abreviado não couber, mantém abreviado e deixa as setas
+   (mostradas/escondidas em aplicarOffsetAbasMesesExtrato) cuidarem do resto — NUNCA cria rolagem
+   horizontal (nem scrollbar nem scroll por toque/roda do mouse): o deslocamento é só transform, só quando
+   o próprio usuário clica numa seta. Sempre tenta o modo mais completo primeiro (nomes por extenso, sem
+   deslocamento) antes de decidir abreviar — nunca fica "presa" no modo abreviado depois que a janela volta
+   a ter espaço suficiente (mesmo princípio de ajustarNavResponsiva). Ao final, garante que a aba
+   ATIVA continua visível (desloca o mínimo necessário para revelá-la, nunca mais que isso) — tanto na
+   1ª medição quanto sempre que ela muda (troca de aba/período) ou a janela é redimensionada. Chamada em
+   requestAnimationFrame a cada render (ver render()) e no listener de resize — sempre self-guarda pela
+   ausência dos elementos quando a aba Extrato Consolidado não está na tela. */
+function ajustarAbasMesesExtrato(){
+  const viewport = document.querySelector('.extrato-abas-meses-viewport');
+  const trilho = document.querySelector('.extrato-abas-meses');
+  if(!viewport || !trilho) return;
+  const labels = trilho.querySelectorAll('[data-aba-mes-label-completo]');
+  if(!labels.length) return;
+  labels.forEach(el=>{ el.textContent = el.dataset.abaMesLabelCompleto; });
+  trilho.style.transform = 'translateX(0px)';
+  if(trilho.scrollWidth > viewport.clientWidth + 1){
+    labels.forEach(el=>{ el.textContent = el.dataset.abaMesLabelAbrev; });
+  }
+  const max = Math.max(0, trilho.scrollWidth - viewport.clientWidth);
+  let offset = Math.min(Math.max(0, UI.extratoAbasOffset||0), max);
+  const ativa = trilho.querySelector('.extrato-aba-mes.ativa');
+  if(ativa){
+    // offsetLeft/offsetWidth são sempre relativos ao layout normal (nunca afetados pelo transform acima),
+    // então a medição continua correta mesmo com o trilho já deslocado de uma interação anterior.
+    if(ativa.offsetLeft < offset) offset = ativa.offsetLeft;
+    else if(ativa.offsetLeft + ativa.offsetWidth > offset + viewport.clientWidth) offset = ativa.offsetLeft + ativa.offsetWidth - viewport.clientWidth;
+    offset = Math.min(Math.max(0, offset), max);
+  }
+  aplicarOffsetAbasMesesExtrato(viewport, trilho, offset);
 }
 /* ---------- Modal: editar os saldos iniciais das contas que compõem o Saldo Inicial do Fluxo de Caixa
    (Conta Corrente + Conta PJ + Poupança). O total é só leitura — só é possível editar cada conta
@@ -18204,6 +18283,19 @@ function bindEvents(){
   document.querySelectorAll('[data-extrato-aba-mes]').forEach(b=> b.addEventListener('click', ()=>{
     UI.extratoAbaMes = b.dataset.extratoAbaMes;
     render();
+  }));
+  // Setas de navegação lateral das abas mensais (só aparecem quando há abas ocultas para aquele lado — ver
+  // ajustarAbasMesesExtrato/aplicarOffsetAbasMesesExtrato): deslocam só o trilho de abas (nunca a página
+  // nem o painel), por isso manipulam o DOM diretamente em vez de chamar render().
+  document.querySelectorAll('[data-extrato-aba-seta]').forEach(b=> b.addEventListener('click', ()=>{
+    const viewport = document.querySelector('.extrato-abas-meses-viewport');
+    const trilho = document.querySelector('.extrato-abas-meses');
+    if(!viewport || !trilho) return;
+    const max = Math.max(0, trilho.scrollWidth - viewport.clientWidth);
+    const passo = viewport.clientWidth * 0.8;
+    const atual = UI.extratoAbasOffset || 0;
+    const novo = b.dataset.extratoAbaSeta==='esq' ? Math.max(0, atual - passo) : Math.min(max, atual + passo);
+    aplicarOffsetAbasMesesExtrato(viewport, trilho, novo);
   }));
   document.querySelector('[data-ajuda-fluxo]')?.addEventListener('toggle', e=>{ UI.ajudaFluxoAberta = e.target.open; });
   document.querySelector('[data-ajuda-cartoes]')?.addEventListener('toggle', e=>{ UI.ajudaCartoesAberta = e.target.open; });
