@@ -848,7 +848,7 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
         Saldo          12,7%
         Ações          14,30%
         Total          100%
-   Definida como constante LARGURAS_COLUNAS_FLUXO logo acima de renderPainelProjecao() (busque por esse
+   Definida como constante LARGURAS_COLUNAS_FLUXO logo acima de renderTabelaMesExtrato() (busque por esse
    nome) e escrita em cada <th style="width:XX%"> — thead e tbody usam a mesma <table style="table-layout:
    fixed"> e portanto herdam automaticamente a mesma largura por coluna, sem precisar repetir a proporção
    em cada <td>. A coluna Ações nunca cresce por causa de mais ícones/cadeado: o espaçamento (gap/padding)
@@ -883,10 +883,10 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
 .status-extrato{font-size:11px;}
 /* Fluxo de Caixa no mobile (item 13 do requisito de responsividade): a mesma tabela vira uma lista
    vertical de cards — cada <tr> um card, cada <td> uma linha "rótulo: valor" — sem tocar no cálculo da
-   projeção nem duplicar a lógica de renderPainelProjecao/renderLinhaProjecao, só a apresentação. As linhas
-   especiais "Lançamentos não listados" (ver calcProjecoesMes/renderLinhaNaoListados) continuam na posição
-   calculada dinamicamente entre os lançamentos listados, com o mesmo cartão/borda desta lista, só com fundo
-   neutro/itálico (ver regra própria logo abaixo). A linha "Saldo do Dia"/"Saldo Atual (Hoje)"
+   projeção nem duplicar a lógica de renderTabelaMesExtrato/renderLinhaProjecao, só a apresentação. As
+   linhas especiais "Lançamentos não listados" (ver calcProjecoesMes/renderLinhaNaoListados) continuam na
+   posição calculada dinamicamente entre os lançamentos listados, com o mesmo cartão/borda desta lista (ver
+   regra própria logo abaixo). A linha "Saldo do Dia"/"Saldo Atual (Hoje)"
    (aplicarLinhasSaldoDiario/.linha-saldo-atual) não é mais usada nesta tabela — as regras abaixo continuam
    valendo para ela só por compatibilidade, caso volte a ser usada em algum outro lugar. */
 @media(max-width:700px){
@@ -1835,13 +1835,6 @@ summary::marker{content:'';}
    vizinho nem acontece nenhum corte/scroll (.tabela-fluxo-wrap já não tem max-height — ver comentário
    próprio a ela). Recalculado automaticamente a cada render, então funciona também quando a quantidade de
    lançamentos de qualquer mês muda dinamicamente. */
-/* Item 2 do requisito "Ajustes no Extrato Consolidado": cada mês ocupa 100% da largura disponível,
-   empilhados um abaixo do outro — nunca lado a lado em colunas de grid (era o comportamento anterior, útil
-   quando existiam poucas colunas por linha, mas deixava "área vazia" ao lado de cada tabela em telas
-   largas). Como cada painel de mês (.panel, dentro de renderPainelProjecao) já é um bloco 100% largura por
-   padrão, um simples empilhamento vertical com espaçamento uniforme (sem nenhuma coluna) já garante colunas
-   sempre alinhadas entre os meses, pois todas as tabelas usam exatamente a mesma LARGURAS_COLUNAS_FLUXO. */
-.resumo-grid{display:flex;flex-direction:column;gap:16px;}
 @media(max-width:480px){.grid-cards{grid-template-columns:1fr;}}
 .saldo-final-projetado{
   display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding:10px 14px;
@@ -1852,22 +1845,27 @@ summary::marker{content:'';}
 .saldo-final-projetado.pos .val{color:var(--receita);}
 .saldo-final-projetado.neg{background:#fbe9e7;}
 .saldo-final-projetado.neg .val{color:var(--despesa);}
-/* Card colapsável de cada mês do Fluxo de Caixa (item 14 do requisito): cabeçalho clicável (título + resumo
-   do mês) sempre visível; a tabela de lançamentos e o saldo final só aparecem quando expandido — ver
-   .fluxo-mes-corpo, filho de <details>. */
-.fluxo-mes-summary{
-  cursor:pointer;display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;user-select:none;
-  margin:0 0 4px;
+/* "Organização das tabelas por abas mensais": um único painel/container para a tabela do Extrato
+   Consolidado — nunca mais de uma tabela mensal empilhada na tela ao mesmo tempo. As abas abaixo (uma por
+   mês do período selecionado, ver renderAbasMesesExtrato) só trocam qual mês é exibido em
+   .fluxo-mes-corpo (renderTabelaMesExtrato) — layout simples de "pills" que rola horizontalmente quando
+   não cabe (nunca quebra em várias linhas nem corta uma aba pela metade). */
+.extrato-abas-meses{
+  display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin:14px 0 12px;padding-bottom:2px;
+  border-bottom:1px solid var(--line);
 }
+.extrato-aba-mes{
+  flex:0 0 auto;border:1px solid var(--line);border-bottom:none;background:#f4f6fb;color:var(--navy-800);
+  padding:8px 16px;font-size:12.5px;font-weight:600;font-family:var(--sans);border-radius:8px 8px 0 0;
+  cursor:pointer;white-space:nowrap;transition:background .15s,color .15s;margin-bottom:-1px;
+}
+.extrato-aba-mes:hover:not(.ativa){background:#e8edf7;}
+.extrato-aba-mes.ativa{background:var(--paper);color:var(--navy-900);border-color:var(--line);border-bottom:1px solid var(--paper);font-weight:700;}
+.fluxo-mes-cabecalho{display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;margin:0 0 4px;}
 .fluxo-mes-titulo{
   font-size:14px;letter-spacing:.4px;text-transform:uppercase;color:var(--navy-800);font-family:var(--mono);
   font-weight:700;
 }
-.fluxo-mes-resumo{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto;font-size:12.5px;}
-.fluxo-mes-resumo b{font-family:var(--mono);}
-.fluxo-mes-resumo b.pos{color:var(--receita);}
-.fluxo-mes-resumo b.neg{color:var(--despesa);}
-.fluxo-mes-details[open] .fluxo-mes-corpo{margin-top:6px;}
 /* Item do requisito: altura visualmente padronizada entre as tabelas do Fluxo de Caixa, sem paginação nem
    rolagem interna — max-height:none (sobrescreve o teto genérico de 520px de .table-wrap) garante que a
    tabela SEMPRE mostra todos os lançamentos do mês, por mais que a lista cresça; min-height dá um piso
@@ -5107,8 +5105,14 @@ let UI = {
   moverSubcategoriaModal: null, // { nome, tipo, grupo, categoria, grupoDestino, categoriaDestino } — mover uma subcategoria para outra categoria/grupo
   posicaoModal: null, // { nivel:'grupo'|'categoria'|'subcategoria', grupo, categoria, nome } — reposicionar (início/fim/depois de)
   gruposAbertos: new Set(),
-  fluxoMesesFechados: new Set(), // chaves "ano-mes" recolhidas manualmente no Extrato Consolidado (item 14) — vazio por padrão = todos expandidos, igual ao comportamento anterior
-  fluxoMesesInicializados: false, // true depois da 1ª renderização do Extrato Consolidado — no mobile, a 1ª vez recolhe todos os meses por padrão (item 8 do requisito); depois disso, respeita só a interação do usuário
+  // "Organização das tabelas por abas mensais": um único painel/tabela por vez no Extrato Consolidado,
+  // com abas para navegar entre os meses do período selecionado (ver renderResumo). extratoAbaMes guarda a
+  // chave "ano-mes" do mês atualmente exibido; extratoAbaAssinaturaPeriodo só existe para DETECTAR quando o
+  // período mudou (seletor de período, mês/ano do topo do app ou intervalo personalizado) — sempre que a
+  // assinatura muda, a 1ª aba do novo período é selecionada automaticamente (requisito explícito), sem
+  // depender de um handler específico em cada campo que possa afetar o período.
+  extratoAbaMes: null,
+  extratoAbaAssinaturaPeriodo: null,
   // Seletor de período do Extrato Consolidado (requisito "Extrato Consolidado" seção 2): 'mesAtual' |
   // 'proximoMes' | 'proximos3meses' (padrão) | 'personalizado'. 'proximos3meses' preserva exatamente o
   // comportamento já existente (mês selecionado no topo + os 3 seguintes — ver calcProjecoesMultiMes),
@@ -11582,7 +11586,7 @@ function renderDashboard(){
   // — antes dos cards de Receitas/Despesas/Saldo/Poupança — para ficarem visíveis sem precisar rolar a
   // tela toda; no desktop a ordem original é mantida (depois dos 4 cards). Só uma troca de POSIÇÃO no HTML
   // gerado (mesmo padrão de checagem de window.innerWidth só na hora de montar a página, recalculada a
-  // cada render, já usado em UI.fluxoMesesFechados) — nenhuma mudança de conteúdo/cálculo dos alertas.
+  // cada render) — nenhuma mudança de conteúdo/cálculo dos alertas.
   const alertaAntesDosCards = window.innerWidth<=700;
   return `
   <div class="dash-hero-saldo">
@@ -14007,13 +14011,24 @@ function renderNaoListadosModal(){
     </div>
   </div>`;
 }
-/* Um painel/mês da projeção, replicando exatamente a mesma estrutura de tabela — inclusive o "Saldo
-   inicial" no cabeçalho (fluxo-mes-resumo), mostrado da mesma forma em TODOS os painéis, sem exceção (item
-   do requisito de padronização visual). O 1º painel (idx 0) é o mês selecionado no topo do app; além desse
-   valor só de leitura no próprio cabeçalho, ele também tem o campo Saldo Inicial EDITÁVEL, mostrado uma
-   única vez acima de todos os painéis (ver renderResumo) — os 3 painéis seguintes encadeiam o saldo final
-   do painel anterior como saldo inicial, sempre só exibido. */
-function renderPainelProjecao(m, idx){
+/* ---------- Extrato Consolidado: abas mensais ----------
+   "Organização das tabelas por abas mensais": um único painel/container para a tabela — nunca mais de uma
+   tabela mensal empilhada verticalmente na tela. As abas abaixo só decidem QUAL mês da lista já calculada
+   (ver mesesParaExtratoConsolidado/calcProjecoesMultiMes) é exibido; a troca de aba (ver bindEvents,
+   [data-extrato-aba-mes]) só altera UI.extratoAbaMes e re-renderiza — nenhum cálculo é refeito, o
+   encadeamento de saldo entre meses (saldoFinal de um vira saldoInicial do seguinte) já vem pronto de
+   calcProjecoesMultiMes independente de qual aba está selecionada. */
+function renderAbasMesesExtrato(meses, chaveAtiva){
+  return `
+  <div class="extrato-abas-meses" role="tablist">
+    ${meses.map(m=>{
+      const chave = `${m.ano}-${m.mes}`;
+      const ativa = chave===chaveAtiva;
+      return `<button type="button" class="extrato-aba-mes ${ativa?'ativa':''}" data-extrato-aba-mes="${chave}" role="tab" aria-selected="${ativa}">${MESES[m.mes-1]}/${m.ano}</button>`;
+    }).join('')}
+  </div>`;
+}
+function renderTabelaMesExtrato(m){
   const linhasHtml = m.linhas.length ? m.linhas.map(l=>
     l.especial==='saldo-dia' ? renderLinhaSaldoAtual(l)
     : l.especial==='nao-listados' ? renderLinhaNaoListados(l)
@@ -14022,45 +14037,30 @@ function renderPainelProjecao(m, idx){
   // DOCUMENTAÇÃO — ver o comentário completo junto à classe CSS ".tabela-fluxo" (procure por
   // "DOCUMENTAÇÃO — Largura das colunas" no <style> desta página). Proporção FIXA (requisito explícito):
   // sempre a mesma em toda tabela/competência, nunca recalculada a partir do maior valor/saldo exibido
-  // no mês (como antes desta mudança) nem alterada pela presença do cadeado 🔓/outros ícones em Ações —
-  // isso é o que garante a mesma "grade" visual (thead/tbody perfeitamente alinhados) em todos os meses.
+  // no mês nem alterada pela presença do cadeado 🔓/outros ícones em Ações — isso é o que garante a mesma
+  // "grade" visual (thead/tbody perfeitamente alinhados) entre uma aba e outra.
   const LARGURAS_COLUNAS_FLUXO = { dia:5.5, descricao:18, conta:11.5, tipo:12, status:13.5, valor:12.5, saldo:12.7, acoes:14.30 };
   const pct = LARGURAS_COLUNAS_FLUXO;
-  // Item 14 do requisito de responsividade: cada mês vira um card colapsável — cabeçalho clicável (título +
-  // resumo do mês, sempre visíveis) e o detalhe (tabela de lançamentos + saldo final projetado) só aparece
-  // quando expandido. Usa <details>/<summary> nativos (mesmo padrão já usado nos Grupos de Configurações —
-  // ver data-grupo-details), com UI.fluxoMesesFechados guardando só as chaves recolhidas manualmente —
-  // vazio por padrão, então todos os meses continuam abertos como antes até o usuário recolher algum.
-  const chaveMesFluxo = `${m.ano}-${m.mes}`;
-  const abertoFluxo = !UI.fluxoMesesFechados.has(chaveMesFluxo);
   return `
-  <div class="panel" style="margin-bottom:0;">
-    <details class="fluxo-mes-details" ${abertoFluxo?'open':''} data-fluxo-mes-details="${chaveMesFluxo}">
-      <summary class="fluxo-mes-summary">
-        <span class="fluxo-mes-titulo">📅 ${MESES[m.mes-1]}/${m.ano}</span>
-        <span class="fluxo-mes-resumo">
-          <span class="hint" style="margin:0;">Saldo inicial ${fmtBRL(m.saldoInicial)}</span>
-          <b class="${classeSinalMoeda(m.saldoFinal)}">Saldo final ${fmtBRL(m.saldoFinal)}</b>
-        </span>
-        <span class="expand-arrow" data-arrow-for="fluxo-mes-${chaveMesFluxo}">${abertoFluxo?'➖':'➕'}</span>
-      </summary>
-      <div class="fluxo-mes-corpo">
-        <div class="table-wrap tabela-fluxo-wrap" style="overflow-x:auto;"><table class="tabela-fluxo" style="table-layout:fixed;width:100%;">
-          <thead><tr>
-            <th style="text-align:center;width:${pct.dia}%;">Dia</th>
-            <th style="text-align:left;width:${pct.descricao}%;">Descrição</th>
-            <th style="text-align:left;width:${pct.conta}%;">Conta/Cartão</th>
-            <th style="text-align:center;width:${pct.tipo}%;">Tipo</th>
-            <th style="text-align:center;width:${pct.status}%;">Status</th>
-            <th style="text-align:right;width:${pct.valor}%;">Valor</th>
-            <th style="text-align:right;width:${pct.saldo}%;">Saldo</th>
-            <th style="text-align:right;width:${pct.acoes}%;">Ações</th>
-          </tr></thead>
-          <tbody>${linhasHtml}</tbody>
-        </table></div>
-        <div class="saldo-final-projetado ${classeSinalMoeda(m.saldoFinal)}"><span>Saldo final</span><span class="val">${fmtBRL(m.saldoFinal)}</span></div>
-      </div>
-    </details>
+  <div class="fluxo-mes-corpo">
+    <div class="fluxo-mes-cabecalho">
+      <span class="fluxo-mes-titulo">📅 ${MESES[m.mes-1]}/${m.ano}</span>
+      <span class="hint" style="margin:0;">Saldo inicial ${fmtBRL(m.saldoInicial)}</span>
+    </div>
+    <div class="table-wrap tabela-fluxo-wrap" style="overflow-x:auto;"><table class="tabela-fluxo" style="table-layout:fixed;width:100%;">
+      <thead><tr>
+        <th style="text-align:center;width:${pct.dia}%;">Dia</th>
+        <th style="text-align:left;width:${pct.descricao}%;">Descrição</th>
+        <th style="text-align:left;width:${pct.conta}%;">Conta/Cartão</th>
+        <th style="text-align:center;width:${pct.tipo}%;">Tipo</th>
+        <th style="text-align:center;width:${pct.status}%;">Status</th>
+        <th style="text-align:right;width:${pct.valor}%;">Valor</th>
+        <th style="text-align:right;width:${pct.saldo}%;">Saldo</th>
+        <th style="text-align:right;width:${pct.acoes}%;">Ações</th>
+      </tr></thead>
+      <tbody>${linhasHtml}</tbody>
+    </table></div>
+    <div class="saldo-final-projetado ${classeSinalMoeda(m.saldoFinal)}"><span>Saldo final</span><span class="val">${fmtBRL(m.saldoFinal)}</span></div>
   </div>`;
 }
 /* ---------- Modal: editar os saldos iniciais das contas que compõem o Saldo Inicial do Fluxo de Caixa
@@ -14451,13 +14451,6 @@ function renderResumo(){
   // sem nenhuma linha correspondente na tabela) agora é resolvido de forma explícita e visível pelas
   // próprias linhas de "Lançamentos não listados" (ver calcProjecoesMes) — não sobra mais nenhuma
   // divergência silenciosa para diagnosticar.
-  // Item 8 do requisito: no mobile, todos os meses iniciam recolhidos (nenhum abre automaticamente) — só
-  // na 1ª renderização desta aba na sessão, para não recolher de novo um mês que o usuário já reabriu
-  // manualmente. Desktop mantém o comportamento padrão de sempre (todos abertos).
-  if(!UI.fluxoMesesInicializados){
-    if(window.innerWidth<=700){ meses.forEach(m=> UI.fluxoMesesFechados.add(`${m.ano}-${m.mes}`)); }
-    UI.fluxoMesesInicializados = true;
-  }
   const pPersonalizado = UI.extratoPeriodoPersonalizado || { anoIni:UI.ano, mesIni:UI.mes, anoFim:UI.ano, mesFim:UI.mes };
   // Edição do Saldo Inicial (renderEditarSaldoInicialFluxoCaixaModal) sempre atua sobre a competência
   // selecionada no topo do app (UI.ano/UI.mes — mesma fonte usada em toda a aplicação, ver painel Contas).
@@ -14466,6 +14459,23 @@ function renderResumo(){
   // escolhido coincide) — nos demais casos o valor abaixo continua exibido corretamente (vem do próprio
   // 1º mês calculado), só sem o atalho de edição, para nunca editar o saldo do mês errado sem avisar.
   const primeiroMesEhCompetenciaAtual = meses[0] && meses[0].ano===UI.ano && meses[0].mes===UI.mes;
+  // "Organização das tabelas por abas mensais": detecta troca de PERÍODO (seletor, mês/ano do topo do app
+  // ou intervalo personalizado) comparando uma assinatura recalculada a cada render — sempre que ela muda,
+  // a 1ª aba do novo período volta a ser a selecionada automaticamente (requisito explícito), sem depender
+  // de um handler dedicado em cada campo que possa afetar o período. Trocar de aba (ver bindEvents,
+  // [data-extrato-aba-mes]) só altera UI.extratoAbaMes — nunca a assinatura — então a seleção manual do
+  // usuário sobrevive normalmente a qualquer render que não mude o período.
+  const assinaturaPeriodoExtrato = JSON.stringify([modoPeriodo, UI.ano, UI.mes, modoPeriodo==='personalizado' ? pPersonalizado : null]);
+  if(UI.extratoAbaAssinaturaPeriodo !== assinaturaPeriodoExtrato){
+    UI.extratoAbaAssinaturaPeriodo = assinaturaPeriodoExtrato;
+    UI.extratoAbaMes = meses[0] ? `${meses[0].ano}-${meses[0].mes}` : null;
+  }
+  // Rede de segurança: se a chave guardada não corresponder a nenhum mês da lista atual (não deveria
+  // acontecer, já que mesesParaExtratoConsolidado sempre devolve ao menos 1 mês), volta para o 1º disponível.
+  if(!meses.some(m=>`${m.ano}-${m.mes}`===UI.extratoAbaMes)){
+    UI.extratoAbaMes = meses[0] ? `${meses[0].ano}-${meses[0].mes}` : null;
+  }
+  const mesAtivoExtrato = meses.find(m=>`${m.ano}-${m.mes}`===UI.extratoAbaMes) || meses[0];
   return `
   <div class="panel">
     <h2>
@@ -14527,11 +14537,10 @@ function renderResumo(){
       </div>
       <button class="btn btn-primary btn-sm" id="btnNovaProjecao">+ Novo lançamento previsto</button>
     </div>
+    ${renderAbasMesesExtrato(meses, UI.extratoAbaMes)}
+    ${mesAtivoExtrato ? renderTabelaMesExtrato(mesAtivoExtrato) : ''}
   </div>
-  ${UI.editarSaldoInicialFluxoCaixaModal ? renderEditarSaldoInicialFluxoCaixaModal() : ""}
-  <div class="resumo-grid">
-    ${meses.map((m,idx)=>renderPainelProjecao(m,idx)).join('')}
-  </div>`;
+  ${UI.editarSaldoInicialFluxoCaixaModal ? renderEditarSaldoInicialFluxoCaixaModal() : ""}`;
 }
 /* ---------- Modal: criar/editar um lançamento previsto (dia, descrição, tipo, cartão, mês inicial) ---------- */
 function renderNovaProjecaoModal(){
@@ -18165,11 +18174,12 @@ function bindEvents(){
     const arrow = document.querySelector(`[data-arrow-for="grupo-${CSS.escape(g)}"]`);
     if(arrow) arrow.textContent = d.open ? '➖' : '➕';
   }));
-  document.querySelectorAll('[data-fluxo-mes-details]').forEach(d=> d.addEventListener('toggle', ()=>{
-    const chave = d.dataset.fluxoMesDetails;
-    if(d.open) UI.fluxoMesesFechados.delete(chave); else UI.fluxoMesesFechados.add(chave);
-    const arrow = document.querySelector(`[data-arrow-for="fluxo-mes-${CSS.escape(chave)}"]`);
-    if(arrow) arrow.textContent = d.open ? '➖' : '➕';
+  // Abas mensais do Extrato Consolidado (ver renderAbasMesesExtrato/renderTabelaMesExtrato): trocar de
+  // aba só troca qual mês já calculado é exibido — nunca recarrega a página nem altera o período
+  // selecionado (UI.extratoPeriodo/UI.extratoPeriodoPersonalizado permanecem intactos).
+  document.querySelectorAll('[data-extrato-aba-mes]').forEach(b=> b.addEventListener('click', ()=>{
+    UI.extratoAbaMes = b.dataset.extratoAbaMes;
+    render();
   }));
   document.querySelector('[data-ajuda-fluxo]')?.addEventListener('toggle', e=>{ UI.ajudaFluxoAberta = e.target.open; });
   document.querySelector('[data-ajuda-cartoes]')?.addEventListener('toggle', e=>{ UI.ajudaCartoesAberta = e.target.open; });
