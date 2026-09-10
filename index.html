@@ -358,28 +358,27 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
   height:calc(var(--bottom-nav-h) + var(--safe-bottom));
 }
 .bn-item{
-  flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
   height:var(--bottom-nav-h);min-width:0;max-width:100%;background:transparent;border:none;color:#a9bbdd;
   font-family:var(--sans);cursor:pointer;transition:color .15s;padding:4px 2px;overflow:hidden;
 }
-.bn-item .bn-icone{font-size:19px;line-height:1;}
+/* "Ajustes de interface — modo mobile" (item 1, navegação inferior): destaque visual da seção atual em
+   forma de "pill" atrás só do ícone (nunca do rótulo, que ficaria comprimido) — mesma linguagem visual das
+   referências anexadas (BB/PicPay/Itaú), adaptada às cores da identidade do FinUs (dourado sobre navy) em
+   vez de copiar a cor de um banco específico. */
+.bn-icone-wrap{
+  display:flex;align-items:center;justify-content:center;width:34px;height:22px;border-radius:var(--radius-full);
+  transition:background .15s;
+}
+.bn-item.active .bn-icone-wrap{background:rgba(255,211,51,.18);}
+.bn-item .bn-icone{font-size:18px;line-height:1;}
 .bn-item .bn-rotulo{
   font-size:10px;font-weight:600;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   max-width:100%;display:block;
 }
 .bn-item:hover{color:#dbe4f7;}
-.bn-item.active{color:var(--gold);}
+.bn-item.active{color:var(--gold);font-weight:700;}
 .bn-item:focus-visible{outline:2px solid var(--gold);outline-offset:-2px;}
-/* Item 2 do requisito (rodada iPhone 13): "☰" e "Painéis" ficam lado a lado, na mesma linha, alinhados à
-   ESQUERDA — nunca space-between (que empurraria o texto para longe do ícone) nem a pilha vertical
-   ícone-em-cima-do-texto herdada de .bn-item genérico (que fazia sentido com vários itens, mas agora
-   .bn-item-paineis é o único botão da barra). Padding horizontal mantém a área de toque confortável. */
-.bn-item-paineis{
-  flex-direction:row;align-items:center;justify-content:flex-start;gap:8px;
-  padding-left:calc(16px + var(--safe-left));
-}
-.bn-item-paineis .bn-icone{font-size:20px;}
-.bn-item-paineis .bn-rotulo{font-size:13px;}
 /* Bottom sheet "Mais": desliza de baixo para cima, sobre um backdrop, sem empurrar o layout da página. */
 .mais-sheet{
   position:fixed;left:0;right:0;bottom:0;z-index:220;background:#fff;
@@ -719,6 +718,28 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 .dash-hero-saldo-val{font-family:var(--mono);font-size:32px;font-weight:700;margin-top:6px;color:var(--gold);}
 .dash-hero-saldo-val.neg{color:#ff8a7a;}
 @media(max-width:700px){ .dash-hero-saldo{display:block;} }
+/* Página inicial mobile (ver renderInicioMobile — "Ajustes de interface — modo mobile", item 1): reaproveita
+   .dash-hero-saldo tal qual (mesmo card/cálculo que antes vivia no Painel Financeiro), só acrescentando a
+   saudação acima e os botões de ação rápida dentro do próprio card, sem duplicar o gradiente/padding dele. */
+.inicio-saudacao{font-size:14.5px;font-weight:600;color:var(--navy-900);margin:2px 2px 12px;}
+.inicio-acoes-rapidas{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;text-align:left;}
+.inicio-acao-pill{
+  flex:1 1 0;min-width:0;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.32);
+  color:#fff;border-radius:var(--radius-full);padding:10px 12px;font-family:var(--sans);font-size:12.5px;
+  font-weight:600;cursor:pointer;white-space:nowrap;text-align:center;transition:background .15s;
+}
+.inicio-acao-pill:hover{background:rgba(255,255,255,.22);}
+.inicio-atalhos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.inicio-atalho{
+  display:flex;flex-direction:column;align-items:center;gap:6px;background:#f4f6fb;border:1px solid var(--line);
+  border-radius:12px;padding:14px 6px;cursor:pointer;font-family:var(--sans);color:var(--navy-900);
+  transition:background .15s;
+}
+.inicio-atalho:hover{background:#e8edf7;}
+.inicio-atalho.ativa{background:var(--navy-50);border-color:var(--navy-900);}
+.inicio-atalho-icone{font-size:22px;line-height:1;}
+.inicio-atalho-nome{font-size:11.5px;font-weight:600;text-align:center;line-height:1.25;}
+@media(max-width:380px){ .inicio-atalhos-grid{grid-template-columns:repeat(2,1fr);} }
 
 /* Mapa de Calor de Despesas (Painel Financeiro) — grid com rolagem horizontal própria (.mc-scroll), nunca
    forçando a página inteira a rolar de lado; min-width no grid garante que as células nunca fiquem
@@ -10740,6 +10761,13 @@ function focarPrimeiroCampoModalAberto(){
 }
 function render(){
   document.documentElement.classList.toggle('forcar-nav-mobile', UI.forcarNavMobile);
+  // "Página inicial e navegação mobile": UI.tab==='inicio' só existe na navegação mobile (não tem
+  // representação no .tabbar de desktop, nem entra em TABS_TODAS/painel "Painéis" — é uma tela extra,
+  // separada das 7 abas de sempre). Se a largura deixar de ser mobile (janela redimensionada) enquanto essa
+  // tela está aberta, volta para o Painel Financeiro — nunca deixa o desktop "preso" numa tela sem tabbar
+  // correspondente. Mesmo critério de mobile já usado por ajustarNavResponsiva (innerWidth<=700 OU
+  // forcarNavMobile).
+  if(UI.tab==='inicio' && window.innerWidth>700 && !UI.forcarNavMobile){ UI.tab = 'dashboard'; }
   if(!STATE.ready){ root.innerHTML = '<div class="empty-state" style="padding-top:80px;">Carregando...</div>'; return; }
   chartInstances.forEach(c=>c.destroy()); chartInstances=[];
   // O tooltip externo (ver tooltipExternoHandler) vive fora da árvore do dashboard (anexado direto no
@@ -11198,7 +11226,7 @@ function renderHeader(){
 		<div class="app-title-wrap">
 			<div class="app-title-info">
 				<h1>Controle Financeiro Familiar</h1>
-				<div class="app-title-linha2"><p>Família Gomes Oliveira</p><p class="app-title-tab-atual">${(TABS_TODAS.find(([id])=>id===UI.tab)||[])[1]||''}</p></div>
+				<div class="app-title-linha2"><p>Família Gomes Oliveira</p><p class="app-title-tab-atual">${UI.tab==='inicio' ? '🏠 Início' : (TABS_TODAS.find(([id])=>id===UI.tab)||[])[1]||''}</p></div>
 			</div>
 			<div class="period-select">
 				<span>Período:</span>
@@ -11385,13 +11413,29 @@ const TABS_PAINEIS_MOBILE = TABS_TODAS.map(([id])=>{
   if(principal) return [id, principal[1], principal[2], TABS_PRINCIPAIS_DESC[id]||''];
   return TABS_SECUNDARIAS.find(t=>t[0]===id);
 });
+/* "Ajustes de interface — modo mobile", item 1 (barra de navegação inferior): 4 acessos diretos — a nova
+   página Início, mais 3 abas de uso mais frequente (Painel/Extrato/Registros, reaproveitando os rótulos
+   curtos já existentes em TABS_PRINCIPAIS, 4º elemento, até aqui sem nenhum uso) — e um 5º botão "Painéis"
+   que continua abrindo o MESMO bottom sheet de sempre, com TODAS as 7 abas na ordem de TABS_TODAS. Nenhuma
+   rota nova: cada ícone só troca UI.tab para um id que já existia; "Painéis" continua sendo o único lugar
+   que precisa listar as 7 abas (nunca duplicado aqui na barra). */
+const BOTTOM_NAV_ATALHOS = [
+  ["inicio","🏠","Início"],
+  ["dashboard","📊","Painel"],
+  ["resumo","📆","Extrato"],
+  ["registros","📒","Registros"],
+];
 function renderTabbar(){
   const maisAberto = UI.menuMobileAberto;
   return `
   <nav class="tabbar">${TABS_TODAS.map(([id,label])=>`<button class="tab-btn ${UI.tab===id?'active':''}" data-tab="${id}">${label}</button>`).join('')}</nav>
   <nav class="bottom-nav">
-    <button type="button" class="bn-item bn-item-paineis ${maisAberto?'active':''}" id="btnMenuMobile" aria-label="${maisAberto?'Fechar painéis':'Abrir painéis'}" aria-expanded="${maisAberto?'true':'false'}">
-      <span class="bn-icone">${maisAberto?'✖️':'☰'}</span><span class="bn-rotulo">Painéis</span>
+    ${BOTTOM_NAV_ATALHOS.map(([id,icone,rotulo])=>`
+    <button type="button" class="bn-item ${UI.tab===id?'active':''}" data-tab="${id}" aria-label="${rotulo}" aria-current="${UI.tab===id?'page':'false'}">
+      <span class="bn-icone-wrap"><span class="bn-icone">${icone}</span></span><span class="bn-rotulo">${rotulo}</span>
+    </button>`).join('')}
+    <button type="button" class="bn-item ${maisAberto?'active':''}" id="btnMenuMobile" aria-label="${maisAberto?'Fechar painéis':'Abrir painéis'}" aria-expanded="${maisAberto?'true':'false'}">
+      <span class="bn-icone-wrap"><span class="bn-icone">${maisAberto?'✖️':'☰'}</span></span><span class="bn-rotulo">Painéis</span>
     </button>
   </nav>
   <div class="mais-sheet ${maisAberto?'aberto':''}" role="dialog" aria-modal="true" aria-label="Painéis">
@@ -11410,6 +11454,7 @@ function renderTabbar(){
   <div class="menu-mobile-backdrop ${maisAberto?'aberto':''}" id="menuMobileBackdrop"></div>`;
 }
 function renderTab(){
+  if(UI.tab==="inicio") return renderInicioMobile();
   if(UI.tab==="dashboard") return renderDashboard();
   if(UI.tab==="inteligencia") return renderInteligencia();
   if(UI.tab==="registros") return renderRegistros();
@@ -11420,6 +11465,43 @@ function renderTab(){
   return "";
 }
 
+/* ---------- PÁGINA INICIAL (mobile) ----------
+   "Ajustes de interface — modo mobile", item 1: área de entrada dedicada do app no mobile — nunca existe no
+   desktop (ver render(), guarda que volta para 'dashboard' se a largura deixar de ser mobile) e é separada
+   do Painel Financeiro (não é mais uma variação dele, é uma aba própria, UI.tab==='inicio'). Reaproveita
+   integralmente cálculos e dados já existentes, sem duplicar nenhuma lógica nova:
+   - O card de saldo é o MESMO .dash-hero-saldo que antes vivia dentro do Painel Financeiro (mesma
+     calcSaldoAtualFluxoCaixa) — ver item 2 ("Saldo Atual Hoje" sai do Painel Financeiro no mobile, para
+     nunca ficar duplicado nos dois lugares ao mesmo tempo, ver renderDashboard).
+   - Os atalhos reaproveitam TABS_PAINEIS_MOBILE (mesmos ícone/nome já usados no painel "Painéis") — nunca
+     uma lista paralela que poderia divergir da real ordem/conteúdo das abas.
+   - "Novo lançamento" reaproveita abrirNovoLancamento(null), a MESMA função do FAB da aba Registros. */
+function renderInicioMobile(){
+  const saldoAtual = calcSaldoAtualFluxoCaixa();
+  return `
+  <div class="inicio-saudacao">Olá, Família Gomes Oliveira 👋</div>
+  <div class="dash-hero-saldo">
+    <div class="dash-hero-saldo-topo">
+      <div class="dash-hero-saldo-lbl">💼 Saldo Atual (Hoje)</div>
+      <div class="dash-hero-saldo-data">${fmtData(hojeISO())}</div>
+    </div>
+    <div class="dash-hero-saldo-val ${arredondarMoeda(saldoAtual)<0?'neg':''}">${fmtBRL(saldoAtual)}</div>
+    <div class="inicio-acoes-rapidas">
+      <button type="button" class="inicio-acao-pill" id="btnInicioNovoLancamento">➕ Novo lançamento</button>
+      <button type="button" class="inicio-acao-pill" id="btnInicioVerExtrato">📆 Ver Extrato</button>
+    </div>
+  </div>
+  <div class="panel" style="margin-bottom:0;">
+    <h2>Painéis</h2>
+    <div class="inicio-atalhos-grid">
+      ${TABS_PAINEIS_MOBILE.map(([id,icone,nome])=>`
+      <button type="button" class="inicio-atalho" data-tab="${id}">
+        <span class="inicio-atalho-icone">${icone}</span>
+        <span class="inicio-atalho-nome">${nome}</span>
+      </button>`).join('')}
+    </div>
+  </div>`;
+}
 /* ---------- DASHBOARD ---------- */
 /* Painel "Mapa de Calor de Despesas" (item do requisito) — fica ACIMA do painel "Visão geral" dentro do
    Painel Financeiro. Linhas = SEMPRE 7 meses (3 posteriores + o mês selecionado no cabeçalho, sempre na 4ª
@@ -18267,7 +18349,11 @@ function bindEvents(){
   document.getElementById('btnMesSeguinte')?.addEventListener('click', ()=>{
     UI.mes += 1; if(UI.mes>12){ UI.mes=1; UI.ano+=1; } render();
   });
-  document.querySelectorAll('.tab-btn, .bn-item[data-tab], .mais-sheet-item[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.tab = b.dataset.tab; UI.menuMobileAberto = false; UI.fabConfigAberto = false; render(); }));
+  document.querySelectorAll('.tab-btn, .bn-item[data-tab], .mais-sheet-item[data-tab], .inicio-atalho[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.tab = b.dataset.tab; UI.menuMobileAberto = false; UI.fabConfigAberto = false; render(); }));
+  // Página inicial mobile (ver renderInicioMobile): ações rápidas reaproveitam funções já existentes — a
+  // MESMA abrirNovoLancamento(null) do FAB da aba Registros, e uma simples troca de aba para o Extrato.
+  document.getElementById('btnInicioNovoLancamento')?.addEventListener('click', ()=> abrirNovoLancamento(null));
+  document.getElementById('btnInicioVerExtrato')?.addEventListener('click', ()=>{ UI.tab = 'resumo'; render(); });
   document.getElementById('btnMenuMobile')?.addEventListener('click', ()=>{ UI.menuMobileAberto = !UI.menuMobileAberto; render(); });
   document.getElementById('btnFecharMaisSheet')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
   document.getElementById('menuMobileBackdrop')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
@@ -18368,9 +18454,11 @@ function bindEvents(){
   document.getElementById('tiVerHistoricoBackups')?.addEventListener('click', ()=>abrirBackupModal());
   document.getElementById('tiIniciarApp')?.addEventListener('click', ()=>{
     UI.appIniciado = true;
-    // A aplicação sempre inicia no Painel Financeiro, com a página no topo — nunca preserva aba nem
-    // posição de rolagem de uma sessão anterior (item 1 do requisito de responsividade/UX).
-    UI.tab = 'dashboard';
+    // A aplicação sempre inicia com a página no topo — nunca preserva aba nem posição de rolagem de uma
+    // sessão anterior (item 1 do requisito de responsividade/UX). No mobile, a aba inicial passa a ser a
+    // nova página "Início" (item 1 de "Ajustes de interface — modo mobile"), área de entrada dedicada e
+    // separada do Painel Financeiro; no desktop continua sendo o Painel Financeiro, como sempre.
+    UI.tab = window.innerWidth<=700 ? 'inicio' : 'dashboard';
     window.scrollTo(0, 0);
     backupAutomaticoSeAplicavel('ao-iniciar');
     // Item 4 do requisito: dispara a sincronização imediatamente ao iniciar, sem exigir um clique extra em
