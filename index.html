@@ -766,15 +766,11 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 @media(max-width:700px){ .dash-hero-saldo{display:block;} }
 /* Página inicial mobile (ver renderInicioMobile — "Ajustes de interface — modo mobile", item 1): reaproveita
    .dash-hero-saldo tal qual (mesmo card/cálculo que antes vivia no Painel Financeiro), só acrescentando a
-   saudação acima e os botões de ação rápida dentro do próprio card, sem duplicar o gradiente/padding dele. */
+   saudação acima, sem duplicar o gradiente/padding dele. "Novos ajustes de interface — modo mobile", item 3:
+   os botões de ação rápida ("+ Novo lançamento"/"Ver Extrato") que existiam dentro do card foram removidos
+   (ver histórico para .inicio-acoes-rapidas/.inicio-acao-pill) — saldo, título, layout e cálculo do card
+   ficam intactos. */
 .inicio-saudacao{font-size:14.5px;font-weight:600;color:var(--navy-900);margin:2px 2px 12px;}
-.inicio-acoes-rapidas{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;text-align:left;}
-.inicio-acao-pill{
-  flex:1 1 0;min-width:0;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.32);
-  color:#fff;border-radius:var(--radius-full);padding:10px 12px;font-family:var(--sans);font-size:12.5px;
-  font-weight:600;cursor:pointer;white-space:nowrap;text-align:center;transition:background .15s;
-}
-.inicio-acao-pill:hover{background:rgba(255,255,255,.22);}
 .inicio-atalhos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
 .inicio-atalho{
   display:flex;flex-direction:column;align-items:center;gap:6px;background:#f4f6fb;border:1px solid var(--line);
@@ -11595,7 +11591,9 @@ function renderTab(){
      nunca ficar duplicado nos dois lugares ao mesmo tempo, ver renderDashboard).
    - Os atalhos reaproveitam TABS_PAINEIS_MOBILE (mesmos ícone/nome já usados no painel "Painéis") — nunca
      uma lista paralela que poderia divergir da real ordem/conteúdo das abas.
-   - "Novo lançamento" reaproveita abrirNovoLancamento(null), a MESMA função do FAB da aba Registros. */
+   - "Novos ajustes de interface — modo mobile", item 3: os botões de ação rápida "+ Novo lançamento" e
+     "Ver Extrato" que existiam dentro do card de saldo foram removidos — saldo, título, data, layout e
+     cálculo do card permanecem intactos. */
 function renderInicioMobile(){
   const saldoAtual = calcSaldoAtualFluxoCaixa();
   return `
@@ -11606,10 +11604,6 @@ function renderInicioMobile(){
       <div class="dash-hero-saldo-data">${fmtData(hojeISO())}</div>
     </div>
     <div class="dash-hero-saldo-val ${arredondarMoeda(saldoAtual)<0?'neg':''}">${fmtBRL(saldoAtual)}</div>
-    <div class="inicio-acoes-rapidas">
-      <button type="button" class="inicio-acao-pill" id="btnInicioNovoLancamento">➕ Novo lançamento</button>
-      <button type="button" class="inicio-acao-pill" id="btnInicioVerExtrato">📆 Ver Extrato</button>
-    </div>
   </div>
   <div class="panel" style="margin-bottom:0;">
     <h2>Painéis</h2>
@@ -18577,10 +18571,6 @@ function bindEvents(){
     UI.mes += 1; if(UI.mes>12){ UI.mes=1; UI.ano+=1; } render();
   });
   document.querySelectorAll('.tab-btn, .bn-item[data-tab], .mais-sheet-item[data-tab], .inicio-atalho[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.tab = b.dataset.tab; UI.menuMobileAberto = false; UI.fabConfigAberto = false; render(); }));
-  // Página inicial mobile (ver renderInicioMobile): ações rápidas reaproveitam funções já existentes — a
-  // MESMA abrirNovoLancamento(null) do FAB da aba Registros, e uma simples troca de aba para o Extrato.
-  document.getElementById('btnInicioNovoLancamento')?.addEventListener('click', ()=> abrirNovoLancamento(null));
-  document.getElementById('btnInicioVerExtrato')?.addEventListener('click', ()=>{ UI.tab = 'resumo'; render(); });
   document.getElementById('btnMenuMobile')?.addEventListener('click', ()=>{ UI.menuMobileAberto = !UI.menuMobileAberto; render(); });
   document.getElementById('btnFecharMaisSheet')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
   document.getElementById('menuMobileBackdrop')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
