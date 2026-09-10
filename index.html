@@ -199,9 +199,14 @@ input,select{font-family:var(--sans);}
      O painel (.menu-arquivo-painel) continua no DOM porque é filho de .menu-arquivo — só o botão que abria
      esse painel pelo cabeçalho é que não faz mais sentido no mobile. */
   #btnMenuArquivo{display:none;}
+  /* "Novos ajustes de interface — FinUs", item 5: o painel para ACIMA do bottom-nav (nunca sobrepondo-o) —
+     mesma técnica de "área livre" já usada por outros elementos flutuantes do app (FABs, Voltar ao Topo):
+     bottom-nav-h + área segura do aparelho, em vez de bottom:0. Item 6: como o menu-arquivo-painel agora
+     pode abrir SOBRE um mais-sheet já aberto (ver bindEvents/btnMenuArquivoMobile), o z-index sobe acima do
+     .mais-sheet (220) — mesmo princípio já usado pelo .fab-config-menu (221) para ficar acima do mais-sheet. */
   .menu-arquivo-painel{
-    position:fixed;top:auto;bottom:0;left:0;right:0;min-width:0;width:100%;max-width:100vw;
-    border-radius:var(--radius-lg) var(--radius-lg) 0 0;z-index:220;padding:10px 0 calc(14px + var(--safe-bottom));
+    position:fixed;top:auto;bottom:calc(var(--bottom-nav-h) + var(--safe-bottom));left:0;right:0;min-width:0;
+    width:100%;max-width:100vw;border-radius:var(--radius-lg) var(--radius-lg) 0 0;z-index:223;padding:10px 0 14px;
     max-height:80vh;overflow-y:auto;box-shadow:0 -12px 32px rgba(0,0,0,.28);
   }
   .ma-painel-titulo{
@@ -212,7 +217,13 @@ input,select{font-family:var(--sans);}
   .ma-item-icone{order:1;}
   .ma-item-textos{order:2;}
   .ma-item-desc{display:block;font-size:11.5px;color:#6a7a97;font-weight:400;white-space:normal;}
-  .menu-arquivo-backdrop{display:block;position:fixed;inset:0;background:rgba(11,42,94,.35);z-index:215;}
+  /* Mesma lógica do painel acima: o fundo escurecido também para acima do bottom-nav — ele continua visível
+     e tocável por baixo (nunca escurecido/encoberto por este backdrop), com z-index entre o mais-sheet
+     (220) e este painel (223). */
+  .menu-arquivo-backdrop{
+    display:block;position:fixed;inset:0 0 calc(var(--bottom-nav-h) + var(--safe-bottom)) 0;
+    background:rgba(11,42,94,.35);z-index:222;
+  }
 }
 /* ---- Indicador ☁ OneDrive / SyncManager (itens 1, 16 e 17 do requisito) ---- */
 .sync-indicador-wrap{position:relative;}
@@ -405,11 +416,15 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
 .bn-item:hover{color:#dbe4f7;}
 .bn-item.active:hover{color:var(--gold);}
 .bn-item:focus-visible{outline:2px solid var(--gold);outline-offset:-2px;}
-/* Bottom sheet "Mais": desliza de baixo para cima, sobre um backdrop, sem empurrar o layout da página. */
+/* Bottom sheet "Mais": desliza de baixo para cima, sobre um backdrop, sem empurrar o layout da página.
+   "Novos ajustes de interface — FinUs", item 5: para ACIMA do bottom-nav (nunca sobrepondo-o) — bottom-nav-h
+   + área segura do aparelho, em vez de bottom:0; a folha só abre quando o bottom-nav já está visível, então
+   não precisa de nenhuma condição extra aqui. O padding inferior próprio não soma mais a área segura (ela
+   já está embutida no deslocamento acima, via a altura do próprio bottom-nav). */
 .mais-sheet{
-  position:fixed;left:0;right:0;bottom:0;z-index:220;background:#fff;
+  position:fixed;left:0;right:0;bottom:calc(var(--bottom-nav-h) + var(--safe-bottom));z-index:220;background:#fff;
   border-radius:var(--radius-lg) var(--radius-lg) 0 0;box-shadow:0 -12px 32px rgba(0,0,0,.28);
-  padding:10px 0 calc(14px + var(--safe-bottom));
+  padding:10px 0 14px;
   padding-left:var(--safe-left);padding-right:var(--safe-right);
   transform:translateY(110%);transition:transform .25s ease;max-height:70vh;overflow-y:auto;
 }
@@ -431,9 +446,20 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
   display:none;position:fixed;inset:0;background:rgba(11,42,94,.35);z-index:215;
 }
 .menu-mobile-backdrop.aberto{display:block;}
+/* "Novos ajustes de interface — FinUs", item 5: o backdrop do PRÓPRIO mais-sheet (#menuMobileBackdrop —
+   id único, ver renderTabbar) também para acima do bottom-nav, igual à folha que ele escurece — o
+   bottom-nav continua visível e tocável por baixo dele, nunca escurecido/encoberto. Escopo só por ID: os
+   demais usos de .menu-mobile-backdrop (filtros mobile, menu do FAB de Configurações) não fazem parte
+   deste item e continuam cobrindo a tela inteira como sempre. */
+#menuMobileBackdrop.aberto{inset:0 0 calc(var(--bottom-nav-h) + var(--safe-bottom)) 0;}
+/* "Novos ajustes de interface — FinUs", item 7: o FAB "+" fica ACIMA do botão Voltar ao Topo (nunca
+   sobreposto a ele) — bottom-nav-h + área segura + o respiro do próprio Voltar ao Topo (18px, ver
+   .back-to-top) + a altura dele (42px, tamanho mobile de .back-to-top) + 14px de respiro entre os dois.
+   Corrige a ordem trocada de uma rodada anterior (o Voltar ao Topo estava ACIMA do FAB) — a ordem correta,
+   de cima para baixo na tela, é: conteúdo → FAB → Voltar ao Topo → área livre → bottom-nav. */
 .fab-novo-lancamento,.fab-novo-lancamento-modal{
   display:none;position:fixed;right:calc(18px + var(--safe-right));z-index:205;
-  bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 18px);
+  bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 18px + 42px + 14px);
   width:var(--fab-size);height:var(--fab-size);border-radius:50%;border:none;
   background:var(--gold);color:var(--navy-950);font-size:28px;line-height:1;font-weight:700;
   box-shadow:0 8px 20px rgba(11,42,94,.35);cursor:pointer;transition:transform .15s,box-shadow .15s;
@@ -460,7 +486,7 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
    conteúdo interativo por cima dele). */
 .fab-config-menu{
   display:none;position:fixed;right:calc(18px + var(--safe-right));z-index:221;
-  bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 18px + var(--fab-size) + 14px);
+  bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 18px + 42px + 14px + var(--fab-size) + 14px);
   flex-direction:column;align-items:flex-end;gap:10px;max-width:calc(100vw - 36px - var(--safe-right));
 }
 .fab-config-item{
@@ -604,8 +630,11 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 .grid-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
 .panel-desc{margin:-8px 0 14px;font-size:11px;color:#6a7a97;font-weight:400;text-transform:none;letter-spacing:normal;font-family:var(--sans);}
 .mini-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
+/* "Novos ajustes de interface — FinUs", item 3: background var(--navy-50) nos cards dos painéis Contas,
+   Meios de Transação e Responsáveis (Configurações) — .mini-card é usada exclusivamente por esses 3
+   painéis (nenhum outro lugar do app), então o ajuste é direto na classe base, sem seletor extra. */
 .mini-card{
-  position:relative;border:1px solid var(--line);border-radius:10px;padding:14px 12px 12px;background:var(--paper);
+  position:relative;border:1px solid var(--line);border-radius:10px;padding:14px 12px 12px;background:var(--navy-50);
   display:flex;flex-direction:column;gap:6px;min-height:104px;
   transition:box-shadow .18s ease,transform .18s ease,border-color .18s ease;
 }
@@ -1276,29 +1305,29 @@ tbody tr:hover{background:var(--navy-50);}
 .back-to-top.visible{opacity:1;visibility:visible;transform:translateY(0);}
 .back-to-top:hover{background:var(--gold);color:var(--navy-950);}
 .back-to-top:active{transform:translateY(1px);}
-/* "Novos ajustes de interface — modo mobile", item 11: no mobile a barra de navegação inferior fixa
-   (.bottom-nav) e o FAB "+" (.fab-novo-lancamento/.fab-config-btn) também ficam fixos no rodapé — o
-   back-to-top precisa flutuar ACIMA dos dois, nunca escondido atrás da barra nem sobreposto ao FAB.
-   Reaproveita a mesma fórmula já usada por .fab-config-menu para "empilhar um elemento acima do FAB, com
-   14px de respiro": bottom-nav-h + área segura do aparelho + o respiro do próprio FAB (18px) + a altura
-   do FAB (--fab-size) + 14px de respiro entre o FAB e este botão — sempre a ordem conteúdo → FAB →
-   Voltar ao Topo → barra, calculada com as mesmas variáveis responsivas (altura real da barra, área
+/* "Novos ajustes de interface — modo mobile", item 11 (revisado por "FinUs", item 7 — ordem corrigida): no
+   mobile a barra de navegação inferior fixa (.bottom-nav) e o FAB "+" (.fab-novo-lancamento/.fab-config-btn)
+   também ficam fixos no rodapé — o back-to-top precisa flutuar ACIMA da barra, nunca escondido atrás dela,
+   e sempre ABAIXO do FAB (nunca sobreposto a ele). Mesmo respiro (18px) que o FAB usava sozinho antes desta
+   revisão — agora é o Voltar ao Topo quem fica mais perto da barra, com o FAB empilhado 14px acima dele
+   (ver .fab-novo-lancamento). Ordem final, de cima para baixo na tela: conteúdo → FAB → Voltar ao Topo →
+   área livre → bottom-nav — calculada com as mesmas variáveis responsivas (altura real da barra, área
    segura) usadas no resto do app, nunca um valor fixo que quebraria em outro tamanho de tela/aparelho.
-   Como nem toda aba tem um FAB visível, sobra às vezes um respiro maior que o estritamente necessário
-   acima da barra — isso nunca é um problema (só a falta de respiro seria); evita ter que saber, só em
-   CSS, se um FAB específico está de fato renderizado ali. Mesma condição de "modo mobile" usada pela
-   bottom-nav/FAB (max-width:700px OU html.forcar-nav-mobile — ver duplicata da regra logo abaixo), nunca
-   um breakpoint próprio que poderia dessincronizar deste botão dos elementos que ele precisa desviar. */
+   Como nem toda aba tem um FAB visível, isso nunca é um problema aqui (o Voltar ao Topo nem depende da
+   altura do FAB — só da barra). Mesma condição de "modo mobile" usada pela bottom-nav/FAB (max-width:700px
+   OU html.forcar-nav-mobile — ver duplicata da regra logo abaixo), nunca um breakpoint próprio que poderia
+   dessincronizar deste botão dos elementos que ele precisa desviar. */
 @media(max-width:700px){
   .back-to-top{
     right:calc(14px + var(--safe-right));
-    bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 18px + var(--fab-size) + 14px);
+    bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 18px);
     width:42px;height:42px;font-size:18px;
   }
 }
 html.forcar-nav-mobile .back-to-top{
   right:calc(14px + var(--safe-right));
-  bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 18px + var(--fab-size) + 14px);
+  bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 18px);
+  width:42px;height:42px;
 }
 /* Mesmo com o respiro acima, o menu expandido do FAB de Configurações (.fab-config-menu, ver
    renderFabConfiguracoes) sobe exatamente até essa mesma altura — e qualquer folha inferior
@@ -1767,7 +1796,43 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
   .modal-head{border-radius:0;flex-shrink:0;}
   .modal-body{flex:1;overflow-y:auto;}
   .modal-foot{flex-shrink:0;flex-wrap:wrap;padding-bottom:calc(11px + var(--safe-bottom));}
+  /* "Novos ajustes de interface — FinUs", item 4: o modal da Conta Microsoft é a única exceção ao padrão
+     "quase tela cheia" acima — só tem 2 botões, então herdar altura/largura cheias deixaria uma enorme
+     área vazia acima/abaixo deles. Sobrescreve pontualmente (id + !important, a MESMA técnica já usada
+     pela regra genérica logo acima, pela mesma razão: vencer o width/height!important da própria regra e
+     o style="width:360px" inline) só este modal — header, cores, espaçamento e todos os demais modais do
+     app continuam exatamente como estão hoje, "quase tela cheia". */
+  #ovContaMicrosoft{align-items:center!important;padding:16px!important;}
+  #ovContaMicrosoft .modal{
+    width:auto!important;max-width:320px!important;height:auto!important;max-height:90vh!important;
+    border-radius:12px!important;padding-top:0!important;flex:none!important;
+  }
+  #ovContaMicrosoft .modal-head{border-radius:12px 12px 0 0!important;}
+  #ovContaMicrosoft .modal-body{flex:none!important;overflow:visible!important;}
+  /* "Novos ajustes de interface — FinUs", item 5: o modal de Backup e Restauração nunca cobre o bottom-nav
+     — o overlay para acima dele (bottom-nav-h + área segura, em vez de ir até o fundo real da tela); o
+     .modal já usa height:100% (regra genérica acima), então ele automaticamente se ajusta a essa altura
+     reduzida do próprio overlay, sem precisar de nenhuma regra própria de altura aqui. O bottom-nav
+     continua visível e tocável por baixo do modal, como pedido. */
+  #ovBackup{inset:0 0 calc(var(--bottom-nav-h) + var(--safe-bottom)) 0;}
 }
+/* Os dois botões do modal Conta Microsoft (mobile) viram cards quadrados lado a lado — mesma linguagem
+   visual do .inicio-atalho já usado na Início (ícone + texto, fundo neutro, borda, cantos arredondados),
+   só com aspect-ratio:1 para ficarem de fato quadrados (o .inicio-atalho original usa min-height, não é
+   quadrado) — nenhum componente novo do zero, só uma variação do que já existe. Continuam dois <button>
+   normais, mesmos ids/handlers de sempre (loginOneDrive/desconectarArquivos); só a apresentação muda. No
+   desktop este item não se aplica (ver "mobile" em renderContaMicrosoftModal) — os botões de lá continuam
+   exatamente como sempre foram. */
+.conta-microsoft-opcoes{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+.conta-microsoft-opcao{
+  aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  background:#f4f6fb;border:1px solid var(--line);border-radius:12px;cursor:pointer;
+  font-family:var(--sans);color:var(--navy-900);font-size:12.5px;font-weight:600;text-align:center;
+  transition:background .15s;padding:10px;
+}
+.conta-microsoft-opcao:hover{background:#e8edf7;}
+.conta-microsoft-opcao .ico{font-size:26px;line-height:1;}
+.conta-microsoft-opcao.perigo{color:var(--despesa);}
 .modal-head{
   padding:13px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;
   background:var(--navy-900);color:#fff;border-radius:12px 12px 0 0;position:sticky;top:0;
@@ -2315,6 +2380,12 @@ summary::marker{content:'';}
    (o padrão cartoes-resumo-item não usa a barra lateral colorida do .kpi). */
 .cartoes-resumo-item.receita .val{color:var(--receita);}
 .cartoes-resumo-item.despesa .val{color:var(--despesa);}
+/* "Novos ajustes de interface — FinUs", item 1: só os labels dos cartoes-resumo do Painel Financeiro e do
+   Planejamento Financeiro (ver .cartoes-resumo-lbl-minusculo nos respectivos cardsResumoHtml) ficam em
+   minúsculas — nunca os demais usos de .cartoes-resumo-item no resto do app (Contas e Cartões, Registros,
+   Configurações, Extrato Consolidado, Resumo Executivo), que mantêm o texto original das labels. Só o
+   texto visual muda (text-transform); o dado/label real por trás nunca é alterado. */
+.cartoes-resumo-lbl-minusculo .cartoes-resumo-item .lbl{text-transform:lowercase;}
 .tabela-cartoes{min-width:760px;}
 /* Reorganização "Ordem das Colunas, Limite e Ações": Ações concentra Importar + o ícone único de editar
    fechamento/vencimento (o modal já edita as duas datas de uma vez) — sempre visível, sem depender de hover,
@@ -7806,14 +7877,18 @@ function calcRendaFamiliar(ano, mes){
    dela nunca altera os valores de Ariana/Bruno nem o total da Renda Familiar (eles continuam vindo direto
    de rf.porResponsavel/rf.total, intocados). Único ponto que decide quantas/quais barras aparecem — usado
    tanto para dimensionar o painel (renderDashboard) quanto para desenhar o gráfico (drawCharts), então os
-   dois nunca podem divergir. */
+   dois nunca podem divergir.
+   "Novos ajustes de interface — FinUs", item 2: quando "Ambos" existe, ela passa a ser a PRIMEIRA série
+   (antes vinha por último) — Ariana e Bruno continuam depois dela, na mesma ordem relativa entre si de
+   sempre. Só a ordem de apresentação muda; nenhum valor/cálculo é afetado (mesmas 3 leituras de
+   rf.porResponsavel/rf.total de antes). */
 function seriesRendaFamiliarPorResponsavel(rf){
   const ariana = rf.porResponsavel['Ariana'] || 0;
   const bruno = rf.porResponsavel['Bruno'] || 0;
   const ambos = rf.total - ariana - bruno;
   const labels = ['Ariana', 'Bruno'];
   const valores = [ariana, bruno];
-  if(ambos > 0.01){ labels.push('Ambos'); valores.push(ambos); }
+  if(ambos > 0.01){ labels.unshift('Ambos'); valores.unshift(ambos); }
   return { labels, valores };
 }
 /* Paleta revisada para maior contraste entre fatias vizinhas — evita tons parecidos (o antigo conjunto
@@ -10944,13 +11019,28 @@ function renderModalInstalarIOS(){
    quando o clique começa no fundo, nunca quando começa dentro do .modal e "borbulha" até aqui), além do
    fechamento padrão pelo ✕. */
 function renderContaMicrosoftModal(){
+  // "Novos ajustes de interface — FinUs", item 4: no mobile os 2 botões viram cards quadrados lado a lado
+  // (.conta-microsoft-opcao, ver CSS) dentro de um modal compacto e centralizado (ver
+  // @media(max-width:700px) #ovContaMicrosoft no CSS) — mesmos ids/ações de sempre, só a apresentação
+  // muda. No desktop nada muda: continuam os 2 botões empilhados de sempre.
+  const mobile = window.innerWidth<=700;
+  const opcoesHtml = mobile ? `
+    <div class="conta-microsoft-opcoes">
+      <button type="button" class="conta-microsoft-opcao" id="btnContaMicrosoftTrocar">
+        <span class="ico">🔀</span><span>Trocar de conta</span>
+      </button>
+      <button type="button" class="conta-microsoft-opcao perigo" id="btnContaMicrosoftSair">
+        <span class="ico">🔌</span><span>Sair da conta</span>
+      </button>
+    </div>` : `
+    <button type="button" class="btn btn-ghost" id="btnContaMicrosoftTrocar" style="width:100%;">🔀 Trocar de conta</button>
+    <button type="button" class="btn btn-danger" id="btnContaMicrosoftSair" style="width:100%;">🔌 Sair da conta</button>`;
   return `
   <div class="overlay" id="ovContaMicrosoft" ${attrZIndexModal('contaMicrosoftModal')}>
     <div class="modal" style="width:360px;">
       <div class="modal-head"><h3>👤 Conta Microsoft</h3><button class="close-x" id="closeContaMicrosoftModal">✕</button></div>
       <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;">
-        <button type="button" class="btn btn-ghost" id="btnContaMicrosoftTrocar" style="width:100%;">🔀 Trocar de conta</button>
-        <button type="button" class="btn btn-danger" id="btnContaMicrosoftSair" style="width:100%;">🔌 Sair da conta</button>
+        ${opcoesHtml}
       </div>
     </div>
   </div>`;
@@ -12024,12 +12114,20 @@ function renderDashboard(){
     </div>
     <div class="dash-hero-saldo-val ${arredondarMoeda(saldoAtual)<0?'neg':''}">${fmtBRL(saldoAtual)}</div>
   </div>`;
+  // "Novos ajustes de interface — FinUs", item 1: mesma composição visual do Resumo Executivo (Inteligência
+  // Financeira) — título da aba dentro de um .panel, acima do .cartoes-resumo-grid, reaproveitando as
+  // MESMAS classes (.panel/.panel h2), nunca um estilo paralelo. .cartoes-resumo-lbl-minusculo só baixa a
+  // caixa dos rótulos (nunca o valor calculado) — ver CSS — e fica restrita a este painel/ao de Planejamento
+  // Financeiro (item 1), nunca vazando para os demais usos de .cartoes-resumo-item no resto do app.
   const cardsResumoHtml = `
-  <div class="cartoes-resumo-grid">
-    <div class="cartoes-resumo-item receita"><span class="ico">💰</span><div><div class="val">${fmtBRL(d.receitasTotal)}</div><div class="lbl">Receitas do mês</div></div></div>
-    <div class="cartoes-resumo-item despesa"><span class="ico">💸</span><div><div class="val">${fmtBRL(d.despesasTotal)}</div><div class="lbl">Despesas do mês</div></div></div>
-    <div class="cartoes-resumo-item"><span class="ico">⚖️</span><div><div class="val">${fmtBRL(d.saldo)}</div><div class="lbl">Saldo do mês</div></div></div>
-    <div class="cartoes-resumo-item"><span class="ico">🐖</span><div><div class="val">${fmtPercentSmart(d.poupanca*100)}</div><div class="lbl">% Poupança</div></div></div>
+  <div class="panel cartoes-resumo-lbl-minusculo" style="padding-bottom:8px;">
+    <h2>📊 Painel Financeiro</h2>
+    <div class="cartoes-resumo-grid">
+      <div class="cartoes-resumo-item receita"><span class="ico">💰</span><div><div class="val">${fmtBRL(d.receitasTotal)}</div><div class="lbl">Receitas do mês</div></div></div>
+      <div class="cartoes-resumo-item despesa"><span class="ico">💸</span><div><div class="val">${fmtBRL(d.despesasTotal)}</div><div class="lbl">Despesas do mês</div></div></div>
+      <div class="cartoes-resumo-item"><span class="ico">⚖️</span><div><div class="val">${fmtBRL(d.saldo)}</div><div class="lbl">Saldo do mês</div></div></div>
+      <div class="cartoes-resumo-item"><span class="ico">🐖</span><div><div class="val">${fmtPercentSmart(d.poupanca*100)}</div><div class="lbl">% Poupança</div></div></div>
+    </div>
   </div>`;
   const ajudaFluxoHtml = `
 <details class="ajuda-fluxo" data-ajuda-dashboard ${UI.ajudaDashboardAberta?'open':''}>
@@ -15515,15 +15613,20 @@ function renderMetas(){
   // posição original (depois dos cards). Cards-resumo em si já ficam 2x2 no mobile pela mesma regra
   // compartilhada de .grid-cards (ver PR do Painel Financeiro) — nenhuma mudança adicional necessária aqui.
   const mobile = window.innerWidth<=700;
+  // "Novos ajustes de interface — FinUs", item 1: mesma composição visual do Resumo Executivo (Inteligência
+  // Financeira) — ver comentário equivalente em renderDashboard/cardsResumoHtml.
   const cardsResumoHtml = `
-  <div class="cartoes-resumo-grid">
-    <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(r.orcamentoTotal)}</div><div class="lbl">Orçamento Total</div></div></div>
-    <div class="cartoes-resumo-item despesa"><span class="ico">💸</span><div><div class="val">${fmtBRL(r.gastoAtual)}</div><div class="lbl">Gasto Atual</div></div></div>
-    <div class="cartoes-resumo-item ${classeReceitaDespesaMoeda(r.saldoDisponivel)}"><span class="ico">📊</span><div><div class="val">${fmtBRL(r.saldoDisponivel)}</div><div class="lbl">Saldo Disponível</div></div></div>
-    <div class="cartoes-resumo-item">
-      <span class="ico">🎯</span>
-      <div><div class="val">${fmtPercentSmart(r.pctConsumido)}</div><div class="lbl">Percentual Consumido</div>
-      <div class="progress-track" style="margin-top:6px;"><div class="progress-fill" style="width:${Math.min(100,r.pctConsumido)}%;background:${r.pctConsumido>100?'#c0392b':(r.pctConsumido>=80?'#c98f00':'#1e8e5a')};"></div></div>
+  <div class="panel cartoes-resumo-lbl-minusculo" style="padding-bottom:8px;">
+    <h2>🎯 Planejamento Financeiro</h2>
+    <div class="cartoes-resumo-grid">
+      <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(r.orcamentoTotal)}</div><div class="lbl">Orçamento Total</div></div></div>
+      <div class="cartoes-resumo-item despesa"><span class="ico">💸</span><div><div class="val">${fmtBRL(r.gastoAtual)}</div><div class="lbl">Gasto Atual</div></div></div>
+      <div class="cartoes-resumo-item ${classeReceitaDespesaMoeda(r.saldoDisponivel)}"><span class="ico">📊</span><div><div class="val">${fmtBRL(r.saldoDisponivel)}</div><div class="lbl">Saldo Disponível</div></div></div>
+      <div class="cartoes-resumo-item">
+        <span class="ico">🎯</span>
+        <div><div class="val">${fmtPercentSmart(r.pctConsumido)}</div><div class="lbl">Percentual Consumido</div>
+        <div class="progress-track" style="margin-top:6px;"><div class="progress-fill" style="width:${Math.min(100,r.pctConsumido)}%;background:${r.pctConsumido>100?'#c0392b':(r.pctConsumido>=80?'#c98f00':'#1e8e5a')};"></div></div>
+        </div>
       </div>
     </div>
   </div>`;
@@ -18816,7 +18919,13 @@ function bindEvents(){
   document.getElementById('btnMenuArquivo')?.addEventListener('click', ()=>{ UI.menuArquivoAberto = !UI.menuArquivoAberto; render(); });
   document.getElementById('btnFecharMenuArquivo')?.addEventListener('click', ()=>{ UI.menuArquivoAberto = false; render(); });
   document.getElementById('menuArquivoBackdrop')?.addEventListener('click', ()=>{ UI.menuArquivoAberto = false; render(); });
-  document.getElementById('btnMenuArquivoMobile')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; UI.menuArquivoAberto = true; render(); });
+  // "Novos ajustes de interface — FinUs", item 6: abrir o menu-arquivo-painel a partir do mais-sheet NUNCA
+  // fecha o mais-sheet (antes fazia UI.menuMobileAberto=false aqui) — ele fica aberto "em segundo plano",
+  // por baixo do menu-arquivo-painel (ver z-index dedicado no CSS). Como nenhum handler deste menu (✕,
+  // clique fora, ou qualquer ação da lista — Salvar/Backup/Trocar de conta/etc., todos abaixo) toca em
+  // UI.menuMobileAberto, fechar o menu-arquivo-painel por qualquer um desses caminhos automaticamente
+  // revela o mais-sheet de novo, exatamente como estava antes — nunca voltando para a aba/tela principal.
+  document.getElementById('btnMenuArquivoMobile')?.addEventListener('click', ()=>{ UI.menuArquivoAberto = true; render(); });
   document.getElementById('maReconectarPacote')?.addEventListener('click', ()=>{ UI.menuArquivoAberto=false; reconectarPacote(); });
   document.getElementById('maSalvar')?.addEventListener('click', ()=>{ UI.menuArquivoAberto=false; salvarArquivos(); });
   document.getElementById('maBackup')?.addEventListener('click', async ()=>{ UI.menuArquivoAberto=false; render(); await criarBackupManual(); render(); });
