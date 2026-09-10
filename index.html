@@ -1276,9 +1276,36 @@ tbody tr:hover{background:var(--navy-50);}
 .back-to-top.visible{opacity:1;visibility:visible;transform:translateY(0);}
 .back-to-top:hover{background:var(--gold);color:var(--navy-950);}
 .back-to-top:active{transform:translateY(1px);}
-@media(max-width:600px){
-  .back-to-top{right:14px;bottom:14px;width:42px;height:42px;font-size:18px;}
+/* "Novos ajustes de interface — modo mobile", item 11: no mobile a barra de navegação inferior fixa
+   (.bottom-nav) e o FAB "+" (.fab-novo-lancamento/.fab-config-btn) também ficam fixos no rodapé — o
+   back-to-top precisa flutuar ACIMA dos dois, nunca escondido atrás da barra nem sobreposto ao FAB.
+   Reaproveita a mesma fórmula já usada por .fab-config-menu para "empilhar um elemento acima do FAB, com
+   14px de respiro": bottom-nav-h + área segura do aparelho + o respiro do próprio FAB (18px) + a altura
+   do FAB (--fab-size) + 14px de respiro entre o FAB e este botão — sempre a ordem conteúdo → FAB →
+   Voltar ao Topo → barra, calculada com as mesmas variáveis responsivas (altura real da barra, área
+   segura) usadas no resto do app, nunca um valor fixo que quebraria em outro tamanho de tela/aparelho.
+   Como nem toda aba tem um FAB visível, sobra às vezes um respiro maior que o estritamente necessário
+   acima da barra — isso nunca é um problema (só a falta de respiro seria); evita ter que saber, só em
+   CSS, se um FAB específico está de fato renderizado ali. Mesma condição de "modo mobile" usada pela
+   bottom-nav/FAB (max-width:700px OU html.forcar-nav-mobile — ver duplicata da regra logo abaixo), nunca
+   um breakpoint próprio que poderia dessincronizar deste botão dos elementos que ele precisa desviar. */
+@media(max-width:700px){
+  .back-to-top{
+    right:calc(14px + var(--safe-right));
+    bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 18px + var(--fab-size) + 14px);
+    width:42px;height:42px;font-size:18px;
+  }
 }
+html.forcar-nav-mobile .back-to-top{
+  right:calc(14px + var(--safe-right));
+  bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 18px + var(--fab-size) + 14px);
+}
+/* Mesmo com o respiro acima, o menu expandido do FAB de Configurações (.fab-config-menu, ver
+   renderFabConfiguracoes) sobe exatamente até essa mesma altura — e qualquer folha inferior
+   (.menu-mobile-backdrop.aberto: filtros mobile, "Mais", o próprio menu do FAB) já cobre a tela pedindo
+   foco exclusivo do usuário. Nesses momentos o back-to-top some (nunca compete visualmente com um menu
+   aberto por cima dele) e volta a aparecer normalmente assim que a folha fecha. */
+#root:has(.menu-mobile-backdrop.aberto) ~ .back-to-top{opacity:0!important;visibility:hidden!important;pointer-events:none;}
 .btn-gold:hover{background:var(--gold-dark);}
 .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--navy-800);}
 .btn-ghost:hover{background:var(--navy-50);}
