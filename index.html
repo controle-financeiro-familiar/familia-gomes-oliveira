@@ -2251,6 +2251,11 @@ summary::marker{content:'';}
 .cartoes-resumo-item > div{min-width:0;}
 .cartoes-resumo-item .val{font-family:var(--mono);font-weight:800;font-size:var(--val-font-size, 15px);color:var(--navy-900);line-height:1.2;white-space:nowrap;overflow:hidden;}
 .cartoes-resumo-item .lbl{font-size:10.5px;color:#6a7a97;font-weight:600;}
+/* "Novos ajustes de interface — modo mobile", item 7: mesmas classes/cores dinâmicas já usadas em .kpi
+   (classeReceitaDespesaMoeda) — só o valor muda de cor conforme o sinal/categoria, nunca o card inteiro
+   (o padrão cartoes-resumo-item não usa a barra lateral colorida do .kpi). */
+.cartoes-resumo-item.receita .val{color:var(--receita);}
+.cartoes-resumo-item.despesa .val{color:var(--despesa);}
 .tabela-cartoes{min-width:760px;}
 /* Reorganização "Ordem das Colunas, Limite e Ações": Ações concentra Importar + o ícone único de editar
    fechamento/vencimento (o modal já edita as duas datas de uma vez) — sempre visível, sem depender de hover,
@@ -11941,11 +11946,11 @@ function renderDashboard(){
     <div class="dash-hero-saldo-val ${arredondarMoeda(saldoAtual)<0?'neg':''}">${fmtBRL(saldoAtual)}</div>
   </div>`;
   const cardsResumoHtml = `
-  <div class="grid-cards">
-    <div class="kpi receita"><div class="bar"></div><div class="lbl">💰 Receitas do mês</div><div class="val">${fmtBRL(d.receitasTotal)}</div></div>
-    <div class="kpi despesa"><div class="bar"></div><div class="lbl">💸 Despesas do mês</div><div class="val">${fmtBRL(d.despesasTotal)}</div></div>
-    <div class="kpi saldo"><div class="bar"></div><div class="lbl">⚖️ Saldo do mês</div><div class="val">${fmtBRL(d.saldo)}</div></div>
-    <div class="kpi"><div class="bar"></div><div class="lbl">🐖 % Poupança</div><div class="val">${fmtPercentSmart(d.poupanca*100)}</div></div>
+  <div class="cartoes-resumo-grid">
+    <div class="cartoes-resumo-item receita"><span class="ico">💰</span><div><div class="val">${fmtBRL(d.receitasTotal)}</div><div class="lbl">Receitas do mês</div></div></div>
+    <div class="cartoes-resumo-item despesa"><span class="ico">💸</span><div><div class="val">${fmtBRL(d.despesasTotal)}</div><div class="lbl">Despesas do mês</div></div></div>
+    <div class="cartoes-resumo-item"><span class="ico">⚖️</span><div><div class="val">${fmtBRL(d.saldo)}</div><div class="lbl">Saldo do mês</div></div></div>
+    <div class="cartoes-resumo-item"><span class="ico">🐖</span><div><div class="val">${fmtPercentSmart(d.poupanca*100)}</div><div class="lbl">% Poupança</div></div></div>
   </div>`;
   const ajudaFluxoHtml = `
 <details class="ajuda-fluxo" data-ajuda-dashboard ${UI.ajudaDashboardAberta?'open':''}>
@@ -14587,13 +14592,20 @@ function renderInteligencia(){
   const qtdAtivosIntel = contarFiltrosPadraoAtivos(f, camposFiltroIntel);
   const filtrosAtivosIntel = filtrosPadraoAtivos(f, camposFiltroIntel);
 
+  // "Novos ajustes de interface — modo mobile", item 7: cards do Resumo Executivo seguem o mesmo padrão
+  // visual (dimensões/espaçamento/bordas/tipografia/ícone) já usado em Contas e Cartões/Registros/
+  // Configurações (.cartoes-resumo-item), em vez do antigo .kpi/barra lateral — só com align-items:
+  // flex-start (em vez do center padrão do componente) porque estes cards têm uma 3ª linha opcional
+  // (.hint com Média/Projetado) que nenhum outro cartão-resumo do app tem.
   const cardResumo = (icone, label, valorAtual, valorMedio, valorProjetado, formato)=>{
     const fmt = formato || fmtBRL;
-    return `<div class="kpi" style="min-height:0;">
-      <div class="bar"></div>
-      <div class="lbl">${icone} ${label}</div>
-      <div class="val">${fmt(valorAtual)}</div>
-      ${(valorMedio!==undefined || valorProjetado!==undefined) ? `<div class="hint" style="margin:2px 0 0;">${valorMedio!==undefined?`Média: ${fmt(valorMedio)}`:''}${(valorMedio!==undefined && valorProjetado!==undefined)?' · ':''}${valorProjetado!==undefined?`Projetado: ${fmt(valorProjetado)}`:''}</div>`:''}
+    return `<div class="cartoes-resumo-item" style="align-items:flex-start;">
+      <span class="ico">${icone}</span>
+      <div>
+        <div class="val">${fmt(valorAtual)}</div>
+        <div class="lbl">${label}</div>
+        ${(valorMedio!==undefined || valorProjetado!==undefined) ? `<div class="hint" style="margin:2px 0 0;">${valorMedio!==undefined?`Média: ${fmt(valorMedio)}`:''}${(valorMedio!==undefined && valorProjetado!==undefined)?' · ':''}${valorProjetado!==undefined?`Projetado: ${fmt(valorProjetado)}`:''}</div>`:''}
+      </div>
     </div>`;
   };
 
@@ -14650,15 +14662,17 @@ function renderInteligencia(){
 
   <div class="panel" style="padding-bottom: 8px;">
     <h2>Resumo Executivo</h2>
-    <div class="grid-cards" style="${mobile ? 'grid-template-columns:repeat(2,1fr);' : 'grid-template-columns:repeat(auto-fit,minmax(190px,1fr));'}">
+    <div class="cartoes-resumo-grid" style="${mobile ? 'grid-template-columns:repeat(2,1fr);' : 'grid-template-columns:repeat(auto-fit,minmax(190px,1fr));'}">
       ${cardResumo('💰','Receita Média', ctx.mediaReceita, undefined, ctx.receitaProjetadaMedia)}
       ${cardResumo('💸','Despesa Média', ctx.mediaDespesa, undefined, ctx.despesaProjetadaMedia)}
       ${cardResumo('⚖️','Saldo Médio', ctx.mediaSaldo, undefined, ctx.saldoProjetadoFinal)}
       ${cardResumo('🐖','Poupança Média', ctx.mediaPoupanca*100, undefined, ctx.poupancaProjetadaMedia*100, v=>fmtPercentSmart(v))}
-      <div class="kpi" style="min-height:0;${mobile?'grid-column:1 / -1;':''}">
-        <div class="bar"></div>
-        <div class="lbl">${TENDENCIA_INFO[ctx.tendenciaGeral].emoji} Tendência Financeira</div>
-        <div class="val" style="color:${TENDENCIA_INFO[ctx.tendenciaGeral].cor};">${TENDENCIA_INFO[ctx.tendenciaGeral].label}</div>
+      <div class="cartoes-resumo-item" style="${mobile?'grid-column:1 / -1;':''}">
+        <span class="ico">${TENDENCIA_INFO[ctx.tendenciaGeral].emoji}</span>
+        <div>
+          <div class="val" style="color:${TENDENCIA_INFO[ctx.tendenciaGeral].cor};">${TENDENCIA_INFO[ctx.tendenciaGeral].label}</div>
+          <div class="lbl">Tendência Financeira</div>
+        </div>
       </div>
     </div>
   </div>
@@ -14959,27 +14973,11 @@ function renderResumo(){
         ` : ''}
       </span>
     </h2>
-    <div class="grid-cards">
-      <div class="kpi">
-        <div class="bar"></div>
-        <div class="lbl">💰 Saldo Inicial</div>
-        <div class="val">${fmtBRL(resumoTopo.saldoAtual)}</div>
-      </div>
-      <div class="kpi receita">
-        <div class="bar"></div>
-        <div class="lbl">⬆️ Entradas Projetadas</div>
-        <div class="val">${fmtBRL(resumoTopo.entradas)}</div>
-      </div>
-      <div class="kpi despesa">
-        <div class="bar"></div>
-        <div class="lbl">⬇️ Saídas Projetadas</div>
-        <div class="val">${fmtBRL(resumoTopo.saidas)}</div>
-      </div>
-      <div class="kpi ${classeReceitaDespesaMoeda(resumoTopo.saldoProjetado)}">
-        <div class="bar"></div>
-        <div class="lbl">📆 Saldo Projetado</div>
-        <div class="val">${fmtBRL(resumoTopo.saldoProjetado)}</div>
-      </div>
+    <div class="cartoes-resumo-grid">
+      <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(resumoTopo.saldoAtual)}</div><div class="lbl">Saldo Inicial</div></div></div>
+      <div class="cartoes-resumo-item receita"><span class="ico">⬆️</span><div><div class="val">${fmtBRL(resumoTopo.entradas)}</div><div class="lbl">Entradas Projetadas</div></div></div>
+      <div class="cartoes-resumo-item despesa"><span class="ico">⬇️</span><div><div class="val">${fmtBRL(resumoTopo.saidas)}</div><div class="lbl">Saídas Projetadas</div></div></div>
+      <div class="cartoes-resumo-item ${classeReceitaDespesaMoeda(resumoTopo.saldoProjetado)}"><span class="ico">📆</span><div><div class="val">${fmtBRL(resumoTopo.saldoProjetado)}</div><div class="lbl">Saldo Projetado</div></div></div>
     </div>
     <details class="ajuda-fluxo" data-ajuda-fluxo ${UI.ajudaFluxoAberta?'open':''}>
       <summary>ℹ️ Como funciona a projeção</summary>
@@ -15437,13 +15435,15 @@ function renderMetas(){
   // compartilhada de .grid-cards (ver PR do Painel Financeiro) — nenhuma mudança adicional necessária aqui.
   const mobile = window.innerWidth<=700;
   const cardsResumoHtml = `
-  <div class="grid-cards">
-    <div class="kpi"><div class="bar"></div><div class="lbl">💰 Orçamento Total</div><div class="val">${fmtBRL(r.orcamentoTotal)}</div></div>
-    <div class="kpi despesa"><div class="bar"></div><div class="lbl">💸 Gasto Atual</div><div class="val">${fmtBRL(r.gastoAtual)}</div></div>
-    <div class="kpi ${classeReceitaDespesaMoeda(r.saldoDisponivel)}"><div class="bar"></div><div class="lbl">📊 Saldo Disponível</div><div class="val">${fmtBRL(r.saldoDisponivel)}</div></div>
-    <div class="kpi">
-      <div class="bar"></div><div class="lbl">🎯 Percentual Consumido</div><div class="val">${fmtPercentSmart(r.pctConsumido)}</div>
-      <div class="progress-track" style="margin-top:8px;"><div class="progress-fill" style="width:${Math.min(100,r.pctConsumido)}%;background:${r.pctConsumido>100?'#c0392b':(r.pctConsumido>=80?'#c98f00':'#1e8e5a')};"></div></div>
+  <div class="cartoes-resumo-grid">
+    <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(r.orcamentoTotal)}</div><div class="lbl">Orçamento Total</div></div></div>
+    <div class="cartoes-resumo-item despesa"><span class="ico">💸</span><div><div class="val">${fmtBRL(r.gastoAtual)}</div><div class="lbl">Gasto Atual</div></div></div>
+    <div class="cartoes-resumo-item ${classeReceitaDespesaMoeda(r.saldoDisponivel)}"><span class="ico">📊</span><div><div class="val">${fmtBRL(r.saldoDisponivel)}</div><div class="lbl">Saldo Disponível</div></div></div>
+    <div class="cartoes-resumo-item">
+      <span class="ico">🎯</span>
+      <div><div class="val">${fmtPercentSmart(r.pctConsumido)}</div><div class="lbl">Percentual Consumido</div>
+      <div class="progress-track" style="margin-top:6px;"><div class="progress-fill" style="width:${Math.min(100,r.pctConsumido)}%;background:${r.pctConsumido>100?'#c0392b':(r.pctConsumido>=80?'#c98f00':'#1e8e5a')};"></div></div>
+      </div>
     </div>
   </div>`;
   const ajudaFluxoHtml = `
