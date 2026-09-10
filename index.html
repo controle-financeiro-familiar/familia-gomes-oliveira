@@ -10861,36 +10861,11 @@ function aplicarFocoBotaoIniciarApp(){
   }
   btn.focus({ preventScroll:true });
 }
-/* Foco automático no primeiro campo de cada modal (item 3 do requisito de UX): sempre que o modal aberto
-   no topo da pilha (maior z-index entre os .overlay presentes no DOM neste momento — mesmo cálculo já
-   usado para empilhar/sobrepor modais, ver CAMADAS_MODAL/zIndexModal) muda de identidade em relação à
-   última vez em que já aplicamos o foco, foca automaticamente o primeiro campo editável/interativo do seu
-   conteúdo (nunca um botão de fechar/cancelar) — sem precisar de nenhum código extra em cada modal
-   individualmente. Chamada sempre logo após bindEvents() (nunca antes — o innerHTML já foi trocado
-   sincronamente nesse ponto, então os elementos do modal já estão de fato montados no DOM). Comparar pela
-   identidade (não recalcular a cada render) evita roubar o foco de um campo em que o usuário já está
-   digitando sempre que outra interação dispara um novo render() com o MESMO modal ainda aberto; o passo
-   atual do fluxo de importação (várias etapas dentro do mesmo modal `ovImport`) conta como identidade
-   própria, para focar de novo ao avançar/voltar de passo. Nenhum campo editável no modal (ex.: só
-   confirmação/aviso) → não força foco em nada, mantendo o comportamento atual. */
-let ULTIMO_MODAL_FOCADO = null;
-function primeiroCampoFocavel(container){
-  const sel = 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]):not([disabled]), select:not([disabled]), textarea:not([disabled])';
-  for(const el of container.querySelectorAll(sel)){
-    if(el.getClientRects().length>0) return el;
-  }
-  return null;
-}
-function focarPrimeiroCampoModalAberto(){
-  const overlays = [...document.querySelectorAll('.overlay')];
-  if(!overlays.length){ ULTIMO_MODAL_FOCADO = null; return; }
-  const topo = overlays.reduce((a,b)=> (parseInt(b.style.zIndex)||0) > (parseInt(a.style.zIndex)||0) ? b : a);
-  const chave = topo.id + (topo.id==='ovImport' ? `:${UI.importStep}` : '');
-  if(chave===ULTIMO_MODAL_FOCADO) return;
-  ULTIMO_MODAL_FOCADO = chave;
-  const campo = primeiroCampoFocavel(topo);
-  if(campo) campo.focus();
-}
+/* "Novos ajustes de interface — modo mobile", item 1: o foco automático no primeiro campo de cada modal
+   (que existia aqui antes, ver histórico) foi removido — nenhum campo deve receber foco/abrir o teclado
+   virtual sozinho ao abrir uma aba ou modal; o usuário sempre toca no campo para começar a editar. O foco
+   normal após uma interação manual do usuário (ex.: clicar um campo, ou o foco-no-erro de validação de um
+   formulário) continua funcionando normalmente — só o disparo automático-ao-abrir foi retirado. */
 function render(){
   document.documentElement.classList.toggle('forcar-nav-mobile', UI.forcarNavMobile);
   // "Página inicial e navegação mobile": UI.tab==='inicio' só existe na navegação mobile (não tem
@@ -10914,7 +10889,6 @@ function render(){
   if(!UI.appIniciado && !UI.modalFecharSessao){
     root.innerHTML = renderBannerPWA() + renderTelaInicial() + (UI.backupModal!==null ? renderBackupModal() : "") + (UI.modalInstalarIOS ? renderModalInstalarIOS() : "");
     bindEvents();
-    focarPrimeiroCampoModalAberto();
     if(focarBotaoIniciarAppPendente){ focarBotaoIniciarAppPendente = false; aplicarFocoBotaoIniciarApp(); }
     return;
   }
@@ -10978,7 +10952,6 @@ function render(){
     ${UI.modalFecharSessao ? renderModalFecharSessao() : ""}
   `;
   bindEvents();
-  focarPrimeiroCampoModalAberto();
   animarTransicaoMapaCalor();
   if(UI.tab==="dashboard" || UI.tab==="metas" || UI.tab==="inteligencia" || UI.evolucaoReservaModal!==null){
     // Chart.js mede o tamanho do container do canvas no momento em que é criado. Chamar isso logo após
@@ -19338,12 +19311,13 @@ function bindEvents(){
   // salvarSaldoInicialSeAplicavel, chamado de dentro do próprio saveTextModal). Exceção: contas do tipo
   // Contracheque nunca mostram este botão no card (ver renderPainelContasBancarias), então nunca chegam
   // aqui — preservado o fluxo específico já existente para elas.
+  // "Novos ajustes de interface — modo mobile", item 1: não foca/seleciona mais o campo Saldo Inicial
+  // automaticamente ao abrir este modal — o usuário toca no campo para começar a editar, como em qualquer
+  // outro modal do app.
   document.querySelectorAll('[data-editar-saldo-inicial-conta]').forEach(b=> b.addEventListener('click', ()=>{
     const conta = b.dataset.editarSaldoInicialConta;
     UI.textModal = { tipo:'conta-editar', nome:conta, original:conta, comSaldoInicial:true, saldoAno:UI.ano, saldoMes:UI.mes };
     render();
-    const inp = document.getElementById('fTextModalSaldoInicial');
-    if(inp){ inp.focus(); inp.select(); }
   }));
   // Seletor de período do Extrato Consolidado (ver mesesParaExtratoConsolidado/OPCOES_PERIODO_EXTRATO).
   document.getElementById('selExtratoPeriodo')?.addEventListener('change', e=>{
@@ -20709,6 +20683,11 @@ function bindEvents(){
   document.getElementById('fData')?.addEventListener('change', ()=>{ syncTxForm(); render(); });
   document.getElementById('fDesc')?.addEventListener('blur', ()=>{
     syncTxForm();
+    // Guarda contra o modal ter sido fechado (UI.editingTx=null) enquanto o campo ainda tinha o foco: trocar
+    // o innerHTML em render() remove o elemento focado do DOM, o que por si só já dispara este blur — sem
+    // esse guard, isso lançava um erro (UI.editingTx.categoria de um UI.editingTx nulo) sempre que o usuário
+    // fechava o modal logo depois de editar a Descrição, sem antes tirar o foco do campo manualmente.
+    if(!UI.editingTx) return;
     // Só sugere automaticamente se a subcategoria ainda estiver vazia — não sobrescreve uma classificação
     // que o usuário já tenha escolhido manualmente antes de terminar de digitar a descrição.
     if(UI.editingTx.categoria) return;
