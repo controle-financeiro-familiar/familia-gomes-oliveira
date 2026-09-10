@@ -339,6 +339,19 @@ input,select{font-family:var(--sans);}
    sozinho) o space-between por si só não empurra mais nada para a direita; margin-left:auto resolve isso
    incondicionalmente, com ou sem quebra. */
 @media(max-width:700px){ .panel h2 > button.no-print{ margin-left:auto; } }
+/* "Ajustes de interface — modo mobile", item 5 (Extrato Consolidado): com "Período Personalizado" ativo,
+   os 3 seletores (período principal, De, Até) reorganizam-se em 3 linhas empilhadas no mobile — cada
+   ".extrato-periodo-linha" ocupa 100% da largura, com altura/alinhamento consistentes entre si (mesma
+   .extrato-periodo-inline select/input já usados no desktop). No desktop nada muda: os 3 grupos continuam
+   lado a lado na mesma linha do h2 (ver .extrato-periodo-inline, display:flex + flex-wrap como rede de
+   segurança apenas para telas muito estreitas). */
+@media(max-width:700px){
+  .extrato-periodo-inline{flex-direction:column;align-items:stretch;width:100%;}
+  .extrato-periodo-linha{width:100%;}
+  .extrato-periodo-linha label{flex:0 0 auto;min-width:34px;}
+  .extrato-periodo-linha select{flex:1;min-width:0;}
+  .extrato-periodo-linha input[type="number"]{flex:1;min-width:0;width:auto;}
+}
 .pwa-banner{background:var(--navy-900);color:#fff;font-size:12.5px;padding:8px 16px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;text-align:center;}
 
 .tabbar{max-width:1280px;margin:0 auto;display:flex;justify-content:space-around;gap:2px;padding:0 20px;overflow:hidden;flex-wrap:nowrap;}
@@ -575,6 +588,7 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
    De/Até entram neste MESMO <span> (nunca uma 2ª linha) — flex-wrap é só uma rede de segurança para telas
    muito estreitas, nunca o comportamento normal em desktop. */
 .extrato-periodo-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:var(--sans);font-weight:400;text-transform:none;letter-spacing:normal;font-size:12.5px;color:#5b6b85;}
+.extrato-periodo-linha{display:flex;align-items:center;gap:8px;}
 /* Item 2 do requisito: os 3 selects (período principal, De, Até) e os 2 inputs de ano (que ficam ao lado
    dos selects De/Até) precisam ter EXATAMENTE a mesma altura — <select> e <input type="number"> têm chrome
    nativo de altura ligeiramente diferente por padrão (o spinner do number, principalmente), então altura
@@ -1010,7 +1024,10 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
   .tabela-fluxo td.tabela-fluxo-acoes{justify-content:flex-end;gap:14px;}
   .tabela-fluxo td.tabela-fluxo-acoes .icon-btn{min-width:var(--touch-min);font-size:16px;}
   .tabela-fluxo .linha-saldo-atual-label{display:block;padding:5px 0;font-weight:700;}
-  .tabela-fluxo .linha-nao-listados-label{display:block;padding:5px 0;}
+  /* "Ajustes de interface — modo mobile", item 5: no card mobile da linha "Lançamentos não listados", o
+     texto do rótulo fica alinhado à direita (os demais valores/ícones/informações da linha continuam como
+     estavam — Dia, Status, Valor, Saldo e o botão 🔍 de auditoria não mudam). */
+  .tabela-fluxo .linha-nao-listados-label{display:block;padding:5px 0;text-align:right;}
   /* Item 8 do requisito: a primeira linha do card (coluna "Dia") fica inteira em negrito — rótulo e valor —
      não só o valor da data — e com um background de destaque, sangrando até as bordas do card (a mesma
      margin negativa do padding do card, ver .tabela-fluxo tr acima) para ler como um "cabeçalho" da linha,
@@ -1677,6 +1694,16 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
   background:var(--navy-900);color:#fff;border-radius:12px 12px 0 0;position:sticky;top:0;
 }
 .modal-head h3{margin:0;font-size:15px;font-family:var(--mono);}
+/* "Ajustes de interface — modo mobile", item 5: título em 2 linhas do modal "Lançamentos não listados"
+   (renderNaoListadosModal) — o ícone 🧾 fica verticalmente centralizado em relação ÀS DUAS linhas juntas
+   (nome + intervalo), nunca só à primeira, por isso o h3 vira um flex-row com o ícone como 1º item e uma
+   coluna (flex-column) com as 2 linhas como 2º item; a 2ª linha usa peso normal e opacidade reduzida para
+   manter a 1ª linha (o nome) como destaque principal do título, igual aos demais modais do app. */
+.nao-listados-modal-titulo{display:flex;align-items:center;gap:8px;}
+.nao-listados-modal-titulo-icone{flex-shrink:0;font-size:17px;line-height:1;}
+.nao-listados-modal-titulo-linhas{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.nao-listados-modal-titulo-linha1{font-weight:700;}
+.nao-listados-modal-titulo-linha2{font-weight:400;font-size:12.5px;opacity:.75;}
 /* Título do modal "Importar arquivo do banco": no desktop, o nome da conta some junto do rótulo assim que
    é definido, na mesma linha ("Título — Conta", igual aos demais modais do app). No mobile, o requisito é
    diferente por completo — nunca a mesma linha (mesmo havendo espaço) e só a partir do passo 3 da
@@ -10477,7 +10504,9 @@ function mesesParaExtratoConsolidado(){
   return calcProjecoesMultiMes(UI.ano, UI.mes, 4);
 }
 /* Resumo agregado do período selecionado no Extrato Consolidado (requisito "Extrato Consolidado" seção
-   12): Saldo Atual (saldo real no início da projeção — o próprio saldoInicial do 1º mês incluído),
+   12): Saldo Inicial (saldo real no início da projeção — o próprio saldoInicial do 1º mês incluído; card
+   renomeado de "Saldo Atual" para "Saldo Inicial" — ver "Ajustes de interface — modo mobile" item 5 — pois
+   é sempre o mesmo valor já exibido no campo "Saldo Inicial" logo abaixo, nunca o saldo do dia de hoje),
    Entradas/Saídas Projetadas (soma de todo o período, incluindo as linhas de "Lançamentos não listados"
    pelo sinal do valor líquido já consolidado) e Saldo Projetado (saldoFinal do ÚLTIMO mês incluído). Não
    recalcula nada por conta própria — só agrega os valores que calcProjecoesMes/calcProjecoesMultiMes já
@@ -14232,7 +14261,12 @@ function renderNaoListadosModal(){
   const { ano, mes, diaIni, diaFim } = cfg;
   const itens = registrosNaoListadosDoIntervalo(ano, mes, diaIni, diaFim).slice().sort((a,b)=> a.data<b.data?-1:(a.data>b.data?1:0));
   const total = itens.reduce((s,t)=> s + (t.tipo==='Receita' ? (Number(t.valor)||0) : (t.tipo==='Despesa' ? -(Number(t.valor)||0) : 0)), 0);
-  const intervaloTexto = diaIni===diaFim ? `dia ${pad2(diaIni)}` : `dias ${pad2(diaIni)} a ${pad2(diaFim)}`;
+  // "Ajustes de interface — modo mobile", item 5: o título do modal passa a ter 2 linhas (nome + intervalo
+  // exibido por extenso, ex.: "01 a 06 de Janeiro de 2026" — sem o prefixo "dia(s)", que fazia mais sentido
+  // só na frase corrida anterior), com o ícone verticalmente centralizado em relação às DUAS linhas juntas
+  // (ver .nao-listados-modal-titulo abaixo) — mantém o título compacto e legível também no mobile.
+  const tituloDiaTexto = diaIni===diaFim ? pad2(diaIni) : `${pad2(diaIni)} a ${pad2(diaFim)}`;
+  const tituloLinha2 = `${tituloDiaTexto} de ${MESES[mes-1]} de ${ano}`;
   // Paginação (requisito "Ajustes no Extrato Consolidado #3" item 5) — mesmo componente/padrão já usado em
   // Ver Extrato/Lançamentos futuros/Mapa de Calor (renderRodapePaginacaoGenerica), nunca uma lógica própria.
   const porPagina = cfg.porPagina || 10;
@@ -14247,7 +14281,16 @@ function renderNaoListadosModal(){
   return `
   <div class="overlay" id="ovNaoListadosModal" ${attrZIndexModal('naoListadosModal')}>
     <div class="modal" style="width:100%;max-width:900px;">
-      <div class="modal-head"><h3>🧾 Lançamentos não listados — ${intervaloTexto} de ${MESES[mes-1]}/${ano}</h3><button class="close-x" id="closeNaoListadosModal">✕</button></div>
+      <div class="modal-head">
+        <h3 class="nao-listados-modal-titulo">
+          <span class="nao-listados-modal-titulo-icone">🧾</span>
+          <span class="nao-listados-modal-titulo-linhas">
+            <span class="nao-listados-modal-titulo-linha1">Lançamentos não listados</span>
+            <span class="nao-listados-modal-titulo-linha2">${tituloLinha2}</span>
+          </span>
+        </h3>
+        <button class="close-x" id="closeNaoListadosModal">✕</button>
+      </div>
       <div class="modal-body">
         <p class="hint" style="margin-top:0;">Registros reais das contas do Extrato Consolidado neste intervalo, sem linha própria na tabela (nem projeção, nem realização de nenhum lançamento previsto), somados na linha "Lançamentos não listados". Somente consulta — para editar ou excluir um lançamento, use a aba Registros.</p>
         ${itens.length ? `
@@ -14837,22 +14880,28 @@ function renderResumo(){
     <h2>
       <span>Extrato Consolidado</span>
       <span class="extrato-periodo-inline">
-        <label for="selExtratoPeriodo">Período</label>
-        <select id="selExtratoPeriodo">${OPCOES_PERIODO_EXTRATO.map(([v,nome])=>`<option value="${v}" ${modoPeriodo===v?'selected':''}>${nome}</option>`).join('')}</select>
+        <span class="extrato-periodo-linha extrato-periodo-linha-principal">
+          <label for="selExtratoPeriodo">Período</label>
+          <select id="selExtratoPeriodo">${OPCOES_PERIODO_EXTRATO.map(([v,nome])=>`<option value="${v}" ${modoPeriodo===v?'selected':''}>${nome}</option>`).join('')}</select>
+        </span>
         ${modoPeriodo==='personalizado' ? `
-        <label for="selExtratoPeriodoMesIni">De</label>
-        <select id="selExtratoPeriodoMesIni">${MESES.map((n,i)=>`<option value="${i+1}" ${Number(pPersonalizado.mesIni)===i+1?'selected':''}>${n}</option>`).join('')}</select>
-        <input type="number" step="1" id="inpExtratoPeriodoAnoIni" value="${pPersonalizado.anoIni}">
-        <label for="selExtratoPeriodoMesFim">Até</label>
-        <select id="selExtratoPeriodoMesFim">${MESES.map((n,i)=>`<option value="${i+1}" ${Number(pPersonalizado.mesFim)===i+1?'selected':''}>${n}</option>`).join('')}</select>
-        <input type="number" step="1" id="inpExtratoPeriodoAnoFim" value="${pPersonalizado.anoFim}">
+        <span class="extrato-periodo-linha extrato-periodo-linha-de">
+          <label for="selExtratoPeriodoMesIni">De</label>
+          <select id="selExtratoPeriodoMesIni">${MESES.map((n,i)=>`<option value="${i+1}" ${Number(pPersonalizado.mesIni)===i+1?'selected':''}>${n}</option>`).join('')}</select>
+          <input type="number" step="1" id="inpExtratoPeriodoAnoIni" value="${pPersonalizado.anoIni}">
+        </span>
+        <span class="extrato-periodo-linha extrato-periodo-linha-ate">
+          <label for="selExtratoPeriodoMesFim">Até</label>
+          <select id="selExtratoPeriodoMesFim">${MESES.map((n,i)=>`<option value="${i+1}" ${Number(pPersonalizado.mesFim)===i+1?'selected':''}>${n}</option>`).join('')}</select>
+          <input type="number" step="1" id="inpExtratoPeriodoAnoFim" value="${pPersonalizado.anoFim}">
+        </span>
         ` : ''}
       </span>
     </h2>
     <div class="grid-cards">
       <div class="kpi">
         <div class="bar"></div>
-        <div class="lbl">💰 Saldo Atual</div>
+        <div class="lbl">💰 Saldo Inicial</div>
         <div class="val">${fmtBRL(resumoTopo.saldoAtual)}</div>
       </div>
       <div class="kpi receita">
@@ -14874,11 +14923,11 @@ function renderResumo(){
     <details class="ajuda-fluxo" data-ajuda-fluxo ${UI.ajudaFluxoAberta?'open':''}>
       <summary>ℹ️ Como funciona a projeção</summary>
       <div class="ajuda-fluxo-conteudo">
-        <p>O <b>Saldo Atual</b> é calculado automaticamente a partir do saldo de cada conta cadastrada; use o ícone <b>✏️</b> ao lado do campo "Saldo Inicial" abaixo para ajustar o saldo inicial de cada conta individualmente. Use o seletor <b>Período</b> para escolher o intervalo exibido — o padrão é <b>Próximos 3 meses</b> (o mês atual e os três meses seguintes).</p>
+        <p>O <b>Saldo Inicial</b> é calculado automaticamente a partir do saldo de cada conta cadastrada; use o ícone <b>✏️</b> ao lado do campo "Saldo Inicial" abaixo para ajustar o saldo inicial de cada conta individualmente. Use o seletor <b>Período</b> para escolher o intervalo exibido — o padrão é <b>Próximos 3 meses</b> (o mês atual e os três meses seguintes).</p>
         <p>Utilize o botão <b>+ Novo Lançamento Previsto</b> para incluir novos lançamentos e os ícones <b>✏️ Editar</b> e <b>🗑️ Excluir</b> para alterar ou remover lançamentos existentes. Os <b>lançamentos previstos</b> (Dia, Descrição, Tipo e Valor) são recorrentes e, por padrão, são replicados automaticamente em todos os meses da projeção, exceto quando um <b>mês de início específico</b> for definido no momento do cadastro. Para lançamentos vinculados a <b>cartões de crédito</b>, o campo <b>Valor</b> é calculado automaticamente com base no valor total da fatura correspondente a cada competência, não sendo necessária edição manual. O campo <b>Saldo</b> é sempre calculado automaticamente e não pode ser editado.</p>
         <p style="margin-bottom:6px;">O cálculo segue a seguinte lógica:</p>
         <ul>
-          <li>O <b>Saldo Atual</b> do primeiro mês do período é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança cadastrada (não inclui Contracheque, Reserva de Emergência nem cartões de crédito) — o mesmo valor já calculado no painel Contas;</li>
+          <li>O <b>Saldo Inicial</b> do primeiro mês do período é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança cadastrada (não inclui Contracheque, Reserva de Emergência nem cartões de crédito) — o mesmo valor já calculado no painel Contas;</li>
           <li>Acumula o efeito de cada lançamento em ordem cronológica — cada linha mostra o <b>Saldo Consolidado</b> exatamente até aquele ponto, nunca a simples soma de receitas e despesas do período;</li>
           <li>O <b>saldo final</b> de cada mês torna-se automaticamente o <b>saldo inicial</b> do mês seguinte, garantindo a continuidade da projeção financeira;</li>
           <li>A coluna <b>Status</b> indica 🟢 Realizado (movimentação real sem projeção associada), 🔵 Projetado (ainda não identificado no Extrato), 🟡 Conforme (já conciliado com o Extrato — ver o selo 🔗/⏪/⏩ ao lado da descrição — e com valor igual ao previsto) ou 🔴 Divergente (também já conciliado, mas com valor diferente do previsto);</li>
