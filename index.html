@@ -15327,7 +15327,12 @@ function renderMetas(){
   const r = calcResumoMetas(competencia);
   const alturaBarra = Math.max(140, 46 + r.lista.length*40);
   const indicadores = indicadoresMetas(r.lista, competencia);
-  return `
+  // "Ajustes de interface — modo mobile", item 4: no mobile, o ajuda-fluxo passa a ser o 1º item da aba,
+  // antes até dos cards-resumo (mesmo princípio já aplicado ao Painel Financeiro) — no desktop mantém a
+  // posição original (depois dos cards). Cards-resumo em si já ficam 2x2 no mobile pela mesma regra
+  // compartilhada de .grid-cards (ver PR do Painel Financeiro) — nenhuma mudança adicional necessária aqui.
+  const mobile = window.innerWidth<=700;
+  const cardsResumoHtml = `
   <div class="grid-cards">
     <div class="kpi"><div class="bar"></div><div class="lbl">💰 Orçamento Total</div><div class="val">${fmtBRL(r.orcamentoTotal)}</div></div>
     <div class="kpi despesa"><div class="bar"></div><div class="lbl">💸 Gasto Atual</div><div class="val">${fmtBRL(r.gastoAtual)}</div></div>
@@ -15336,7 +15341,8 @@ function renderMetas(){
       <div class="bar"></div><div class="lbl">🎯 Percentual Consumido</div><div class="val">${fmtPercentSmart(r.pctConsumido)}</div>
       <div class="progress-track" style="margin-top:8px;"><div class="progress-fill" style="width:${Math.min(100,r.pctConsumido)}%;background:${r.pctConsumido>100?'#c0392b':(r.pctConsumido>=80?'#c98f00':'#1e8e5a')};"></div></div>
     </div>
-  </div>
+  </div>`;
+  const ajudaFluxoHtml = `
   <details class="ajuda-fluxo" data-ajuda-metas ${UI.ajudaMetasAberta?'open':''}>
     <summary>ℹ️ Informações sobre esta tela</summary>
     <div class="ajuda-fluxo-conteudo">
@@ -15345,7 +15351,11 @@ function renderMetas(){
       <p><b>Recorrência</b>: metas mensais/trimestrais/semestrais/anuais se repetem automaticamente a partir do período inicial, sem precisar recriá-las a cada competência.</p>
       <p style="margin-bottom:0;"><b>Situação</b>: compara o gasto já lançado (mesmo critério usado no Painel Financeiro e no Extrato Consolidado) com o valor da meta, sinalizando quando ela está próxima do limite ou já foi ultrapassada.</p>
     </div>
-  </details>
+  </details>`;
+  return `
+  ${mobile ? ajudaFluxoHtml : ''}
+  ${cardsResumoHtml}
+  ${mobile ? '' : ajudaFluxoHtml}
   ${renderAlertasMetas(r.lista)}
   <div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
