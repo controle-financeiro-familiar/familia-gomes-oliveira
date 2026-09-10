@@ -880,6 +880,24 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 .grafico-expandido-corpo{flex:1 1 auto;min-height:0;overflow:auto;padding:10px 14px;position:relative;}
 .mc-expandido{height:100%;display:flex;flex-direction:column;}
 .mc-expandido .mc-scroll{flex:1 1 auto;}
+/* "Novos ajustes de interface — modo mobile", item 8: card informativo do Mapa de Calor no mobile (ver
+   renderMapaCalorPlaceholderMobile) — visualmente integrado ao restante do painel (mesma paleta/raio de
+   borda do resto do app), mas com borda tracejada para se diferenciar de um card de dado comum e sinalizar
+   "isto é uma ação, toque aqui", nunca um estado de erro. O elemento inteiro é um <button>, então já ganha
+   :hover/:active e semântica de toque sem nenhum JS extra. */
+.mc-placeholder-mobile{
+  display:block;width:100%;text-align:center;padding:28px 16px;border:1.5px dashed var(--line);
+  border-radius:var(--radius-md);background:var(--navy-50);cursor:pointer;font-family:var(--sans);
+  transition:background .15s,border-color .15s;
+}
+.mc-placeholder-mobile:hover,.mc-placeholder-mobile:active{background:#e8edf7;border-color:var(--navy-300,#9db2d6);}
+.mc-placeholder-icone{font-size:32px;line-height:1;display:block;margin-bottom:10px;}
+.mc-placeholder-titulo{font-size:14.5px;font-weight:700;color:var(--navy-900);margin-bottom:4px;}
+.mc-placeholder-texto{margin:0 0 14px;font-size:12.5px;color:#6a7a97;line-height:1.4;}
+.mc-placeholder-acao{
+  display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--navy-900);
+  background:#fff;border:1px solid var(--line);border-radius:var(--radius-full);padding:7px 14px;
+}
 @media(max-width:700px){
   .mc-scroll{padding:6px;}
   .mc-grid{min-width:520px;gap:2px;}
@@ -11736,12 +11754,32 @@ function renderMapaCalorDespesas(){
   // expandido, este painel compacto não é renderizado (evita o mesmo id="painelMapaCalorDespesas" duas
   // vezes na página) — a visão expandida cobre a tela toda de qualquer forma.
   if(UI.graficoExpandido==='mapaCalor') return '';
+  // "Novos ajustes de interface — modo mobile", item 8: no mobile, o espaço reduzido nunca chega a mostrar
+  // a grade compacta (ilegível/cortada nessa largura) — mostra um card informativo no lugar (ver
+  // renderMapaCalorPlaceholderMobile), com uma chamada clara para abrir em tela cheia. O botão ⛶ do
+  // cabeçalho, redundante com o próprio card sendo clicável, só aparece no desktop. A funcionalidade do
+  // gráfico em si nunca é removida — só a apresentação inicial no espaço pequeno muda.
+  const mobile = window.innerWidth<=700;
   return `
   <div class="panel" id="painelMapaCalorDespesas">
-    <h2>🔥 Mapa de Calor de Despesas <button type="button" class="btn-expandir-grafico no-print" data-grafico-expandir-btn="mapaCalor" title="Expandir em tela cheia" aria-label="Expandir gráfico em tela cheia">⛶</button></h2>
+    <h2>🔥 Mapa de Calor de Despesas ${mobile ? '' : `<button type="button" class="btn-expandir-grafico no-print" data-grafico-expandir-btn="mapaCalor" title="Expandir em tela cheia" aria-label="Expandir gráfico em tela cheia">⛶</button>`}</h2>
     <p class="hint" style="margin:0 0 12px;">Intensidade da cor é proporcional ao total de despesas lançadas em cada dia — quanto mais forte o vermelho, maior o gasto naquele dia. Clique num dia com despesas para ver os lançamentos. 3 meses antes e 3 meses depois de ${MESES[UI.mes-1]}/${UI.ano}, o mês atual, destacado abaixo.</p>
-    ${renderMapaCalorConteudo()}
+    ${mobile ? renderMapaCalorPlaceholderMobile() : renderMapaCalorConteudo()}
   </div>`;
+}
+/* "Novos ajustes de interface — modo mobile", item 8: card informativo mostrado no lugar do Mapa de Calor
+   compacto, só no mobile — comunica que a tela é pequena demais para o gráfico e convida a tocar para abrir
+   em tela cheia. O card inteiro é o alvo do toque: carrega o MESMO data-grafico-expandir-btn="mapaCalor" já
+   usado pelo botão ⛶ (ver bindEvents, delegação genérica em [data-grafico-expandir-btn]), então reaproveita
+   o mecanismo de expansão existente sem nenhum handler novo. */
+function renderMapaCalorPlaceholderMobile(){
+  return `
+  <button type="button" class="mc-placeholder-mobile" data-grafico-expandir-btn="mapaCalor">
+    <span class="mc-placeholder-icone">📊🔍</span>
+    <div class="mc-placeholder-titulo">Gráfico não exibido</div>
+    <p class="mc-placeholder-texto">A tela é muito pequena para renderizar este gráfico corretamente.</p>
+    <div class="mc-placeholder-acao">👆 Toque para visualizar o gráfico completo</div>
+  </button>`;
 }
 /* Item do requisito ("animação temporal"): quando o período do cabeçalho muda (setas de mês/ano), o Mapa
    de Calor não troca instantaneamente — as células que representam a MESMA data em ambas as janelas de 6
