@@ -731,15 +731,26 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
    centralizados abaixo, empilhados com espaçamento vertical (ver uso em renderInteligencia). */
 .cenario-card-mobile{border:1px solid var(--line);border-radius:8px;padding:10px 10px;}
 .cenario-cabecalho-mobile{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;}
-.cenario-cabecalho-mobile .cenario-titulo{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;}
-.cenario-variacao-mobile{display:flex;align-items:center;gap:4px;flex:0 0 auto;margin-left:auto;}
-.cenario-variacao-label{font-size:8px;color:#5b6b85;white-space:nowrap;text-transform:uppercase;letter-spacing:.1px;}
+/* "Novos ajustes de interface — modo mobile", item 9: título do card com fonte maior (13.5px, antes 12.5px)
+   para melhorar a hierarquia visual — o bloco de variações ao lado foi comprimido o suficiente (ver
+   .cenario-variacao-label/.cenario-input-grupo-mobile abaixo) para que "Conservador"/"Otimista" continuem
+   cabendo por inteiro, nunca cortados por reticências (medido/confirmado via teste automatizado). */
+.cenario-cabecalho-mobile .cenario-titulo{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px;}
+.cenario-variacao-mobile{display:flex;align-items:center;gap:3px;flex:0 0 auto;margin-left:auto;}
+.cenario-variacao-label{font-size:7.5px;color:#5b6b85;white-space:nowrap;text-transform:uppercase;letter-spacing:.1px;}
 .cenario-input-grupo-mobile{display:flex;align-items:center;gap:1px;font-size:10px;font-weight:700;color:#5b6b85;white-space:nowrap;}
-.cenario-input-grupo-mobile .cenario-input-3d{width:30px;min-height:20px;font-size:10px;padding:0;text-align:center;}
+.cenario-input-grupo-mobile .cenario-input-3d{width:28px;min-height:20px;font-size:10px;padding:0;text-align:center;}
 .cenario-indicadores-mobile{display:flex;flex-direction:column;gap:10px;margin-top:12px;}
 .cenario-indicador-mobile{display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px;}
 .cenario-indicador-mobile .hint{font-size:10.5px;margin:0;}
 .cenario-indicador-mobile b{font-size:15px;}
+/* Item 9 do requisito: Saldo Projetado com fonte maior/destaque (fica sozinho na 1ª linha do bloco de
+   indicadores); Poupança Projetada e Patrimônio Projetado passam para uma 2ª linha, lado a lado
+   (space-around distribui o espaço uniformemente entre os dois, sem quebrar para linhas diferentes
+   enquanto houver espaço — testado nas larguras de mobile suportadas pelo app). */
+.cenario-indicador-mobile.cenario-indicador-destaque b{font-size:19px;}
+.cenario-indicadores-mobile-linha2{display:flex;justify-content:space-around;gap:8px;}
+.cenario-indicadores-mobile-linha2 .cenario-indicador-mobile{flex:1 1 0;min-width:0;}
 @media(max-width:900px){.grid-cards{grid-template-columns:repeat(2,1fr);}}
 .kpi{border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;background:var(--paper);position:relative;overflow:hidden;}
 .kpi .lbl{font-size:11.5px;color:#5b6b85;font-weight:600;text-transform:uppercase;letter-spacing:.3px;}
@@ -14803,9 +14814,11 @@ function renderInteligencia(){
             </div>` : ''}
           </div>
           <div class="cenario-indicadores-mobile">
-            <div class="cenario-indicador-mobile"><span class="hint">Saldo Projetado</span><b class="${c.saldo>=0?'val-cell pos':'val-cell neg'}">${fmtBRL(c.saldo)}</b></div>
-            <div class="cenario-indicador-mobile"><span class="hint">Poupança Projetada</span><b>${fmtPercentSmart(c.poupanca*100)}</b></div>
-            <div class="cenario-indicador-mobile"><span class="hint">Patrimônio Projetado</span><b>${fmtBRL(c.patrimonioProjetado)}</b></div>
+            <div class="cenario-indicador-mobile cenario-indicador-destaque"><span class="hint">Saldo Projetado</span><b class="${c.saldo>=0?'val-cell pos':'val-cell neg'}">${fmtBRL(c.saldo)}</b></div>
+            <div class="cenario-indicadores-mobile-linha2">
+              <div class="cenario-indicador-mobile"><span class="hint">Poupança Projetada</span><b>${fmtPercentSmart(c.poupanca*100)}</b></div>
+              <div class="cenario-indicador-mobile"><span class="hint">Patrimônio Projetado</span><b>${fmtBRL(c.patrimonioProjetado)}</b></div>
+            </div>
           </div>
         </div>`;
           return `
