@@ -14950,14 +14950,8 @@ function renderResumo(){
         </ul>
       </div>
     </details>
-    <div class="saldo-inicial-row">
-      <div class="field" style="margin-bottom:0;">
-        <label>Saldo Inicial (R$)</label>
-        <div class="saldo-inicial-somente-leitura">${fmtBRL(meses[0]?.saldoInicial ?? 0)} ${primeiroMesEhCompetenciaAtual ? `<button type="button" class="icon-btn" id="btnEditarSaldoInicialFluxoCaixa" title="Editar os saldos iniciais das contas">✏️</button>` : ''}</div>
-      </div>
-      <button class="btn btn-primary btn-sm" id="btnNovaProjecao">+ Novo lançamento previsto</button>
-    </div>
-    ${renderAbasMesesExtrato(meses, UI.extratoAbaMes)}
+    <button class="btn btn-primary btn-sm" id="btnNovaProjecao">+ Novo lançamento previsto</button>
+	${renderAbasMesesExtrato(meses, UI.extratoAbaMes)}
     ${mesAtivoExtrato ? renderTabelaMesExtrato(mesAtivoExtrato) : ''}
   </div>
   ${UI.editarSaldoInicialFluxoCaixaModal ? renderEditarSaldoInicialFluxoCaixaModal() : ""}`;
