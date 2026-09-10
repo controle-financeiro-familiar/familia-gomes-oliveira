@@ -1137,8 +1137,15 @@ tbody tr:hover{background:var(--navy-50);}
 }
 .reg-grupo-data{margin-bottom:var(--sp-4);}
 .reg-grupo-data-titulo{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#8393ac;padding:0 2px 6px;}
+/* "Ajustes de interface — modo mobile", item 7: align-items:center (em vez do antigo flex-start) garante
+   que a caixa de seleção (.reg-card-check) fique sempre verticalmente centralizada em relação ao conteúdo
+   principal do card (.reg-card-principal), nunca alinhada ao topo/base — vale para qualquer quantidade de
+   linhas em .reg-card-principal (descrição+valor, grupo/conta+tag, e as tags extras opcionais de parcela/
+   responsável/lançamento interno), já que o alinhamento passa a acompanhar o item mais alto do card
+   automaticamente, sem precisar calcular a altura manualmente. O menu ⋮ (.reg-card-menu) também passa a
+   ficar centralizado pelo mesmo motivo — mesma lógica de alinhamento para os 3 itens do flex-row. */
 .reg-card{
-  display:flex;align-items:flex-start;gap:8px;background:var(--paper);border:1px solid var(--line);
+  display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--line);
   border-radius:var(--radius-md);padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-2);position:relative;
 }
 /* Item 13 do requisito: no mobile, tocar em qualquer parte do card (fora da caixa de seleção e do menu ⋮)
