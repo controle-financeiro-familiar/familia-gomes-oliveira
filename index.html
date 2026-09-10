@@ -2052,7 +2052,7 @@ summary::marker{content:'';}
 /* ---- Aba Contas e Cartões ---- */
 .cartoes-resumo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
 /* Item 17 do requisito: resumo do painel Cartões — usa flex em vez de grid, então quando o último card
-   (ex.: "parcelado em aberto") sobra sozinho numa linha, ele estica (flex:1) até preencher todo o espaço
+   (ex.: "total parcelado em aberto") sobra sozinho numa linha, ele estica (flex:1) até preencher todo o espaço
    horizontal restante, em vez de ficar do tamanho de uma única coluna com vazio ao lado. Responsivo em
    qualquer largura (desktop ou mobile), já que é o mesmo flex-wrap em ambos. */
 .cartoes-resumo-grid-flex-fill{display:flex;flex-wrap:wrap;}
@@ -2063,6 +2063,14 @@ summary::marker{content:'';}
    por todo o restante do app, preservando o empilhamento/adaptação existente no mobile. */
 .cartoes-resumo-grid-contas{grid-template-columns:repeat(5,1fr);}
 @media(max-width:900px){ .cartoes-resumo-grid-contas{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));} }
+/* "Ajustes de interface — modo mobile", item 6 (Contas e Cartões): no mobile, o 1º card ("conta(s)") ocupa
+   100% da largura do painel sozinho numa linha, e os 4 cards seguintes (saldo inicial/saldo líquido/
+   entradas/saídas) formam uma grade 2x2 — em vez do auto-fit genérico usado entre 700px e 900px, que
+   deixaria a quantidade de colunas variar conforme o espaço disponível. */
+@media(max-width:700px){
+  .cartoes-resumo-grid-contas{grid-template-columns:repeat(2,1fr);}
+  .cartoes-resumo-grid-contas .cartoes-resumo-item:first-child{grid-column:1 / -1;}
+}
 /* Modal "Ver detalhes" de Economias — agrupamento Categoria → Subcategoria → lançamentos. */
 .aportes-categoria-bloco{margin-bottom:14px;}
 .aportes-categoria-bloco:last-child{margin-bottom:0;}
@@ -13466,7 +13474,7 @@ function renderCartoes(){
       <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(resumo.valorTotal)}</div><div class="lbl">total das faturas</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">🟢</span><div><div class="val">${resumo.pagas}</div><div class="lbl">paga${resumo.pagas===1?'':'s'}</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">🟡</span><div><div class="val">${resumo.pendentes}</div><div class="lbl">pendente${resumo.pendentes===1?'':'s'}</div></div></div>
-      <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(resumo.saldoParceladoTotal)}</div><div class="lbl">parcelado em aberto</div></div></div>
+      <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(resumo.saldoParceladoTotal)}</div><div class="lbl">total parcelado em aberto</div></div></div>
     </div>
     <div class="table-wrap table-wrap-cartoes" style="overflow-x:auto;" data-ordenar-tabela="cartoes"><table class="tabela-cartoes" style="table-layout:fixed;width:100%;">
       <thead><tr>
