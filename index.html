@@ -5259,6 +5259,7 @@ let UI = {
   iosInstallDismissed: false, // true depois que o usuário dispensa a faixa "Adicionar à tela inicial" no Safari/iOS (que não dispara beforeinstallprompt) — só dura a sessão atual, igual ao Chrome
   modalInstalarIOS: false, // true = passo a passo manual de "Adicionar à Tela de Início" está aberto (Safari/iOS)
   backupModal: null, // { aba:'historico'|'config', backups:[...]|null, carregando:bool, selecionados:Set, filtros:{tipo:Set,aberto}, excluindo:{processados,total,nome}|null } — tela "Backup e Restauração" (null = fechada)
+  contaMicrosoftModal: false, // "Novos ajustes de interface — modo mobile", item 4: card "Conta Microsoft" da página inicial — modal simples com só "Trocar de conta"/"Sair da conta" (true = aberto)
   cartoesSecaoAtiva: 'contas', // 'contas' | 'cartoes' — qual painel do acordeão da aba Contas e Cartões está expandido
   appIniciado: false, // só true depois do clique explícito em "<svg width="13" height="13" viewBox="-0.016 0 0.39 0.39" xmlns="http://www.w3.org/2000/svg"><path d="M.36.21v.001a.2.2 0 0 1-.015.07V.28C.317.345.253.39.179.39S.042.345.015.281V.28A.2.2 0 0 1 0 .211V.21C0 .152.028.1.072.067A.03.03 0 0 1 .095.061a.03.03 0 0 1 .019.012.03.03 0 0 1 .006.022.03.03 0 0 1-.012.02.12.12 0 0 0-.048.096.12.12 0 1 0 .192-.096.03.03 0 0 1-.012-.02.03.03 0 0 1 .006-.022.03.03 0 0 1 .02-.012.03.03 0 0 1 .022.006A.18.18 0 0 1 .36.21M.21.03v.151a.03.03 0 0 1-.06 0V.03q0-.013.009-.021T.18 0c.013-.001.016.003.021.009A.03.03 0 0 1 .21.03"/></svg>️ Iniciar App" — a tela inicial nunca dá lugar ao app sozinha, mesmo com os dois arquivos já prontos
   importTotaisEmprestimo: null, // { [descricao]: {totalParcelas, parcelamentoId} } — totais confirmados nesta importação (novos + detectados)
@@ -5408,6 +5409,7 @@ const CAMADAS_MODAL = [
   'confirmDelParcela',                 // ovConfirmDelParcela — confirmar exclusão de parcela
   'confirmEditarParcela',              // ovConfirmEditarParcela — confirmar escopo da edição de uma parcela
   'backupModal',                       // ovBackup — Backup e Restauração
+  'contaMicrosoftModal',               // ovContaMicrosoft — página inicial, card "Conta Microsoft"
 
   // Nível 3 — aninhado dentro de um modal do Nível 2
   'duplicarMesesEditarItem',           // ovDuplicarMesesEditarItem — editar uma ocorrência da prévia
@@ -10853,6 +10855,25 @@ function renderModalInstalarIOS(){
     </div>
   </div>`;
 }
+/* "Novos ajustes de interface — modo mobile", item 4: modal do card "Conta Microsoft" da página inicial —
+   deliberadamente simples, só com os 2 botões pedidos (nada de campos/outras ações), reaproveitando as
+   MESMAS ações já existentes no Menu ☰ (loginOneDrive/desconectarArquivos, ver "maTrocarConta"/
+   "maDesconectar"), nunca uma lógica de conta paralela. Único modal do app que fecha ao tocar/clicar fora
+   dele (requisito explícito desta seção) — feito comparando e.target com o próprio overlay (só dispara
+   quando o clique começa no fundo, nunca quando começa dentro do .modal e "borbulha" até aqui), além do
+   fechamento padrão pelo ✕. */
+function renderContaMicrosoftModal(){
+  return `
+  <div class="overlay" id="ovContaMicrosoft" ${attrZIndexModal('contaMicrosoftModal')}>
+    <div class="modal" style="width:360px;">
+      <div class="modal-head"><h3>👤 Conta Microsoft</h3><button class="close-x" id="closeContaMicrosoftModal">✕</button></div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;">
+        <button type="button" class="btn btn-ghost" id="btnContaMicrosoftTrocar" style="width:100%;">🔀 Trocar de conta</button>
+        <button type="button" class="btn btn-danger" id="btnContaMicrosoftSair" style="width:100%;">🔌 Sair da conta</button>
+      </div>
+    </div>
+  </div>`;
+}
 /* Foco automático no botão "Iniciar App" logo que a conexão com o OneDrive é concluída com sucesso (ver
    focarBotaoIniciarAppPendente/finalizarOperacaoOneDrive) — nunca em erro, cancelamento ou fechamento manual
    da janela de autenticação, e nunca quando o botão ainda está desabilitado (arquivosProntos ainda falso,
@@ -10942,6 +10963,7 @@ function render(){
     ${UI.editingTx!==null ? renderTxModal() : ""}
     ${UI.edicaoLoteModal!==null ? renderEdicaoLoteModal() : ""}
     ${UI.backupModal!==null ? renderBackupModal() : ""}
+    ${UI.contaMicrosoftModal ? renderContaMicrosoftModal() : ""}
     ${UI.textModal!==null ? renderTextModal() : ""}
     ${UI.novaProjecaoModal!==null ? renderNovaProjecaoModal() : ""}
     ${UI.conciliarProjecaoModal!==null ? renderConciliarProjecaoModal() : ""}
@@ -11593,7 +11615,11 @@ function renderTab(){
      uma lista paralela que poderia divergir da real ordem/conteúdo das abas.
    - "Novos ajustes de interface — modo mobile", item 3: os botões de ação rápida "+ Novo lançamento" e
      "Ver Extrato" que existiam dentro do card de saldo foram removidos — saldo, título, data, layout e
-     cálculo do card permanecem intactos. */
+     cálculo do card permanecem intactos.
+   - Item 4: 2 cards adicionais no mesmo painel "Painéis" — "Backup e Restauração" (abre o MESMO modal já
+     existente, via abrirBackupModal(), nunca um modal novo) e "Conta Microsoft" (abre o novo
+     renderContaMicrosoftModal(), ver bindEvents). Nenhum dos dois tem data-tab (não trocam de aba, abrem um
+     modal), então ficam fora do seletor genérico ".inicio-atalho[data-tab]" usado pelos 7 atalhos acima. */
 function renderInicioMobile(){
   const saldoAtual = calcSaldoAtualFluxoCaixa();
   return `
@@ -11613,6 +11639,14 @@ function renderInicioMobile(){
         <span class="inicio-atalho-icone">${icone}</span>
         <span class="inicio-atalho-nome">${nome}</span>
       </button>`).join('')}
+      <button type="button" class="inicio-atalho" id="btnInicioBackup">
+        <span class="inicio-atalho-icone">☁️</span>
+        <span class="inicio-atalho-nome">Backup e Restauração</span>
+      </button>
+      <button type="button" class="inicio-atalho" id="btnInicioContaMicrosoft">
+        <span class="inicio-atalho-icone">👤</span>
+        <span class="inicio-atalho-nome">Conta Microsoft</span>
+      </button>
     </div>
   </div>`;
 }
@@ -18571,6 +18605,19 @@ function bindEvents(){
     UI.mes += 1; if(UI.mes>12){ UI.mes=1; UI.ano+=1; } render();
   });
   document.querySelectorAll('.tab-btn, .bn-item[data-tab], .mais-sheet-item[data-tab], .inicio-atalho[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.tab = b.dataset.tab; UI.menuMobileAberto = false; UI.fabConfigAberto = false; render(); }));
+  // "Novos ajustes de interface — modo mobile", item 4: os 2 cards adicionais da página inicial (ver
+  // renderInicioMobile) reaproveitam as MESMAS ações já existentes — abrirBackupModal() (idêntica ao item
+  // "Backup e Restauração" do Menu ☰) e o novo modal simples de Conta Microsoft.
+  document.getElementById('btnInicioBackup')?.addEventListener('click', async ()=> { await abrirBackupModal(); });
+  document.getElementById('btnInicioContaMicrosoft')?.addEventListener('click', ()=>{ UI.contaMicrosoftModal = true; render(); });
+  document.getElementById('closeContaMicrosoftModal')?.addEventListener('click', ()=>{ UI.contaMicrosoftModal = false; render(); });
+  // Único modal do app que fecha ao tocar/clicar fora dele (requisito explícito desta seção) — só quando o
+  // clique começa no próprio overlay (o fundo), nunca quando começa dentro do .modal e borbulha até aqui.
+  document.getElementById('ovContaMicrosoft')?.addEventListener('click', (e)=>{ if(e.target.id==='ovContaMicrosoft'){ UI.contaMicrosoftModal = false; render(); } });
+  // "Trocar de conta"/"Sair da conta": MESMAS ações já usadas pelo Menu ☰ (maTrocarConta/maDesconectar) —
+  // nunca uma lógica de conta paralela.
+  document.getElementById('btnContaMicrosoftTrocar')?.addEventListener('click', ()=>{ UI.contaMicrosoftModal = false; loginOneDrive(); });
+  document.getElementById('btnContaMicrosoftSair')?.addEventListener('click', ()=>{ UI.contaMicrosoftModal = false; desconectarArquivos(); });
   document.getElementById('btnMenuMobile')?.addEventListener('click', ()=>{ UI.menuMobileAberto = !UI.menuMobileAberto; render(); });
   document.getElementById('btnFecharMaisSheet')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
   document.getElementById('menuMobileBackdrop')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
