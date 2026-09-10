@@ -11620,7 +11620,7 @@ const TABS_PRINCIPAIS = [
 ];
 const TABS_SECUNDARIAS = [
   ["cartoes","💳","Contas e Cartões","Saldos, limites e faturas das suas contas e cartões"],
-  ["categorias","⚙️","Configurações","Categorias, backups, conta Microsoft e preferências"],
+  ["categorias","⚙️","Configurações","Categorias, contas, meios de transação e responsáveis"],
 ];
 const TABS_TODAS = [["dashboard","📊 Painel Financeiro"],["inteligencia","🧠 Inteligência Financeira"],["metas","🎯 Planejamento Financeiro"],["resumo","📆 Extrato Consolidado"],["cartoes","💳 Contas e Cartões"],["registros","📒 Registros"],["categorias","⚙️ Configurações"]];
 /* Item 7 do requisito: o painel "Painéis" do mobile precisa listar TODAS as abas na MESMA ordem do
@@ -11675,7 +11675,7 @@ function renderTabbar(){
     <div class="mais-sheet-titulo">Painéis <button type="button" class="close-x-claro mais-sheet-fechar" id="btnFecharMaisSheet" title="Fechar">✕</button></div>
     <button type="button" class="mais-sheet-item" id="btnMenuArquivoMobile">
       <span class="mais-sheet-icone">📁</span>
-      <span class="mais-sheet-textos"><span class="mais-sheet-nome">Menu</span><span class="mais-sheet-desc">Salvar, sincronizar, backups e conta Microsoft</span></span>
+      <span class="mais-sheet-textos"><span class="mais-sheet-nome">Menu</span><span class="mais-sheet-desc">Salvar, backups e conta Microsoft</span></span>
     </button>
     ${TABS_PAINEIS_MOBILE.map(([id,icone,nome,desc])=>`
     <button type="button" class="mais-sheet-item ${UI.tab===id?'active':''}" data-tab="${id}">
