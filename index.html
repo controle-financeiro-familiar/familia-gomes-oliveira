@@ -710,6 +710,20 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
      mantendo uma área de toque confortável sem ocupar espaço desnecessário. */
   .cenario-input-3d{min-height:24px;width:36px;font-size:11px;padding:2px 2px;text-align:center;}
 }
+/* "Ajustes de interface — modo mobile": layout próprio dos cards de Simulação de Cenários — ícone+título à
+   esquerda, bloco de variações (só nos cards que têm) à direita, ambos na mesma 1ª linha; os 3 indicadores
+   centralizados abaixo, empilhados com espaçamento vertical (ver uso em renderInteligencia). */
+.cenario-card-mobile{border:1px solid var(--line);border-radius:8px;padding:10px 10px;}
+.cenario-cabecalho-mobile{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;}
+.cenario-cabecalho-mobile .cenario-titulo{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;}
+.cenario-variacao-mobile{display:flex;align-items:center;gap:4px;flex:0 0 auto;margin-left:auto;}
+.cenario-variacao-label{font-size:8px;color:#5b6b85;white-space:nowrap;text-transform:uppercase;letter-spacing:.1px;}
+.cenario-input-grupo-mobile{display:flex;align-items:center;gap:1px;font-size:10px;font-weight:700;color:#5b6b85;white-space:nowrap;}
+.cenario-input-grupo-mobile .cenario-input-3d{width:30px;min-height:20px;font-size:10px;padding:0;text-align:center;}
+.cenario-indicadores-mobile{display:flex;flex-direction:column;gap:10px;margin-top:12px;}
+.cenario-indicador-mobile{display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px;}
+.cenario-indicador-mobile .hint{font-size:10.5px;margin:0;}
+.cenario-indicador-mobile b{font-size:15px;}
 @media(max-width:900px){.grid-cards{grid-template-columns:repeat(2,1fr);}}
 .kpi{border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;background:var(--paper);position:relative;overflow:hidden;}
 .kpi .lbl{font-size:11.5px;color:#5b6b85;font-weight:600;text-transform:uppercase;letter-spacing:.3px;}
@@ -14457,6 +14471,9 @@ function renderInteligencia(){
   const f = UI.intelFiltros;
   const ctx = calcInteligenciaFinanceira(f);
   const CONF_COR = { Alta:'#1e8e5a', Média:'#c98a00', Baixa:'#c0392b' };
+  // "Ajustes de interface — modo mobile": ver usos abaixo (tag Confiabilidade à direita, grade 2x2+1 do
+  // Resumo Executivo, layout dos cards de Simulação de Cenários).
+  const mobile = window.innerWidth<=700;
   // Item 4 do requisito: mesmo padrão de filtros global (agrupamento mobile, botão "Restaurar filtros
   // padrão" só quando há algo selecionado, chips abaixo da barra) usado em Registros e nos 4 modais de
   // lançamento — período/horizonte (selects) não entram na contagem por não serem filtros "limpáveis".
@@ -14485,7 +14502,7 @@ function renderInteligencia(){
         <h2 style="margin-bottom:2px;">🧠 Inteligência Financeira</h2>
         <p class="hint" style="margin:0;">Análise histórica, comportamento financeiro, sazonalidade e projeções futuras.</p>
       </div>
-      <div style="display:flex;align-items:center;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;${mobile?'margin-left:auto;':''}">
         <span class="tag" style="background:${CONF_COR[ctx.confiabilidade.nivel]}22;color:${CONF_COR[ctx.confiabilidade.nivel]};font-weight:700;" title="${escapeHtml(ctx.confiabilidade.explicacao)}">🎯 Confiabilidade: ${ctx.confiabilidade.nivel}</span>
       </div>
     </div>
@@ -14529,12 +14546,12 @@ function renderInteligencia(){
 
   <div class="panel" style="padding-bottom: 8px;">
     <h2>Resumo Executivo</h2>
-    <div class="grid-cards" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));">
+    <div class="grid-cards" style="${mobile ? 'grid-template-columns:repeat(2,1fr);' : 'grid-template-columns:repeat(auto-fit,minmax(190px,1fr));'}">
       ${cardResumo('💰','Receita Média', ctx.mediaReceita, undefined, ctx.receitaProjetadaMedia)}
       ${cardResumo('💸','Despesa Média', ctx.mediaDespesa, undefined, ctx.despesaProjetadaMedia)}
       ${cardResumo('⚖️','Saldo Médio', ctx.mediaSaldo, undefined, ctx.saldoProjetadoFinal)}
       ${cardResumo('🐖','Poupança Média', ctx.mediaPoupanca*100, undefined, ctx.poupancaProjetadaMedia*100, v=>fmtPercentSmart(v))}
-      <div class="kpi" style="min-height:0;">
+      <div class="kpi" style="min-height:0;${mobile?'grid-column:1 / -1;':''}">
         <div class="bar"></div>
         <div class="lbl">${TENDENCIA_INFO[ctx.tendenciaGeral].emoji} Tendência Financeira</div>
         <div class="val" style="color:${TENDENCIA_INFO[ctx.tendenciaGeral].cor};">${TENDENCIA_INFO[ctx.tendenciaGeral].label}</div>
@@ -14608,11 +14625,38 @@ function renderInteligencia(){
         <p class="hint" style="margin:0;">Ajuste os percentuais de Conservador/Otimista para ver o impacto na hora - Provável é sempre a projeção principal.</p>
         <button type="button" class="btn btn-ghost btn-sm intel-cenarios-restaurar" id="btnResetarCenarios">↺ Restaurar percentuais padrão</button>
         <div class="intel-cenarios-lista">
-        ${Object.entries(ctx.cenarios).map(([chave,c])=>`
+        ${Object.entries(ctx.cenarios).map(([chave,c])=>{
+          const temVariacao = chave==='conservador'||chave==='otimista';
+          const icone = c.label==='Conservador'?'🛡️':(c.label==='Otimista'?'🚀':'🎯');
+          // "Ajustes de interface — modo mobile": layout próprio no mobile — ícone+título à esquerda,
+          // bloco de variações (quando existir) à direita, TUDO na 1ª linha; os 3 indicadores centralizados
+          // abaixo, empilhados com espaçamento vertical. Os inputs em si (data-cenario-param) são os MESMOS
+          // do desktop — só o texto do rótulo muda de "Variação Receita (%)"/"Variação Despesa (%)" para os
+          // símbolos "+"/"-" (associados ao mesmo campo), por não caberem por extenso; nenhuma mudança de
+          // comportamento/cálculo, só de apresentação. Cards sem variação (Provável) nunca reservam o
+          // espaço do bloco de variações — ele simplesmente não existe no HTML, não fica "vazio".
+          if(mobile) return `
+        <div class="cenario-card-mobile">
+          <div class="cenario-cabecalho-mobile">
+            <span class="cenario-titulo">${icone} ${c.label}</span>
+            ${temVariacao ? `
+            <div class="cenario-variacao-mobile">
+              <span class="cenario-variacao-label">Variações (%)</span>
+              <label class="cenario-input-grupo-mobile" title="Variação Receita (%)"><span>+</span><input type="number" step="1" class="mini cenario-input-3d" data-cenario-param="${chave}|receita" value="${(ctx.cenarioParams[chave].receita*100).toFixed(0)}"></label>
+              <label class="cenario-input-grupo-mobile" title="Variação Despesa (%)"><span>-</span><input type="number" step="1" class="mini cenario-input-3d" data-cenario-param="${chave}|despesa" value="${(ctx.cenarioParams[chave].despesa*100).toFixed(0)}"></label>
+            </div>` : ''}
+          </div>
+          <div class="cenario-indicadores-mobile">
+            <div class="cenario-indicador-mobile"><span class="hint">Saldo Projetado</span><b class="${c.saldo>=0?'val-cell pos':'val-cell neg'}">${fmtBRL(c.saldo)}</b></div>
+            <div class="cenario-indicador-mobile"><span class="hint">Poupança Projetada</span><b>${fmtPercentSmart(c.poupanca*100)}</b></div>
+            <div class="cenario-indicador-mobile"><span class="hint">Patrimônio Projetado</span><b>${fmtBRL(c.patrimonioProjetado)}</b></div>
+          </div>
+        </div>`;
+          return `
         <div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;">
           <div class="cenario-cabecalho">
-            <span class="cenario-titulo">${c.label==='Conservador'?'🛡️':(c.label==='Otimista'?'🚀':'🎯')} ${c.label}</span>
-            ${(chave==='conservador'||chave==='otimista') ? `
+            <span class="cenario-titulo">${icone} ${c.label}</span>
+            ${temVariacao ? `
             <div class="cenario-inputs-linha">
               <label class="cenario-input-grupo">Variação Receita (%)<input type="number" step="1" class="mini cenario-input-3d" data-cenario-param="${chave}|receita" value="${(ctx.cenarioParams[chave].receita*100).toFixed(0)}"></label>
               <label class="cenario-input-grupo">Variação Despesa (%)<input type="number" step="1" class="mini cenario-input-3d" data-cenario-param="${chave}|despesa" value="${(ctx.cenarioParams[chave].despesa*100).toFixed(0)}"></label>
@@ -14623,7 +14667,8 @@ function renderInteligencia(){
             <div><span class="hint">Poupança Projetada</span><br><b>${fmtPercentSmart(c.poupanca*100)}</b></div>
             <div><span class="hint">Patrimônio Projetado</span><br><b>${fmtBRL(c.patrimonioProjetado)}</b></div>
           </div>
-        </div>`).join('')}
+        </div>`;
+        }).join('')}
         </div>
       </div>
     </div>
