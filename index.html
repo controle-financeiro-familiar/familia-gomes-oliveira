@@ -376,32 +376,34 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
    espremidas na barra. */
 .bottom-nav{
   display:none;position:fixed;left:0;right:0;bottom:0;z-index:210;
+  align-items:center;justify-content:space-around;
   background:var(--navy-900);border-top:1px solid rgba(255,255,255,.08);
   box-shadow:0 -4px 14px rgba(11,42,94,.18);
   padding-bottom:var(--safe-bottom);padding-left:var(--safe-left);padding-right:var(--safe-right);
   height:calc(var(--bottom-nav-h) + var(--safe-bottom));
 }
+/* "Novos ajustes de interface — modo mobile", item 6 (navegação inferior, ref. imagem do BB): por padrão
+   cada item é só o ícone, num botão compacto e circular; o item atualmente selecionado (ou com sua ação em
+   andamento) vira uma "pill" mais larga, com o ícone e o nome lado a lado — nunca um embaixo do outro. Como
+   o <span class="bn-rotulo"> só existe no HTML do item ativo (ver renderTabbar), não precisa de nenhuma
+   regra de largura/opacidade para "esconder" o rótulo dos demais — eles simplesmente não o têm. flex:0 1
+   auto (em vez do antigo flex:1 1 0) deixa cada botão do tamanho do seu próprio conteúdo — só assim a pill
+   ativa pode ficar mais larga sem forçar os outros itens a encolher de forma desigual; .bottom-nav com
+   justify-content:space-around distribui o espaço restante entre eles. */
 .bn-item{
-  flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  height:var(--bottom-nav-h);min-width:0;max-width:100%;background:transparent;border:none;color:#a9bbdd;
-  font-family:var(--sans);cursor:pointer;transition:color .15s;padding:4px 2px;overflow:hidden;
+  flex:0 1 auto;display:flex;align-items:center;justify-content:center;gap:6px;
+  height:36px;min-width:36px;max-width:100%;background:transparent;border:none;color:#a9bbdd;
+  font-family:var(--sans);cursor:pointer;transition:background .15s,color .15s;padding:0 12px;
+  border-radius:var(--radius-full);overflow:hidden;
 }
-/* "Ajustes de interface — modo mobile" (item 1, navegação inferior): destaque visual da seção atual em
-   forma de "pill" atrás só do ícone (nunca do rótulo, que ficaria comprimido) — mesma linguagem visual das
-   referências anexadas (BB/PicPay/Itaú), adaptada às cores da identidade do FinUs (dourado sobre navy) em
-   vez de copiar a cor de um banco específico. */
-.bn-icone-wrap{
-  display:flex;align-items:center;justify-content:center;width:34px;height:22px;border-radius:var(--radius-full);
-  transition:background .15s;
-}
-.bn-item.active .bn-icone-wrap{background:rgba(255,211,51,.18);}
-.bn-item .bn-icone{font-size:18px;line-height:1;}
+.bn-item.active{background:rgba(255,211,51,.18);color:var(--gold);font-weight:700;}
+.bn-item .bn-icone{font-size:19px;line-height:1;flex-shrink:0;}
 .bn-item .bn-rotulo{
-  font-size:10px;font-weight:600;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  max-width:100%;display:block;
+  font-size:12.5px;font-weight:700;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  max-width:120px;
 }
 .bn-item:hover{color:#dbe4f7;}
-.bn-item.active{color:var(--gold);font-weight:700;}
+.bn-item.active:hover{color:var(--gold);}
 .bn-item:focus-visible{outline:2px solid var(--gold);outline-offset:-2px;}
 /* Bottom sheet "Mais": desliza de baixo para cima, sobre um backdrop, sem empurrar o layout da página. */
 .mais-sheet{
@@ -11566,29 +11568,42 @@ const TABS_PAINEIS_MOBILE = TABS_TODAS.map(([id])=>{
   if(principal) return [id, principal[1], principal[2], TABS_PRINCIPAIS_DESC[id]||''];
   return TABS_SECUNDARIAS.find(t=>t[0]===id);
 });
-/* "Ajustes de interface — modo mobile", item 1 (barra de navegação inferior): 4 acessos diretos — a nova
-   página Início, mais 3 abas de uso mais frequente (Painel/Extrato/Registros, reaproveitando os rótulos
-   curtos já existentes em TABS_PRINCIPAIS, 4º elemento, até aqui sem nenhum uso) — e um 5º botão "Painéis"
-   que continua abrindo o MESMO bottom sheet de sempre, com TODAS as 7 abas na ordem de TABS_TODAS. Nenhuma
-   rota nova: cada ícone só troca UI.tab para um id que já existia; "Painéis" continua sendo o único lugar
-   que precisa listar as 7 abas (nunca duplicado aqui na barra). */
+/* "Novos ajustes de interface — modo mobile", item 6 (barra de navegação inferior, ref. imagem do BB): 3
+   acessos diretos por aba — Início, Extrato (resumo) e Cartões (aba "cartoes", já abrindo direto no painel
+   Cartões do acordeão — ver btnBottomNavCartoes) — mais 2 ações que NÃO trocam de aba: Backup (abre
+   diretamente o modal de Backup e Restauração, MESMA abrirBackupModal() reaproveitada nos cards da Início e
+   no Menu ☰) e Menu (abre o MESMO bottom sheet "Painéis" de sempre, com as 7 abas). Nenhuma rota nova, nada
+   removido: Painel Financeiro e Registros continuam acessíveis pelo Menu/Painéis e pelos cards da Início,
+   só deixam de ter ícone direto na barra. Por padrão cada item mostra só o ícone; o item atualmente
+   selecionado (ou com sua ação em andamento, no caso de Backup/Menu) também mostra o nome ao lado do ícone,
+   nunca embaixo — o rótulo simplesmente não é renderizado nos demais itens (não é CSS escondendo, é o
+   próprio <span> ausente do HTML), então nenhum item reserva espaço para um texto que não está mostrando. */
 const BOTTOM_NAV_ATALHOS = [
   ["inicio","🏠","Início"],
-  ["dashboard","📊","Painel"],
   ["resumo","📆","Extrato"],
-  ["registros","📒","Registros"],
 ];
 function renderTabbar(){
   const maisAberto = UI.menuMobileAberto;
+  const backupAberto = UI.backupModal !== null;
+  const cartoesAtivo = UI.tab==='cartoes';
   return `
   <nav class="tabbar">${TABS_TODAS.map(([id,label])=>`<button class="tab-btn ${UI.tab===id?'active':''}" data-tab="${id}">${label}</button>`).join('')}</nav>
   <nav class="bottom-nav">
-    ${BOTTOM_NAV_ATALHOS.map(([id,icone,rotulo])=>`
-    <button type="button" class="bn-item ${UI.tab===id?'active':''}" data-tab="${id}" aria-label="${rotulo}" aria-current="${UI.tab===id?'page':'false'}">
-      <span class="bn-icone-wrap"><span class="bn-icone">${icone}</span></span><span class="bn-rotulo">${rotulo}</span>
-    </button>`).join('')}
+    ${BOTTOM_NAV_ATALHOS.map(([id,icone,rotulo])=>{
+      const ativo = UI.tab===id;
+      return `
+    <button type="button" class="bn-item ${ativo?'active':''}" data-tab="${id}" aria-label="${rotulo}" aria-current="${ativo?'page':'false'}">
+      <span class="bn-icone">${icone}</span>${ativo?`<span class="bn-rotulo">${rotulo}</span>`:''}
+    </button>`;
+    }).join('')}
+    <button type="button" class="bn-item ${cartoesAtivo?'active':''}" id="btnBottomNavCartoes" aria-label="Contas e Cartões" aria-current="${cartoesAtivo?'page':'false'}">
+      <span class="bn-icone">💳</span>${cartoesAtivo?`<span class="bn-rotulo">Cartões</span>`:''}
+    </button>
+    <button type="button" class="bn-item ${backupAberto?'active':''}" id="btnBottomNavBackup" aria-label="Backup e Restauração">
+      <span class="bn-icone">☁️</span>${backupAberto?`<span class="bn-rotulo">Backup</span>`:''}
+    </button>
     <button type="button" class="bn-item ${maisAberto?'active':''}" id="btnMenuMobile" aria-label="${maisAberto?'Fechar painéis':'Abrir painéis'}" aria-expanded="${maisAberto?'true':'false'}">
-      <span class="bn-icone-wrap"><span class="bn-icone">${maisAberto?'✖️':'☰'}</span></span><span class="bn-rotulo">Painéis</span>
+      <span class="bn-icone">${maisAberto?'✖️':'☰'}</span>${maisAberto?`<span class="bn-rotulo">Menu</span>`:''}
     </button>
   </nav>
   <div class="mais-sheet ${maisAberto?'aberto':''}" role="dialog" aria-modal="true" aria-label="Painéis">
@@ -18633,6 +18648,11 @@ function bindEvents(){
   // nunca uma lógica de conta paralela.
   document.getElementById('btnContaMicrosoftTrocar')?.addEventListener('click', ()=>{ UI.contaMicrosoftModal = false; loginOneDrive(); });
   document.getElementById('btnContaMicrosoftSair')?.addEventListener('click', ()=>{ UI.contaMicrosoftModal = false; desconectarArquivos(); });
+  // "Novos ajustes de interface — modo mobile", item 6 (bottom nav): "Cartões" abre a aba "cartoes" já no
+  // painel Cartões do acordeão — MESMO comportamento de btnIrParaCartoes, nunca uma lógica paralela. "Backup"
+  // abre diretamente o modal (MESMA abrirBackupModal() dos cards da Início/Menu ☰), sem navegar de aba.
+  document.getElementById('btnBottomNavCartoes')?.addEventListener('click', ()=>{ UI.tab='cartoes'; UI.cartoesSecaoAtiva='cartoes'; render(); });
+  document.getElementById('btnBottomNavBackup')?.addEventListener('click', async ()=>{ await abrirBackupModal(); });
   document.getElementById('btnMenuMobile')?.addEventListener('click', ()=>{ UI.menuMobileAberto = !UI.menuMobileAberto; render(); });
   document.getElementById('btnFecharMaisSheet')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
   document.getElementById('menuMobileBackdrop')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
