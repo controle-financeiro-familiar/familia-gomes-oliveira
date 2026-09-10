@@ -6364,6 +6364,21 @@ async function criarArquivosFaltantesNoOneDrive(){
    NUNCA deve interromper ou reverter a operação real que está sendo auditada — por isso todo erro aqui é
    só logado no console, nunca propagado. */
 function usuarioAtualLabel(){ return msalConta?.username || msalConta?.name || 'desconhecido'; }
+/* "Novos ajustes de interface — modo mobile", item 2: saudação da página inicial (.inicio-saudacao)
+   identifica QUEM está usando o app pela conta Microsoft/OneDrive efetivamente conectada nesta sessão —
+   nunca por uma preferência salva à parte, sempre a mesma msalConta já usada por todo o resto da integração
+   com o OneDrive (login/logout/sync). Sem conexão (offline, ou conectado a alguma outra conta que não seja
+   uma das duas cadastradas), mantém a identificação neutra "Família Gomes Oliveira" — nunca deixa o nome
+   vazio nem mostra o e-mail cru na saudação. */
+const MAPA_NOME_POR_CONTA_MICROSOFT = {
+  'arianagno@live.com': 'Ariana',
+  'brunoposantos@outlook.com': 'Bruno',
+};
+function nomeUsuarioConectado(){
+  if(!msalConta) return 'Família Gomes Oliveira';
+  const email = (msalConta.username || '').trim().toLowerCase();
+  return MAPA_NOME_POR_CONTA_MICROSOFT[email] || 'Família Gomes Oliveira';
+}
 async function registrarAuditoria(operacao, arquivo, resultado, detalhes){
   try{
     if(!oneDriveClient._raiz || nivelAcessoPasta==='leitura') return; // sem pasta resolvida ainda, ou sem permissão de escrever
@@ -11584,7 +11599,7 @@ function renderTab(){
 function renderInicioMobile(){
   const saldoAtual = calcSaldoAtualFluxoCaixa();
   return `
-  <div class="inicio-saudacao">Olá, Família Gomes Oliveira 👋</div>
+  <div class="inicio-saudacao">Olá, ${escapeHtml(nomeUsuarioConectado())} 👋</div>
   <div class="dash-hero-saldo">
     <div class="dash-hero-saldo-topo">
       <div class="dash-hero-saldo-lbl">💼 Saldo Atual (Hoje)</div>
