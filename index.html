@@ -1066,10 +1066,13 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
   .tabela-fluxo td.tabela-fluxo-acoes{justify-content:flex-end;gap:14px;}
   .tabela-fluxo td.tabela-fluxo-acoes .icon-btn{min-width:var(--touch-min);font-size:16px;}
   .tabela-fluxo .linha-saldo-atual-label{display:block;padding:5px 0;font-weight:700;}
-  /* "Ajustes de interface — modo mobile", item 5: no card mobile da linha "Lançamentos não listados", o
-     texto do rótulo fica alinhado à direita (os demais valores/ícones/informações da linha continuam como
-     estavam — Dia, Status, Valor, Saldo e o botão 🔍 de auditoria não mudam). */
-  .tabela-fluxo .linha-nao-listados-label{display:block;padding:5px 0;text-align:right;}
+  /* "Novos ajustes de interface — modo mobile", item 10: corrige uma regressão introduzida na rodada
+     anterior — display:block (para "alinhar à direita" o texto) na verdade colava o rótulo "Descrição"
+     (::before) ao conteúdo "Lançamentos não listados", porque removia o justify-content:space-between
+     padrão do .tabela-fluxo td (ver regra genérica acima). Sem NENHUMA regra própria aqui, o td volta a
+     usar esse mesmo padrão — "Descrição" à esquerda, "Lançamentos não listados" à direita, cada um numa
+     extremidade da linha, exatamente como qualquer outra linha do card — que é o resultado esperado tanto
+     do requisito original (à direita) quanto deste (nunca colado ao rótulo). Nada no texto/dado muda. */
   /* Item 8 do requisito: a primeira linha do card (coluna "Dia") fica inteira em negrito — rótulo e valor —
      não só o valor da data — e com um background de destaque, sangrando até as bordas do card (a mesma
      margin negativa do padding do card, ver .tabela-fluxo tr acima) para ler como um "cabeçalho" da linha,
