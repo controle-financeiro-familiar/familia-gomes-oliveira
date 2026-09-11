@@ -13754,7 +13754,7 @@ function renderCartoes(){
   // mora DENTRO deste mesmo painel do título (mesma convenção de Registros: nunca um <details> solto fora
   // do .panel), mesmo ele explicando os 2 painéis do acordeão logo abaixo.
   return `
-  <div class="panel">
+  <div class="panel" style="padding-bottom:8px;">
     <h2><span>💳 Contas e Cartões</span></h2>
     <details class="ajuda-fluxo" data-ajuda-cartoes ${UI.ajudaCartoesAberta?'open':''}>
       <summary>ℹ️ Informações sobre esta tela</summary>
@@ -15981,7 +15981,7 @@ function renderCategorias(){
   // nenhum painel foi alterado; o espaçamento entre os blocos continua o margin-bottom padrão de .panel
   // (16px), o mesmo já usado entre quaisquer 2 painéis empilhados no resto do app.
   const painelTituloHtml = `
-  <div class="panel">
+  <div class="panel" style="padding-bottom:8px;">
     <h2><span>⚙️ Configurações</span></h2>
     <details class="ajuda-fluxo" data-ajuda-configuracoes ${UI.ajudaConfiguracoesAberta?'open':''}>
       <summary>ℹ️ Informações sobre esta tela</summary>
