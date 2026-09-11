@@ -11795,8 +11795,11 @@ function renderTabbar(){
     <button type="button" class="bn-item ${backupAberto?'active':''}" id="btnBottomNavBackup" aria-label="Backup e Restauração">
       <span class="bn-icone">☁️</span>${backupAberto?`<span class="bn-rotulo">Backup</span>`:''}
     </button>
+    <!-- "Novos ajustes de interface — FinUs" (4ª rodada), item 4: o ícone (☰) nunca muda para ✖️ quando o
+         Menu está ativo — a classe "active"/o rótulo "Menu" ao lado (mesmos recursos visuais já usados
+         pelos demais itens) já diferenciam o estado, sem precisar trocar o desenho do ícone em si. -->
     <button type="button" class="bn-item ${maisAberto?'active':''}" id="btnMenuMobile" aria-label="${maisAberto?'Fechar painéis':'Abrir painéis'}" aria-expanded="${maisAberto?'true':'false'}">
-      <span class="bn-icone">${maisAberto?'✖️':'☰'}</span>${maisAberto?`<span class="bn-rotulo">Menu</span>`:''}
+      <span class="bn-icone">☰</span>${maisAberto?`<span class="bn-rotulo">Menu</span>`:''}
     </button>
   </nav>
   <div class="mais-sheet ${maisAberto?'aberto':''}" role="dialog" aria-modal="true" aria-label="Painéis">
@@ -13736,7 +13739,13 @@ function renderCartoes(){
   const chCartao = 17, chLimite = 17, chAcoes = 6, chData = 8, chStatus = 13, chValor = 15, chSaldo = 16;
   const chTotal = chCartao + chLimite + chAcoes + chData*2 + chStatus + chValor + chSaldo;
   const pct = ch => (ch/chTotal*100).toFixed(2);
+  // "Novos ajustes de interface — FinUs" (4ª rodada), item 1: título da aba dentro de main, mesmo padrão
+  // estrutural já usado por Registros (.panel > h2 simples, sem cartoes-resumo-grid — esta aba não tem um
+  // resumo único: cada seção do acordeão abaixo, Contas/Cartões, já tem seu próprio resumo).
   return `
+  <div class="panel">
+    <h2><span>Contas e Cartões</span></h2>
+  </div>
   <details class="ajuda-fluxo" data-ajuda-cartoes ${UI.ajudaCartoesAberta?'open':''}>
     <summary>ℹ️ Informações sobre esta tela</summary>
     <div class="ajuda-fluxo-conteudo">
@@ -15951,7 +15960,12 @@ function renderCategorias(){
   const totalResultados = Object.values(porGrupo).reduce((s,cats)=>s+Object.values(cats).reduce((s2,itens)=>s2+itens.length,0),0);
   const totalGruposVisiveis = Object.keys(porGrupo).length;
   const totalCategoriasVisiveis = Object.values(porGrupo).reduce((s,cats)=>s+Object.keys(cats).length,0);
-  return `
+  // "Novos ajustes de interface — FinUs" (4ª rodada), item 2: só a ORDEM/disposição dos painéis muda — Contas/
+  // Meios de Transação/Responsáveis (painelContasHtml, já em 2 colunas via .contas-cols/.col-direita, mesmo
+  // grid de sempre) passam a vir ANTES, com Grupos/Categorias/Subcategorias (painelCategoriasHtml) abaixo,
+  // ocupando a largura total — nenhum conteúdo/funcionalidade/controle de nenhum dos painéis foi alterado,
+  // só a posição relativa entre os dois blocos no HTML final (ver return, no fim da função).
+  const painelCategoriasHtml = `
   <div class="panel">
     <h2><span>Grupos, categorias e subcategorias</span></h2>
     <details class="ajuda-fluxo" data-ajuda-configuracoes ${UI.ajudaConfiguracoesAberta?'open':''}>
@@ -16025,7 +16039,8 @@ function renderCategorias(){
           </details>`;
         }).join('')}
       </details>`).join('')}
-  </div>
+  </div>`;
+  const painelContasHtml = `
   <div class="contas-cols">
     <div class="panel" style="display:flex;flex-direction:column;">
       <h2><span>Contas <span class="badge-count">${contasOrdenadas().length}</span></span><button class="btn btn-primary btn-sm" id="btnNovaConta">+ Nova Conta</button></h2>
@@ -16085,7 +16100,10 @@ function renderCategorias(){
         </div>
       </div>
     </div>
-  </div>
+  </div>`;
+  return `
+  ${painelContasHtml}
+  ${painelCategoriasHtml}
   ${UI.novaSubcategoria!==null ? renderNovaSubcategoriaModal() : ""}
   ${UI.moverCategoriaModal!==null ? renderMoverCategoriaModal() : ""}
   ${UI.moverSubcategoriaModal!==null ? renderMoverSubcategoriaModal() : ""}
@@ -18925,7 +18943,12 @@ function bindEvents(){
   document.getElementById('btnMesSeguinte')?.addEventListener('click', ()=>{
     UI.mes += 1; if(UI.mes>12){ UI.mes=1; UI.ano+=1; } render();
   });
-  document.querySelectorAll('.tab-btn, .bn-item[data-tab], .mais-sheet-item[data-tab], .inicio-atalho[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.tab = b.dataset.tab; UI.menuMobileAberto = false; UI.fabConfigAberto = false; render(); }));
+  // "Novos ajustes de interface — FinUs" (4ª rodada), item 3: navegar para qualquer aba enquanto Backup e
+  // Restauração está aberto (UI.backupModal!==null) precisa FECHAR o Backup na hora — sem isto, renderTab()
+  // continuava mostrando a página de Backup por cima (ver seu próprio "if(UI.backupModal!==null) return
+  // renderBackupPagina()"), então UI.tab mudava só "por trás", exigindo um 2º toque (fechar o Backup) para o
+  // conteúdo da aba escolhida finalmente aparecer. Zerar aqui é inofensivo quando já não há Backup aberto.
+  document.querySelectorAll('.tab-btn, .bn-item[data-tab], .mais-sheet-item[data-tab], .inicio-atalho[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.backupModal = null; UI.tab = b.dataset.tab; UI.menuMobileAberto = false; UI.fabConfigAberto = false; render(); }));
   // "Novos ajustes de interface — modo mobile", item 4: os 2 cards adicionais da página inicial (ver
   // renderInicioMobile) reaproveitam as MESMAS ações já existentes — abrirBackupModal() (idêntica ao item
   // "Backup e Restauração" do Menu ☰) e o novo modal simples de Conta Microsoft.
@@ -18942,9 +18965,11 @@ function bindEvents(){
   // "Novos ajustes de interface — modo mobile", item 6 (bottom nav): "Cartões" abre a aba "cartoes" já no
   // painel Cartões do acordeão — MESMO comportamento de btnIrParaCartoes, nunca uma lógica paralela. "Backup"
   // abre diretamente o modal (MESMA abrirBackupModal() dos cards da Início/Menu ☰), sem navegar de aba.
-  document.getElementById('btnBottomNavCartoes')?.addEventListener('click', ()=>{ UI.tab='cartoes'; UI.cartoesSecaoAtiva='cartoes'; render(); });
+  document.getElementById('btnBottomNavCartoes')?.addEventListener('click', ()=>{ UI.backupModal = null; UI.tab='cartoes'; UI.cartoesSecaoAtiva='cartoes'; render(); });
   document.getElementById('btnBottomNavBackup')?.addEventListener('click', async ()=>{ await abrirBackupModal(); });
-  document.getElementById('btnMenuMobile')?.addEventListener('click', ()=>{ UI.menuMobileAberto = !UI.menuMobileAberto; render(); });
+  // Item 3 (mesma correção do bind acima): abrir o sheet "Painéis" também precisa fechar o Backup na hora,
+  // nunca deixá-lo aberto por baixo do sheet.
+  document.getElementById('btnMenuMobile')?.addEventListener('click', ()=>{ UI.backupModal = null; UI.menuMobileAberto = !UI.menuMobileAberto; render(); });
   document.getElementById('btnFecharMaisSheet')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
   document.getElementById('menuMobileBackdrop')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
   document.querySelectorAll('[data-grupo-details]').forEach(d=> d.addEventListener('toggle', ()=>{
