@@ -1680,7 +1680,7 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 @media(max-width:700px){
   .field input, .field select{font-size:16px;}
 }
-.hint{font-size:11px;color:#8393ac;margin-top:10px;}
+.hint{font-size:8px;color:#8393ac;margin-top:10px;}
 .tipo-toggle{display:flex;gap:8px;grid-column:span 4;}
 .tipo-toggle button{
   flex:1;border:2px solid var(--line);background:#fff;border-radius:8px;padding:10px;font-weight:700;font-size:13px;color:#5b6b85;
@@ -2403,7 +2403,7 @@ summary::marker{content:'';}
 .cartoes-resumo-item{min-width:0;}
 .cartoes-resumo-item > div{min-width:0;}
 .cartoes-resumo-item .val{font-family:var(--mono);font-weight:800;font-size:var(--val-font-size, 15px);color:var(--navy-900);line-height:1.2;white-space:nowrap;overflow:hidden;}
-.cartoes-resumo-item .lbl{font-size:10.5px;color:#6a7a97;font-weight:600;}
+.cartoes-resumo-item .lbl{font-size:8.5px;color:#6a7a97;font-weight:600;}
 /* "Novos ajustes de interface — modo mobile", item 7: mesmas classes/cores dinâmicas já usadas em .kpi
    (classeReceitaDespesaMoeda) — só o valor muda de cor conforme o sinal/categoria, nunca o card inteiro
    (o padrão cartoes-resumo-item não usa a barra lateral colorida do .kpi). */
@@ -14850,12 +14850,12 @@ function renderInteligencia(){
   // (.hint com Média/Projetado) que nenhum outro cartão-resumo do app tem.
   const cardResumo = (icone, label, valorAtual, valorMedio, valorProjetado, formato)=>{
     const fmt = formato || fmtBRL;
-    return `<div class="cartoes-resumo-item" style="align-items:flex-start;">
+    return `<div class="cartoes-resumo-item" style="align-items:center;">
       <span class="ico">${icone}</span>
       <div>
         <div class="val">${fmt(valorAtual)}</div>
         <div class="lbl">${label}</div>
-        ${(valorMedio!==undefined || valorProjetado!==undefined) ? `<div class="hint" style="margin:2px 0 0;">${valorMedio!==undefined?`Média: ${fmt(valorMedio)}`:''}${(valorMedio!==undefined && valorProjetado!==undefined)?' · ':''}${valorProjetado!==undefined?`Projetado: ${fmt(valorProjetado)}`:''}</div>`:''}
+        ${(valorMedio!==undefined || valorProjetado!==undefined) ? `<div class="hint" style="margin:2px 0 0;">${valorMedio!==undefined?`Média: ${fmt(valorMedio)}`:''}${(valorMedio!==undefined && valorProjetado!==undefined)?' · ':''}${valorProjetado!==undefined?`projetado: ${fmt(valorProjetado)}`:''}</div>`:''}
       </div>
     </div>`;
   };
@@ -14888,7 +14888,7 @@ function renderInteligencia(){
         <p style="margin-bottom:0;"><b>💬 Leitura Financeira</b>: a síntese final, em tópicos independentes — cada um já com um ícone indicando se é uma situação positiva, um ponto de atenção, uma oportunidade ou uma tendência. É o resumo para levar para a decisão, sem precisar reler todos os painéis acima.</p>
       </div>
     </details>
-    <div class="toolbar filtros-mobile-toolbar ${filtrosEstaoAgrupados('Intel')?'agrupado':''}" style="margin-top:14px;justify-content:flex-start;">
+    <div class="toolbar filtros-mobile-toolbar ${filtrosEstaoAgrupados('Intel')?'agrupado':''}" style="margin-top:14px;margin-bottom:8px;justify-content:flex-start;">
       <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Intel')?'agrupado':''}" id="btnFiltrosMobileIntel" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosIntel>0?` <span class="filtros-mobile-badge">${qtdAtivosIntel}</span>`:''}</button>
       <div class="filtros-barra ${filtrosEstaoAgrupados('Intel')?'agrupado':''} ${UI.filtrosMobileAberto==='Intel'?'aberto-mobile':''}" data-prefixo-filtros="Intel">
         <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileIntel" title="Fechar">✕</button></div>
