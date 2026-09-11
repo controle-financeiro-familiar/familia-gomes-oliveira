@@ -12212,14 +12212,14 @@ function renderDashboard(){
     </div>`;
   })()}
   <div class="dash-row-2col">
-    <div class="panel" id="painelRendaFamiliar" style="margin-bottom:0;">
+    <div class="panel" id="painelRendaFamiliar" style="margin-bottom:0;display:flex;flex-direction:column;">
       <h2>👪 Renda Familiar — ${MESES[UI.mes-1]}/${UI.ano}</h2>
       ${(()=>{
         const rf = calcRendaFamiliar(UI.ano, UI.mes);
         const alturaBarra = Math.max(120, 46 + seriesRendaFamiliarPorResponsavel(rf).labels.length*44);
         const subsOrdenadas = Object.keys(rf.porSubcategoria).sort((a,b)=>rf.porSubcategoria[b]-rf.porSubcategoria[a]);
         return `
-        <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="display:flex;flex-direction:column;gap:16px;flex:1;min-height:0;">
 
   ${
     rf.total <= 0
@@ -12249,7 +12249,15 @@ function renderDashboard(){
       `
   }
 
-  <div class="chart-box" style="height:${alturaBarra}px;width:100%;">
+  <!-- "Alinhamento do gráfico de barras do painel Renda Familiar": height:${alturaBarra}px continua sendo o
+       piso/base de cálculo de sempre (mesma fórmula, proporcional ao nº de responsáveis, nunca alterada) —
+       flex:1 (no chart-box e no wrapper acima, com #painelRendaFamiliar virando display:flex;flex-direction:
+       column) faz essa base de flex crescer para ocupar toda a sobra vertical do painel, sempre que o
+       conteúdo natural for menor que o piso de 500px de #painelRendaFamiliar (nunca a altura geral do painel
+       em si, que continua a mesma). Mesmo mecanismo de flexbox já usado em .dash-row-2col-igual, sem
+       precisar igualar a mais nenhuma coluna. Sem isso, com poucos responsáveis o gráfico ficava com altura
+       fixa pequena, deslocado para cima, sobrando espaço vazio abaixo dele até a base do painel. -->
+  <div class="chart-box" style="height:${alturaBarra}px;width:100%;flex:1;">
     <canvas id="chartRendaBarra"></canvas>
   </div>
 
