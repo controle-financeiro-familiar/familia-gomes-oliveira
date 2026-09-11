@@ -13525,7 +13525,7 @@ function renderRegistros(){
   const qtdAtivos = contarFiltrosPadraoAtivos(f, camposFiltroReg);
   return `
   <div class="panel">
-    <h2><span>Registros de lançamentos</span></h2>
+    <h2><span>📒 Registros de lançamentos</span></h2>
     <div class="cartoes-resumo-grid">
       <div class="cartoes-resumo-item"><span class="ico">🧾</span><div><div class="val">${list.length}</div><div class="lbl">lançamento${list.length===1?'':'s'} filtrado${list.length===1?'':'s'}</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(totalReceitas)}</div><div class="lbl">receitas</div></div></div>
@@ -15186,7 +15186,7 @@ function renderResumo(){
   return `
   <div class="panel cartoes-resumo-lbl-minusculo">
     <h2>
-      <span>Extrato Consolidado</span>
+      <span>📆 Extrato Consolidado</span>
       <span class="extrato-periodo-inline">
         <span class="extrato-periodo-linha extrato-periodo-linha-principal">
           <label for="selExtratoPeriodo">Período</label>
