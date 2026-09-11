@@ -11748,14 +11748,16 @@ const BOTTOM_NAV_ATALHOS = [
 ];
 function renderTabbar(){
   const maisAberto = UI.menuMobileAberto;
-  // "Novos ajustes de interface — FinUs" (2ª rodada), item 2: com o Menu aberto, NENHUM outro item do
-  // bottom-nav pode continuar aparecendo como ativo (label exibido) — só o próprio botão Menu. UI.tab (e o
+  // "Novos ajustes de interface — FinUs" (2ª rodada), item 2, estendido pela 3ª rodada item 2: com o Menu
+  // OU com a página de Backup e Restauração abertos, NENHUM outro item do bottom-nav pode continuar
+  // aparecendo como ativo (label exibido) — só o item especial correspondente (Menu ou Backup). UI.tab (e o
   // backupModal) continuam intocados por trás (seleção funcional preservada); é só a marcação visual
-  // "ativo"/rótulo exibido de cada item que fica condicionada a !maisAberto, então some assim que o Menu
-  // abre e volta sozinha, com o valor real de UI.tab, assim que o Menu fecha — sem nenhum estado próprio
-  // para "restaurar".
-  const backupAberto = !maisAberto && UI.backupModal !== null;
-  const cartoesAtivo = !maisAberto && UI.tab==='cartoes';
+  // "ativo"/rótulo exibido de cada item que fica condicionada a essas duas flags, então some assim que o
+  // Menu/Backup abre e volta sozinha, com o valor real de UI.tab, assim que fecha — sem nenhum estado
+  // próprio para "restaurar".
+  const backupModalAberto = UI.backupModal !== null;
+  const backupAberto = !maisAberto && backupModalAberto;
+  const cartoesAtivo = !maisAberto && !backupModalAberto && UI.tab==='cartoes';
   // "Novos ajustes de interface — FinUs" (2ª rodada), item 5: Início ganha um botão próprio no INÍCIO do
   // .tabbar de desktop — de propósito FORA do .map(TABS_TODAS) abaixo (mesmo princípio já usado pelo ícone
   // dedicado do bottom-nav mobile, ver BOTTOM_NAV_ATALHOS): Início é uma tela extra, separada das 7 abas de
@@ -11769,7 +11771,7 @@ function renderTabbar(){
   </nav>
   <nav class="bottom-nav">
     ${BOTTOM_NAV_ATALHOS.map(([id,icone,rotulo])=>{
-      const ativo = !maisAberto && UI.tab===id;
+      const ativo = !maisAberto && !backupModalAberto && UI.tab===id;
       return `
     <button type="button" class="bn-item ${ativo?'active':''}" data-tab="${id}" aria-label="${rotulo}" aria-current="${ativo?'page':'false'}">
       <span class="bn-icone">${icone}</span>${ativo?`<span class="bn-rotulo">${rotulo}</span>`:''}
@@ -13637,6 +13639,13 @@ function renderRodapePaginacaoGenerica(totalFiltrado, porPagina, paginaAtual, to
 function renderRodapePaginacaoRegistros(totalFiltrado, porPagina, paginaAtual, totalPaginas, inicioIdx, fimIdx){
   return renderRodapePaginacaoGenerica(totalFiltrado, porPagina, paginaAtual, totalPaginas, inicioIdx, fimIdx,
     { selectId:'regPorPagina', dataAttr:'reg-pagina' });
+}
+/* "Novos ajustes de interface — FinUs" (3ª rodada), item 1: paginação da aba Histórico de Backup e
+   Restauração — MESMO componente genérico (renderRodapePaginacaoGenerica) já usado por Registros/"Duplicar
+   por vários meses"/os modais de conta, nunca um padrão de paginação paralelo. */
+function renderRodapePaginacaoBackup(totalFiltrado, porPagina, paginaAtual, totalPaginas, inicioIdx, fimIdx){
+  return renderRodapePaginacaoGenerica(totalFiltrado, porPagina, paginaAtual, totalPaginas, inicioIdx, fimIdx,
+    { selectId:'backupPorPagina', dataAttr:'backup-pagina', unidade:'backups' });
 }
 /* ---------- Botões padrão "Verificar duplicidade" / "+ Novo Lançamento" nos modais de Contas e Cartões ----------
    Mesmo par de botões, mesma posição, dimensões e hierarquia visual (ghost + primary, tamanho btn-sm) em
@@ -16629,7 +16638,7 @@ function renderTextModal(){
 
 /* ===================== MODAL: BACKUP E RESTAURAÇÃO ===================== */
 async function abrirBackupModal(){
-  UI.backupModal = { aba:'historico', backups:null, carregando:true, selecionados:new Set(), filtros:{ tipo:new Set(), aberto:null }, excluindo:null };
+  UI.backupModal = { aba:'historico', backups:null, carregando:true, selecionados:new Set(), filtros:{ tipo:new Set(), aberto:null }, excluindo:null, pagina:1, porPagina:10 };
   render();
   // "Novos ajustes de interface — FinUs" (2ª rodada), item 4: Backup e Restauração agora é uma página em
   // main (renderBackupPagina) — como abri-la nunca muda UI.tab, render() não zera o scroll sozinho (só
@@ -16740,8 +16749,25 @@ function renderBackupConteudo(){
         ${backupsFiltrados.length===0 ? `<div class="empty-state" style="margin-top:14px;"><div class="big">🗄️</div>Nenhum backup encontrado com esses filtros.</div>` : (()=>{
           const podeExcluir = nivelAcessoPasta!=='leitura';
           const sel = m.selecionados || (m.selecionados = new Set());
-          const nomesVisiveis = backupsFiltrados.map(b=>b.nome);
           const qtdSel = sel.size;
+          // "Novos ajustes de interface — FinUs" (3ª rodada), item 1: paginação aplicada por último, depois
+          // de filtro e ordenação (mesmo princípio/mesmo componente já usado em Registros — ver
+          // renderRodapePaginacaoGenerica) — backupsFiltrados continua representando TODOS os resultados
+          // filtrados (usado por "Selecionar todos"/exclusão em lote entre páginas); pageList é só a fatia
+          // exibida na página atual. "Selecionar todos" e seu estado marcado/indeterminado ficam restritos à
+          // página atual (nomesVisiveis = pageList), exatamente como em Registros — a seleção em si (m.
+          // selecionados) continua persistindo entre páginas, então dá para selecionar itens em páginas
+          // diferentes antes de excluir em lote.
+          const totalFiltradoBackup = backupsFiltrados.length;
+          const porPaginaBackup = m.porPagina || 10;
+          const totalPaginasBackup = porPaginaBackup==='TODOS' ? 1 : Math.max(1, Math.ceil(totalFiltradoBackup/porPaginaBackup));
+          if(!m.pagina || m.pagina<1) m.pagina = 1;
+          if(m.pagina>totalPaginasBackup) m.pagina = totalPaginasBackup;
+          const inicioIdxBackup = porPaginaBackup==='TODOS' ? 0 : (m.pagina-1)*porPaginaBackup;
+          const fimIdxBackup = porPaginaBackup==='TODOS' ? totalFiltradoBackup : Math.min(inicioIdxBackup+porPaginaBackup, totalFiltradoBackup);
+          const pageList = backupsFiltrados.slice(inicioIdxBackup, fimIdxBackup);
+          const rodapePaginacaoBackup = renderRodapePaginacaoBackup(totalFiltradoBackup, porPaginaBackup, m.pagina, totalPaginasBackup, inicioIdxBackup, fimIdxBackup);
+          const nomesVisiveis = pageList.map(b=>b.nome);
           return `
         ${podeExcluir && qtdSel>0 ? `
         <div class="barra-acoes-lote" style="display:flex;align-items:center;gap:10px;margin:10px 0;padding:8px 12px;background:#eef2ff;border-radius:8px;">
@@ -16752,14 +16778,14 @@ function renderBackupConteudo(){
         ${podeExcluir ? `
         <label class="reg-select-all-mobile backup-select-all-mobile no-print">
           <input type="checkbox" id="chkSelecionarTodosBackupMobile" ${nomesVisiveis.length>0 && nomesVisiveis.every(n=>sel.has(n))?'checked':''} data-indet-lote="${sel.size>0 && !nomesVisiveis.every(n=>sel.has(n))}" ${bloqueado?'disabled':''}>
-          Selecionar todos (${nomesVisiveis.length})
+          Selecionar todos nesta página (${nomesVisiveis.length})
         </label>` : ''}
         <div class="table-wrap" data-ordenar-tabela="backups"><table class="tabela-cards-mobile">
           <thead><tr>
             ${podeExcluir ? `<th style="width:1%;"><input type="checkbox" id="chkSelecionarTodosBackup" ${nomesVisiveis.length>0 && nomesVisiveis.every(n=>sel.has(n))?'checked':''} ${bloqueado?'disabled':''}></th>` : ''}
             ${thOrdenavel('backups','criadoEm','Data/Hora')}${thOrdenavel('backups','tipo','Tipo')}${thOrdenavel('backups','nome','Arquivo')}${thOrdenavel('backups','tamanho','Tamanho',{style:'text-align:right;'})}${thOrdenavel('backups','qtdTransacoes','Registros',{style:'text-align:right;'})}${thOrdenavel('backups','integridade','Integridade',{style:'text-align:center;'})}<th class="col-acoes">Ações</th></tr></thead>
           <tbody>
-            ${backupsFiltrados.map(b=>`<tr>
+            ${pageList.map(b=>`<tr>
               ${podeExcluir ? `<td data-label="" class="backup-linha-checkbox"><input type="checkbox" class="chk-selecionar-backup" data-backup-nome="${escapeHtml(b.nome)}" ${sel.has(b.nome)?'checked':''} ${bloqueado?'disabled':''}></td>` : ''}
               <td data-label="Data/Hora" style="white-space:nowrap;">${formatarDataHoraCurta(b.criadoEm)}</td>
               <td data-label="Tipo">${BACKUP_TIPO_INFO[b.tipo]?.icone||''} ${BACKUP_TIPO_INFO[b.tipo]?.label||b.tipo}</td>
@@ -16775,7 +16801,8 @@ function renderBackupConteudo(){
               </td>
             </tr>`).join('')}
           </tbody>
-        </table></div>`;
+        </table></div>
+        <div class="registros-rodape">${rodapePaginacaoBackup}</div>`;
         })()}`}
         `;
         })() : `
@@ -16805,10 +16832,10 @@ function renderBackupConteudo(){
           <p class="hint" style="margin-bottom:0;">A política de retenção só se aplica a backups <b>automáticos</b> — manuais e de pré-restauração nunca são excluídos automaticamente, e o backup automático mais recente nunca é removido.</p>
         </div>
         `}
+      ${m.aba==='config' ? `
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);">
-        <button type="button" class="btn btn-ghost" id="closeBackupModal2">Cancelar</button>
-		${m.aba==='config' ? `<button type="button" class="btn btn-primary btn-sm" id="btnSalvarConfigBackup">💾 Salvar configuração</button>` : ''}
-      </div>`;
+        <button type="button" class="btn btn-primary btn-sm" id="btnSalvarConfigBackup">💾 Salvar configuração</button>
+      </div>` : ''}`;
 }
 /* Página em main (dentro do app já iniciado, qualquer viewport) — ver comentário de renderBackupConteudo.
    Mesmo conceito estrutural das demais abas (renderInicio/renderDashboard/etc.): um .panel direto em
@@ -20835,18 +20862,23 @@ function bindEvents(){
   // "Novos ajustes de interface — FinUs" (2ª rodada), item 4: mesmo scrollTo(0,0) de abrirBackupModal(),
   // agora ao voltar — fechar a página de Backup sempre volta ao topo da aba por trás, como qualquer outra
   // navegação de página do app (nunca "reaparece" no meio da tela por causa de um scroll antigo).
+  // "Novos ajustes de interface — FinUs" (3ª rodada), item 3: o botão "Cancelar" (closeBackupModal2) foi
+  // removido das duas abas (Histórico/Configuração) — "← Voltar" no cabeçalho continua sendo a única forma
+  // de sair da página, funcionalmente idêntica ao que "Cancelar" fazia.
   document.getElementById('closeBackupModal')?.addEventListener('click', ()=>{ UI.backupModal=null; render(); window.scrollTo(0,0); });
-  document.getElementById('closeBackupModal2')?.addEventListener('click', ()=>{ UI.backupModal=null; render(); window.scrollTo(0,0); });
   if(UI.backupModal){
     const bm = UI.backupModal;
     document.querySelectorAll('[data-backup-aba]').forEach(b=> b.addEventListener('click', ()=>{ bm.aba = b.dataset.backupAba; render(); }));
     // Item 2 do requisito: filtro "Tipo" da aba Histórico — mesmo motor genérico dos demais filtros do app.
+    // "Novos ajustes de interface — FinUs" (3ª rodada), item 1: toda mudança de filtro volta para a 1ª
+    // página (mesmo princípio já usado em Registros — UI.regPagina=1 nos callbacks equivalentes), já que o
+    // conjunto filtrado muda e a página em que o usuário estava pode nem existir mais no novo resultado.
     if(bm.aba==='historico' && bm.filtros){
       const tiposUsadosBind = Array.from(new Set((bm.backups||[]).map(b=>b.tipo)));
-      bindFiltroMultiSelect(bm.filtros, 'Backup', 'tipo', tiposUsadosBind.map(t=>({value:t})), ()=> render());
-      bindChipsFiltrosAtivos(bm.filtros, 'Backup', ()=> render());
+      bindFiltroMultiSelect(bm.filtros, 'Backup', 'tipo', tiposUsadosBind.map(t=>({value:t})), ()=>{ bm.pagina = 1; render(); });
+      bindChipsFiltrosAtivos(bm.filtros, 'Backup', ()=>{ bm.pagina = 1; render(); });
       bindFiltrosMobileToggle('Backup');
-      document.getElementById('btnLimparFiltrosBackup')?.addEventListener('click', ()=>{ bm.filtros = { tipo:new Set(), aberto:null }; render(); });
+      document.getElementById('btnLimparFiltrosBackup')?.addEventListener('click', ()=>{ bm.filtros = { tipo:new Set(), aberto:null }; bm.pagina = 1; render(); });
     }
     document.getElementById('btnCriarBackupAgoraModal')?.addEventListener('click', async ()=>{
       await criarBackupManual();
@@ -20882,10 +20914,13 @@ function bindEvents(){
       await atualizarListaBackupModal();
     }));
     if(!bm.selecionados) bm.selecionados = new Set();
-    // "Selecionar todos" nunca deve alcançar backups ocultos pelo filtro "Tipo" ativo — usa a MESMA função
-    // de filtragem usada para desenhar a tabela (backupsFiltradosAtuais), nunca a lista completa bm.backups.
+    // "Novos ajustes de interface — FinUs" (3ª rodada), item 1: com paginação, "Selecionar todos" passa a
+    // valer só para a página atual (mesmo princípio de bindSelecaoLote/Registros) — lê os nomes direto dos
+    // checkboxes já renderizados (.chk-selecionar-backup, só a fatia da página atual), em vez de recalcular
+    // filtro+ordenação+paginação de novo aqui (nunca duas fontes de verdade sobre "o que está nesta
+    // página"). A seleção em si (bm.selecionados) continua persistindo entre páginas normalmente.
     const alternarTodos = e=>{
-      const nomes = backupsFiltradosAtuais(bm).map(x=>x.nome);
+      const nomes = [...document.querySelectorAll('.chk-selecionar-backup')].map(el=>el.dataset.backupNome);
       if(e.target.checked) nomes.forEach(n=> bm.selecionados.add(n));
       else nomes.forEach(n=> bm.selecionados.delete(n));
       render();
@@ -20898,6 +20933,24 @@ function bindEvents(){
       render();
     }));
     document.getElementById('btnLimparSelecaoBackup')?.addEventListener('click', ()=>{ bm.selecionados.clear(); render(); });
+    // "Novos ajustes de interface — FinUs" (3ª rodada), item 1: navegação da paginação — mesmo padrão de
+    // Registros (ver #regPorPagina/[data-reg-pagina]), só trocando o estado alvo para bm.pagina/porPagina
+    // (o clamp final acontece dentro do próprio renderBackupConteudo(), igual a renderRegistros()).
+    document.getElementById('backupPorPagina')?.addEventListener('change', e=>{
+      const v = e.target.value;
+      bm.porPagina = v==='TODOS' ? 'TODOS' : Number(v);
+      bm.pagina = 1;
+      render();
+    });
+    document.querySelectorAll('[data-backup-pagina]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const v = btn.dataset.backupPagina;
+        if(v==='prev') bm.pagina = Math.max(1, bm.pagina-1);
+        else if(v==='next') bm.pagina = bm.pagina+1;
+        else bm.pagina = Number(v);
+        render();
+      });
+    });
     // Item 1 do requisito: exclusão múltipla pede UMA ÚNICA confirmação para todo o lote (nunca uma por
     // item — ver excluirBackupSemConfirmar, que não confirma nada sozinha), tenta excluir todos os
     // selecionados mesmo que algum falhe no meio do caminho, e ao final relata exatamente quais backups
