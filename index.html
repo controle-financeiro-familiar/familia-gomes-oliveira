@@ -13739,24 +13739,27 @@ function renderCartoes(){
   const chCartao = 17, chLimite = 17, chAcoes = 6, chData = 8, chStatus = 13, chValor = 15, chSaldo = 16;
   const chTotal = chCartao + chLimite + chAcoes + chData*2 + chStatus + chValor + chSaldo;
   const pct = ch => (ch/chTotal*100).toFixed(2);
-  // "Novos ajustes de interface — FinUs" (4ª rodada), item 1: título da aba dentro de main, mesmo padrão
-  // estrutural já usado por Registros (.panel > h2 simples, sem cartoes-resumo-grid — esta aba não tem um
-  // resumo único: cada seção do acordeão abaixo, Contas/Cartões, já tem seu próprio resumo).
+  // "Novos ajustes de interface — FinUs" (4ª rodada, item 1 / 5ª rodada, item 4): título da aba dentro de
+  // main, mesmo padrão estrutural já usado por Registros (.panel > h2, ícone dentro do próprio <span> do
+  // título — mesma convenção de Registros/Extrato Consolidado) — sem cartoes-resumo-grid, pois esta aba não
+  // tem um resumo único (cada seção do acordeão abaixo, Contas/Cartões, já tem o seu próprio). O ajuda-fluxo
+  // mora DENTRO deste mesmo painel do título (mesma convenção de Registros: nunca um <details> solto fora
+  // do .panel), mesmo ele explicando os 2 painéis do acordeão logo abaixo.
   return `
   <div class="panel">
-    <h2><span>Contas e Cartões</span></h2>
+    <h2><span>💳 Contas e Cartões</span></h2>
+    <details class="ajuda-fluxo" data-ajuda-cartoes ${UI.ajudaCartoesAberta?'open':''}>
+      <summary>ℹ️ Informações sobre esta tela</summary>
+      <div class="ajuda-fluxo-conteudo">
+        <p><b>Painel Contas</b>: mostra o saldo atual e a movimentação do período de cada conta bancária cadastrada (corrente, poupança, investimentos, contracheque etc.). <b>👁 Ver Extrato</b> abre o detalhamento de todos os lançamentos da competência exibida, com saldo acumulado. <b>⏳ Ver lançamentos futuros</b> mostra os lançamentos já cadastrados com data posterior a hoje nessa conta, permitindo acompanhar compromissos financeiros ainda não efetivados antes que aconteçam.</p>
+        <p><b>Painel Cartões</b>: mostra a fatura da competência exibida de cada cartão de crédito. <b>🏆 melhor cartão para comprar hoje</b>: compras realizadas neste cartão terão o maior prazo até o pagamento da fatura, considerando as datas de fechamento e vencimento configuradas. ${!melhorCartao.vencedor && (!melhorCartao.candidatos || melhorCartao.candidatos.length===0) ? 'Defina o dia de fechamento e de vencimento de ao menos um cartão em Configurações → Contas para o app calcular essa indicação.' : ''}</p>
+        <p><b>Saldo parcelado em aberto</b>: para o mês visualizado nesta aba, soma o valor de todas as parcelas futuras já registradas de compras parceladas em cada cartão (a partir do mês seguinte ao selecionado — a parcela do próprio mês não entra aqui, pois já está incluída no valor da fatura). Muda automaticamente ao trocar o mês. Anuidades parceladas (categoria "Anuidade de Cartão de Crédito") não entram nessa soma.</p>
+        <p><b>👁 Ver Fatura</b>: abre a fatura digital da competência exibida, com todos os lançamentos, parcelas e créditos (inclusive estornos, tratados como crédito) que a compõem. <b>👁 Ver Próximas Faturas</b> (ao lado do saldo parcelado) mostra a projeção dos meses seguintes, com os lançamentos de cada competência sob demanda.</p>
+        <p><b>Fechamento e vencimento</b>: o dia padrão de cada cartão é configurado na aba Configurações → Contas. Use os lápis ✏️ na tabela para ajustar a data desta fatura específica, quando o cartão não tiver dia de fechamento fixo ou quando o vencimento cair em fim de semana/feriado e for antecipado ou adiado. Uma compra feita após o dia de fechamento entra automaticamente na fatura do mês seguinte.</p>
+        <p style="margin-bottom:0;"><b>Pagamento de fatura</b>: o Status é 100% automático. Basta lançar a saída do dinheiro na categoria <b>Pagamento de Fatura de Cartão de Crédito</b>, na conta corrente usada para pagar — a aplicação reconhece esse lançamento sozinha quando o valor bate exatamente com o saldo da fatura e a data está dentro do período de cobrança dela. Se o pagamento também for lançado do lado do cartão (categoria <b>Recebimento por Pagamento de Fatura</b>), ele é somado normalmente, inclusive permitindo pagamentos parciais em mais de um lançamento. O Status atualiza sozinho para "Paga — Totalmente" ou "Paga — Parcialmente"; sem nenhum pagamento identificado, mostra "Aberta" (dentro do prazo) ou "Atrasada" (vencida), com o vencimento próximo sempre em destaque.</p>
+      </div>
+    </details>
   </div>
-  <details class="ajuda-fluxo" data-ajuda-cartoes ${UI.ajudaCartoesAberta?'open':''}>
-    <summary>ℹ️ Informações sobre esta tela</summary>
-    <div class="ajuda-fluxo-conteudo">
-      <p><b>Painel Contas</b>: mostra o saldo atual e a movimentação do período de cada conta bancária cadastrada (corrente, poupança, investimentos, contracheque etc.). <b>👁 Ver Extrato</b> abre o detalhamento de todos os lançamentos da competência exibida, com saldo acumulado. <b>⏳ Ver lançamentos futuros</b> mostra os lançamentos já cadastrados com data posterior a hoje nessa conta, permitindo acompanhar compromissos financeiros ainda não efetivados antes que aconteçam.</p>
-      <p><b>Painel Cartões</b>: mostra a fatura da competência exibida de cada cartão de crédito. <b>🏆 melhor cartão para comprar hoje</b>: compras realizadas neste cartão terão o maior prazo até o pagamento da fatura, considerando as datas de fechamento e vencimento configuradas. ${!melhorCartao.vencedor && (!melhorCartao.candidatos || melhorCartao.candidatos.length===0) ? 'Defina o dia de fechamento e de vencimento de ao menos um cartão em Configurações → Contas para o app calcular essa indicação.' : ''}</p>
-      <p><b>Saldo parcelado em aberto</b>: para o mês visualizado nesta aba, soma o valor de todas as parcelas futuras já registradas de compras parceladas em cada cartão (a partir do mês seguinte ao selecionado — a parcela do próprio mês não entra aqui, pois já está incluída no valor da fatura). Muda automaticamente ao trocar o mês. Anuidades parceladas (categoria "Anuidade de Cartão de Crédito") não entram nessa soma.</p>
-      <p><b>👁 Ver Fatura</b>: abre a fatura digital da competência exibida, com todos os lançamentos, parcelas e créditos (inclusive estornos, tratados como crédito) que a compõem. <b>👁 Ver Próximas Faturas</b> (ao lado do saldo parcelado) mostra a projeção dos meses seguintes, com os lançamentos de cada competência sob demanda.</p>
-      <p><b>Fechamento e vencimento</b>: o dia padrão de cada cartão é configurado na aba Configurações → Contas. Use os lápis ✏️ na tabela para ajustar a data desta fatura específica, quando o cartão não tiver dia de fechamento fixo ou quando o vencimento cair em fim de semana/feriado e for antecipado ou adiado. Uma compra feita após o dia de fechamento entra automaticamente na fatura do mês seguinte.</p>
-      <p style="margin-bottom:0;"><b>Pagamento de fatura</b>: o Status é 100% automático. Basta lançar a saída do dinheiro na categoria <b>Pagamento de Fatura de Cartão de Crédito</b>, na conta corrente usada para pagar — a aplicação reconhece esse lançamento sozinha quando o valor bate exatamente com o saldo da fatura e a data está dentro do período de cobrança dela. Se o pagamento também for lançado do lado do cartão (categoria <b>Recebimento por Pagamento de Fatura</b>), ele é somado normalmente, inclusive permitindo pagamentos parciais em mais de um lançamento. O Status atualiza sozinho para "Paga — Totalmente" ou "Paga — Parcialmente"; sem nenhum pagamento identificado, mostra "Aberta" (dentro do prazo) ou "Atrasada" (vencida), com o vencimento próximo sempre em destaque.</p>
-    </div>
-  </details>
   <div class="cc-accordion">
     <div class="cc-accordion-headers">
       <button type="button" class="cc-accordion-header ${UI.cartoesSecaoAtiva==='contas'?'ativo':''}" data-cc-secao="contas">Contas - ${competenciaLabel(competencia)}</button>
@@ -15960,14 +15963,17 @@ function renderCategorias(){
   const totalResultados = Object.values(porGrupo).reduce((s,cats)=>s+Object.values(cats).reduce((s2,itens)=>s2+itens.length,0),0);
   const totalGruposVisiveis = Object.keys(porGrupo).length;
   const totalCategoriasVisiveis = Object.values(porGrupo).reduce((s,cats)=>s+Object.keys(cats).length,0);
-  // "Novos ajustes de interface — FinUs" (4ª rodada), item 2: só a ORDEM/disposição dos painéis muda — Contas/
-  // Meios de Transação/Responsáveis (painelContasHtml, já em 2 colunas via .contas-cols/.col-direita, mesmo
-  // grid de sempre) passam a vir ANTES, com Grupos/Categorias/Subcategorias (painelCategoriasHtml) abaixo,
-  // ocupando a largura total — nenhum conteúdo/funcionalidade/controle de nenhum dos painéis foi alterado,
-  // só a posição relativa entre os dois blocos no HTML final (ver return, no fim da função).
-  const painelCategoriasHtml = `
+  // "Novos ajustes de interface — FinUs" (4ª rodada, item 2 / 5ª rodada, itens 2 e 3): título da aba (ícone +
+  // "Configurações") dentro de main, mesmo padrão .panel > h2 já usado por Registros/Extrato Consolidado/
+  // Contas e Cartões — um painel PRÓPRIO, só para o título, com o ajuda-fluxo DENTRO dele (nunca mais dentro
+  // do painel "Grupos, categorias e subcategorias", que é só um dos 4 painéis da aba, não o painel do
+  // título). Ordem final (ver return): título → Contas/Meios/Responsáveis (2 colunas) → Grupos/Categorias/
+  // Subcategorias (largura total) — só a ORDEM/disposição muda, nenhum conteúdo/funcionalidade/controle de
+  // nenhum painel foi alterado; o espaçamento entre os blocos continua o margin-bottom padrão de .panel
+  // (16px), o mesmo já usado entre quaisquer 2 painéis empilhados no resto do app.
+  const painelTituloHtml = `
   <div class="panel">
-    <h2><span>Grupos, categorias e subcategorias</span></h2>
+    <h2><span>⚙️ Configurações</span></h2>
     <details class="ajuda-fluxo" data-ajuda-configuracoes ${UI.ajudaConfiguracoesAberta?'open':''}>
       <summary>ℹ️ Informações sobre esta tela</summary>
       <div class="ajuda-fluxo-conteudo">
@@ -15977,6 +15983,10 @@ function renderCategorias(){
         <p style="margin-bottom:0;">Alterações feitas aqui refletem imediatamente em todas as outras abas — não é necessário salvar separadamente.</p>
       </div>
     </details>
+  </div>`;
+  const painelCategoriasHtml = `
+  <div class="panel">
+    <h2><span>Grupos, categorias e subcategorias</span></h2>
     <div class="cartoes-resumo-grid">
       <div class="cartoes-resumo-item"><span class="ico">🗂️</span><div><div class="val">${totalGruposVisiveis}</div><div class="lbl">grupo${totalGruposVisiveis===1?'':'s'}</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">📁</span><div><div class="val">${totalCategoriasVisiveis}</div><div class="lbl">categoria${totalCategoriasVisiveis===1?'':'s'}</div></div></div>
@@ -16102,6 +16112,7 @@ function renderCategorias(){
     </div>
   </div>`;
   return `
+  ${painelTituloHtml}
   ${painelContasHtml}
   ${painelCategoriasHtml}
   ${UI.novaSubcategoria!==null ? renderNovaSubcategoriaModal() : ""}
@@ -16673,7 +16684,11 @@ function renderTextModal(){
 
 /* ===================== MODAL: BACKUP E RESTAURAÇÃO ===================== */
 async function abrirBackupModal(){
-  UI.backupModal = { aba:'historico', backups:null, carregando:true, selecionados:new Set(), filtros:{ tipo:new Set(), aberto:null }, excluindo:null, pagina:1, porPagina:10 };
+  // "Novos ajustes de interface — FinUs" (5ª rodada), item 5: padrão inicial de 5 registros por página
+  // (antes 10) — só a quantidade padrão muda; o seletor "Exibir" continua permitindo trocar livremente
+  // (mesmo componente genérico renderRodapePaginacaoGenerica de sempre), e a paginação/contagem/navegação já
+  // recalculam sozinhas a partir de m.porPagina (ver renderBackupConteudo), sem nenhuma lógica nova aqui.
+  UI.backupModal = { aba:'historico', backups:null, carregando:true, selecionados:new Set(), filtros:{ tipo:new Set(), aberto:null }, excluindo:null, pagina:1, porPagina:5 };
   render();
   // "Novos ajustes de interface — FinUs" (2ª rodada), item 4: Backup e Restauração agora é uma página em
   // main (renderBackupPagina) — como abri-la nunca muda UI.tab, render() não zera o scroll sozinho (só
@@ -16794,7 +16809,7 @@ function renderBackupConteudo(){
           // selecionados) continua persistindo entre páginas, então dá para selecionar itens em páginas
           // diferentes antes de excluir em lote.
           const totalFiltradoBackup = backupsFiltrados.length;
-          const porPaginaBackup = m.porPagina || 10;
+          const porPaginaBackup = m.porPagina || 5;
           const totalPaginasBackup = porPaginaBackup==='TODOS' ? 1 : Math.max(1, Math.ceil(totalFiltradoBackup/porPaginaBackup));
           if(!m.pagina || m.pagina<1) m.pagina = 1;
           if(m.pagina>totalPaginasBackup) m.pagina = totalPaginasBackup;
@@ -16878,13 +16893,19 @@ function renderBackupConteudo(){
    (closeBackupModal, ver bindEvents) — fechar aqui só zera UI.backupModal, então a tela volta sozinha para
    a aba em que o usuário estava (UI.tab nunca é alterado por abrir/fechar o Backup). */
 function renderBackupPagina(){
-  // "Novos ajustes de interface — FinUs" (3ª rodada), item 4: a classe "backup-config-mobile" só é aplicada
-  // quando a aba ativa é Configuração — o CSS de compactação (@media max-width:700px) fica assim restrito a
-  // essa aba/viewport, nunca afetando o Histórico (que já tem sua própria tabela/paginação) nem o desktop.
-  const compactoMobile = UI.backupModal.aba==='config' ? ' backup-config-mobile' : '';
+  // "Novos ajustes de interface — FinUs" (3ª rodada, item 4 / 5ª rodada, item 6): a classe "backup-config-
+  // mobile" — mesmas regras (@media max-width:700px), nunca um padrão paralelo — passou a ser aplicada nas
+  // DUAS abas (Histórico e Configuração), para os dois terem exatamente o mesmo espaçamento no mobile
+  // (título, sub-abas, info-card da pasta). Os seletores específicos da aba Configuração (.backup-config-
+  // form/.tx-row/.backup-config-acoes) simplesmente não existem no DOM do Histórico, então não têm efeito
+  // ali — nenhuma regra nova precisou ser criada. No desktop, a classe não muda nada (regra só no @media).
+  const compactoMobile = ' backup-config-mobile';
+  // "Novos ajustes de interface — FinUs" (5ª rodada), item 7: ícone do título trocado para ☁️ — mesmo ícone
+  // já usado em todo o resto do app para esta mesma função (bottom-nav "Backup", item "Backup e
+  // Restauração" do Menu ☰), nunca um símbolo diferente só no título da página/modal.
   return `
   <div class="panel${compactoMobile}">
-    <h2><span>📚 Backup e Restauração</span><button type="button" class="btn btn-ghost btn-sm" id="closeBackupModal">← Voltar</button></h2>
+    <h2><span>☁️ Backup e Restauração</span><button type="button" class="btn btn-ghost btn-sm" id="closeBackupModal">← Voltar</button></h2>
     ${renderBackupConteudo()}
   </div>`;
 }
@@ -16894,7 +16915,7 @@ function renderBackupModalPreApp(){
   return `
   <div class="overlay" id="ovBackup" ${attrZIndexModal('backupModal')}>
     <div class="modal modal-backup" style="width:1280px;">
-      <div class="modal-head"><h3>📚 Backup e Restauração</h3><button class="close-x" id="closeBackupModal">✕</button></div>
+      <div class="modal-head"><h3>☁️ Backup e Restauração</h3><button class="close-x" id="closeBackupModal">✕</button></div>
       <div class="modal-body">
         ${renderBackupConteudo()}
       </div>
@@ -18948,7 +18969,11 @@ function bindEvents(){
   // continuava mostrando a página de Backup por cima (ver seu próprio "if(UI.backupModal!==null) return
   // renderBackupPagina()"), então UI.tab mudava só "por trás", exigindo um 2º toque (fechar o Backup) para o
   // conteúdo da aba escolhida finalmente aparecer. Zerar aqui é inofensivo quando já não há Backup aberto.
-  document.querySelectorAll('.tab-btn, .bn-item[data-tab], .mais-sheet-item[data-tab], .inicio-atalho[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.backupModal = null; UI.tab = b.dataset.tab; UI.menuMobileAberto = false; UI.fabConfigAberto = false; render(); }));
+  // "Novos ajustes de interface — FinUs" (5ª rodada), item 1: além do mais-sheet (UI.menuMobileAberto), o
+  // menu-arquivo-painel (UI.menuArquivoAberto) também pode estar aberto por cima dele (ver btnMenuArquivoMobile
+  // logo abaixo — abri-lo de propósito NUNCA fecha o mais-sheet, ver comentário lá) — navegar para qualquer
+  // aba precisa fechar os dois de uma vez, nunca deixar nenhum sobreposto ao conteúdo recém-aberto.
+  document.querySelectorAll('.tab-btn, .bn-item[data-tab], .mais-sheet-item[data-tab], .inicio-atalho[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.backupModal = null; UI.tab = b.dataset.tab; UI.menuMobileAberto = false; UI.menuArquivoAberto = false; UI.fabConfigAberto = false; render(); }));
   // "Novos ajustes de interface — modo mobile", item 4: os 2 cards adicionais da página inicial (ver
   // renderInicioMobile) reaproveitam as MESMAS ações já existentes — abrirBackupModal() (idêntica ao item
   // "Backup e Restauração" do Menu ☰) e o novo modal simples de Conta Microsoft.
@@ -18965,11 +18990,11 @@ function bindEvents(){
   // "Novos ajustes de interface — modo mobile", item 6 (bottom nav): "Cartões" abre a aba "cartoes" já no
   // painel Cartões do acordeão — MESMO comportamento de btnIrParaCartoes, nunca uma lógica paralela. "Backup"
   // abre diretamente o modal (MESMA abrirBackupModal() dos cards da Início/Menu ☰), sem navegar de aba.
-  document.getElementById('btnBottomNavCartoes')?.addEventListener('click', ()=>{ UI.backupModal = null; UI.tab='cartoes'; UI.cartoesSecaoAtiva='cartoes'; render(); });
-  document.getElementById('btnBottomNavBackup')?.addEventListener('click', async ()=>{ await abrirBackupModal(); });
-  // Item 3 (mesma correção do bind acima): abrir o sheet "Painéis" também precisa fechar o Backup na hora,
-  // nunca deixá-lo aberto por baixo do sheet.
-  document.getElementById('btnMenuMobile')?.addEventListener('click', ()=>{ UI.backupModal = null; UI.menuMobileAberto = !UI.menuMobileAberto; render(); });
+  document.getElementById('btnBottomNavCartoes')?.addEventListener('click', ()=>{ UI.backupModal = null; UI.menuMobileAberto = false; UI.menuArquivoAberto = false; UI.tab='cartoes'; UI.cartoesSecaoAtiva='cartoes'; render(); });
+  document.getElementById('btnBottomNavBackup')?.addEventListener('click', async ()=>{ UI.menuMobileAberto = false; UI.menuArquivoAberto = false; await abrirBackupModal(); });
+  // Item 3 da rodada anterior (mesma correção do bind acima) + item 1 desta rodada: abrir o sheet "Painéis"
+  // também precisa fechar o Backup e o menu-arquivo-painel na hora, nunca deixar nenhum dos dois por baixo.
+  document.getElementById('btnMenuMobile')?.addEventListener('click', ()=>{ UI.backupModal = null; UI.menuArquivoAberto = false; UI.menuMobileAberto = !UI.menuMobileAberto; render(); });
   document.getElementById('btnFecharMaisSheet')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
   document.getElementById('menuMobileBackdrop')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
   document.querySelectorAll('[data-grupo-details]').forEach(d=> d.addEventListener('toggle', ()=>{
