@@ -1369,8 +1369,14 @@ html.forcar-nav-mobile .back-to-top{
    renderFabConfiguracoes) sobe exatamente até essa mesma altura — e qualquer folha inferior
    (.menu-mobile-backdrop.aberto: filtros mobile, "Mais", o próprio menu do FAB) já cobre a tela pedindo
    foco exclusivo do usuário. Nesses momentos o back-to-top some (nunca compete visualmente com um menu
-   aberto por cima dele) e volta a aparecer normalmente assim que a folha fecha. */
-#root:has(.menu-mobile-backdrop.aberto) ~ .back-to-top{opacity:0!important;visibility:hidden!important;pointer-events:none;}
+   aberto por cima dele) e volta a aparecer normalmente assim que a folha fecha.
+   "Novos ajustes de interface — FinUs" (3ª rodada), itens 6/7: o mesmo vale para a visualização em tela
+   cheia de um gráfico (.grafico-expandido-overlay — Mapa de Calor/Despesas por Grupo, ver
+   renderGraficoExpandidoModal): sem isto, o Voltar ao Topo (z-index:500) ficava visível E clicável POR CIMA
+   do overlay do gráfico (z-index:400) sempre que a página já estivesse rolada > 200px antes de abrir a tela
+   cheia — nunca mais aparece enquanto o gráfico está expandido, e volta ao normal assim que ele fecha. */
+#root:has(.menu-mobile-backdrop.aberto) ~ .back-to-top,
+#root:has(.grafico-expandido-overlay) ~ .back-to-top{opacity:0!important;visibility:hidden!important;pointer-events:none;}
 .btn-gold:hover{background:var(--gold-dark);}
 .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--navy-800);}
 .btn-ghost:hover{background:var(--navy-50);}
