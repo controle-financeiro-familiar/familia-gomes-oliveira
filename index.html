@@ -1264,6 +1264,27 @@ tbody tr:hover{background:var(--navy-50);}
 .backup-progresso-exclusao-trilho{height:8px;border-radius:var(--radius-full);background:var(--navy-100);overflow:hidden;}
 .backup-progresso-exclusao-fill{height:100%;border-radius:var(--radius-full);background:var(--navy-900);transition:width .2s ease;}
 @media(max-width:700px){ .backup-progresso-exclusao-topo .hint{display:none;} }
+/* "Novos ajustes de interface — FinUs" (3ª rodada), item 4: no mobile, com a aba Configuração de Backup e
+   Restauração ativa (.backup-config-mobile, aplicada só nesse caso — ver renderBackupPagina), reduz
+   margens/paddings/gaps para que todo o conteúdo caiba dentro de main sem gerar rolagem vertical própria da
+   página. Nenhum campo/opção/texto/controle/ação é removido — só o respiro entre eles diminui, sem chegar a
+   comprometer legibilidade ou a área de toque dos controles (altura de inputs/selects/botões não muda).
+   Escopado só à classe: nunca afeta a aba Histórico (que tem sua própria tabela/paginação) nem o desktop. */
+@media(max-width:700px){
+  .panel.backup-config-mobile{ padding:14px;margin-bottom:0; }
+  .panel.backup-config-mobile h2{ margin-bottom:8px; }
+  .panel.backup-config-mobile .tabs-secundarias{ margin-bottom:8px; }
+  .panel.backup-config-mobile .tab-sec{ padding:7px 12px; }
+  .panel.backup-config-mobile .info-card{ padding:8px 10px;margin-bottom:8px; }
+  .panel.backup-config-mobile .backup-config-form{ gap:10px;margin-top:8px!important; }
+  /* As 2 caixas "Reter por (dias)"/"Máximo de backups automáticos" tinham nowrap fixo (pensado para
+     telas largas) — no mobile isso é sobrescrito para permitir empilhar em 2 linhas quando o rótulo mais
+     longo não couber lado a lado, evitando rolagem horizontal sem remover nenhum campo. */
+  .panel.backup-config-mobile .tx-row{ margin-bottom:6px;flex-wrap:wrap!important; }
+  .panel.backup-config-mobile .tx-row > .field.tx-narrow{ flex:1 1 140px!important; }
+  .panel.backup-config-mobile .hint{ margin-top:4px; }
+  .panel.backup-config-mobile .backup-config-acoes{ margin-top:10px;padding-top:10px; }
+}
 .reg-card-principal{flex:1;min-width:0;}
 .reg-card-linha1{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
 .reg-card-descricao{font-size:14px;font-weight:600;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -1882,7 +1903,7 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
    declaração mesmo dentro do breakpoint mobile. */
 @media(max-width:700px){ .modal-foot{justify-content:flex-start;} }
 /* Sub-abas dentro de um modal (ex.: Backup e Restauração — Histórico/Configuração). */
-.tabs-secundarias{display:flex;gap:6px;border-bottom:1px solid var(--line);}
+.tabs-secundarias{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:14px;}
 .tab-sec{border:none;background:transparent;padding:8px 14px;font-size:12.5px;font-weight:600;color:#5b6b85;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
 .tab-sec:hover{color:var(--navy-900);}
 .tab-sec.ativo{color:var(--navy-900);border-bottom-color:var(--navy-900);}
@@ -16702,7 +16723,7 @@ function renderBackupConteudo(){
     for(const nome of Array.from(m.selecionados)){ if(!visiveisAgora.has(nome)) m.selecionados.delete(nome); }
   }
   return `
-        <div class="tabs-secundarias" style="margin-bottom:14px;">
+        <div class="tabs-secundarias">
           <button type="button" class="tab-sec ${m.aba==='historico'?'ativo':''}" data-backup-aba="historico">Histórico</button>
           <button type="button" class="tab-sec ${m.aba==='config'?'ativo':''}" data-backup-aba="config">Configuração</button>
         </div>
@@ -16806,7 +16827,7 @@ function renderBackupConteudo(){
         })()}`}
         `;
         })() : `
-        <div class="tx-form" style="margin-top:10px;">
+        <div class="tx-form backup-config-form" style="margin-top:10px;">
           <div class="field"><label>Periodicidade do backup automático</label>
             <select id="cfgBackupPeriodicidade">
               <option value="manual" ${backupConfig.periodicidade==='manual'?'selected':''}>Somente manual (desligado)</option>
@@ -16833,7 +16854,7 @@ function renderBackupConteudo(){
         </div>
         `}
       ${m.aba==='config' ? `
-      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);">
+      <div class="backup-config-acoes" style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);">
         <button type="button" class="btn btn-primary btn-sm" id="btnSalvarConfigBackup">💾 Salvar configuração</button>
       </div>` : ''}`;
 }
@@ -16843,8 +16864,12 @@ function renderBackupConteudo(){
    (closeBackupModal, ver bindEvents) — fechar aqui só zera UI.backupModal, então a tela volta sozinha para
    a aba em que o usuário estava (UI.tab nunca é alterado por abrir/fechar o Backup). */
 function renderBackupPagina(){
+  // "Novos ajustes de interface — FinUs" (3ª rodada), item 4: a classe "backup-config-mobile" só é aplicada
+  // quando a aba ativa é Configuração — o CSS de compactação (@media max-width:700px) fica assim restrito a
+  // essa aba/viewport, nunca afetando o Histórico (que já tem sua própria tabela/paginação) nem o desktop.
+  const compactoMobile = UI.backupModal.aba==='config' ? ' backup-config-mobile' : '';
   return `
-  <div class="panel">
+  <div class="panel${compactoMobile}">
     <h2><span>📚 Backup e Restauração</span><button type="button" class="btn btn-ghost btn-sm" id="closeBackupModal">← Voltar</button></h2>
     ${renderBackupConteudo()}
   </div>`;
