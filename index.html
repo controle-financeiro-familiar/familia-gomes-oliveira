@@ -2501,6 +2501,15 @@ summary::marker{content:'';}
 .leitura-financeira-item{display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.55;}
 .leitura-financeira-item:last-child{margin-bottom:0;}
 .leitura-financeira-icone{font-size:16px;line-height:1.5;flex:none;}
+/* Ajuste de interface (Inteligência Financeira, modo mobile): reduzir o font-size para 12.5px somente nos
+   painéis "Comportamento Sazonal" e "Leitura Financeira", só no mobile — layout, espaçamento e demais
+   estilos (h2, .hint, larguras, cores) permanecem intactos, pois cada um já define seu próprio font-size
+   explícito e não herda deste ajuste. No desktop e nas demais abas nada muda. */
+@media(max-width:700px){
+  .intel-panel-sazonal{ font-size:12.5px; }
+  .intel-panel-leitura{ font-size:12.5px; }
+  .intel-panel-leitura .leitura-financeira-item{ font-size:12.5px; }
+}
 .competencias-futuras-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:4px;}
 .competencia-futura-card{border:1px solid var(--line);border-radius:9px;padding:10px 12px;cursor:pointer;transition:border-color .15s ease,background .15s ease;background:#fff;}
 .competencia-futura-card:hover{border-color:var(--navy-900);}
@@ -14935,7 +14944,7 @@ function renderInteligencia(){
   </div>
 
   <div class="dash-row-2col dash-row-2col-igual">
-    <div class="panel" style="margin-bottom:0;">
+    <div class="panel intel-panel-sazonal" style="margin-bottom:0;">
       <h2>Comportamento Sazonal</h2>
       ${!ctx.sazonalidade ? `<p class="hint">Histórico insuficiente para identificar sazonalidade (mínimo de 6 meses).</p>` : `
       <p style="margin:0 0 8px;"><b>${MESES[ctx.sazonalidade.maiorDespesa.mes-1]}</b> apresenta despesas aproximadamente <b>${fmtPercentSmart(Math.abs(ctx.sazonalidade.maiorDespesa.variacao*100))}</b> ${ctx.sazonalidade.maiorDespesa.variacao>=0?'acima':'abaixo'} da média histórica.</p>
@@ -15080,7 +15089,7 @@ function renderInteligencia(){
     <div class="chart-box" style="height:280px;"><canvas id="chartIntelPatrimonio"></canvas></div>
   </div>
 
-  <div class="panel" style="border:2px solid var(--navy-900);">
+  <div class="panel intel-panel-leitura" style="border:2px solid var(--navy-900);">
     <h2>💬 Leitura Financeira</h2>
     ${(()=>{
       // Consolida a síntese interpretativa (seção 13) com as antigas dicas do painel "Educação Financeira"
