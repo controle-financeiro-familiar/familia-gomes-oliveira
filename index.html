@@ -12169,6 +12169,9 @@ function renderDashboard(){
   // MESMAS classes (.panel/.panel h2), nunca um estilo paralelo. .cartoes-resumo-lbl-minusculo só baixa a
   // caixa dos rótulos (nunca o valor calculado) — ver CSS — e fica restrita a este painel/ao de Planejamento
   // Financeiro (item 1), nunca vazando para os demais usos de .cartoes-resumo-item no resto do app.
+  // "Ajustes de interface — ajuda-fluxo": movido para DENTRO do painel do título (mesmo padrão já usado em
+  // Registros — h2 → cartoes-resumo-grid → ajuda-fluxo, tudo no mesmo .panel), em vez de um <details> solto
+  // fora dele. Conteúdo/texto do ajuda-fluxo, título e ícone do painel continuam exatamente os mesmos.
   const cardsResumoHtml = `
   <div class="panel cartoes-resumo-lbl-minusculo" style="padding-bottom:8px;">
     <h2>📊 Painel Financeiro</h2>
@@ -12178,26 +12181,23 @@ function renderDashboard(){
       <div class="cartoes-resumo-item"><span class="ico">⚖️</span><div><div class="val">${fmtBRL(d.saldo)}</div><div class="lbl">Saldo do mês</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">🐖</span><div><div class="val">${fmtPercentSmart(d.poupanca*100)}</div><div class="lbl">% Poupança</div></div></div>
     </div>
+    <details class="ajuda-fluxo" data-ajuda-dashboard ${UI.ajudaDashboardAberta?'open':''}>
+      <summary>ℹ️ Informações sobre esta tela</summary>
+      <div class="ajuda-fluxo-conteudo">
+        <p><b>💰 Receitas, 💸 Despesas e ⚖️ Saldo</b>: somam todos os lançamentos da competência selecionada no topo da página (mês/ano). O <b>🐖 % Poupança</b> é a fração da receita do mês que sobrou como saldo positivo.</p>
+        <p><b>🎯 Planejamento Financeiro</b>: aparece somente quando existem metas cadastradas para o mês; clique no card para abrir a aba Planejamento Financeiro com o detalhe de cada uma.</p>
+        <p><b>👪 Renda Familiar</b>: distribui a receita do mês por fonte (subcategoria) e por responsável, sempre a partir dos lançamentos — nunca de um valor fixo.</p>
+        <p><b>🪙 Economias</b> e <b>💳 Fatura atual por cartão</b>: usam os mesmos cálculos das abas Contas e Cartões e Extrato Consolidado, então ficam sempre consistentes entre si.</p>
+        <p><b>🔥 Mapa de Calor de Despesas</b>: uma célula por dia (7 meses — 3 antes e 3 depois do mês selecionado no cabeçalho, sempre no centro), com a cor mais forte quanto maior o total de despesas naquele dia. Clique num dia com despesas para abrir a lista de lançamentos daquele dia, com filtros e seleção em lote própria — sem precisar trocar de aba.</p>
+        <p style="margin-bottom:0;"><b>📊 Visão Geral</b>: mostra como a despesa do mês se distribui entre os grupos (gráfico de barras), a proporção entre despesas e saldo positivo dentro da receita (donut) e a evolução de receitas e despesas nos últimos 6 meses — para comparar o mês atual com o comportamento recente sem precisar trocar de aba. Para uma análise mais aprofundada (tendência, sazonalidade, projeções), use a aba <b>🧠 Inteligência Financeira</b>.</p>
+      </div>
+    </details>
   </div>`;
-  const ajudaFluxoHtml = `
-<details class="ajuda-fluxo" data-ajuda-dashboard ${UI.ajudaDashboardAberta?'open':''}>
-    <summary>ℹ️ Informações sobre esta tela</summary>
-    <div class="ajuda-fluxo-conteudo">
-      <p><b>💰 Receitas, 💸 Despesas e ⚖️ Saldo</b>: somam todos os lançamentos da competência selecionada no topo da página (mês/ano). O <b>🐖 % Poupança</b> é a fração da receita do mês que sobrou como saldo positivo.</p>
-      <p><b>🎯 Planejamento Financeiro</b>: aparece somente quando existem metas cadastradas para o mês; clique no card para abrir a aba Planejamento Financeiro com o detalhe de cada uma.</p>
-      <p><b>👪 Renda Familiar</b>: distribui a receita do mês por fonte (subcategoria) e por responsável, sempre a partir dos lançamentos — nunca de um valor fixo.</p>
-      <p><b>🪙 Economias</b> e <b>💳 Fatura atual por cartão</b>: usam os mesmos cálculos das abas Contas e Cartões e Extrato Consolidado, então ficam sempre consistentes entre si.</p>
-      <p><b>🔥 Mapa de Calor de Despesas</b>: uma célula por dia (7 meses — 3 antes e 3 depois do mês selecionado no cabeçalho, sempre no centro), com a cor mais forte quanto maior o total de despesas naquele dia. Clique num dia com despesas para abrir a lista de lançamentos daquele dia, com filtros e seleção em lote própria — sem precisar trocar de aba.</p>
-      <p style="margin-bottom:0;"><b>📊 Visão Geral</b>: mostra como a despesa do mês se distribui entre os grupos (gráfico de barras), a proporção entre despesas e saldo positivo dentro da receita (donut) e a evolução de receitas e despesas nos últimos 6 meses — para comparar o mês atual com o comportamento recente sem precisar trocar de aba. Para uma análise mais aprofundada (tendência, sazonalidade, projeções), use a aba <b>🧠 Inteligência Financeira</b>.</p>
-    </div>
-  </details>`;
   return `
   ${heroSaldoHtml}
   ${mobile ? alertaVencimentoHtml : ''}
   ${cardsResumoHtml}
-  ${mobile ? ajudaFluxoHtml : ''}
   ${mobile ? '' : alertaVencimentoHtml}
-  ${mobile ? '' : ajudaFluxoHtml}
   ${(()=>{
     const rm = calcResumoMetas(competencia);
     if(!rm.lista.length) return '';
@@ -15692,6 +15692,9 @@ function renderMetas(){
   const mobile = window.innerWidth<=700;
   // "Novos ajustes de interface — FinUs", item 1: mesma composição visual do Resumo Executivo (Inteligência
   // Financeira) — ver comentário equivalente em renderDashboard/cardsResumoHtml.
+  // "Ajustes de interface — ajuda-fluxo": movido para DENTRO do painel do título (mesmo padrão de
+  // Registros/Painel Financeiro — h2 → cartoes-resumo-grid → ajuda-fluxo, tudo no mesmo .panel), em vez de
+  // um <details> solto fora dele. Conteúdo/texto do ajuda-fluxo, título e ícone do painel continuam os mesmos.
   const cardsResumoHtml = `
   <div class="panel cartoes-resumo-lbl-minusculo" style="padding-bottom:8px;">
     <h2>🎯 Planejamento Financeiro</h2>
@@ -15706,20 +15709,18 @@ function renderMetas(){
         </div>
       </div>
     </div>
+    <details class="ajuda-fluxo" data-ajuda-metas ${UI.ajudaMetasAberta?'open':''}>
+      <summary>ℹ️ Informações sobre esta tela</summary>
+      <div class="ajuda-fluxo-conteudo">
+        <p><b>Orçamento Total, Gasto Atual e Saldo Disponível</b>: somam todas as metas cadastradas para a competência selecionada no topo da página (mês/ano).</p>
+        <p><b>Nível da meta</b>: uma meta pode valer para um Grupo inteiro, uma Categoria específica ou uma Subcategoria específica — quanto mais específico, mais preciso o acompanhamento.</p>
+        <p><b>Recorrência</b>: metas mensais/trimestrais/semestrais/anuais se repetem automaticamente a partir do período inicial, sem precisar recriá-las a cada competência.</p>
+        <p style="margin-bottom:0;"><b>Situação</b>: compara o gasto já lançado (mesmo critério usado no Painel Financeiro e no Extrato Consolidado) com o valor da meta, sinalizando quando ela está próxima do limite ou já foi ultrapassada.</p>
+      </div>
+    </details>
   </div>`;
-  const ajudaFluxoHtml = `
-  <details class="ajuda-fluxo" data-ajuda-metas ${UI.ajudaMetasAberta?'open':''}>
-    <summary>ℹ️ Informações sobre esta tela</summary>
-    <div class="ajuda-fluxo-conteudo">
-      <p><b>Orçamento Total, Gasto Atual e Saldo Disponível</b>: somam todas as metas cadastradas para a competência selecionada no topo da página (mês/ano).</p>
-      <p><b>Nível da meta</b>: uma meta pode valer para um Grupo inteiro, uma Categoria específica ou uma Subcategoria específica — quanto mais específico, mais preciso o acompanhamento.</p>
-      <p><b>Recorrência</b>: metas mensais/trimestrais/semestrais/anuais se repetem automaticamente a partir do período inicial, sem precisar recriá-las a cada competência.</p>
-      <p style="margin-bottom:0;"><b>Situação</b>: compara o gasto já lançado (mesmo critério usado no Painel Financeiro e no Extrato Consolidado) com o valor da meta, sinalizando quando ela está próxima do limite ou já foi ultrapassada.</p>
-    </div>
-  </details>`;
   return `
   ${cardsResumoHtml}
-  ${ajudaFluxoHtml}
   ${renderAlertasMetas(r.lista)}
   <div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
