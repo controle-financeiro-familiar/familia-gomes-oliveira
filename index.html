@@ -1817,12 +1817,6 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
   }
   #ovContaMicrosoft .modal-head{border-radius:12px 12px 0 0!important;}
   #ovContaMicrosoft .modal-body{flex:none!important;overflow:visible!important;}
-  /* "Novos ajustes de interface — FinUs", item 5: o modal de Backup e Restauração nunca cobre o bottom-nav
-     — o overlay para acima dele (bottom-nav-h + área segura, em vez de ir até o fundo real da tela); o
-     .modal já usa height:100% (regra genérica acima), então ele automaticamente se ajusta a essa altura
-     reduzida do próprio overlay, sem precisar de nenhuma regra própria de altura aqui. O bottom-nav
-     continua visível e tocável por baixo do modal, como pedido. */
-  #ovBackup{inset:0 0 calc(var(--bottom-nav-h) + var(--safe-bottom)) 0;}
 }
 /* Os dois botões do modal Conta Microsoft (mobile) viram cards quadrados lado a lado — mesma linguagem
    visual do .inicio-atalho já usado na Início (ícone + texto, fundo neutro, borda, cantos arredondados),
@@ -5568,7 +5562,10 @@ const CAMADAS_MODAL = [
   'confirmDelProjecao',                // ovConfirmDelProjecao — confirmar escopo da exclusão de um lançamento previsto (só esta competência ou todas)
   'confirmDelParcela',                 // ovConfirmDelParcela — confirmar exclusão de parcela
   'confirmEditarParcela',              // ovConfirmEditarParcela — confirmar escopo da edição de uma parcela
-  'backupModal',                       // ovBackup — Backup e Restauração
+  'backupModal',                       // ovBackup — só usado ANTES de "Iniciar App" (tela inicial, sem
+                                        // main/bottom-nav ainda); dentro do app já iniciado, Backup e
+                                        // Restauração é uma página em main (ver renderBackupPagina), não
+                                        // mais um modal — ver renderTab()/renderBackupModalPreApp
   'contaMicrosoftModal',               // ovContaMicrosoft — página inicial, card "Conta Microsoft"
 
   // Nível 3 — aninhado dentro de um modal do Nível 2
@@ -11098,7 +11095,7 @@ function render(){
   // — mesmo com os dois arquivos já abertos/criados/restaurados e válidos, a aplicação NUNCA carrega
   // sozinha; importar, criar ou restaurar só preparam os arquivos, mas não "entram" no app.
   if(!UI.appIniciado && !UI.modalFecharSessao){
-    root.innerHTML = renderBannerPWA() + renderTelaInicial() + (UI.backupModal!==null ? renderBackupModal() : "") + (UI.modalInstalarIOS ? renderModalInstalarIOS() : "");
+    root.innerHTML = renderBannerPWA() + renderTelaInicial() + (UI.backupModal!==null ? renderBackupModalPreApp() : "") + (UI.modalInstalarIOS ? renderModalInstalarIOS() : "");
     bindEvents();
     if(focarBotaoIniciarAppPendente){ focarBotaoIniciarAppPendente = false; aplicarFocoBotaoIniciarApp(); }
     return;
@@ -11141,7 +11138,6 @@ function render(){
     ${UI.importCatModal!==null ? renderImportCatModal() : ""}
     ${UI.editingTx!==null ? renderTxModal() : ""}
     ${UI.edicaoLoteModal!==null ? renderEdicaoLoteModal() : ""}
-    ${UI.backupModal!==null ? renderBackupModal() : ""}
     ${UI.contaMicrosoftModal ? renderContaMicrosoftModal() : ""}
     ${UI.textModal!==null ? renderTextModal() : ""}
     ${UI.novaProjecaoModal!==null ? renderNovaProjecaoModal() : ""}
@@ -11790,6 +11786,14 @@ function renderTabbar(){
   <div class="menu-mobile-backdrop ${maisAberto?'aberto':''}" id="menuMobileBackdrop"></div>`;
 }
 function renderTab(){
+  // "Novos ajustes de interface — FinUs" (2ª rodada), item 4: Backup e Restauração deixa de ser um modal
+  // sobreposto — vira uma "página" dentro de main, no mesmo conceito estrutural das demais abas (um
+  // renderXxx() que retorna .panel(s) direto, sem overlay). Fica de fora do switch por UI.tab de propósito:
+  // como antes (quando era modal), continua sobrepondo QUALQUER aba por trás — abrir o Backup nunca muda
+  // UI.tab, então fechar (UI.backupModal=null) volta exatamente pra aba em que o usuário estava, em
+  // qualquer viewport (mobile, tablet ou desktop) — nenhuma duplicação de lógica de abertura/fechamento
+  // (abrirBackupModal/closeBackupModal* continuam exatamente as mesmas).
+  if(UI.backupModal!==null) return renderBackupPagina();
   if(UI.tab==="inicio") return renderInicioMobile();
   if(UI.tab==="dashboard") return renderDashboard();
   if(UI.tab==="inteligencia") return renderInteligencia();
@@ -16614,6 +16618,11 @@ function renderTextModal(){
 async function abrirBackupModal(){
   UI.backupModal = { aba:'historico', backups:null, carregando:true, selecionados:new Set(), filtros:{ tipo:new Set(), aberto:null }, excluindo:null };
   render();
+  // "Novos ajustes de interface — FinUs" (2ª rodada), item 4: Backup e Restauração agora é uma página em
+  // main (renderBackupPagina) — como abri-la nunca muda UI.tab, render() não zera o scroll sozinho (só
+  // zera quando a aba muda). Sem isto, abrir o Backup a partir de um ponto rolado da tela anterior faria a
+  // página já nascer rolada, em vez de sempre começar do topo, como qualquer outra navegação de página. */
+  window.scrollTo(0, 0);
   const backups = await carregarHistoricoBackups();
   if(UI.backupModal){ UI.backupModal.backups = backups; UI.backupModal.carregando = false; render(); }
 }
@@ -16646,13 +16655,19 @@ function renderProgressoExclusaoBackup(excluindo){
     <div class="backup-progresso-exclusao-trilho"><div class="backup-progresso-exclusao-fill" style="width:${pct}%;"></div></div>
   </div>`;
 }
-/* Lista de backups após o filtro "Tipo" ativo — função única compartilhada entre renderBackupModal() e o
+/* Lista de backups após o filtro "Tipo" ativo — função única compartilhada entre renderBackupConteudo() e o
    bind de "Selecionar todos" (ver bindEvents), para que os dois nunca divirjam sobre quais backups estão
    "visíveis" no momento. */
 function backupsFiltradosAtuais(m){
   return m.backups ? m.backups.filter(b=> passaFiltroMultiSel((m.filtros||{tipo:new Set()}).tipo, b.tipo)) : [];
 }
-function renderBackupModal(){
+/* "Novos ajustes de interface — FinUs" (2ª rodada), item 4: conteúdo de Backup e Restauração extraído do
+   antigo renderBackupModal() para uma função própria, sem NENHUM wrapper de modal/overlay — reaproveitada
+   tanto pela nova página em main (renderBackupPagina, usada sempre que o app já foi iniciado, em qualquer
+   viewport) quanto pelo modal antigo (renderBackupModalPreApp, único caso ainda em uso: a tela inicial,
+   antes de "Iniciar App", que não tem main/bottom-nav para hospedar uma página). Conteúdo/funcionalidades
+   idênticos nos dois casos — só a moldura em volta muda. */
+function renderBackupConteudo(){
   const m = UI.backupModal;
   // Seleção em lote é sempre contextual à listagem filtrada atual (requisito da rodada seguinte): qualquer
   // backup que tenha ficado fora do resultado filtrado (ex.: o usuário selecionou com um filtro, depois
@@ -16665,10 +16680,6 @@ function renderBackupModal(){
     for(const nome of Array.from(m.selecionados)){ if(!visiveisAgora.has(nome)) m.selecionados.delete(nome); }
   }
   return `
-  <div class="overlay" id="ovBackup" ${attrZIndexModal('backupModal')}>
-    <div class="modal modal-backup" style="width:1280px;">
-      <div class="modal-head"><h3>📚 Backup e Restauração</h3><button class="close-x" id="closeBackupModal">✕</button></div>
-      <div class="modal-body">
         <div class="tabs-secundarias" style="margin-bottom:14px;">
           <button type="button" class="tab-sec ${m.aba==='historico'?'ativo':''}" data-backup-aba="historico">Histórico</button>
           <button type="button" class="tab-sec ${m.aba==='config'?'ativo':''}" data-backup-aba="config">Configuração</button>
@@ -16781,10 +16792,32 @@ function renderBackupModal(){
           <p class="hint" style="margin-bottom:0;">A política de retenção só se aplica a backups <b>automáticos</b> — manuais e de pré-restauração nunca são excluídos automaticamente, e o backup automático mais recente nunca é removido.</p>
         </div>
         `}
-      </div>
-      <div class="modal-foot">
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);">
         <button type="button" class="btn btn-ghost" id="closeBackupModal2">Cancelar</button>
 		${m.aba==='config' ? `<button type="button" class="btn btn-primary btn-sm" id="btnSalvarConfigBackup">💾 Salvar configuração</button>` : ''}
+      </div>`;
+}
+/* Página em main (dentro do app já iniciado, qualquer viewport) — ver comentário de renderBackupConteudo.
+   Mesmo conceito estrutural das demais abas (renderInicioMobile/renderDashboard/etc.): um .panel direto em
+   main, sem overlay. "← Voltar" reaproveita o MESMO handler que fechava o ✕ do modal antigo
+   (closeBackupModal, ver bindEvents) — fechar aqui só zera UI.backupModal, então a tela volta sozinha para
+   a aba em que o usuário estava (UI.tab nunca é alterado por abrir/fechar o Backup). */
+function renderBackupPagina(){
+  return `
+  <div class="panel">
+    <h2><span>📚 Backup e Restauração</span><button type="button" class="btn btn-ghost btn-sm" id="closeBackupModal">← Voltar</button></h2>
+    ${renderBackupConteudo()}
+  </div>`;
+}
+/* Único uso restante do modal/overlay: a tela inicial (antes de "Iniciar App"), que não tem main/bottom-nav
+   para hospedar uma página — ver "tiVerHistoricoBackups" em bindEvents e o 2º parâmetro de render(). */
+function renderBackupModalPreApp(){
+  return `
+  <div class="overlay" id="ovBackup" ${attrZIndexModal('backupModal')}>
+    <div class="modal modal-backup" style="width:1280px;">
+      <div class="modal-head"><h3>📚 Backup e Restauração</h3><button class="close-x" id="closeBackupModal">✕</button></div>
+      <div class="modal-body">
+        ${renderBackupConteudo()}
       </div>
     </div>
   </div>`;
@@ -20786,8 +20819,11 @@ function bindEvents(){
   }
 
   // ---- Modal Backup e Restauração ----
-  document.getElementById('closeBackupModal')?.addEventListener('click', ()=>{ UI.backupModal=null; render(); });
-  document.getElementById('closeBackupModal2')?.addEventListener('click', ()=>{ UI.backupModal=null; render(); });
+  // "Novos ajustes de interface — FinUs" (2ª rodada), item 4: mesmo scrollTo(0,0) de abrirBackupModal(),
+  // agora ao voltar — fechar a página de Backup sempre volta ao topo da aba por trás, como qualquer outra
+  // navegação de página do app (nunca "reaparece" no meio da tela por causa de um scroll antigo).
+  document.getElementById('closeBackupModal')?.addEventListener('click', ()=>{ UI.backupModal=null; render(); window.scrollTo(0,0); });
+  document.getElementById('closeBackupModal2')?.addEventListener('click', ()=>{ UI.backupModal=null; render(); window.scrollTo(0,0); });
   if(UI.backupModal){
     const bm = UI.backupModal;
     document.querySelectorAll('[data-backup-aba]').forEach(b=> b.addEventListener('click', ()=>{ bm.aba = b.dataset.backupAba; render(); }));
