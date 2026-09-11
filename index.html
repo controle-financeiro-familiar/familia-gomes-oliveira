@@ -814,7 +814,7 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 .dash-hero-saldo-val{font-family:var(--mono);font-size:32px;font-weight:700;margin-top:6px;color:var(--gold);}
 .dash-hero-saldo-val.neg{color:#ff8a7a;}
 @media(max-width:700px){ .dash-hero-saldo{display:block;} }
-/* Página inicial mobile (ver renderInicio — "Ajustes de interface — modo mobile", item 1): reaproveita
+/* Página inicial mobile (ver renderInicioMobile — "Ajustes de interface — modo mobile", item 1): reaproveita
    .dash-hero-saldo tal qual (mesmo card/cálculo que antes vivia no Painel Financeiro), só acrescentando a
    saudação acima, sem duplicar o gradiente/padding dele. "Novos ajustes de interface — modo mobile", item 3:
    os botões de ação rápida ("+ Novo lançamento"/"Ver Extrato") que existiam dentro do card foram removidos
@@ -847,13 +847,6 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
   display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
 }
 @media(max-width:380px){ .inicio-atalhos-grid{grid-template-columns:repeat(2,1fr);} }
-/* "Novos ajustes de interface — FinUs" (2ª rodada), item 5: no desktop a grade de atalhos usa auto-fit com
-   um teto de largura por item (mesma técnica já usada em .cartoes-resumo-grid/.mini-card-grid) — em vez de
-   continuar em 3 colunas fixas esticadas para preencher uma tela larga (o que pareceria a versão mobile
-   simplesmente ampliada), o número de colunas cresce com o espaço disponível e cada atalho mantém um
-   tamanho parecido ao do mobile. Item ainda quadrado o bastante (min-height:80px, ver .inicio-atalho) para
-   caber confortavelmente nessa largura menor por item. */
-@media(min-width:701px){ .inicio-atalhos-grid{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));} }
 
 /* Mapa de Calor de Despesas (Painel Financeiro) — grid com rolagem horizontal própria (.mc-scroll), nunca
    forçando a página inteira a rolar de lado; min-width no grid garante que as células nunca fiquem
@@ -11110,12 +11103,13 @@ function aplicarFocoBotaoIniciarApp(){
    formulário) continua funcionando normalmente — só o disparo automático-ao-abrir foi retirado. */
 function render(){
   document.documentElement.classList.toggle('forcar-nav-mobile', UI.forcarNavMobile);
-  // "Página inicial": UI.tab==='inicio' é uma tela extra, separada das 7 abas de sempre — nunca entra em
-  // TABS_TODAS/painel "Painéis" mobile (tem acesso próprio e direto: ícone dedicado no bottom-nav mobile e
-  // botão próprio no início do .tabbar de desktop — ver BOTTOM_NAV_ATALHOS/renderTabbar). "Novos ajustes de
-  // interface — FinUs" (2ª rodada), item 5: passou a existir também no desktop (renderInicio, antes só
-  // mobile), então não há mais guarda nenhuma redirecionando para o Painel Financeiro ao redimensionar a
-  // janela — a aba persiste normalmente em qualquer largura, como qualquer outra.
+  // "Página inicial e navegação mobile": UI.tab==='inicio' só existe na navegação mobile (não tem
+  // representação no .tabbar de desktop, nem entra em TABS_TODAS/painel "Painéis" — é uma tela extra,
+  // separada das 7 abas de sempre). Se a largura deixar de ser mobile (janela redimensionada) enquanto essa
+  // tela está aberta, volta para o Painel Financeiro — nunca deixa o desktop "preso" numa tela sem tabbar
+  // correspondente. Mesmo critério de mobile já usado por ajustarNavResponsiva (innerWidth<=700 OU
+  // forcarNavMobile).
+  if(UI.tab==='inicio' && window.innerWidth>700 && !UI.forcarNavMobile){ UI.tab = 'dashboard'; }
   if(!STATE.ready){ root.innerHTML = '<div class="empty-state" style="padding-top:80px;">Carregando...</div>'; return; }
   chartInstances.forEach(c=>c.destroy()); chartInstances=[];
   // O tooltip externo (ver tooltipExternoHandler) vive fora da árvore do dashboard (anexado direto no
@@ -11785,17 +11779,8 @@ function renderTabbar(){
   const backupModalAberto = UI.backupModal !== null;
   const backupAberto = !maisAberto && backupModalAberto;
   const cartoesAtivo = !maisAberto && !backupModalAberto && UI.tab==='cartoes';
-  // "Novos ajustes de interface — FinUs" (2ª rodada), item 5: Início ganha um botão próprio no INÍCIO do
-  // .tabbar de desktop — de propósito FORA do .map(TABS_TODAS) abaixo (mesmo princípio já usado pelo ícone
-  // dedicado do bottom-nav mobile, ver BOTTOM_NAV_ATALHOS): Início é uma tela extra, separada das 7 abas de
-  // sempre, e nunca deve engordar TABS_TODAS/o painel "Painéis" mobile (que já tem acesso próprio e direto a
-  // ela). O clique já funciona sozinho — .tab-btn[data-tab] já está no seletor genérico de navegação por aba
-  // (ver bindEvents), nenhum handler novo necessário.
   return `
-  <nav class="tabbar">
-    <button class="tab-btn ${UI.tab==='inicio'?'active':''}" data-tab="inicio">🏠 Início</button>
-    ${TABS_TODAS.map(([id,label])=>`<button class="tab-btn ${UI.tab===id?'active':''}" data-tab="${id}">${label}</button>`).join('')}
-  </nav>
+  <nav class="tabbar">${TABS_TODAS.map(([id,label])=>`<button class="tab-btn ${UI.tab===id?'active':''}" data-tab="${id}">${label}</button>`).join('')}</nav>
   <nav class="bottom-nav">
     ${BOTTOM_NAV_ATALHOS.map(([id,icone,rotulo])=>{
       const ativo = !maisAberto && !backupModalAberto && UI.tab===id;
@@ -11838,7 +11823,7 @@ function renderTab(){
   // qualquer viewport (mobile, tablet ou desktop) — nenhuma duplicação de lógica de abertura/fechamento
   // (abrirBackupModal/closeBackupModal* continuam exatamente as mesmas).
   if(UI.backupModal!==null) return renderBackupPagina();
-  if(UI.tab==="inicio") return renderInicio();
+  if(UI.tab==="inicio") return renderInicioMobile();
   if(UI.tab==="dashboard") return renderDashboard();
   if(UI.tab==="inteligencia") return renderInteligencia();
   if(UI.tab==="registros") return renderRegistros();
@@ -11849,29 +11834,24 @@ function renderTab(){
   return "";
 }
 
-/* ---------- PÁGINA INICIAL ----------
-   "Ajustes de interface — modo mobile", item 1: área de entrada dedicada do app, originalmente só no
-   mobile, separada do Painel Financeiro (não é uma variação dele, é uma aba própria, UI.tab==='inicio').
-   Reaproveita integralmente cálculos e dados já existentes, sem duplicar nenhuma lógica nova:
+/* ---------- PÁGINA INICIAL (mobile) ----------
+   "Ajustes de interface — modo mobile", item 1: área de entrada dedicada do app no mobile — nunca existe no
+   desktop (ver render(), guarda que volta para 'dashboard' se a largura deixar de ser mobile) e é separada
+   do Painel Financeiro (não é mais uma variação dele, é uma aba própria, UI.tab==='inicio'). Reaproveita
+   integralmente cálculos e dados já existentes, sem duplicar nenhuma lógica nova:
    - O card de saldo é o MESMO .dash-hero-saldo que antes vivia dentro do Painel Financeiro (mesma
-     calcSaldoAtualFluxoCaixa) — ver item 2 ("Saldo Atual Hoje" sai do Painel Financeiro, para nunca ficar
-     duplicado nos dois lugares ao mesmo tempo, ver renderDashboard).
-   - Os atalhos reaproveitam TABS_PAINEIS_MOBILE (mesmos ícone/nome já usados no painel "Painéis" mobile) —
-     nunca uma lista paralela que poderia divergir da real ordem/conteúdo das abas.
+     calcSaldoAtualFluxoCaixa) — ver item 2 ("Saldo Atual Hoje" sai do Painel Financeiro no mobile, para
+     nunca ficar duplicado nos dois lugares ao mesmo tempo, ver renderDashboard).
+   - Os atalhos reaproveitam TABS_PAINEIS_MOBILE (mesmos ícone/nome já usados no painel "Painéis") — nunca
+     uma lista paralela que poderia divergir da real ordem/conteúdo das abas.
    - "Novos ajustes de interface — modo mobile", item 3: os botões de ação rápida "+ Novo lançamento" e
      "Ver Extrato" que existiam dentro do card de saldo foram removidos — saldo, título, data, layout e
      cálculo do card permanecem intactos.
-   - Item 4: 2 cards adicionais no mesmo painel "Painéis" — "Backup e Restauração" (abre a MESMA página já
-     existente, via abrirBackupModal(), nunca uma página nova) e "Conta Microsoft" (abre o
+   - Item 4: 2 cards adicionais no mesmo painel "Painéis" — "Backup e Restauração" (abre o MESMO modal já
+     existente, via abrirBackupModal(), nunca um modal novo) e "Conta Microsoft" (abre o novo
      renderContaMicrosoftModal(), ver bindEvents). Nenhum dos dois tem data-tab (não trocam de aba, abrem um
-     modal/página própria), então ficam fora do seletor genérico ".inicio-atalho[data-tab]" usado pelos 7
-     atalhos acima.
-   "Novos ajustes de interface — FinUs" (2ª rodada), item 5: a MESMA função passa a valer também no desktop
-   (antes só existia no mobile — ver histórico de render()/renderTabbar() para a guarda/tabbar que
-   restringiam isso) — identidade visual, hierarquia, conteúdo e navegação idênticos aos de sempre; só a
-   densidade da grade de atalhos se adapta ao espaço maior (ver @media(min-width:701px) .inicio-atalhos-grid
-   no CSS — nunca uma versão paralela ou proporcionalmente ampliada da tela mobile). */
-function renderInicio(){
+     modal), então ficam fora do seletor genérico ".inicio-atalho[data-tab]" usado pelos 7 atalhos acima. */
+function renderInicioMobile(){
   const saldoAtual = calcSaldoAtualFluxoCaixa();
   return `
   <div class="inicio-saudacao">Olá, ${escapeHtml(nomeUsuarioConectado())} 👋</div>
@@ -12154,6 +12134,7 @@ function renderGraficoExpandidoModal(){
 function renderDashboard(){
   const d = calcDashboard(UI.ano, UI.mes);
   const competencia = `${UI.ano}-${pad2(UI.mes)}`;
+  const saldoAtual = calcSaldoAtualFluxoCaixa();
   const alertaVencimentoHtml = (()=>{
     const alertasVenc = alertasFluxoCaixaMes();
     if(!alertasVenc.length) return '';
@@ -12168,12 +12149,18 @@ function renderDashboard(){
   // checagem de window.innerWidth só na hora de montar a página, recalculada a cada render) — nenhuma
   // mudança de conteúdo/cálculo dos alertas.
   const mobile = window.innerWidth<=700;
-  // "Ajustes de interface — modo mobile", item 2 ("Saldo Atual Hoje"): esse card saiu do Painel Financeiro
-  // — vive só na página Início (ver renderInicio, que faz seu próprio calcSaldoAtualFluxoCaixa()). Nunca
-  // duplicado nos dois lugares ao mesmo tempo. "Novos ajustes de interface — FinUs" (2ª rodada), item 5:
-  // agora que a página Início também existe no desktop (antes só no mobile), o card sai também do Painel
-  // Financeiro do desktop pelo mesmo motivo.
-  const heroSaldoHtml = '';
+  // "Ajustes de interface — modo mobile", item 2 ("Saldo Atual Hoje"): no mobile esse card sai do Painel
+  // Financeiro — foi para a nova página Início (ver renderInicioMobile), que já reaproveita o MESMO
+  // .dash-hero-saldo/cálculo. Nunca duplicado nos dois lugares ao mesmo tempo. No desktop continua aqui,
+  // como sempre (a página Início nem existe no desktop).
+  const heroSaldoHtml = mobile ? '' : `
+  <div class="dash-hero-saldo">
+    <div class="dash-hero-saldo-topo">
+      <div class="dash-hero-saldo-lbl">💼 Saldo Atual (Hoje)</div>
+      <div class="dash-hero-saldo-data">${fmtData(hojeISO())}</div>
+    </div>
+    <div class="dash-hero-saldo-val ${arredondarMoeda(saldoAtual)<0?'neg':''}">${fmtBRL(saldoAtual)}</div>
+  </div>`;
   // "Novos ajustes de interface — FinUs", item 1: mesma composição visual do Resumo Executivo (Inteligência
   // Financeira) — título da aba dentro de um .panel, acima do .cartoes-resumo-grid, reaproveitando as
   // MESMAS classes (.panel/.panel h2), nunca um estilo paralelo. .cartoes-resumo-lbl-minusculo só baixa a
@@ -16868,7 +16855,7 @@ function renderBackupConteudo(){
       </div>` : ''}`;
 }
 /* Página em main (dentro do app já iniciado, qualquer viewport) — ver comentário de renderBackupConteudo.
-   Mesmo conceito estrutural das demais abas (renderInicio/renderDashboard/etc.): um .panel direto em
+   Mesmo conceito estrutural das demais abas (renderInicioMobile/renderDashboard/etc.): um .panel direto em
    main, sem overlay. "← Voltar" reaproveita o MESMO handler que fechava o ✕ do modal antigo
    (closeBackupModal, ver bindEvents) — fechar aqui só zera UI.backupModal, então a tela volta sozinha para
    a aba em que o usuário estava (UI.tab nunca é alterado por abrir/fechar o Backup). */
@@ -18940,7 +18927,7 @@ function bindEvents(){
   });
   document.querySelectorAll('.tab-btn, .bn-item[data-tab], .mais-sheet-item[data-tab], .inicio-atalho[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.tab = b.dataset.tab; UI.menuMobileAberto = false; UI.fabConfigAberto = false; render(); }));
   // "Novos ajustes de interface — modo mobile", item 4: os 2 cards adicionais da página inicial (ver
-  // renderInicio) reaproveitam as MESMAS ações já existentes — abrirBackupModal() (idêntica ao item
+  // renderInicioMobile) reaproveitam as MESMAS ações já existentes — abrirBackupModal() (idêntica ao item
   // "Backup e Restauração" do Menu ☰) e o novo modal simples de Conta Microsoft.
   document.getElementById('btnInicioBackup')?.addEventListener('click', async ()=> { await abrirBackupModal(); });
   document.getElementById('btnInicioContaMicrosoft')?.addEventListener('click', ()=>{ UI.contaMicrosoftModal = true; render(); });
