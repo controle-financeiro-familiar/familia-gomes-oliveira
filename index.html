@@ -15378,15 +15378,18 @@ function renderConciliarProjecaoModal(){
   const statusPreview = qtdTotalPreview===0 ? 'Sem conciliação' : (Math.abs(diferenca)<0.005 ? 'Conciliado' : `Conciliado (diferença de ${fmtBRL(Math.abs(diferenca))})`);
   // Larguras fixas o bastante para Data/Conta/Categoria/Tipo/Valor/Ação nunca quebrarem linha nem cortarem
   // conteúdo, com Descrição recebendo o espaço restante — soma sempre 100%, então a tabela nunca precisa
-  // de overflow-x (requisito "não usar overflow-x como solução principal").
+  // de overflow-x (requisito "não usar overflow-x como solução principal"). data-label em cada <td> é o que
+  // permite ao CSS genérico .tabela-cards-mobile (mesmo mecanismo já usado em Backup/Inteligência
+  // Financeira/Planejamento Financeiro) empilhar a linha como card no mobile, sem overflow-x nem tabela
+  // bespoke própria — nunca um padrão de responsividade paralelo (item 5 do requisito).
   const linhaRegistro = (t, acaoHtml) => `<tr>
-              <td style="width:10%;">${fmtData(t.data)}</td>
-              <td style="width:30%;">${escapeHtml(t.descricao)}</td>
-              <td style="width:14%;">${escapeHtml(t.conta)}</td>
-              <td style="width:14%;">${escapeHtml(t.categoria||'—')}</td>
-              <td style="width:9%;text-align:center;"><span class="tag ${t.tipo}" style="font-size:9px;">${t.tipo}</span></td>
-              <td style="width:14%;text-align:right;">${fmtBRL(t.valor)}</td>
-              <td style="width:9%;text-align:center;">${acaoHtml}</td>
+              <td data-label="Data" style="width:10%;">${fmtData(t.data)}</td>
+              <td data-label="Descrição" style="width:30%;">${escapeHtml(t.descricao)}</td>
+              <td data-label="Conta" style="width:14%;">${escapeHtml(t.conta)}</td>
+              <td data-label="Categoria" style="width:14%;">${escapeHtml(t.categoria||'—')}</td>
+              <td data-label="Tipo" style="width:9%;text-align:center;"><span class="tag ${t.tipo}" style="font-size:9px;">${t.tipo}</span></td>
+              <td data-label="Valor" style="width:14%;text-align:right;">${fmtBRL(t.valor)}</td>
+              <td data-label="" style="width:9%;text-align:center;">${acaoHtml}</td>
             </tr>`;
   // Ordenação (item 1 do pedido): aplicada sobre a lista COMPLETA de candidatos, antes de qualquer
   // paginação — na ordenação original (sem clique), aplicarOrdenacaoClique devolve `candidatos` como
@@ -15432,13 +15435,13 @@ function renderConciliarProjecaoModal(){
         </table>
         ${reaisVinculados.length ? `
         <p class="field-section-label" style="margin:14px 0 4px;">Vínculos já confirmados</p>
-        <div class="table-wrap" style="overflow-x:auto;"><table style="width:100%;table-layout:fixed;">
+        <div class="table-wrap" style="overflow-x:auto;"><table class="tabela-cards-mobile" style="width:100%;table-layout:fixed;">
           <thead><tr><th style="width:10%;">Data</th><th style="width:30%;">Descrição</th><th style="width:14%;">Conta</th><th style="width:14%;">Categoria</th><th style="width:9%;">Tipo</th><th style="width:14%;text-align:right;">Valor</th><th style="width:9%;"></th></tr></thead>
           <tbody>${reaisVinculados.map(t=>linhaRegistro(t, `<button type="button" class="icon-btn" data-conciliar-remover-vinculo="${t.id}" title="Remover este vínculo (volta a ser um candidato disponível)">🗑️</button>`)).join('')}</tbody>
         </table></div>` : ''}
         <p class="field-section-label" style="margin:14px 0 4px;">Candidatos disponíveis${candidatos.length ? ` (${candidatos.length})` : ''}</p>
         <p class="hint" style="margin-top:0;">Marque um ou mais registros que correspondem de fato a este previsto (não é preciso que a data ou o valor sejam exatamente iguais) e confirme a seleção. Clique num cabeçalho para ordenar.</p>
-        ${candidatos.length ? `<div class="table-wrap" style="overflow-x:auto;" data-ordenar-tabela="conciliarCandidatos"><table style="width:100%;table-layout:fixed;">
+        ${candidatos.length ? `<div class="table-wrap" style="overflow-x:auto;" data-ordenar-tabela="conciliarCandidatos"><table class="tabela-cards-mobile" style="width:100%;table-layout:fixed;">
           <thead><tr>
             <th style="width:6%;"></th>
             ${thOrdenavel('conciliarCandidatos','data','Data',{style:'width:10%;'})}
@@ -15450,13 +15453,13 @@ function renderConciliarProjecaoModal(){
           </tr></thead>
           <tbody>
             ${pageList.map(c=>`<tr>
-              <td style="text-align:center;"><input type="checkbox" data-conciliar-check="${c.t.id}" ${selecionados.includes(c.t.id)?'checked':''}></td>
-              <td>${fmtData(c.t.data)}</td>
-              <td>${escapeHtml(c.t.descricao)}</td>
-              <td>${escapeHtml(c.t.conta)}</td>
-              <td>${escapeHtml(c.t.categoria||'—')}</td>
-              <td><span class="tag ${c.t.tipo}" style="font-size:9px;">${c.t.tipo}</span></td>
-              <td style="text-align:right;">${fmtBRL(c.t.valor)}</td>
+              <td data-label="" style="text-align:center;"><input type="checkbox" data-conciliar-check="${c.t.id}" ${selecionados.includes(c.t.id)?'checked':''}></td>
+              <td data-label="Data">${fmtData(c.t.data)}</td>
+              <td data-label="Descrição">${escapeHtml(c.t.descricao)}</td>
+              <td data-label="Conta">${escapeHtml(c.t.conta)}</td>
+              <td data-label="Categoria">${escapeHtml(c.t.categoria||'—')}</td>
+              <td data-label="Tipo"><span class="tag ${c.t.tipo}" style="font-size:9px;">${c.t.tipo}</span></td>
+              <td data-label="Valor" style="text-align:right;">${fmtBRL(c.t.valor)}</td>
             </tr>`).join('')}
           </tbody>
         </table></div>
