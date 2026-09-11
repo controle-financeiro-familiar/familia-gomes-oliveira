@@ -420,13 +420,21 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
    "Novos ajustes de interface — FinUs", item 5: para ACIMA do bottom-nav (nunca sobrepondo-o) — bottom-nav-h
    + área segura do aparelho, em vez de bottom:0; a folha só abre quando o bottom-nav já está visível, então
    não precisa de nenhuma condição extra aqui. O padding inferior próprio não soma mais a área segura (ela
-   já está embutida no deslocamento acima, via a altura do próprio bottom-nav). */
+   já está embutida no deslocamento acima, via a altura do próprio bottom-nav).
+   "Novos ajustes de interface — FinUs" (2ª rodada), item 1: translateY(110%) sozinho deslizava a folha para
+   fora só em relação à PRÓPRIA altura dela — como o "bottom" acima agora já soma bottom-nav-h+safe-bottom
+   (bem maior que 10% da altura da folha em conteúdos curtos), o topo/borda/sombra fechados ainda ficavam
+   visíveis por cima do bottom-nav. O deslocamento fechado agora soma explicitamente essa MESMA distância
+   (+ uma margem de segurança de 24px) ao 100% da própria altura, então a folha fechada sempre acaba
+   totalmente abaixo da viewport, não importa o quão curto seja o conteúdo — nunca mais um resíduo visual
+   sobre/atrás da barra. */
 .mais-sheet{
   position:fixed;left:0;right:0;bottom:calc(var(--bottom-nav-h) + var(--safe-bottom));z-index:220;background:#fff;
   border-radius:var(--radius-lg) var(--radius-lg) 0 0;box-shadow:0 -12px 32px rgba(0,0,0,.28);
   padding:10px 0 14px;
   padding-left:var(--safe-left);padding-right:var(--safe-right);
-  transform:translateY(110%);transition:transform .25s ease;max-height:70vh;overflow-y:auto;
+  transform:translateY(calc(100% + var(--bottom-nav-h) + var(--safe-bottom) + 24px));
+  transition:transform .25s ease;max-height:70vh;overflow-y:auto;
 }
 .mais-sheet.aberto{transform:translateY(0);}
 .mais-sheet-alca{width:40px;height:4px;border-radius:var(--radius-full);background:var(--line);margin:0 auto 10px;}
@@ -2380,11 +2388,11 @@ summary::marker{content:'';}
    (o padrão cartoes-resumo-item não usa a barra lateral colorida do .kpi). */
 .cartoes-resumo-item.receita .val{color:var(--receita);}
 .cartoes-resumo-item.despesa .val{color:var(--despesa);}
-/* "Novos ajustes de interface — FinUs", item 1: só os labels dos cartoes-resumo do Painel Financeiro e do
-   Planejamento Financeiro (ver .cartoes-resumo-lbl-minusculo nos respectivos cardsResumoHtml) ficam em
-   minúsculas — nunca os demais usos de .cartoes-resumo-item no resto do app (Contas e Cartões, Registros,
-   Configurações, Extrato Consolidado, Resumo Executivo), que mantêm o texto original das labels. Só o
-   texto visual muda (text-transform); o dado/label real por trás nunca é alterado. */
+/* "Novos ajustes de interface — FinUs", item 1, estendido pela 2ª rodada itens 6/7: labels dos
+   cartoes-resumo em minúsculas — Painel Financeiro, Planejamento Financeiro, Resumo Executivo (Inteligência
+   Financeira) e Extrato Consolidado (ver .cartoes-resumo-lbl-minusculo nos respectivos cardsResumoHtml/
+   painéis). Contas e Cartões, Registros e Configurações mantêm o texto original das labels (não pedido para
+   esses). Só o texto visual muda (text-transform); o dado/label real por trás nunca é alterado. */
 .cartoes-resumo-lbl-minusculo .cartoes-resumo-item .lbl{text-transform:lowercase;}
 .tabela-cartoes{min-width:760px;}
 /* Reorganização "Ordem das Colunas, Limite e Ações": Ações concentra Importar + o ícone único de editar
@@ -11738,13 +11746,19 @@ const BOTTOM_NAV_ATALHOS = [
 ];
 function renderTabbar(){
   const maisAberto = UI.menuMobileAberto;
-  const backupAberto = UI.backupModal !== null;
-  const cartoesAtivo = UI.tab==='cartoes';
+  // "Novos ajustes de interface — FinUs" (2ª rodada), item 2: com o Menu aberto, NENHUM outro item do
+  // bottom-nav pode continuar aparecendo como ativo (label exibido) — só o próprio botão Menu. UI.tab (e o
+  // backupModal) continuam intocados por trás (seleção funcional preservada); é só a marcação visual
+  // "ativo"/rótulo exibido de cada item que fica condicionada a !maisAberto, então some assim que o Menu
+  // abre e volta sozinha, com o valor real de UI.tab, assim que o Menu fecha — sem nenhum estado próprio
+  // para "restaurar".
+  const backupAberto = !maisAberto && UI.backupModal !== null;
+  const cartoesAtivo = !maisAberto && UI.tab==='cartoes';
   return `
   <nav class="tabbar">${TABS_TODAS.map(([id,label])=>`<button class="tab-btn ${UI.tab===id?'active':''}" data-tab="${id}">${label}</button>`).join('')}</nav>
   <nav class="bottom-nav">
     ${BOTTOM_NAV_ATALHOS.map(([id,icone,rotulo])=>{
-      const ativo = UI.tab===id;
+      const ativo = !maisAberto && UI.tab===id;
       return `
     <button type="button" class="bn-item ${ativo?'active':''}" data-tab="${id}" aria-label="${rotulo}" aria-current="${ativo?'page':'false'}">
       <span class="bn-icone">${icone}</span>${ativo?`<span class="bn-rotulo">${rotulo}</span>`:''}
@@ -12142,10 +12156,10 @@ function renderDashboard(){
     </div>
   </details>`;
   return `
-  ${mobile ? ajudaFluxoHtml : ''}
   ${heroSaldoHtml}
   ${mobile ? alertaVencimentoHtml : ''}
   ${cardsResumoHtml}
+  ${mobile ? ajudaFluxoHtml : ''}
   ${mobile ? '' : alertaVencimentoHtml}
   ${mobile ? '' : ajudaFluxoHtml}
   ${(()=>{
@@ -14837,7 +14851,7 @@ function renderInteligencia(){
     <div class="empty-state"><div class="big">📊</div><b>Dados insuficientes para uma projeção confiável.</b><br>Continue registrando seus lançamentos para aumentar a precisão da análise (mínimo de 3 meses de histórico com os filtros atuais).</div>
   </div>` : `
 
-  <div class="panel" style="padding-bottom: 8px;">
+  <div class="panel cartoes-resumo-lbl-minusculo" style="padding-bottom: 8px;">
     <h2>Resumo Executivo</h2>
     <div class="cartoes-resumo-grid" style="${mobile ? 'grid-template-columns:repeat(2,1fr);' : 'grid-template-columns:repeat(auto-fit,minmax(190px,1fr));'}">
       ${cardResumo('💰','Receita Média', ctx.mediaReceita, undefined, ctx.receitaProjetadaMedia)}
@@ -15130,7 +15144,7 @@ function renderResumo(){
   }
   const mesAtivoExtrato = meses.find(m=>`${m.ano}-${m.mes}`===UI.extratoAbaMes) || meses[0];
   return `
-  <div class="panel">
+  <div class="panel cartoes-resumo-lbl-minusculo">
     <h2>
       <span>Extrato Consolidado</span>
       <span class="extrato-periodo-inline">
@@ -15608,9 +15622,9 @@ function renderMetas(){
   const r = calcResumoMetas(competencia);
   const alturaBarra = Math.max(140, 46 + r.lista.length*40);
   const indicadores = indicadoresMetas(r.lista, competencia);
-  // "Ajustes de interface — modo mobile", item 4: no mobile, o ajuda-fluxo passa a ser o 1º item da aba,
-  // antes até dos cards-resumo (mesmo princípio já aplicado ao Painel Financeiro) — no desktop mantém a
-  // posição original (depois dos cards). Cards-resumo em si já ficam 2x2 no mobile pela mesma regra
+  // "Novos ajustes de interface — FinUs" (2ª rodada), item 3: o ajuda-fluxo fica sempre IMEDIATAMENTE
+  // APÓS os cards-resumo — mesma relação usada no desktop, agora também no mobile (antes ficava ANTES dos
+  // cards no mobile, ver histórico). Cards-resumo em si já ficam 2x2 no mobile pela mesma regra
   // compartilhada de .grid-cards (ver PR do Painel Financeiro) — nenhuma mudança adicional necessária aqui.
   const mobile = window.innerWidth<=700;
   // "Novos ajustes de interface — FinUs", item 1: mesma composição visual do Resumo Executivo (Inteligência
@@ -15641,9 +15655,8 @@ function renderMetas(){
     </div>
   </details>`;
   return `
-  ${mobile ? ajudaFluxoHtml : ''}
   ${cardsResumoHtml}
-  ${mobile ? '' : ajudaFluxoHtml}
+  ${ajudaFluxoHtml}
   ${renderAlertasMetas(r.lista)}
   <div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
