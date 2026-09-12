@@ -339,10 +339,10 @@ input,select{font-family:var(--sans);}
   padding:8px 20px;text-align:center;
 }
 .banner b{color:#5c3d00;}
-/* "Ajustes de interface — modo mobile": espaçamento inferior próprio do banner de alertas de vencimento do
-   Painel Financeiro — sem isso ele ficava visualmente grudado nos cards-resumo logo abaixo. Só neste
-   contexto (não em todo .banner, reaproveitado em vários outros lugares com margens já corretas). */
-@media(max-width:700px){ .alerta-vencimento-dashboard{ margin-bottom:14px; } }
+/* Espaçamento inferior próprio do banner de alertas de vencimento do Painel Financeiro — sem isso ele
+   ficava visualmente grudado no elemento seguinte (desktop e mobile). Só neste contexto (não em todo
+   .banner, reaproveitado em vários outros lugares com margens já corretas). */
+.alerta-vencimento-dashboard{ margin-bottom:18px; }
 /* "Ajustes de interface — modo mobile": botões de ação num .panel h2 (Fatura Atual por Cartão/"Ver
    Cartões", Visão Geral/"Exportar relatório", Economias/"Ver detalhes") continuam alinhados à direita
    mesmo quando o título ao lado é longo o bastante para quebrar para uma 2ª linha — .panel h2 já é
@@ -732,7 +732,7 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
    Financeira/Simulação de Cenários, na aba Inteligência Financeira) — o painel mais curto estica até a
    altura do mais alto, em vez de cada um assumir só a altura do próprio conteúdo. */
 .dash-row-2col-igual{align-items:stretch;}
-.dash-row-2col-igual > .panel{display:flex;flex-direction:column;height:100%;box-sizing:border-box;}
+.dash-row-2col-igual > .panel{display:flex;flex-direction:column;height:100%;box-sizing:border-box;font-size:12.5px;}
 /* Cabeçalho de cada cenário (Simulação de Cenários): título à esquerda, campos de variação (só em
    Conservador/Otimista) à direita, na mesma linha — só quebra para duas linhas em telas muito estreitas,
    quando não há espaço para os dois lados convivendo. */
@@ -1056,6 +1056,11 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
 .tabela-fluxo td{padding:5px 8px;font-size:11.5px;}
 .tabela-fluxo th{padding:6px 8px;}
 .tabela-fluxo td:nth-child(2),.tabela-fluxo td:nth-child(3){overflow-wrap:break-word;word-break:break-word;}
+/* Ajuste de interface: colunas Conta/Cartão (3ª), Tipo (4ª) e Status (5ª) — cabeçalho e conteúdo alinhados
+   ao centro, igual às demais colunas já centralizadas nesta tabela (Dia). Não altera as demais colunas
+   (Descrição/Valor/Saldo/Ações) nem o layout de cards do mobile (que usa display:flex/space-between,
+   onde text-align não tem efeito visual). */
+.tabela-fluxo td:nth-child(3),.tabela-fluxo td:nth-child(4),.tabela-fluxo td:nth-child(5){text-align:center;}
 .tabela-fluxo .icon-btn{padding:1px;font-size:12px;}
 /* Coluna Ações (desktop): botões sempre alinhados à direita, espaçamento uniforme entre eles e nunca em
    mais de uma linha — display:flex resolve os três de uma vez (flex-wrap:nowrap é redundante com
@@ -1570,7 +1575,7 @@ html.forcar-nav-mobile .back-to-top{
    (que sempre vence, independente de ordem) — a regra de classe abaixo fica como documentação/reforço, mas
    quem efetivamente fixa a largura é o inline; max-width:96vw (herdado de .modal) continua garantindo o
    encolhimento em telas menores mesmo com o inline. */
-.modal-mapa-calor{ width:min(1280px, 96vw); }
+.modal-mapa-calor{ width:100%; max-width:1280px; }
 /* Modal de Backup e Restauração: mesmo padrão de largura responsiva (teto 1280px) usado pelos demais
    modais grandes acima — inline style="width:1280px" no markup é quem efetivamente fixa a largura
    (ver comentário do .modal-mapa-calor sobre a ordem de especificidade do CSS). SEM altura forçada: o
@@ -1680,7 +1685,7 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 @media(max-width:700px){
   .field input, .field select{font-size:16px;}
 }
-.hint{font-size:8px;color:#8393ac;margin-top:10px;}
+.hint{font-size:11.5px;color:#8393ac;margin-top:10px;}
 .tipo-toggle{display:flex;gap:8px;grid-column:span 4;}
 .tipo-toggle button{
   flex:1;border:2px solid var(--line);background:#fff;border-radius:8px;padding:10px;font-weight:700;font-size:13px;color:#5b6b85;
@@ -2259,7 +2264,7 @@ summary::marker{content:'';}
 /* Classe genérica reutilizável para transformar qualquer tabela em cards empilhados no mobile (mesma
    técnica já usada em Fluxo de Caixa/Cartões/Economias) — usar quando a tabela não tem nenhum estilo
    bespoke próprio que já resolva isso. Cada <td> precisa de um atributo data-label. */
-.tabela-cards-mobile{width:100%;}
+.tabela-cards-mobile{width:100%;font-size:11px;}
 @media(max-width:700px){
   .tabela-cards-mobile{display:block;}
   .tabela-cards-mobile thead{display:none;}
@@ -2403,7 +2408,7 @@ summary::marker{content:'';}
 .cartoes-resumo-item{min-width:0;}
 .cartoes-resumo-item > div{min-width:0;}
 .cartoes-resumo-item .val{font-family:var(--mono);font-weight:800;font-size:var(--val-font-size, 15px);color:var(--navy-900);line-height:1.2;white-space:nowrap;overflow:hidden;}
-.cartoes-resumo-item .lbl{font-size:8.5px;color:#6a7a97;font-weight:600;}
+.cartoes-resumo-item .lbl{font-size:11.5px;color:#6a7a97;font-weight:600;}
 /* "Novos ajustes de interface — modo mobile", item 7: mesmas classes/cores dinâmicas já usadas em .kpi
    (classeReceitaDespesaMoeda) — só o valor muda de cor conforme o sinal/categoria, nunca o card inteiro
    (o padrão cartoes-resumo-item não usa a barra lateral colorida do .kpi). */
@@ -2498,18 +2503,13 @@ summary::marker{content:'';}
 /* Leitura Financeira (aba Inteligência Financeira) — lista de tópicos independentes, cada um com ícone de
    sentido (ver ajuste "Mesclagem de Educação Financeira e Leitura Financeira"). */
 .leitura-financeira-topicos{display:flex;flex-direction:column;gap:10px;}
-.leitura-financeira-item{display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.55;}
+.leitura-financeira-item{display:flex;gap:10px;align-items:center;font-size:12.5px;line-height:1.55;}
 .leitura-financeira-item:last-child{margin-bottom:0;}
 .leitura-financeira-icone{font-size:16px;line-height:1.5;flex:none;}
-/* Ajuste de interface (Inteligência Financeira, modo mobile): reduzir o font-size para 12.5px somente nos
-   painéis "Comportamento Sazonal" e "Leitura Financeira", só no mobile — layout, espaçamento e demais
-   estilos (h2, .hint, larguras, cores) permanecem intactos, pois cada um já define seu próprio font-size
-   explícito e não herda deste ajuste. No desktop e nas demais abas nada muda. */
-@media(max-width:700px){
-  .intel-panel-sazonal{ font-size:12.5px; }
-  .intel-panel-leitura{ font-size:12.5px; }
-  .intel-panel-leitura .leitura-financeira-item{ font-size:12.5px; }
-}
+/* Ajuste de interface (Inteligência Financeira, modo mobile): o painel "Comportamento Sazonal" já herda
+   font-size:12.5px em todos os viewports via .dash-row-2col-igual > .panel (ver regra correspondente) —
+   layout, espaçamento e demais estilos (h2, .hint, larguras, cores) permanecem intactos, pois cada um já
+   define seu próprio font-size explícito e não herda deste ajuste. */
 .competencias-futuras-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:4px;}
 .competencia-futura-card{border:1px solid var(--line);border-radius:9px;padding:10px 12px;cursor:pointer;transition:border-color .15s ease,background .15s ease;background:#fff;}
 .competencia-futura-card:hover{border-color:var(--navy-900);}
@@ -14606,7 +14606,7 @@ function renderNaoListadosModal(){
     { selectId:'naoListadosPorPagina', dataAttr:'nao-listados-pagina', unidade:'lançamentos' });
   return `
   <div class="overlay" id="ovNaoListadosModal" ${attrZIndexModal('naoListadosModal')}>
-    <div class="modal" style="width:100%;max-width:900px;">
+    <div class="modal" style="width:100%;max-width:1280px;">
       <div class="modal-head">
         <h3 class="nao-listados-modal-titulo">
           <span class="nao-listados-modal-titulo-icone">🧾</span>
@@ -14697,7 +14697,7 @@ function renderTabelaMesExtrato(m){
       <thead><tr>
         <th style="text-align:center;width:${pct.dia}%;">Dia</th>
         <th style="text-align:left;width:${pct.descricao}%;">Descrição</th>
-        <th style="text-align:left;width:${pct.conta}%;">Conta/Cartão</th>
+        <th style="text-align:center;width:${pct.conta}%;">Conta/Cartão</th>
         <th style="text-align:center;width:${pct.tipo}%;">Tipo</th>
         <th style="text-align:center;width:${pct.status}%;">Status</th>
         <th style="text-align:right;width:${pct.valor}%;">Valor</th>
@@ -14961,7 +14961,7 @@ function renderInteligencia(){
       <h2>Alertas Analíticos</h2>
       ${ctx.alertas.length ? `
       <ul style="margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:8px;">
-        ${ctx.alertas.map(a=>`<li style="display:flex;gap:8px;align-items:flex-start;"><span>${a.icone}</span><span style="font-size:12.5px;">${a.texto}</span></li>`).join('')}
+        ${ctx.alertas.map(a=>`<li style="display:flex;gap:8px;align-items:center;"><span>${a.icone}</span><span style="font-size:12.5px;">${a.texto}</span></li>`).join('')}
       </ul>` : `<p class="hint">Nenhum alerta relevante identificado no período analisado.</p>`}
     </div>
   </div>
