@@ -1380,7 +1380,7 @@ html.forcar-nav-mobile .back-to-top{
 .btn-ghost:hover{background:var(--navy-50);}
 .btn-danger{background:#fbe7e4;color:var(--despesa);}
 .btn-danger:hover{background:#f5cfc9;}
-.btn-sm{padding:6px 10px;font-size:12px;}
+.btn-sm{padding:6px 10px;font-size:11px;}
 /* Área de ações de backup (tela inicial): hierarquia visual entre a ação primária (Restaurar backup)
    e a ação secundária (Ver histórico de backups) — ver .ti-backup-acoes. */
 .ti-backup-acoes{display:flex;flex-direction:column;align-items:center;width:100%;gap:10px;margin-top:10px;}
@@ -1490,7 +1490,7 @@ html.forcar-nav-mobile .back-to-top{
    passam a quebrar em várias linhas (toolbar-modal-padrao-filtros) — única situação em que isso é
    permitido — e a tabela ganha rolagem horizontal própria em vez de forçar o modal a ultrapassar a
    viewport. */
-.modal-extrato-futuros{ width:1280px; }
+.modal-extrato-futuros{ width:100%; max-width:1280px; }
 /* Item 12 do requisito: no modal Extrato da Conta (inclui Contracheque/TRT), "Imprimir" e "Replicar
    Contracheque" ficam juntos, alinhados à direita, na mesma linha enquanto couberem; em telas estreitas
    empilham um acima do outro (sempre à direita, nunca ultrapassando a largura do painel). */
@@ -1563,7 +1563,7 @@ html.forcar-nav-mobile .back-to-top{
    realmente não tem espaço para tudo (cabeçalho + resumo + filtros + tabela + paginação + ações). Também
    compacta os espaçamentos internos (sem alterar os componentes originais, usados em outras telas) para
    caber mais conteúdo sem rolagem em resoluções comuns de notebook/desktop. */
-.modal-fatura-cartao{ width:min(1280px, 96vw); }
+.modal-fatura-cartao{ width:100%; max-width:1280px; }
 /* Modal do Mapa de Calor de Despesas: mesmo padrão de largura responsiva já usado pelos modais de Cartões
    acima (.modal-fatura-cartao) — teto de 1280px no desktop, encolhe em telas menores (sempre dentro do
    teto global .modal{max-width:96vw}), sempre centralizado (herda o próprio .overlay). No mobile, a media
@@ -1664,17 +1664,16 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
    não um campo do formulário) nem nenhum outro modal — escopado só a esta classe. */
 .modal-editor-conta .modal-body input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]),
 .modal-editor-conta .modal-body select,
-.modal-editor-conta .modal-body button,
-.modal-editor-conta .modal-foot button{
+.modal-editor-conta .modal-body button{
   height:36px;
 }
 /* Mesmo tratamento acima, agora para os modais de lançamento (renderTxModal, renderNovaProjecaoModal,
-   renderDuplicarMesesEditarItemModal — ver .modal-editor-lancamento): campos de input/select e botões do
-   formulário/rodapé com altura fixa de 36px, escopado só a esses modais. */
+   renderDuplicarMesesEditarItemModal — ver .modal-editor-lancamento): campos de input/select do
+   formulário com altura fixa de 36px, escopado só a esses modais (o rodapé já usa a mesma altura em
+   qualquer modal, ver .modal-foot button). */
 .modal-editor-lancamento .modal-body input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]),
 .modal-editor-lancamento .modal-body select,
-.modal-editor-lancamento .modal-body button,
-.modal-editor-lancamento .modal-foot button{
+.modal-editor-lancamento .modal-body button{
   height:36px;
 }
 /* Item 6 do requisito: no mobile (especialmente iOS Safari), um input/select focado com font-size menor
@@ -1694,6 +1693,14 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .tipo-toggle button.sel-Receita{border-color:var(--receita);color:var(--receita);background:#e1f4ea;}
 .tipo-toggle button.sel-Fixo{border-color:var(--fixo);color:var(--fixo);background:#dcf0f5;}
 .tipo-toggle button.sel-Var{border-color:var(--variavel);color:var(--variavel);background:#fdecc8;}
+/* Ajuste de interface: botões Despesa/Receita dos modais "+ Novo lançamento" (renderTxModal) e "+ Novo
+   lançamento previsto" (renderNovaProjecaoModal) — texto sempre perfeitamente centralizado (vertical e
+   horizontalmente), independentemente da largura do botão/dispositivo. Escopado só a esses 4 ids (nunca
+   .tipo-toggle button em geral, reaproveitado por vários outros toggles — Grupo/Categoria, Fixo/Variável,
+   Classificar lançamento etc. — que não fazem parte deste pedido e continuam como estavam). */
+#btnTipoDespesa, #btnTipoReceita, #btnNovaProjecaoDespesa, #btnNovaProjecaoReceita{
+  display:flex; align-items:center; justify-content:center;
+}
 /* ---- Modal de lançamento: layout em seções (substitui o form-grid rígido só neste modal) ---- */
 .tx-form{display:flex;flex-direction:column;gap:18px;}
 .tx-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
@@ -1901,6 +1908,12 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .modal-head-acoes .btn:hover{background:rgba(255,255,255,.12);}
 .modal-body{padding:14px 20px;}
 .modal-foot{padding:11px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px;position:sticky;bottom:0;background:#fff;}
+/* Ajuste de interface: todo button do rodapé de modal (Fechar/Cancelar/Confirmar/etc.) com a mesma altura
+   já usada como referência para .btn-primary em outros pontos da interface (mesmos 36px já aplicados aos
+   campos/botões dos modais de edição — ver .modal-editor-conta/.modal-editor-lancamento logo abaixo, agora
+   generalizados para qualquer modal em vez de escopados só a esses dois) — alinhamento vertical, padding,
+   bordas e demais propriedades de .btn continuam intactos. */
+.modal-foot button{height:36px;}
 /* Item 2 do requisito: no mobile, os botões do rodapé de TODOS os modais ficam alinhados à esquerda — regra
    única e global (nunca por modal individual). Precisa vir DEPOIS da regra base acima (mesma especificidade
    0,1,0): senão a base — que não está em media query e por isso "sempre" se aplica — venceria por ordem de
@@ -2495,10 +2508,10 @@ summary::marker{content:'';}
 .drill-intel-nivel{padding:8px 10px 8px 22px;background:#fafbfd;border-left:2px solid var(--line);}
 .drill-intel-nivel-2{margin-left:14px;border-left-color:var(--gold-dark,#c98a00);}
 .drill-intel-nivel-3{margin-left:14px;border-left-color:var(--navy-300,#8393ac);padding-top:8px;}
-.drill-intel-titulo{font-weight:700;font-size:12.5px;color:var(--navy-800);margin-bottom:6px;}
-.drill-intel-item{display:flex;justify-content:space-between;align-items:center;padding:5px 6px;font-size:12.5px;cursor:pointer;border-radius:5px;}
+.drill-intel-titulo{font-weight:700;font-size:11px;color:var(--navy-800);margin-bottom:6px;}
+.drill-intel-item{display:flex;justify-content:space-between;align-items:center;padding:5px 6px;font-size:11px;cursor:pointer;border-radius:5px;}
 .drill-intel-item:hover{background:var(--navy-100,#e7ecf5);}
-.drill-intel-tabela{width:100%;font-size:12px;border-collapse:collapse;}
+.drill-intel-tabela{width:100%;font-size:11px;border-collapse:collapse;}
 .drill-intel-tabela td{padding:3px 6px;border-bottom:1px solid var(--line);}
 /* Leitura Financeira (aba Inteligência Financeira) — lista de tópicos independentes, cada um com ícone de
    sentido (ver ajuste "Mesclagem de Educação Financeira e Leitura Financeira"). */
@@ -14622,8 +14635,8 @@ function renderNaoListadosModal(){
         ${itens.length ? `
         <div class="table-wrap" style="overflow:visible;max-height:none;"><table class="tabela-cards-mobile" style="width:100%;table-layout:fixed;">
           <thead><tr>
-            <th style="width:12%;">Data</th><th style="width:32%;">Descrição</th><th style="width:18%;">Conta</th>
-            <th style="width:18%;">Categoria</th><th style="width:10%;">Tipo</th><th style="width:10%;text-align:right;">Valor</th>
+            <th style="width:9%;">Data</th><th style="width:36%;">Descrição</th><th style="width:16%;">Conta</th>
+            <th style="width:16%;">Categoria</th><th style="width:8%;">Tipo</th><th style="width:15%;text-align:right;">Valor</th>
           </tr></thead>
           <tbody>${itensPagina.map(t=>`<tr>
             <td data-label="Data">${fmtData(t.data)}</td>
@@ -14639,7 +14652,7 @@ function renderNaoListadosModal(){
         ` : `<div class="empty-state"><div class="big">🧾</div>Nenhum lançamento encontrado neste intervalo.</div>`}
       </div>
       <div class="modal-foot">
-        <button class="btn btn-ghost" id="cancelNaoListadosModal">Fechar</button>
+        <button class="btn btn-ghost" id="cancelNaoListadosModal">Cancelar</button>
       </div>
     </div>
   </div>`;
@@ -14952,7 +14965,7 @@ function renderInteligencia(){
       <p style="margin:0 0 10px;">Menor capacidade de poupança costuma ocorrer em <b>${MESES[ctx.sazonalidade.menorPoupanca.mes-1]}</b> (${fmtPercentSmart(ctx.sazonalidade.menorPoupanca.poupanca*100)} de poupança média).</p>
       ${ctx.sazonalidade.categoriasSazonais.length ? `
       <p class="hint" style="margin-bottom:4px;">Categorias com concentração sazonal:</p>
-      <ul style="margin:0;padding-left:18px;font-size:12.5px;">
+      <ul style="margin:0;padding-left:18px;font-size:12.5px;line-height:1.5;">
         ${ctx.sazonalidade.categoriasSazonais.slice(0,6).map(c=>`<li>${iconeGrupo(c.grupo)} <b>${escapeHtml(c.grupo)}</b> — concentração em ${c.meses.map(m=>MESES[m-1].slice(0,3)).join(', ')}</li>`).join('')}
       </ul>` : `<p class="hint" style="margin:0;">A receita e as despesas apresentam estabilidade ao longo do ano, sem evidência de sazonalidade relevante por categoria.</p>`}
       `}
@@ -15256,7 +15269,7 @@ function renderResumo(){
         </ul>
       </div>
     </details>
-    <button class="btn btn-primary btn-sm" id="btnNovaProjecao">+ Novo lançamento previsto</button>
+    <button class="btn btn-primary btn-sm" id="btnNovaProjecao" style="display:block;margin-left:auto;">+ Novo lançamento previsto</button>
 	${renderAbasMesesExtrato(meses, UI.extratoAbaMes)}
     ${mesAtivoExtrato ? renderTabelaMesExtrato(mesAtivoExtrato) : ''}
   </div>
@@ -15405,12 +15418,12 @@ function renderConciliarProjecaoModal(){
   // Financeira/Planejamento Financeiro) empilhar a linha como card no mobile, sem overflow-x nem tabela
   // bespoke própria — nunca um padrão de responsividade paralelo (item 5 do requisito).
   const linhaRegistro = (t, acaoHtml) => `<tr>
-              <td data-label="Data" style="width:10%;">${fmtData(t.data)}</td>
-              <td data-label="Descrição" style="width:30%;">${escapeHtml(t.descricao)}</td>
-              <td data-label="Conta" style="width:14%;">${escapeHtml(t.conta)}</td>
-              <td data-label="Categoria" style="width:14%;">${escapeHtml(t.categoria||'—')}</td>
-              <td data-label="Tipo" style="width:9%;text-align:center;"><span class="tag ${t.tipo}" style="font-size:9px;">${t.tipo}</span></td>
-              <td data-label="Valor" style="width:14%;text-align:right;">${fmtBRL(t.valor)}</td>
+              <td data-label="Data" style="width:9%;">${fmtData(t.data)}</td>
+              <td data-label="Descrição" style="width:33%;">${escapeHtml(t.descricao)}</td>
+              <td data-label="Conta" style="width:13%;">${escapeHtml(t.conta)}</td>
+              <td data-label="Categoria" style="width:13%;">${escapeHtml(t.categoria||'—')}</td>
+              <td data-label="Tipo" style="width:8%;text-align:center;"><span class="tag ${t.tipo}" style="font-size:9px;">${t.tipo}</span></td>
+              <td data-label="Valor" style="width:15%;text-align:right;">${fmtBRL(t.valor)}</td>
               <td data-label="" style="width:9%;text-align:center;">${acaoHtml}</td>
             </tr>`;
   // Ordenação (item 1 do pedido): aplicada sobre a lista COMPLETA de candidatos, antes de qualquer
@@ -15428,7 +15441,7 @@ function renderConciliarProjecaoModal(){
   // (renderRodapePaginacaoGenerica): opera sobre candidatosOrdenados por inteiro (totalFiltrado =
   // candidatos.length, nunca o tamanho da página), só recorta pageList para a exibição.
   const totalFiltrado = candidatosOrdenados.length;
-  const porPagina = cfg.porPagina || 10;
+  const porPagina = cfg.porPagina || 5;
   const totalPaginas = porPagina==='TODOS' ? 1 : Math.max(1, Math.ceil(totalFiltrado/porPagina));
   if(!cfg.pagina || cfg.pagina<1) cfg.pagina = 1;
   else if(cfg.pagina>totalPaginas) cfg.pagina = totalPaginas;
@@ -15439,7 +15452,7 @@ function renderConciliarProjecaoModal(){
     { selectId:'conciliarPorPagina', dataAttr:'conciliar-pagina', opcoesPorPagina:[5,10,25,50] });
   return `
   <div class="overlay" id="ovConciliarProjecao" ${attrZIndexModal('conciliarProjecaoModal')}>
-    <div class="modal" style="width:100%;max-width:1100px;">
+    <div class="modal" style="width:100%;max-width:1280px;">
       <div class="modal-head"><h3>🔗 Conciliar com o Extrato</h3><button class="close-x" id="closeConciliarProjecao">✕</button></div>
       <div class="modal-body">
         <div class="info-card" style="margin-top:0;">
@@ -15458,20 +15471,20 @@ function renderConciliarProjecaoModal(){
         ${reaisVinculados.length ? `
         <p class="field-section-label" style="margin:14px 0 4px;">Vínculos já confirmados</p>
         <div class="table-wrap" style="overflow-x:auto;"><table class="tabela-cards-mobile" style="width:100%;table-layout:fixed;">
-          <thead><tr><th style="width:10%;">Data</th><th style="width:30%;">Descrição</th><th style="width:14%;">Conta</th><th style="width:14%;">Categoria</th><th style="width:9%;">Tipo</th><th style="width:14%;text-align:right;">Valor</th><th style="width:9%;"></th></tr></thead>
+          <thead><tr><th style="width:9%;">Data</th><th style="width:33%;">Descrição</th><th style="width:13%;">Conta</th><th style="width:13%;">Categoria</th><th style="width:8%;">Tipo</th><th style="width:15%;text-align:right;">Valor</th><th style="width:9%;"></th></tr></thead>
           <tbody>${reaisVinculados.map(t=>linhaRegistro(t, `<button type="button" class="icon-btn" data-conciliar-remover-vinculo="${t.id}" title="Remover este vínculo (volta a ser um candidato disponível)">🗑️</button>`)).join('')}</tbody>
         </table></div>` : ''}
         <p class="field-section-label" style="margin:14px 0 4px;">Candidatos disponíveis${candidatos.length ? ` (${candidatos.length})` : ''}</p>
         <p class="hint" style="margin-top:0;">Marque um ou mais registros que correspondem de fato a este previsto (não é preciso que a data ou o valor sejam exatamente iguais) e confirme a seleção. Clique num cabeçalho para ordenar.</p>
         ${candidatos.length ? `<div class="table-wrap" style="overflow-x:auto;" data-ordenar-tabela="conciliarCandidatos"><table class="tabela-cards-mobile" style="width:100%;table-layout:fixed;">
           <thead><tr>
-            <th style="width:6%;"></th>
-            ${thOrdenavel('conciliarCandidatos','data','Data',{style:'width:10%;'})}
-            ${thOrdenavel('conciliarCandidatos','descricao','Descrição',{style:'width:27%;'})}
+            <th style="width:5%;"></th>
+            ${thOrdenavel('conciliarCandidatos','data','Data',{style:'width:9%;'})}
+            ${thOrdenavel('conciliarCandidatos','descricao','Descrição',{style:'width:32%;'})}
             ${thOrdenavel('conciliarCandidatos','conta','Conta',{style:'width:14%;'})}
             ${thOrdenavel('conciliarCandidatos','categoria','Categoria',{style:'width:14%;'})}
-            ${thOrdenavel('conciliarCandidatos','tipo','Tipo',{style:'width:9%;'})}
-            ${thOrdenavel('conciliarCandidatos','valor','Valor',{style:'width:20%;text-align:right;'})}
+            ${thOrdenavel('conciliarCandidatos','tipo','Tipo',{style:'width:8%;'})}
+            ${thOrdenavel('conciliarCandidatos','valor','Valor',{style:'width:18%;text-align:right;'})}
           </tr></thead>
           <tbody>
             ${pageList.map(c=>`<tr>
@@ -15488,7 +15501,7 @@ function renderConciliarProjecaoModal(){
         <div class="registros-rodape">${rodapePaginacaoCandidatos}</div>` : `<div class="empty-state"><div class="big">🔎</div>Nenhum candidato restante — todos já foram vinculados ou descartados.</div>`}
       </div>
       <div class="modal-foot" style="flex-wrap:wrap;gap:8px;">
-        <button class="btn btn-ghost" id="cancelConciliarProjecao">Fechar</button>
+        <button class="btn btn-ghost" id="cancelConciliarProjecao">Cancelar</button>
         ${candidatos.length ? `<button class="btn btn-ghost" id="nenhumaConciliarProjecao">🚫 Nenhuma das restantes corresponde</button>` : ''}
         ${selecionados.length ? `<button class="btn btn-primary" id="confirmarConciliarSelecao">✅ Confirmar seleção (${selecionados.length})</button>` : ''}
       </div>
@@ -16706,7 +16719,7 @@ async function abrirBackupModal(){
   // (antes 10) — só a quantidade padrão muda; o seletor "Exibir" continua permitindo trocar livremente
   // (mesmo componente genérico renderRodapePaginacaoGenerica de sempre), e a paginação/contagem/navegação já
   // recalculam sozinhas a partir de m.porPagina (ver renderBackupConteudo), sem nenhuma lógica nova aqui.
-  UI.backupModal = { aba:'historico', backups:null, carregando:true, selecionados:new Set(), filtros:{ tipo:new Set(), aberto:null }, excluindo:null, pagina:1, porPagina:5 };
+  UI.backupModal = { aba:'historico', backups:null, carregando:true, selecionados:new Set(), filtros:{ tipo:new Set(), integridade:new Set(), aberto:null }, excluindo:null, pagina:1, porPagina:5 };
   render();
   // "Novos ajustes de interface — FinUs" (2ª rodada), item 4: Backup e Restauração agora é uma página em
   // main (renderBackupPagina) — como abri-la nunca muda UI.tab, render() não zera o scroll sozinho (só
@@ -16728,6 +16741,15 @@ const BACKUP_TIPO_INFO = {
   'pre-restore': { label:'Pré-restauração', icone:'🔒' },
   desconhecido: { label:'—', icone:'' },
 };
+/* Ajuste de interface: filtro "Integridade" na aba Histórico do Backup — mesma chave já usada para exibir
+   e ordenar a coluna Integridade (ver célula da tabela/critério de ordenação em renderBackupConteudo),
+   centralizada aqui para nunca divergir entre exibição, ordenação e filtro. */
+const BACKUP_INTEGRIDADE_INFO = {
+  valido: { label:'✓ Válido' },
+  'sem-checksum': { label:'⚠ Sem checksum' },
+  invalido: { label:'✕ Inválido' },
+};
+function chaveIntegridadeBackup(b){ return b.integro ? (b.semMetadados ? 'sem-checksum' : 'valido') : 'invalido'; }
 /* Item 3 do requisito: barra de progresso REAL (não indeterminada) durante a exclusão de backups —
    `excluindo` é { processados, total, nome } atualizado a cada item processado (ver
    btnExcluirBackupsSelecionados), então o percentual reflete exatamente quantos já foram tentados, não
@@ -16749,7 +16771,10 @@ function renderProgressoExclusaoBackup(excluindo){
    bind de "Selecionar todos" (ver bindEvents), para que os dois nunca divirjam sobre quais backups estão
    "visíveis" no momento. */
 function backupsFiltradosAtuais(m){
-  return m.backups ? m.backups.filter(b=> passaFiltroMultiSel((m.filtros||{tipo:new Set()}).tipo, b.tipo)) : [];
+  const f = m.filtros || {};
+  return m.backups ? m.backups.filter(b=>
+    passaFiltroMultiSel(f.tipo||new Set(), b.tipo) && passaFiltroMultiSel(f.integridade||new Set(), chaveIntegridadeBackup(b))
+  ) : [];
 }
 /* "Novos ajustes de interface — FinUs" (2ª rodada), item 4: conteúdo de Backup e Restauração extraído do
    antigo renderBackupModal() para uma função própria, sem NENHUM wrapper de modal/overlay — reaproveitada
@@ -16780,39 +16805,46 @@ function renderBackupConteudo(){
         </div>
 
         ${m.aba==='historico' ? (()=>{
-          if(!m.filtros) m.filtros = { tipo:new Set(), aberto:null };
+          if(!m.filtros) m.filtros = { tipo:new Set(), integridade:new Set(), aberto:null };
           const f = m.filtros;
           const bloqueado = !!m.excluindo;
-          // Item 2 do requisito: filtro "Tipo" na aba Histórico do Backup, mesmo motor genérico dos demais
-          // filtros do app (renderFiltroMultiSelect/bindFiltroMultiSelect/renderChipsFiltrosAtivos) — as
-          // opções refletem os tipos realmente presentes nos backups carregados (manual/automático/
-          // pré-restauração/desconhecido — ver BACKUP_TIPO_INFO), nunca uma lista fixa.
-          const tiposUsados = (m.backups||[]).length ? Array.from(new Set(m.backups.map(b=>b.tipo))).sort((a,b)=> (BACKUP_TIPO_INFO[a]?.label||a).localeCompare(BACKUP_TIPO_INFO[b]?.label||b,'pt-BR')) : [];
-          const camposFiltroBackup = [{campo:'tipo', label:'Tipo', options: tiposUsados.map(t=>({value:t, label:`${BACKUP_TIPO_INFO[t]?.icone?BACKUP_TIPO_INFO[t].icone+' ':''}${BACKUP_TIPO_INFO[t]?.label||t}`}))}];
+          // Item 2 do requisito: filtros "Tipo"/"Integridade" na aba Histórico do Backup, mesmo motor
+          // genérico dos demais filtros do app (renderFiltroMultiSelect/bindFiltroMultiSelect/
+          // renderChipsFiltrosAtivos) — as opções refletem os valores realmente presentes nos backups
+          // carregados (manual/automático/pré-restauração/desconhecido — ver BACKUP_TIPO_INFO; válido/sem
+          // checksum/inválido — ver BACKUP_INTEGRIDADE_INFO/chaveIntegridadeBackup), nunca uma lista fixa.
+          const temBackups = !!(m.backups && m.backups.length>0);
+          const tiposUsados = temBackups ? Array.from(new Set(m.backups.map(b=>b.tipo))).sort((a,b)=> (BACKUP_TIPO_INFO[a]?.label||a).localeCompare(BACKUP_TIPO_INFO[b]?.label||b,'pt-BR')) : [];
+          const integridadesUsadas = temBackups ? Array.from(new Set(m.backups.map(chaveIntegridadeBackup))) : [];
+          const camposFiltroBackup = [
+            {campo:'tipo', label:'Tipo', options: tiposUsados.map(t=>({value:t, label:`${BACKUP_TIPO_INFO[t]?.icone?BACKUP_TIPO_INFO[t].icone+' ':''}${BACKUP_TIPO_INFO[t]?.label||t}`}))},
+            {campo:'integridade', label:'Integridade', options: integridadesUsadas.map(v=>({value:v, label: BACKUP_INTEGRIDADE_INFO[v]?.label||v}))},
+          ];
           const qtdAtivosBackup = contarFiltrosPadraoAtivos(f, camposFiltroBackup);
           const backupsFiltrados = aplicarOrdenacaoClique(backupsFiltradosAtuais(m), 'backups', {
             criadoEm:{tipo:'data', valor:b=>b.criadoEm}, tipo:{tipo:'texto', valor:b=>BACKUP_TIPO_INFO[b.tipo]?.label||b.tipo}, nome:{tipo:'texto', valor:b=>b.nome},
             tamanho:{tipo:'numero', valor:b=>b.tamanho}, qtdTransacoes:{tipo:'numero', valor:b=>b.qtdTransacoes},
-            integridade:{tipo:'texto', valor:b=> b.integro ? (b.semMetadados?'Sem checksum':'Válido') : 'Inválido'},
+            integridade:{tipo:'texto', valor:b=> BACKUP_INTEGRIDADE_INFO[chaveIntegridadeBackup(b)].label},
           });
           return `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0;">
-          ${nivelAcessoPasta!=='leitura' ? `<button type="button" class="btn btn-primary btn-sm" id="btnCriarBackupAgoraModal" ${bloqueado?'disabled':''}>🗄️ Criar backup agora</button>` : `<span></span>`}
+        <div class="toolbar toolbar-modal-padrao no-print" style="margin:10px 0;">
+          ${nivelAcessoPasta!=='leitura' ? `<button type="button" class="btn btn-primary btn-sm" id="btnCriarBackupAgoraModal" ${bloqueado?'disabled':''}>🗄️ Criar backup agora</button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm" id="btnAtualizarListaBackup" ${bloqueado?'disabled':''}>↻ Atualizar lista</button>
-        </div>
-        ${m.carregando ? `<div class="empty-state"><div class="big">⏳</div>Lendo backups...</div>` :
-          !msalConta ? `<div class="empty-state"><div class="big">☁️</div>Conecte-se ao OneDrive para ver o histórico de versões.</div>` :
-          !m.backups || m.backups.length===0 ? `<div class="empty-state"><div class="big">🗄️</div>Nenhum backup encontrado nesta pasta ainda.</div>` : `
-        <div class="toolbar filtros-mobile-toolbar ${filtrosEstaoAgrupados('Backup')?'agrupado':''}" style="justify-content:flex-start;">
+          ${temBackups ? `
           <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Backup')?'agrupado':''}" id="btnFiltrosMobileBackup" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosBackup>0?` <span class="filtros-mobile-badge">${qtdAtivosBackup}</span>`:''}</button>
-          <div class="filtros-barra ${filtrosEstaoAgrupados('Backup')?'agrupado':''} ${UI.filtrosMobileAberto==='Backup'?'aberto-mobile':''}" data-prefixo-filtros="Backup">
+          <div class="toolbar-modal-padrao-filtros filtros-barra ${filtrosEstaoAgrupados('Backup')?'agrupado':''} ${UI.filtrosMobileAberto==='Backup'?'aberto-mobile':''}" data-prefixo-filtros="Backup">
             <div class="filtros-barra-titulo-mobile">Filtros <button type="button" class="close-x-claro" id="btnFecharFiltrosMobileBackup" title="Fechar">✕</button></div>
             ${renderFiltroMultiSelect(f,'Backup','tipo','Tipo',camposFiltroBackup[0].options)}
+            ${renderFiltroMultiSelect(f,'Backup','integridade','Integridade',camposFiltroBackup[1].options)}
             <div class="filtros-barra-acoes-mobile"><button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosMobileBackup">Aplicar</button></div>
           </div>
           ${UI.filtrosMobileAberto==='Backup' ? `<div class="menu-mobile-backdrop aberto" id="filtrosMobileBackdropBackup"></div>` : ''}
+          ` : ''}
         </div>
-        ${renderChipsFiltrosAtivos(f, 'Backup', camposFiltroBackup, 'btnLimparFiltrosBackup')}
+        ${temBackups ? renderChipsFiltrosAtivos(f, 'Backup', camposFiltroBackup, 'btnLimparFiltrosBackup') : ''}
+        ${m.carregando ? `<div class="empty-state"><div class="big">⏳</div>Lendo backups...</div>` :
+          !msalConta ? `<div class="empty-state"><div class="big">☁️</div>Conecte-se ao OneDrive para ver o histórico de versões.</div>` :
+          !temBackups ? `<div class="empty-state"><div class="big">🗄️</div>Nenhum backup encontrado nesta pasta ainda.</div>` : `
         ${m.excluindo ? renderProgressoExclusaoBackup(m.excluindo) : ''}
         ${backupsFiltrados.length===0 ? `<div class="empty-state" style="margin-top:14px;"><div class="big">🗄️</div>Nenhum backup encontrado com esses filtros.</div>` : (()=>{
           const podeExcluir = nivelAcessoPasta!=='leitura';
@@ -16838,8 +16870,9 @@ function renderBackupConteudo(){
           const nomesVisiveis = pageList.map(b=>b.nome);
           return `
         ${podeExcluir && qtdSel>0 ? `
-        <div class="barra-acoes-lote" style="display:flex;align-items:center;gap:10px;margin:10px 0;padding:8px 12px;background:#eef2ff;border-radius:8px;">
+        <div class="barra-acoes-lote" style="display:flex;align-items:center;gap:10px;margin:10px 0;padding:8px 12px;background:#eef2ff;border-radius:8px;flex-wrap:wrap;">
           <span><b>${qtdSel}</b> backup${qtdSel===1?'':'s'} selecionado${qtdSel===1?'':'s'}</span>
+          ${qtdSel<totalFiltradoBackup ? `<button type="button" class="btn btn-ghost btn-sm" id="btnSelecionarTodosBackupFiltrados" ${bloqueado?'disabled':''}>Selecionar todos os ${totalFiltradoBackup} encontrados</button>` : ''}
           <button type="button" class="btn btn-danger btn-sm" id="btnExcluirBackupsSelecionados" ${bloqueado?'disabled':''}>🗑️ Excluir selecionados</button>
           <button type="button" class="btn btn-ghost btn-sm" id="btnLimparSelecaoBackup" ${bloqueado?'disabled':''}>✕ Limpar seleção</button>
         </div>` : ''}
@@ -20092,7 +20125,7 @@ function bindEvents(){
      (remove TODOS os vínculos desta competência de uma vez — requisitos 6/7 — nunca automática quando há
      ambiguidade). ---- */
   document.querySelectorAll('[data-proj-conciliar]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.conciliarProjecaoModal = { itemId: b.dataset.projConciliar, competencia: b.dataset.projConciliarMes, selecionados: [], pagina: 1, porPagina: 10 };
+    UI.conciliarProjecaoModal = { itemId: b.dataset.projConciliar, competencia: b.dataset.projConciliarMes, selecionados: [], pagina: 1, porPagina: 5 };
     render();
   }));
   document.querySelectorAll('[data-proj-desvincular]').forEach(b=> b.addEventListener('click', ()=>{
@@ -20964,10 +20997,12 @@ function bindEvents(){
     // conjunto filtrado muda e a página em que o usuário estava pode nem existir mais no novo resultado.
     if(bm.aba==='historico' && bm.filtros){
       const tiposUsadosBind = Array.from(new Set((bm.backups||[]).map(b=>b.tipo)));
+      const integridadesUsadasBind = Array.from(new Set((bm.backups||[]).map(chaveIntegridadeBackup)));
       bindFiltroMultiSelect(bm.filtros, 'Backup', 'tipo', tiposUsadosBind.map(t=>({value:t})), ()=>{ bm.pagina = 1; render(); });
+      bindFiltroMultiSelect(bm.filtros, 'Backup', 'integridade', integridadesUsadasBind.map(v=>({value:v})), ()=>{ bm.pagina = 1; render(); });
       bindChipsFiltrosAtivos(bm.filtros, 'Backup', ()=>{ bm.pagina = 1; render(); });
       bindFiltrosMobileToggle('Backup');
-      document.getElementById('btnLimparFiltrosBackup')?.addEventListener('click', ()=>{ bm.filtros = { tipo:new Set(), aberto:null }; bm.pagina = 1; render(); });
+      document.getElementById('btnLimparFiltrosBackup')?.addEventListener('click', ()=>{ bm.filtros = { tipo:new Set(), integridade:new Set(), aberto:null }; bm.pagina = 1; render(); });
     }
     document.getElementById('btnCriarBackupAgoraModal')?.addEventListener('click', async ()=>{
       await criarBackupManual();
@@ -21022,6 +21057,15 @@ function bindEvents(){
       render();
     }));
     document.getElementById('btnLimparSelecaoBackup')?.addEventListener('click', ()=>{ bm.selecionados.clear(); render(); });
+    // Item 8 do requisito: "Selecionar todos os N encontrados" estende a seleção a TODOS os backups que
+    // atendem ao filtro atual (backupsFiltradosAtuais — mesma função usada no render), não só aos da
+    // página exibida — mesmo princípio já usado em Registros/Ver Extrato/Lançamentos futuros (ver
+    // renderBarraAcoesLote/data-selecionar-todos-filtrados-lote), aqui reaproveitando diretamente a função
+    // de filtro (em vez de ler ids do DOM) por não haver duplicação de lógica de filtro a evitar.
+    document.getElementById('btnSelecionarTodosBackupFiltrados')?.addEventListener('click', ()=>{
+      backupsFiltradosAtuais(bm).forEach(b=> bm.selecionados.add(b.nome));
+      render();
+    });
     // "Novos ajustes de interface — FinUs" (3ª rodada), item 1: navegação da paginação — mesmo padrão de
     // Registros (ver #regPorPagina/[data-reg-pagina]), só trocando o estado alvo para bm.pagina/porPagina
     // (o clamp final acontece dentro do próprio renderBackupConteudo(), igual a renderRegistros()).
