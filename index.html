@@ -1851,10 +1851,24 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
    rodapé fixos (já eram sticky) e o conteúdo ocupando o espaço restante — nunca um modal estreito com
    conteúdo cortado, rolagem dupla ou botões fora da tela. */
 @media(max-width:700px){
-  .overlay{padding:0;align-items:flex-end;}
+  .overlay{
+    padding:0;align-items:flex-end;
+    /* Nenhum modal pode sobrepor a bottom-nav (nem cobri-la, nem ficar por baixo dela sem espaço): reserva,
+       na própria caixa do backdrop, exatamente o mesmo espaço que a bottom-nav ocupa — var(--bottom-nav-h)
+       + a safe-area inferior do aparelho (mesma soma usada em .bottom-nav{height:...} e em todo o resto do
+       app, ex.: .mais-sheet/.menu-arquivo-painel/.fab-*, nunca um valor novo). Como o .modal abaixo usa
+       height:100% (do PRÓPRIO overlay, que agora é mais baixo), ele encolhe automaticamente para caber só
+       na parte de cima que sobra — a bottom-nav nunca fica coberta nem por trás do modal, continua visível
+       e clicável o tempo todo. Sem valor fixo por aparelho: onde não há safe-area (--safe-bottom:0px), o
+       espaço reservado é só a altura da própria barra, igual em qualquer altura de tela. */
+    bottom:calc(var(--bottom-nav-h) + var(--safe-bottom));
+  }
   .modal{
     /* !important necessário: muitos modais definem width inline (ex.: style="width:480px") — sem isso,
-       o estilo inline vence a regra da media query e o modal fica estreito no mobile em vez de tela cheia. */
+       o estilo inline vence a regra da media query e o modal fica estreito no mobile em vez de tela cheia.
+       height:100% (não mais 100vh/100dvh) passa a ser relativo ao .overlay acima, que já exclui a faixa da
+       bottom-nav — a área útil do modal (inclusive o conteúdo rolável de .modal-body, ver abaixo) nunca
+       ultrapassa essa margem; max-height continua como rede de segurança (nunca maior que a viewport). */
     width:100%!important;max-width:100vw!important;height:100%!important;max-height:100dvh!important;border-radius:0;
     display:flex;flex-direction:column;resize:none;padding-top:calc(11px + var(--safe-top));
   }
