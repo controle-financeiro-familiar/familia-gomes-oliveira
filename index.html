@@ -1779,6 +1779,19 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
    conciliado/projetado/diferença/status, lado a lado, recalculado a cada checkbox marcado/desmarcado. */
 .conciliar-resumo{border-collapse:separate;border-spacing:8px 0;margin-left:-8px;width:calc(100% + 16px) !important;}
 .conciliar-resumo td{background:var(--navy-50);border-radius:8px;padding:8px 12px;font-size:12px;}
+/* No mobile, os 5 cards em uma única linha (layout de tabela do desktop acima) não cabem lado a lado sem
+   espremer/cortar o conteúdo — viram um grid de 2 colunas (tbody/tr viram display:contents para que os
+   <td> passem a ser os itens diretos do grid, sem precisar trocar a tag <table> nem duplicar o HTML/dados);
+   como são sempre 5 cards (ímpar), o último (Status) sobra sozinho e ocupa a linha inteira (grid-column:1/
+   -1), em vez de ficar pela metade ao lado de um espaço vazio. Mesmo padrão visual/cores/raio de borda de
+   sempre (.conciliar-resumo td acima, intocado) — só a distribuição muda. */
+@media(max-width:700px){
+  .conciliar-resumo{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-left:0;width:100%!important;
+  }
+  .conciliar-resumo tbody,.conciliar-resumo tr{display:contents;}
+  .conciliar-resumo td:last-child{grid-column:1 / -1;}
+}
 /* Previsão Financeira: no desktop, Projeção e Confiabilidade dividem a mesma linha (Confiabilidade
    alinhada à direita, via order+margin-left:auto — nunca empurrando para uma linha extra), com Faixa
    provável na linha de baixo, ocupando a largura toda (flex-basis:100% força a quebra, mesma técnica já
@@ -2321,6 +2334,15 @@ summary::marker{content:'';}
   .tabela-cards-mobile td{
     display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;font-size:13px;
     border-bottom:1px solid var(--navy-50);text-align:left!important;white-space:normal!important;
+    /* !important necessário: algumas tabelas (ex.: "Vínculos já confirmados" do modal Conciliar com o
+       Extrato, ver linhaRegistro) reaproveitam os mesmos <td> com um style="width:X%" inline — usado para
+       dividir as colunas no desktop (table-layout:fixed) — que, sem isto, sobrevive à virada para "card"
+       no mobile e espreme rótulo+valor dentro de só uma fração da largura do card (o resto fica em branco
+       à direita), fazendo tudo parecer "colado" à esquerda em vez de ocupar as duas extremidades da linha.
+       width:auto restaura a largura cheia do card para qualquer <td> de qualquer tabela deste padrão, sem
+       precisar tocar em nenhuma tabela/função individualmente — table-layout:fixed continua intocado no
+       desktop (fora desta media query). */
+    width:auto!important;
   }
   .tabela-cards-mobile td:last-child{border-bottom:none;}
   .tabela-cards-mobile td[data-label]:not([data-label=""])::before{
@@ -2328,6 +2350,16 @@ summary::marker{content:'';}
     color:#8393ac;flex-shrink:0;
   }
   .tabela-cards-mobile td[colspan]{display:block;border-bottom:none;padding:8px 0 0;}
+  /* Descrição nos cards de "Lançamentos não listados" (modal de auditoria) e "Candidatos disponíveis"
+     (modal Conciliar com o Extrato): o rótulo e o valor continuam lado a lado, com justify-content:
+     space-between (herdado da regra genérica acima) — mas como a descrição real de um lançamento costuma
+     ser mais longa que "DESCRIÇÃO" e quebra em várias linhas dentro do próprio flex item, sem text-align a
+     quebra faz cada linha nascer colada à esquerda (encostada no rótulo), em vez de ocupar a extremidade
+     direita da linha como todo o resto do card. text-align:right aqui não muda o texto/dado nem empilha
+     rótulo/valor (ver .val-cell abaixo, usado só quando o requisito pede empilhar) — só alinha o texto (de
+     uma ou várias linhas) à direita dentro do próprio espaço que o space-between já reserva para ele. */
+  #ovNaoListadosModal td[data-label="Descrição"],
+  [data-ordenar-tabela="conciliarCandidatos"] td[data-label="Descrição"]{ text-align:right!important; }
   /* Células com conteúdo em mais de uma linha (ex.: valor + faixa provável abaixo, via <br>) não cabem
      lado a lado com o rótulo em flex-row sem estourar a largura — empilha rótulo acima do valor em vez de
      lado a lado, preservando a quebra de linha interna da célula. */
@@ -6682,6 +6714,24 @@ async function desconectarArquivos(){
   } finally {
     desconectarArquivosEmAndamento = false;
   }
+}
+/* "Trocar de conta Microsoft" (menu-arquivo-painel/card da Início — ver maTrocarConta/btnContaMicrosoftTrocar
+   em bindEvents): antes chamava loginOneDrive() diretamente, que não fazia nada visível quando já havia uma
+   conta conectada — loginOneDrive() só abre o popup de login quando msalConta ainda é null (ver
+   jaAutenticado, dentro de loginOneDrive); com uma conta já conectada, ele pula direto para recarregar os
+   arquivos da MESMA conta,
+   dando a impressão de que o botão não fez nada. Corrigido reutilizando os DOIS fluxos já existentes, na
+   ordem certa — nunca um mecanismo de autenticação novo: primeiro desconectarArquivos() (mesmo "Sair da
+   conta" de sempre — verifica alterações não salvas, invalida a conta atual via logoutOneDrive/limpa o
+   cache do token) e só então loginOneDrive() (mesmo "Conectar" de sempre, agora com msalConta já null, então
+   ABRE o popup normalmente, já com prompt:'select_account' — o usuário escolhe/entra com outra conta). Se o
+   usuário cancelar a desconexão (ex.: alterações não salvas, escolheu "Cancelar" no aviso), msalConta
+   continua preenchido — não prossegue para o login, exatamente como cancelar qualquer outra ação que dependa
+   desse aviso. */
+async function trocarContaOneDrive(){
+  await desconectarArquivos();
+  if(msalConta) return false; // desconexão cancelada pelo usuário — não abre o login de outra conta
+  return await loginOneDrive();
 }
 /* Restaura STATE para o estado "zerado" inicial (sem lançamentos nem configurações carregadas) — usado ao
    desconectar arquivos ou depois de "Fechar sessão sem salvar", para a aplicação voltar a se comportar
@@ -19068,7 +19118,7 @@ function bindEvents(){
   document.getElementById('ovContaMicrosoft')?.addEventListener('click', (e)=>{ if(e.target.id==='ovContaMicrosoft'){ UI.contaMicrosoftModal = false; render(); } });
   // "Trocar de conta"/"Sair da conta": MESMAS ações já usadas pelo Menu ☰ (maTrocarConta/maDesconectar) —
   // nunca uma lógica de conta paralela.
-  document.getElementById('btnContaMicrosoftTrocar')?.addEventListener('click', ()=>{ UI.contaMicrosoftModal = false; loginOneDrive(); });
+  document.getElementById('btnContaMicrosoftTrocar')?.addEventListener('click', ()=>{ UI.contaMicrosoftModal = false; trocarContaOneDrive(); });
   document.getElementById('btnContaMicrosoftSair')?.addEventListener('click', ()=>{ UI.contaMicrosoftModal = false; desconectarArquivos(); });
   // "Novos ajustes de interface — modo mobile", item 6 (bottom nav): "Cartões" abre a aba "cartoes" já no
   // painel Cartões do acordeão — MESMO comportamento de btnIrParaCartoes, nunca uma lógica paralela. "Backup"
@@ -19169,10 +19219,15 @@ function bindEvents(){
   document.getElementById('maReconectarPacote')?.addEventListener('click', ()=>{ UI.menuArquivoAberto=false; reconectarPacote(); });
   document.getElementById('maSalvar')?.addEventListener('click', ()=>{ UI.menuArquivoAberto=false; salvarArquivos(); });
   document.getElementById('maBackup')?.addEventListener('click', async ()=>{ UI.menuArquivoAberto=false; render(); await criarBackupManual(); render(); });
-  document.getElementById('maBackupRestauracao')?.addEventListener('click', async ()=>{ UI.menuArquivoAberto=false; await abrirBackupModal(); });
+  // Diferente dos demais itens do menu-arquivo-painel (que só fecham o próprio painel e voltam a mostrar o
+  // mais-sheet por trás — comportamento OK para ações rápidas como Salvar/Backup manual), este item NAVEGA
+  // para a página de Backup e Restauração — precisa fechar os dois níveis de menu (igual já faz o atalho
+  // equivalente da bottom-nav, ver btnBottomNavBackup acima), senão o mais-sheet (com z-index maior que o
+  // conteúdo da página) fica aberto por cima, escondendo o Backup recém-aberto.
+  document.getElementById('maBackupRestauracao')?.addEventListener('click', async ()=>{ UI.menuArquivoAberto=false; UI.menuMobileAberto=false; await abrirBackupModal(); });
   document.getElementById('maImportarBackup')?.addEventListener('click', ()=>{ UI.menuArquivoAberto=false; importarBackupExterno(); });
   document.getElementById('maFecharApp')?.addEventListener('click', ()=> fecharAppVoltarTelaInicial());
-  document.getElementById('maTrocarConta')?.addEventListener('click', ()=>{ UI.menuArquivoAberto=false; loginOneDrive(); });
+  document.getElementById('maTrocarConta')?.addEventListener('click', ()=>{ UI.menuArquivoAberto=false; trocarContaOneDrive(); });
   document.getElementById('maDesconectar')?.addEventListener('click', ()=>{ UI.menuArquivoAberto=false; desconectarArquivos(); });
   // Tela inicial (sessão zerada)
   // Item 5 do requisito: um único botão cobre tanto "Conectar"/"Tentar Novamente" quanto o caso de já
