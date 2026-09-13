@@ -915,8 +915,26 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
   position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;box-sizing:border-box;
 }
 @media(orientation:portrait){
+  /* Correção de posicionamento (notch/Dynamic Island/home indicator): como o giro acima é só visual — o
+     dispositivo continua fisicamente em retrato por baixo —, env(safe-area-inset-*) continua se referindo
+     às bordas FÍSICAS reais da tela (topo/baixo/esquerda/direita), não ao "topo"/"esquerda" já girados do
+     elemento. Preenchendo a viewport inteira (100vh/100vw) sem descontar essas áreas, o conteúdo podia
+     nascer parcialmente sob o notch/Dynamic Island (physical top) ou o home indicator (physical bottom).
+     A matemática do giro (rotate(90deg) translateY(-100%), origin top left) mapeia o retângulo não-girado
+     top:B;left:A;width:W;height:H para o retângulo final na tela em X:[A, A+H] e Y:[B, B+W] — por isso,
+     para o retângulo final ocupar exatamente a área útil/segura da tela (ou seja, X entre inset-left e
+     100vw-inset-right, e Y entre inset-top e 100vh-inset-bottom), basta usar A=inset-left, B=inset-top,
+     H=100vw-inset-left-inset-right (a `height` do elemento) e W=100vh-inset-top-inset-bottom (a `width`).
+     Isso preenche a área segura por inteiro (logo, fica automaticamente centralizado nela, sem sobra de
+     nenhum lado) e nunca é cortado pelas safe areas — sem valores fixos por aparelho: onde as safe areas
+     são 0 (a maioria dos Androids, desktops em retrato, etc.), width/height voltam a ser exatamente 100vh/
+     100vw, idêntico ao comportamento anterior. Tamanho/conteúdo/demais estilos do gráfico em si e o
+     comportamento no desktop (regra base acima, fora desta media query) continuam intocados. */
   .grafico-expandido-rotativo{
-    inset:auto;top:0;left:0;width:100vh;height:100vw;
+    inset:auto;
+    top:env(safe-area-inset-top,0px);left:env(safe-area-inset-left,0px);
+    width:calc(100vh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+    height:calc(100vw - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px));
     transform:rotate(90deg) translateY(-100%);transform-origin:top left;
   }
 }
