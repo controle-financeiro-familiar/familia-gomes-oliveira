@@ -2360,6 +2360,14 @@ summary::marker{content:'';}
      uma ou várias linhas) à direita dentro do próprio espaço que o space-between já reserva para ele. */
   #ovNaoListadosModal td[data-label="Descrição"],
   [data-ordenar-tabela="conciliarCandidatos"] td[data-label="Descrição"]{ text-align:right!important; }
+  /* Mesmo caso acima, para os cards de "Vínculos já confirmados" (modal Conciliar com o Extrato, ver
+     linhaRegistro): tanto Descrição quanto Categoria podem ser mais longas que o próprio rótulo e quebrar
+     em várias linhas dentro do flex item — sem text-align, cada linha nascia colada ao rótulo em vez de
+     ocupar a extremidade direita, como Data/Conta/Tipo/Valor (que nunca quebram) já fazem. Escopado só a
+     esta tabela (.tabela-vinculos-confirmados) e só a estes dois campos — os demais elementos do card
+     continuam exatamente como estão. */
+  .tabela-vinculos-confirmados td[data-label="Descrição"],
+  .tabela-vinculos-confirmados td[data-label="Categoria"]{ text-align:right!important; }
   /* Células com conteúdo em mais de uma linha (ex.: valor + faixa provável abaixo, via <br>) não cabem
      lado a lado com o rótulo em flex-row sem estourar a largura — empilha rótulo acima do valor em vez de
      lado a lado, preservando a quebra de linha interna da célula. */
@@ -15552,7 +15560,7 @@ function renderConciliarProjecaoModal(){
         </table>
         ${reaisVinculados.length ? `
         <p class="field-section-label" style="margin:14px 0 4px;">Vínculos já confirmados</p>
-        <div class="table-wrap" style="overflow-x:auto;"><table class="tabela-cards-mobile" style="width:100%;table-layout:fixed;">
+        <div class="table-wrap" style="overflow-x:auto;"><table class="tabela-cards-mobile tabela-vinculos-confirmados" style="width:100%;table-layout:fixed;">
           <thead><tr><th style="width:9%;">Data</th><th style="width:33%;">Descrição</th><th style="width:13%;">Conta</th><th style="width:13%;">Categoria</th><th style="width:8%;">Tipo</th><th style="width:15%;text-align:right;">Valor</th><th style="width:9%;"></th></tr></thead>
           <tbody>${reaisVinculados.map(t=>linhaRegistro(t, `<button type="button" class="icon-btn" data-conciliar-remover-vinculo="${t.id}" title="Remover este vínculo (volta a ser um candidato disponível)">🗑️</button>`)).join('')}</tbody>
         </table></div>` : ''}
