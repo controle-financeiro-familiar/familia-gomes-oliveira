@@ -5328,6 +5328,19 @@ function alertasFluxoCaixaMes(){
   });
   return alertas.sort((a,b)=>a.dias-b.dias);
 }
+/* HTML do banner de alertas de vencimento (Painel Financeiro no desktop, Página Inicial no mobile — ver
+   renderDashboard/renderInicioMobile). Uma ÚNICA implementação para os dois lugares, reaproveitando
+   sempre a mesma alertasFluxoCaixaMes() — nunca uma segunda lógica paralela. `extraStyle` permite ajustar
+   só o espaçamento externo no ponto de uso (ex.: margin-top na Início), sem mexer na classe
+   .alerta-vencimento-dashboard (compartilhada) nem no conteúdo/cálculo do alerta em si. */
+function renderAlertaVencimentoHtml(extraStyle){
+  const alertasVenc = alertasFluxoCaixaMes();
+  if(!alertasVenc.length) return '';
+  const itens = alertasVenc.map(a=>
+    `<b>${escapeHtml(a.descricao)}</b> (${fmtBRL(a.valor)}) vence amanhã — ${fmtData(a.data.toISOString().slice(0,10))}`
+  ).join(' &nbsp;•&nbsp; ');
+  return `<div class="banner alerta-vencimento-dashboard" style="text-align:left;border-radius:8px;${extraStyle||''}">🔔 ${itens}</div>`;
+}
 function escapeHtml(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 // Ícone SVG padrão de filtro (item 3 do requisito) — usado em TODOS os botões de filtro da aplicação.
 const ICONE_FILTRO_SVG = '<svg class="ico-filtro" width="12" height="12" viewBox="0 0 0.24 0.24" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M.225.03v.025L.15.126V.21H.09V.126L.015.055V.03zm-.12.09v.075h.03V.12L.21.049V.045H.03v.004z"/></svg>';
@@ -5720,6 +5733,22 @@ function zIndexModal(prop){
 }
 /* Atributo pronto para colar no <div class="overlay" ...> de cada modal — ver usos abaixo. */
 function attrZIndexModal(prop){ return `style="z-index:${zIndexModal(prop)};"`; }
+/* Fecha de uma vez TODOS os modais de conteúdo/ação hoje abertos (percorre CAMADAS_MODAL, a mesma lista
+   usada para os z-index acima, então nunca duplica/esquece um modal novo que venha a ser criado). Usado
+   pela bottom-nav (mobile): tocar em qualquer botão dela precisa fechar o modal atual e mostrar o
+   conteúdo do botão tocado num único toque, em vez de exigir fechar o modal manualmente antes. Excluídos
+   de propósito os 2 modais de "Nível topo" (modalConflitoGravacao/modalFecharSessao) — são avisos
+   bloqueantes (conflito de gravação, confirmação ao fechar a sessão) que não devem ser descartados só por
+   um toque incidental na barra inferior. */
+function fecharModaisDeConteudo(){
+  CAMADAS_MODAL.forEach(prop=>{
+    if(prop==='modalConflitoGravacao' || prop==='modalFecharSessao') return;
+    const atual = UI[prop];
+    if(typeof atual==='boolean') UI[prop] = false;
+    else if(typeof atual==='number') UI[prop] = 0;
+    else UI[prop] = null;
+  });
+}
 
 
 /* ===================== PERSISTÊNCIA EM ARQUIVO CSV (via OneDrive / Microsoft Graph) =====================
@@ -11965,7 +11994,14 @@ function renderTab(){
    - Item 4: 2 cards adicionais no mesmo painel "Painéis" — "Backup e Restauração" (abre o MESMO modal já
      existente, via abrirBackupModal(), nunca um modal novo) e "Conta Microsoft" (abre o novo
      renderContaMicrosoftModal(), ver bindEvents). Nenhum dos dois tem data-tab (não trocam de aba, abrem um
-     modal), então ficam fora do seletor genérico ".inicio-atalho[data-tab]" usado pelos 7 atalhos acima. */
+     modal), então ficam fora do seletor genérico ".inicio-atalho[data-tab]" usado pelos 7 atalhos acima.
+   - "Ajustes de interface — modo mobile" (rodada seguinte): os alertas de vencimento, que antes viviam só no
+     Painel Financeiro, aparecem aqui entre o card de Saldo Atual (Hoje) e o painel "Painéis" — MESMA
+     renderAlertaVencimentoHtml() usada no desktop (ver renderDashboard), sem nenhuma lógica/cálculo/conteúdo
+     paralelo. O margin-top:18px repassado casa com o margin-bottom:18px já existente da própria
+     .alerta-vencimento-dashboard, deixando o espaçamento acima e abaixo do alerta igual — o mesmo valor já
+     usado por ele no Painel Financeiro. No Painel Financeiro (mobile) o alerta deixa de aparecer, nunca
+     duplicado nos dois lugares ao mesmo tempo. */
 function renderInicioMobile(){
   const saldoAtual = calcSaldoAtualFluxoCaixa();
   return `
@@ -11977,6 +12013,7 @@ function renderInicioMobile(){
     </div>
     <div class="dash-hero-saldo-val ${arredondarMoeda(saldoAtual)<0?'neg':''}">${fmtBRL(saldoAtual)}</div>
   </div>
+  ${renderAlertaVencimentoHtml('margin-top:18px;')}
   <div class="panel" style="margin-bottom:0;">
     <h2>Painéis</h2>
     <div class="inicio-atalhos-grid">
@@ -12250,20 +12287,13 @@ function renderDashboard(){
   const d = calcDashboard(UI.ano, UI.mes);
   const competencia = `${UI.ano}-${pad2(UI.mes)}`;
   const saldoAtual = calcSaldoAtualFluxoCaixa();
-  const alertaVencimentoHtml = (()=>{
-    const alertasVenc = alertasFluxoCaixaMes();
-    if(!alertasVenc.length) return '';
-    const itens = alertasVenc.map(a=>
-      `<b>${escapeHtml(a.descricao)}</b> (${fmtBRL(a.valor)}) vence amanhã — ${fmtData(a.data.toISOString().slice(0,10))}`
-    ).join(' &nbsp;•&nbsp; ');
-    return `<div class="banner alerta-vencimento-dashboard" style="text-align:left;border-radius:8px;">🔔 ${itens}</div>`;
-  })();
-  // Item do requisito: no mobile, os alertas de vencimento ficam logo antes dos cards de
-  // Receitas/Despesas/Saldo/Poupança — para ficarem visíveis sem precisar rolar a tela toda; no desktop a
-  // ordem original é mantida (depois dos 4 cards). Só uma troca de POSIÇÃO no HTML gerado (mesmo padrão de
-  // checagem de window.innerWidth só na hora de montar a página, recalculada a cada render) — nenhuma
-  // mudança de conteúdo/cálculo dos alertas.
   const mobile = window.innerWidth<=700;
+  // "Ajustes de interface — modo mobile" (rodada seguinte): no mobile, os alertas de vencimento saem do
+  // Painel Financeiro e passam a ser exibidos na Página Inicial (ver renderInicioMobile — entre o card de
+  // Saldo Atual (Hoje) e o painel "Painéis"), reaproveitando a MESMA renderAlertaVencimentoHtml() — nunca
+  // duplicados nos dois lugares ao mesmo tempo. No desktop a Início não existe, então o comportamento
+  // original (alertas aqui, depois dos 4 cards de resumo) fica intacto.
+  const alertaVencimentoHtml = mobile ? '' : renderAlertaVencimentoHtml();
   // "Ajustes de interface — modo mobile", item 2 ("Saldo Atual Hoje"): no mobile esse card sai do Painel
   // Financeiro — foi para a nova página Início (ver renderInicioMobile), que já reaproveita o MESMO
   // .dash-hero-saldo/cálculo. Nunca duplicado nos dois lugares ao mesmo tempo. No desktop continua aqui,
@@ -12307,9 +12337,8 @@ function renderDashboard(){
   </div>`;
   return `
   ${heroSaldoHtml}
-  ${mobile ? alertaVencimentoHtml : ''}
   ${cardsResumoHtml}
-  ${mobile ? '' : alertaVencimentoHtml}
+  ${alertaVencimentoHtml}
   ${(()=>{
     const rm = calcResumoMetas(competencia);
     if(!rm.lista.length) return '';
@@ -19114,7 +19143,17 @@ function bindEvents(){
   // menu-arquivo-painel (UI.menuArquivoAberto) também pode estar aberto por cima dele (ver btnMenuArquivoMobile
   // logo abaixo — abri-lo de propósito NUNCA fecha o mais-sheet, ver comentário lá) — navegar para qualquer
   // aba precisa fechar os dois de uma vez, nunca deixar nenhum sobreposto ao conteúdo recém-aberto.
-  document.querySelectorAll('.tab-btn, .bn-item[data-tab], .mais-sheet-item[data-tab], .inicio-atalho[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.backupModal = null; UI.tab = b.dataset.tab; UI.menuMobileAberto = false; UI.menuArquivoAberto = false; UI.fabConfigAberto = false; render(); }));
+  // Aqui ficam só .tab-btn (desktop), .mais-sheet-item e .inicio-atalho (mobile, mas não são a bottom-nav
+  // em si) — o .bn-item[data-tab] (botões da própria barra inferior) tem seu próprio listener logo abaixo,
+  // que além disto tudo também fecha qualquer modal de conteúdo aberto (ver fecharModaisDeConteudo).
+  document.querySelectorAll('.tab-btn, .mais-sheet-item[data-tab], .inicio-atalho[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ UI.backupModal = null; UI.tab = b.dataset.tab; UI.menuMobileAberto = false; UI.menuArquivoAberto = false; UI.fabConfigAberto = false; render(); }));
+  // "Novos ajustes de interface — modo mobile" (rodada seguinte), item 1: tocar em qualquer botão da
+  // bottom-nav com um modal aberto (Editar Lançamento, Conciliar com o Extrato, etc.) precisa fechá-lo e já
+  // mostrar o conteúdo da aba tocada num único toque — sem isto o modal ficava visível por cima da nova aba
+  // (o overlay dele não cobre mais a bottom-nav, ver ajuste de safe-area de rodada anterior, então agora dá
+  // pra tocar nela com o modal ainda aberto). Só afeta a bottom-nav (mobile); o desktop usa .tab-btn acima,
+  // sem nenhuma mudança de comportamento.
+  document.querySelectorAll('.bn-item[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ fecharModaisDeConteudo(); UI.tab = b.dataset.tab; UI.menuMobileAberto = false; UI.menuArquivoAberto = false; UI.fabConfigAberto = false; render(); }));
   // "Novos ajustes de interface — modo mobile", item 4: os 2 cards adicionais da página inicial (ver
   // renderInicioMobile) reaproveitam as MESMAS ações já existentes — abrirBackupModal() (idêntica ao item
   // "Backup e Restauração" do Menu ☰) e o novo modal simples de Conta Microsoft.
@@ -19131,11 +19170,11 @@ function bindEvents(){
   // "Novos ajustes de interface — modo mobile", item 6 (bottom nav): "Cartões" abre a aba "cartoes" já no
   // painel Cartões do acordeão — MESMO comportamento de btnIrParaCartoes, nunca uma lógica paralela. "Backup"
   // abre diretamente o modal (MESMA abrirBackupModal() dos cards da Início/Menu ☰), sem navegar de aba.
-  document.getElementById('btnBottomNavCartoes')?.addEventListener('click', ()=>{ UI.backupModal = null; UI.menuMobileAberto = false; UI.menuArquivoAberto = false; UI.tab='cartoes'; UI.cartoesSecaoAtiva='cartoes'; render(); });
-  document.getElementById('btnBottomNavBackup')?.addEventListener('click', async ()=>{ UI.menuMobileAberto = false; UI.menuArquivoAberto = false; await abrirBackupModal(); });
+  document.getElementById('btnBottomNavCartoes')?.addEventListener('click', ()=>{ fecharModaisDeConteudo(); UI.menuMobileAberto = false; UI.menuArquivoAberto = false; UI.tab='cartoes'; UI.cartoesSecaoAtiva='cartoes'; render(); });
+  document.getElementById('btnBottomNavBackup')?.addEventListener('click', async ()=>{ fecharModaisDeConteudo(); UI.menuMobileAberto = false; UI.menuArquivoAberto = false; await abrirBackupModal(); });
   // Item 3 da rodada anterior (mesma correção do bind acima) + item 1 desta rodada: abrir o sheet "Painéis"
   // também precisa fechar o Backup e o menu-arquivo-painel na hora, nunca deixar nenhum dos dois por baixo.
-  document.getElementById('btnMenuMobile')?.addEventListener('click', ()=>{ UI.backupModal = null; UI.menuArquivoAberto = false; UI.menuMobileAberto = !UI.menuMobileAberto; render(); });
+  document.getElementById('btnMenuMobile')?.addEventListener('click', ()=>{ fecharModaisDeConteudo(); UI.menuArquivoAberto = false; UI.menuMobileAberto = !UI.menuMobileAberto; render(); });
   document.getElementById('btnFecharMaisSheet')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
   document.getElementById('menuMobileBackdrop')?.addEventListener('click', ()=>{ UI.menuMobileAberto = false; render(); });
   document.querySelectorAll('[data-grupo-details]').forEach(d=> d.addEventListener('toggle', ()=>{
