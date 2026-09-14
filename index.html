@@ -15994,7 +15994,7 @@ function renderMetas(){
     </div>
     ${r.lista.length===0 ? `<div class="empty-state"><div class="big">🎯</div>Nenhuma meta cadastrada para este mês. Use "+ Nova meta" para começar.</div>` : `
     <div class="chart-box" style="height:${alturaBarra}px;margin-top:14px;"><canvas id="chartMetas"></canvas></div>
-    <div class="table-wrap" style="margin-top:16px;" data-ordenar-tabela="metas"><table class="tabela-cards-mobile">
+    <div class="table-wrap reg-tabela-principal" style="margin-top:16px;" data-ordenar-tabela="metas"><table>
       <thead><tr>${thOrdenavel('metas','grupo','Grupo')}${thOrdenavel('metas','categoria','Categoria')}${thOrdenavel('metas','subcategoria','Subcategoria')}${thOrdenavel('metas','valor','Meta',{style:'text-align:right;'})}${thOrdenavel('metas','gasto','Gasto',{style:'text-align:right;'})}${thOrdenavel('metas','saldo','Saldo',{style:'text-align:right;'})}${thOrdenavel('metas','pct','% Utilizado')}${thOrdenavel('metas','recorrencia','Período')}${thOrdenavel('metas','situacao','Situação')}<th class="col-acoes">Ações</th></tr></thead>
       <tbody>
       ${aplicarOrdenacaoClique(r.lista, 'metas', {
@@ -16025,7 +16025,36 @@ function renderMetas(){
         </tr>`;
       }).join('')}
       </tbody>
-    </table></div>`}
+    </table></div>
+    <div class="reg-lista-mobile">${aplicarOrdenacaoClique(r.lista, 'metas', {
+      grupo:{tipo:'texto', valor:m=>m.grupo}, categoria:{tipo:'texto', valor:m=>m.categoria}, subcategoria:{tipo:'texto', valor:m=>m.subcategoria},
+      valor:{tipo:'moeda', valor:m=>m.valor}, gasto:{tipo:'moeda', valor:m=>m.gasto}, saldo:{tipo:'moeda', valor:m=>m.saldo},
+      pct:{tipo:'percentual', valor:m=>m.pct}, recorrencia:{tipo:'texto', valor:m=>RECORRENCIA_LABEL[m.recorrencia]},
+      situacao:{tipo:'texto', valor:m=>SITUACAO_META_INFO[m.situacao].label},
+    }).map(m=>{
+      const info = SITUACAO_META_INFO[m.situacao];
+      return construirRegCard({
+        chave: m.id, detalhe: false,
+        titulo: `${iconeGrupo(m.grupo)} ${escapeHtml(nomeMeta(m))}`,
+        valorTexto: fmtBRL(m.saldo), valorClasse: classeSinalMoeda(m.saldo),
+        secundario: `Meta: ${fmtBRL(m.valor)} · Gasto: ${fmtBRL(m.gasto)}`,
+        tagsHtml: `<span class="meta-situacao-tag" style="background:${info.cor}1a;color:${info.cor};">${info.emoji} ${info.label}</span>`,
+        extraHtml: `<div class="reg-card-extra">
+          <div class="progress-track" style="margin-top:4px;"><div class="progress-fill" style="width:${Math.min(100,m.pct)}%;background:${info.cor};"></div></div>
+          <span>${fmtPercentSmart(m.pct)} utilizado · ${RECORRENCIA_LABEL[m.recorrencia]||'—'}</span>
+        </div>`,
+        acoesHtml: `
+        <div class="reg-card-menu">
+          <button type="button" class="icon-btn reg-card-menu-btn" data-reg-card-menu="${m.id}" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.regCardMenuAberto===m.id?'true':'false'}">⋮</button>
+          ${UI.regCardMenuAberto===m.id ? `
+          <div class="reg-card-menu-lista">
+            <button type="button" data-editar-meta="${m.id}">✏️ Editar</button>
+            <button type="button" data-historico-meta="${m.id}">📈 Ver histórico</button>
+            <button type="button" data-excluir-meta="${m.id}">🗑️ Excluir</button>
+          </div>` : ''}
+        </div>`,
+      });
+    }).join('')}</div>`}
   </div>
   ${indicadores ? renderIndicadoresMetas(indicadores) : ''}
   ${renderHistoricoMetaPanel(competencia)}
@@ -17139,7 +17168,7 @@ function renderBackupConteudo(){
           <input type="checkbox" id="chkSelecionarTodosBackupMobile" ${nomesVisiveis.length>0 && nomesVisiveis.every(n=>sel.has(n))?'checked':''} data-indet-lote="${sel.size>0 && !nomesVisiveis.every(n=>sel.has(n))}" ${bloqueado?'disabled':''}>
           Selecionar todos nesta página (${nomesVisiveis.length})
         </label>` : ''}
-        <div class="table-wrap" data-ordenar-tabela="backups"><table class="tabela-cards-mobile">
+        <div class="table-wrap reg-tabela-principal" data-ordenar-tabela="backups"><table>
           <thead><tr>
             ${podeExcluir ? `<th style="width:1%;"><input type="checkbox" id="chkSelecionarTodosBackup" ${nomesVisiveis.length>0 && nomesVisiveis.every(n=>sel.has(n))?'checked':''} ${bloqueado?'disabled':''}></th>` : ''}
             ${thOrdenavel('backups','criadoEm','Data/Hora')}${thOrdenavel('backups','tipo','Tipo')}${thOrdenavel('backups','nome','Arquivo')}${thOrdenavel('backups','tamanho','Tamanho',{style:'text-align:right;'})}${thOrdenavel('backups','qtdTransacoes','Registros',{style:'text-align:right;'})}${thOrdenavel('backups','integridade','Integridade',{style:'text-align:center;'})}<th class="col-acoes">Ações</th></tr></thead>
@@ -17161,6 +17190,20 @@ function renderBackupConteudo(){
             </tr>`).join('')}
           </tbody>
         </table></div>
+        <div class="reg-lista-mobile">${pageList.map(b=>construirRegCard({
+          chave: b.nome, detalhe: false,
+          checkboxHtml: podeExcluir ? `<label class="reg-card-check"><input type="checkbox" class="chk-selecionar-backup" data-backup-nome="${escapeHtml(b.nome)}" ${sel.has(b.nome)?'checked':''} ${bloqueado?'disabled':''} aria-label="Selecionar backup"></label>` : '',
+          titulo: formatarDataHoraCurta(b.criadoEm),
+          valorTexto: formatarTamanhoArquivo(b.tamanho),
+          secundario: `${BACKUP_TIPO_INFO[b.tipo]?.icone||''} ${BACKUP_TIPO_INFO[b.tipo]?.label||b.tipo} · ${b.qtdTransacoes ?? '—'} registros`,
+          tagsHtml: `<span class="hint" style="margin:0;" title="${escapeHtml(b.motivoInvalido||'')}">${b.integro ? (b.semMetadados?'⚠ Sem checksum':'✓ Válido') : '✕ Inválido'}</span>`,
+          extraHtml: `<div class="reg-card-extra" style="word-break:break-all;">${escapeHtml(b.nome)}</div>`,
+          semAcao: nivelAcessoPasta==='leitura',
+          acoesHtml: `<div class="reg-card-acoes-inline">
+            <button type="button" class="btn btn-primary btn-sm" data-restaurar-backup="${escapeHtml(b.nome)}" ${(!b.integro||bloqueado)?'disabled':''} ${!b.integro?'title="Backup inválido — restauração bloqueada"':''}>Restaurar</button>
+            <button type="button" class="icon-btn" data-excluir-backup="${escapeHtml(b.nome)}" title="Excluir" ${bloqueado?'disabled':''}>🗑️</button>
+          </div>`,
+        })).join('')}</div>
         <div class="registros-rodape">${rodapePaginacaoBackup}</div>`;
         })()}`}
         `;
