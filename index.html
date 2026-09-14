@@ -9320,6 +9320,7 @@ function renderHistoricoContrachequeModal(){
         </table></div>
         <div class="reg-lista-mobile">${historicoPagina.map(h=>construirRegCard({
           chave: h.competencia,
+          icone: '📄',
           titulo: escapeHtml(competenciaLabel(h.competencia)),
           valorTexto: fmtBRL(h.liquido),
           secundario: `Bruto: <span class="val-cell pos">${fmtBRL(h.bruto)}</span> · Descontos: <span class="val-cell neg">${fmtBRL(h.descontos)}</span>`,
@@ -9382,6 +9383,7 @@ function renderEvolucaoReservaModal(){
           resgates:{tipo:'moeda', valor:m=>m.resgates}, rendimentos:{tipo:'moeda', valor:m=>m.rendimentos},
         }).map(m=>construirRegCard({
           chave: m.competencia, semAcao: true,
+          icone: '📈',
           titulo: escapeHtml(competenciaLabel(m.competencia)),
           valorTexto: fmtBRL(m.saldoFinal),
           secundario: `Aportes: ${m.aportes>0?`<span class="val-cell pos">${fmtBRL(m.aportes)}</span>`:'—'} · Resgates: ${m.resgates>0?`<span class="val-cell neg">${fmtBRL(m.resgates)}</span>`:'—'}`,
@@ -13919,6 +13921,7 @@ function renderCardCartao(c, competencia, melhorCartao){
     chave: c, detalhe: false,
     classeExtra: `linha-fatura ${st.chave}`,
     estiloExtra: `border-left:4px solid ${corCartao(c)};`,
+    icone: '💳',
     titulo: escapeHtml(c),
     valorTexto: `${fmtBRL(v)}<button type="button" class="icon-btn btn-projecao" data-ver-fatura="${escapeHtml(c)}" title="Ver fatura">👁</button>`,
     valorClasse: v===0?'valor-zero':'valor-destaque',
@@ -14735,6 +14738,7 @@ function renderCardLinhaProjecao(l){
   const temVinculo = ['conciliado','antecipado','postecipado'].includes(l.statusConciliacao);
   return construirRegCard({
     chave: l.id, detalhe: false,
+    icone: iconeGrupo(l.grupo),
     titulo: `${escapeHtml(l.descricao)}${seloConciliacaoProjecao(l)}`,
     valorTexto: fmtBRL(l.valorCalculado),
     valorClasse: l.tipo==='Despesa'?'neg':'pos',
@@ -14778,7 +14782,8 @@ function renderCardLinhaSaldoAtual(l){
   return construirRegCard({
     chave: `saldo-${l.dia}`, detalhe: false,
     classeExtra: `linha-saldo-atual${l.ehHoje ? ' linha-saldo-hoje' : ''}`,
-    titulo: l.ehHoje ? '📍 Saldo Atual (Hoje)' : '📅 Saldo do Dia',
+    icone: l.ehHoje ? '📍' : '📅',
+    titulo: l.ehHoje ? 'Saldo Atual (Hoje)' : 'Saldo do Dia',
     valorTexto: fmtBRL(l.saldo), valorClasse: 'saldo-destaque',
     secundario: `Dia ${pad2(l.dia)}`,
     semAcao: true,
@@ -15070,6 +15075,7 @@ function renderEditarSaldoInicialFluxoCaixaModal(){
         </table>
         <div class="reg-lista-mobile">${aplicarOrdenacaoClique(valores, 'saldoInicialFC', { conta:{tipo:'texto', valor:v=>v.conta}, valor:{tipo:'moeda', valor:v=>v.valor} }).map(v=>construirRegCard({
           chave: v.conta, semAcao: true,
+          icone: '🏦',
           titulo: escapeHtml(v.conta),
           valorTexto: `<input type="text" inputmode="decimal" class="inp-saldo-inicial-fc" data-conta="${escapeHtml(v.conta)}" value="${fmtMoedaInput(v.valor)}" style="width:110px;text-align:right;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-family:var(--mono);">`,
           secundario: escapeHtml(STATE.contaTipos[v.conta]||''),
@@ -15099,7 +15105,8 @@ function renderCardIntelGrupo(g){
     clickAttr: `data-drill-grupo="${escapeHtml(g.grupo)}"`,
     estiloExtra: `cursor:pointer;${expandido ? 'background:var(--navy-50,#eef2f9);' : ''}`,
     semAcao: true,
-    titulo: `${expandido?'➖':'➕'} ${iconeGrupo(g.grupo)} ${escapeHtml(g.grupo)}`,
+    icone: iconeGrupo(g.grupo),
+    titulo: `${expandido?'➖':'➕'} ${escapeHtml(g.grupo)}`,
     valorTexto: fmtBRL(g.atual),
     secundario: `Média: ${fmtBRL(g.mediaHist)} · Projeção: ${fmtBRL(g.projecao)}`,
     tagsHtml: `<span class="status-extrato" title="${escapeHtml(info.tooltip)}" style="color:${info.cor};">${info.emoji} ${info.label}</span>`,
@@ -15317,6 +15324,7 @@ function renderInteligencia(){
       <div class="reg-lista-mobile">${ctx.projecoes.map(p=>construirRegCard({
         chave: `${p.ano}-${p.mes}`, semAcao: true,
         estiloExtra: p.risco==='alto' ? 'background:#fbe4e1;' : (p.risco==='medio' ? 'background:#fdf3d8;' : ''),
+        icone: '📅',
         titulo: `${MESES[p.mes-1]}/${p.ano} ${p.risco==='alto'?'🔴':(p.risco==='medio'?'🟡':'')}`,
         valorTexto: fmtBRL(p.saldoProjetado), valorClasse: classeSinalMoeda(p.saldoProjetado),
         secundario: `Receita: ${fmtBRL(p.receitaProjetada)} · Despesa: ${fmtBRL(p.despesaProjetada)}`,
@@ -15829,6 +15837,7 @@ function renderConciliarProjecaoModal(){
         </table></div>
         <div class="reg-lista-mobile">${pageList.map(c=>construirRegCard({
           chave: c.t.id, detalhe: false,
+          icone: iconeGrupo(c.t.grupo),
           checkboxHtml: `<label class="reg-card-check"><input type="checkbox" data-conciliar-check="${c.t.id}" ${selecionados.includes(c.t.id)?'checked':''} aria-label="Selecionar candidato"></label>`,
           titulo: escapeHtml(c.t.descricao),
           valorTexto: fmtBRL(c.t.valor), valorClasse: c.t.tipo==='Receita'?'pos':'neg',
@@ -15997,6 +16006,7 @@ function renderDuplicarMesesModal(){
         <div class="reg-lista-mobile">${pageList.map(o=>construirRegCard({
           chave: String(o.idx), detalhe: false,
           estiloExtra: o.duplicado ? 'background:#fff3ea;' : '',
+          icone: '📅',
           titulo: `${fmtData(o.data)}${o.editado?' <span class="hint" style="margin:0;font-style:italic;">(editado)</span>':''}`,
           valorTexto: `${original.tipo==='Despesa'?'-':''}${fmtBRL(o.valor)}`, valorClasse: original.tipo==='Despesa'?'neg':'pos',
           secundario: `#${o.idx+1}`,
@@ -16142,7 +16152,8 @@ function renderMetas(){
       const info = SITUACAO_META_INFO[m.situacao];
       return construirRegCard({
         chave: m.id, detalhe: false,
-        titulo: `${iconeGrupo(m.grupo)} ${escapeHtml(nomeMeta(m))}`,
+        icone: iconeGrupo(m.grupo),
+        titulo: escapeHtml(nomeMeta(m)),
         valorTexto: fmtBRL(m.saldo), valorClasse: classeSinalMoeda(m.saldo),
         secundario: `Meta: ${fmtBRL(m.valor)} · Gasto: ${fmtBRL(m.gasto)}`,
         tagsHtml: `<span class="meta-situacao-tag" style="background:${info.cor}1a;color:${info.cor};">${info.emoji} ${info.label}</span>`,
@@ -16265,6 +16276,7 @@ function renderHistoricoMetaPanel(competencia){
       const info = SITUACAO_META_INFO[situacaoMeta(x.gasto, x.meta)];
       return construirRegCard({
         chave: x.competencia, semAcao: true,
+        icone: '📅',
         titulo: escapeHtml(competenciaLabel(x.competencia)),
         valorTexto: fmtBRL(diferenca), valorClasse: classeSinalMoeda(diferenca),
         secundario: `Meta: ${fmtBRL(x.meta)} · Gasto: ${fmtBRL(x.gasto)}`,
@@ -17299,10 +17311,11 @@ function renderBackupConteudo(){
         </table></div>
         <div class="reg-lista-mobile">${pageList.map(b=>construirRegCard({
           chave: b.nome, detalhe: false,
+          icone: BACKUP_TIPO_INFO[b.tipo]?.icone || '☁️',
           checkboxHtml: podeExcluir ? `<label class="reg-card-check"><input type="checkbox" class="chk-selecionar-backup" data-backup-nome="${escapeHtml(b.nome)}" ${sel.has(b.nome)?'checked':''} ${bloqueado?'disabled':''} aria-label="Selecionar backup"></label>` : '',
           titulo: formatarDataHoraCurta(b.criadoEm),
           valorTexto: formatarTamanhoArquivo(b.tamanho),
-          secundario: `${BACKUP_TIPO_INFO[b.tipo]?.icone||''} ${BACKUP_TIPO_INFO[b.tipo]?.label||b.tipo} · ${b.qtdTransacoes ?? '—'} registros`,
+          secundario: `${BACKUP_TIPO_INFO[b.tipo]?.label||b.tipo} · ${b.qtdTransacoes ?? '—'} registros`,
           tagsHtml: `<span class="hint" style="margin:0;" title="${escapeHtml(b.motivoInvalido||'')}">${b.integro ? (b.semMetadados?'⚠ Sem checksum':'✓ Válido') : '✕ Inválido'}</span>`,
           extraHtml: `<div class="reg-card-extra" style="word-break:break-all;">${escapeHtml(b.nome)}</div>`,
           semAcao: nivelAcessoPasta==='leitura',
@@ -17732,6 +17745,7 @@ function renderModalTaxasConversao(){
     const valorBRL = Math.abs(info.valorOriginal) * (parseTaxaDecimal(taxaAtual)||0);
     return construirRegCard({
       chave: String(i), semAcao: true,
+      icone: '💱',
       titulo: escapeHtml(r[1]),
       valorTexto: `<span class="val-cell" data-taxa-valor-idx="${i}">${fmtBRL(valorBRL)}</span>`,
       secundario: `${fmtData(r[0])} · Original: ${info.moeda} ${Math.abs(info.valorOriginal).toFixed(2)}`,
@@ -17768,6 +17782,7 @@ function renderModalParcelasEmprestimo(){
     const atual = total>0 && total>=it.parcelasRestantes ? (total - it.parcelasRestantes + 1) : null;
     return construirRegCard({
       chave: String(i), semAcao: true,
+      icone: '🏦',
       titulo: escapeHtml(it.descricao),
       valorTexto: `<span class="val-cell" data-parcela-atual-idx="${i}">${atual!==null ? `${atual}/${total}` : '<span class="hint">—</span>'}</span>`,
       secundario: `Parcelas restantes: ${it.parcelasRestantes}`,
