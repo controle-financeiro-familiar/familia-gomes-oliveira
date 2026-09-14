@@ -1097,19 +1097,53 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
    convenção de acessibilidade do restante da tabela: nunca só uma cor de fundo/borda sem texto/ícone
    equivalente), então o texto ao lado só reforça visualmente, sem depender de cor para ser lido. */
 .status-extrato{font-size:11px;}
-/* Extrato Consolidado no mobile ("Padronização da visualização mobile em .reg-lista-mobile"): a tabela
-   mensal (.tabela-fluxo) passou a ter uma lista .reg-lista-mobile irmã (ver renderTabelaMesExtrato/
-   renderCardLinhaProjecao/renderCardLinhaSaldoAtual/renderCardLinhaNaoListados) — a tabela desktop fica só
-   oculta neste breakpoint (.reg-tabela-principal, regra genérica acima), sem mais nenhuma conversão
-   CSS de <tr>/<td> em card própria desta tabela (o bloco que fazia isso foi removido; o destaque visual
-   das linhas especiais "hoje"/"não listados" ganhou as regras .reg-card.linha-saldo-hoje/.reg-card.
-   linha-nao-listados logo abaixo, no mesmo espírito das regras tr.linha-saldo-hoje/tr.linha-nao-listados
-   já existentes para a tabela desktop). */
-.reg-card.linha-saldo-atual .reg-card-descricao{font-weight:700;}
-.reg-card.linha-saldo-hoje{background:#fff8e6;border-color:var(--gold);}
-.reg-card.linha-saldo-hoje .reg-card-valor.saldo-destaque{background:var(--gold);color:var(--navy-950);}
-.reg-card.linha-nao-listados{background:var(--navy-50,#f4f7fc);}
-.reg-card.linha-nao-listados .reg-card-descricao,.reg-card.linha-nao-listados .reg-card-secundario{color:#5b6b85;}
+/* Fluxo de Caixa no mobile (item 13 do requisito de responsividade): a mesma tabela vira uma lista
+   vertical de cards — cada <tr> um card, cada <td> uma linha "rótulo: valor" — sem tocar no cálculo da
+   projeção nem duplicar a lógica de renderTabelaMesExtrato/renderLinhaProjecao, só a apresentação. As
+   linhas especiais "Lançamentos não listados" (ver calcProjecoesMes/renderLinhaNaoListados) continuam na
+   posição calculada dinamicamente entre os lançamentos listados, com o mesmo cartão/borda desta lista (ver
+   regra própria logo abaixo). A linha "Saldo do Dia"/"Saldo Atual (Hoje)"
+   (aplicarLinhasSaldoDiario/.linha-saldo-atual) não é mais usada nesta tabela — as regras abaixo continuam
+   valendo para ela só por compatibilidade, caso volte a ser usada em algum outro lugar. */
+@media(max-width:700px){
+  .tabela-fluxo{min-width:0;width:100%;display:block;}
+  .tabela-fluxo thead{display:none;}
+  .tabela-fluxo tbody{display:block;}
+  .tabela-fluxo tr{
+    display:block;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-md);
+    padding:8px 12px;margin-bottom:8px;
+  }
+  .tabela-fluxo tr.linha-saldo-hoje{border-color:var(--gold);border-width:2px;}
+  .tabela-fluxo td{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;font-size:13px;
+    border-bottom:1px solid var(--navy-50);
+  }
+  .tabela-fluxo td:last-child{border-bottom:none;}
+  .tabela-fluxo td[data-label]:not([data-label=""])::before{
+    content:attr(data-label);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;
+    color:#8393ac;flex-shrink:0;
+  }
+  .tabela-fluxo td.tabela-fluxo-acoes{justify-content:flex-end;gap:14px;}
+  .tabela-fluxo td.tabela-fluxo-acoes .icon-btn{min-width:var(--touch-min);font-size:16px;}
+  .tabela-fluxo .linha-saldo-atual-label{display:block;padding:5px 0;font-weight:700;}
+  /* "Novos ajustes de interface — modo mobile", item 10: corrige uma regressão introduzida na rodada
+     anterior — display:block (para "alinhar à direita" o texto) na verdade colava o rótulo "Descrição"
+     (::before) ao conteúdo "Lançamentos não listados", porque removia o justify-content:space-between
+     padrão do .tabela-fluxo td (ver regra genérica acima). Sem NENHUMA regra própria aqui, o td volta a
+     usar esse mesmo padrão — "Descrição" à esquerda, "Lançamentos não listados" à direita, cada um numa
+     extremidade da linha, exatamente como qualquer outra linha do card — que é o resultado esperado tanto
+     do requisito original (à direita) quanto deste (nunca colado ao rótulo). Nada no texto/dado muda. */
+  /* Item 8 do requisito: a primeira linha do card (coluna "Dia") fica inteira em negrito — rótulo e valor —
+     não só o valor da data — e com um background de destaque, sangrando até as bordas do card (a mesma
+     margin negativa do padding do card, ver .tabela-fluxo tr acima) para ler como um "cabeçalho" da linha,
+     sem alterar a hierarquia visual do restante do card. */
+  .tabela-fluxo td:first-child{
+    font-weight:700;background:var(--navy-50);margin:-8px -12px 5px;padding:8px 12px;
+    border-radius:var(--radius-md) var(--radius-md) 0 0;border-bottom:1px solid var(--line);
+  }
+  .tabela-fluxo td:first-child::before{font-weight:700;}
+  .tabela-fluxo tr.linha-saldo-hoje td:first-child{background:var(--gold-light,#fbf0d9);}
+}
 thead th{
   text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.3px;text-transform:uppercase;
   color:#fff;background:var(--navy-800);padding:9px 10px;position:sticky;top:0;
@@ -1207,37 +1241,25 @@ tbody tr:hover{background:var(--navy-50);}
   .reg-lista-mobile{display:block;}
 }
 .reg-grupo-data{margin-bottom:var(--sp-4);}
-.reg-grupo-data-titulo{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5b6b85;padding:0 2px 8px;}
-/* "Reformulação visual do .reg-card no mobile" (referência: extrato de app bancário real do usuário —
-   linha 1 = caixa de seleção (quando houver) + descrição completa (nunca truncada, com toda a largura do
-   card para si) + valor no topo à direita; linha 2 = ícone de identidade (pequeno, próprio bloco) +
-   grupo/categoria + informação complementar (conta, tag de tipo) + indicador de interação (chevron ›/
-   menu ⋮/ações inline) empurrado para a direita): estrutura interna de QUALQUER .reg-card da aplicação
-   passa a ser sempre .reg-card-topo (descrição + valor) seguida de .reg-card-linha2 (ícone + secundário +
-   tags + ação), dentro de .reg-card-corpo — ver construirRegCard. align-items:flex-start no .reg-card
-   mantém a caixa de seleção ancorada no topo do card mesmo quando a descrição ocupa várias linhas. */
+.reg-grupo-data-titulo{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#8393ac;padding:0 2px 6px;}
+/* "Ajustes de interface — modo mobile", item 7: align-items:center (em vez do antigo flex-start) garante
+   que a caixa de seleção (.reg-card-check) fique sempre verticalmente centralizada em relação ao conteúdo
+   principal do card (.reg-card-principal), nunca alinhada ao topo/base — vale para qualquer quantidade de
+   linhas em .reg-card-principal (descrição+valor, grupo/conta+tag, e as tags extras opcionais de parcela/
+   responsável/lançamento interno), já que o alinhamento passa a acompanhar o item mais alto do card
+   automaticamente, sem precisar calcular a altura manualmente. O menu ⋮ (.reg-card-menu) também passa a
+   ficar centralizado pelo mesmo motivo — mesma lógica de alinhamento para os 3 itens do flex-row. */
 .reg-card{
-  display:flex;align-items:flex-start;gap:10px;background:var(--paper);border:1px solid var(--line);
-  border-radius:16px;padding:14px 16px;margin-bottom:10px;position:relative;
-  box-shadow:0 1px 2px rgba(16,24,40,.04);
+  display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--line);
+  border-radius:var(--radius-md);padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-2);position:relative;
 }
-/* Item 13 do requisito original + "Reformulação visual do .reg-card": tocar em qualquer parte do card (fora
-   da caixa de seleção/menu ⋮/ações) abre o modal de detalhe completo do lançamento — só os cards com
-   data-reg-card-detalhe (lançamentos de verdade: Registros/Extrato/Futuros/Fatura/Próximas Faturas) ganham
-   esse comportamento e o indicador visual (.reg-card-chevron). Listas cujo toque expande conteúdo inline
-   (clickAttr, ex.: "Onde o dinheiro está mudando?") continuam clicáveis mas sem o chevron — o sinal visual
-   delas é o ➕/➖ já embutido no próprio título. */
+/* Item 13 do requisito: no mobile, tocar em qualquer parte do card (fora da caixa de seleção e do menu ⋮)
+   abre um modal com o detalhe completo do lançamento — só os cards com data-reg-card-detalhe (lista de
+   Registros) ganham esse comportamento. */
 .reg-card[data-reg-card-detalhe]{cursor:pointer;}
-.reg-card-corpo{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;}
-.reg-card-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
-.reg-card-icone{
-  width:24px;height:24px;border-radius:7px;flex-shrink:0;background:var(--navy-50);
-  display:flex;align-items:center;justify-content:center;font-size:13px;line-height:1;
-}
 /* Seleção em lote na lista mobile (item 18 do requisito de responsividade) — caixa de seleção do card,
-   ancorada no início da 1ª linha (mesma altura da descrição), mesma altura mínima de toque das demais
-   ações da lista. */
-.reg-card-check{display:flex;align-items:flex-start;justify-content:center;flex-shrink:0;min-width:var(--touch-min);padding-top:2px;}
+   mesma altura mínima de toque das demais ações da lista. */
+.reg-card-check{display:flex;align-items:center;justify-content:center;flex-shrink:0;min-width:var(--touch-min);margin:calc(-1*var(--sp-3)) 0;}
 .reg-card-check input{width:18px;height:18px;}
 .reg-select-all-mobile{
   display:flex;align-items:center;gap:8px;font-size:12.5px;color:#5b6b85;font-weight:600;
@@ -1279,34 +1301,17 @@ tbody tr:hover{background:var(--navy-50);}
   .panel.backup-config-mobile .hint{ margin-top:4px; }
   .panel.backup-config-mobile .backup-config-acoes{ margin-top:10px;padding-top:10px; }
 }
-/* Título/descrição principal (item 3 do requisito "Reformulação visual do .reg-card": nunca truncar com
-   reticências, nem sequer via -webkit-line-clamp) — quebra livremente em quantas linhas o texto precisar;
-   fica sozinha na linha 1 do card (ver .reg-card-topo), então tem toda a largura disponível (menos a caixa
-   de seleção, quando houver) para nunca precisar cortar a informação principal. */
-.reg-card-descricao{
-  flex:1;min-width:0;font-size:15px;font-weight:700;color:var(--ink);
-  overflow-wrap:anywhere;white-space:normal;
-}
-.reg-card-valor{flex-shrink:0;font-family:var(--mono);font-weight:700;font-size:15px;white-space:nowrap;}
+.reg-card-principal{flex:1;min-width:0;}
+.reg-card-linha1{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+.reg-card-descricao{font-size:14px;font-weight:600;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.reg-card-valor{font-family:var(--mono);font-weight:700;font-size:15px;white-space:nowrap;}
 .reg-card-valor.neg{color:var(--despesa);}
 .reg-card-valor.pos{color:var(--receita);}
-.reg-card-linha2{display:flex;flex-wrap:wrap;align-items:center;gap:6px;}
+.reg-card-linha2{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:3px;}
 .reg-card-linha2 .tag{white-space:nowrap;flex-shrink:0;}
-.reg-card-secundario{font-size:13px;color:#6a7a97;overflow-wrap:anywhere;white-space:normal;}
-/* Área de ação da linha 2 (o que quer que sinalize a interação: chevron de detalhe, menu ⋮ ou ações
-   inline) — sempre empurrada para a extremidade direita da linha 2 (ver ícone+secundário+tags à esquerda),
-   nunca competindo por espaço com a descrição (que agora tem sua própria linha, ver .reg-card-topo). */
-.reg-card-lado{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:auto;}
-.reg-card-chevron{color:#b7c0d1;font-size:20px;line-height:1;flex-shrink:0;}
+.reg-card-secundario{font-size:12px;color:#6a7a97;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .reg-card-menu{position:relative;flex-shrink:0;}
 .reg-card-menu-btn{min-width:var(--touch-min);font-size:18px;}
-/* "Padronização da visualização mobile em .reg-lista-mobile": área de ações de um .reg-card quando a
-   tabela desktop de origem já mostra a(s) ação(ões) como botão(ões) visíveis (em vez de escondidos atrás
-   de um menu ⋮) — ex.: "Restaurar" do Backup Histórico, "Ver detalhes" do Histórico do Contracheque. Meros
-   botões (mesmos .btn/.icon-btn de sempre) dentro de um contêiner flex vertical, nunca um componente visual
-   novo; usado só quando a área de ações do card não precisa da lógica de abrir/fechar do menu ⋮. */
-.reg-card-acoes-inline{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;}
-.reg-card-acoes-inline .btn{white-space:nowrap;}
 .reg-card-menu-lista{
   position:absolute;right:0;top:100%;z-index:30;background:#fff;border:1px solid var(--line);
   border-radius:var(--radius-sm);box-shadow:0 10px 24px rgba(11,42,94,.18);min-width:160px;overflow:hidden;
@@ -2345,11 +2350,24 @@ summary::marker{content:'';}
     color:#8393ac;flex-shrink:0;
   }
   .tabela-cards-mobile td[colspan]{display:block;border-bottom:none;padding:8px 0 0;}
-  /* Os ajustes de alinhamento de Descrição/Categoria que existiam aqui para "Lançamentos não listados",
-     "Candidatos disponíveis" e "Vínculos já confirmados" (modal Conciliar com o Extrato) ficaram obsoletos:
-     as 3 tabelas passaram a usar .reg-lista-mobile/.reg-card no mobile (ver "Padronização da visualização
-     mobile em .reg-lista-mobile") — cujo .reg-card-descricao já trata texto longo com reticências em 1
-     linha, mesmo padrão do resto do app, sem precisar de nenhuma regra escopada por tabela. */
+  /* Descrição nos cards de "Lançamentos não listados" (modal de auditoria) e "Candidatos disponíveis"
+     (modal Conciliar com o Extrato): o rótulo e o valor continuam lado a lado, com justify-content:
+     space-between (herdado da regra genérica acima) — mas como a descrição real de um lançamento costuma
+     ser mais longa que "DESCRIÇÃO" e quebra em várias linhas dentro do próprio flex item, sem text-align a
+     quebra faz cada linha nascer colada à esquerda (encostada no rótulo), em vez de ocupar a extremidade
+     direita da linha como todo o resto do card. text-align:right aqui não muda o texto/dado nem empilha
+     rótulo/valor (ver .val-cell abaixo, usado só quando o requisito pede empilhar) — só alinha o texto (de
+     uma ou várias linhas) à direita dentro do próprio espaço que o space-between já reserva para ele. */
+  #ovNaoListadosModal td[data-label="Descrição"],
+  [data-ordenar-tabela="conciliarCandidatos"] td[data-label="Descrição"]{ text-align:right!important; }
+  /* Mesmo caso acima, para os cards de "Vínculos já confirmados" (modal Conciliar com o Extrato, ver
+     linhaRegistro): tanto Descrição quanto Categoria podem ser mais longas que o próprio rótulo e quebrar
+     em várias linhas dentro do flex item — sem text-align, cada linha nascia colada ao rótulo em vez de
+     ocupar a extremidade direita, como Data/Conta/Tipo/Valor (que nunca quebram) já fazem. Escopado só a
+     esta tabela (.tabela-vinculos-confirmados) e só a estes dois campos — os demais elementos do card
+     continuam exatamente como estão. */
+  .tabela-vinculos-confirmados td[data-label="Descrição"],
+  .tabela-vinculos-confirmados td[data-label="Categoria"]{ text-align:right!important; }
   /* Células com conteúdo em mais de uma linha (ex.: valor + faixa provável abaixo, via <br>) não cabem
      lado a lado com o rótulo em flex-row sem estourar a largura — empilha rótulo acima do valor em vez de
      lado a lado, preservando a quebra de linha interna da célula. */
@@ -2588,14 +2606,81 @@ summary::marker{content:'';}
    editar as duas datas mora agora só na coluna Ações (ver .cartao-acoes), nunca mais dentro de Fechamento
    ou Vencimento — por isso não depende mais de hover para aparecer. */
 .data-editavel-valor{display:flex;flex-direction:column;align-items:center;line-height:1.3;}
-/* Cartões no mobile ("Padronização da visualização mobile em .reg-lista-mobile"): a tabela ganhou uma
-   .reg-lista-mobile irmã (ver renderCardCartao/renderCartoes) — a tabela desktop fica só oculta neste
-   breakpoint (.reg-tabela-principal, regra genérica acima), sem mais a conversão CSS de <tr>/<td> própria
-   desta tabela (o bloco que fazia isso foi removido). .linha-fatura/.status-col/.status-progresso/
-   .limite-cartao-info continuam com as MESMAS classes/regras de cor de antes (não scoped a <tr>, ver logo
-   acima) — o card mobile as reaproveita sem nenhuma regra nova. A imagem do logotipo da instituição (só
-   decorativa, ver comentário de renderCardCartao) não é reproduzida no card, então .cartao-col/
-   .cartao-col-logo seguem em uso exclusivo da tabela desktop. */
+/* Cartões no mobile (item 15 do requisito de responsividade): mesma técnica de card já usada no Fluxo de
+   Caixa — cada <tr> vira um card, sem depender de hover para revelar o ícone de editar (item 25: ações
+   nunca dependentes de hover em touch) nem duplicar a lógica de cálculo das faturas. */
+@media(max-width:700px){
+  .tabela-cartoes{min-width:0;width:100%;display:block;}
+  .tabela-cartoes thead{display:none;}
+  .tabela-cartoes tbody{display:block;}
+  /* Cabeçalho do card (item 13 do requisito): logo/nome do cartão e o botão "Importar arquivo do banco"
+     na MESMA linha, alinhados verticalmente — a <tr> vira um flex-row "quebrado", onde a 1ª e a 2ª coluna
+     (nome do cartão e importar) dividem a primeira linha, e cada campo seguinte ocupa uma linha própria
+     (mesma técnica de card das demais tabelas, sem duplicar o cálculo de nenhuma fatura). */
+  .tabela-cartoes tr{
+    display:flex;flex-wrap:wrap;align-items:flex-start;
+    background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-md);
+    padding:10px 14px;margin-bottom:10px;
+  }
+  .tabela-cartoes td{
+    display:flex;flex:1 1 100%;order:3;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;
+    border-bottom:1px solid var(--navy-50);text-align:left!important;
+  }
+  /* flex-basis:0 (em vez de "auto") é essencial aqui: com "auto" o navegador decide se quebra a linha
+     comparando o tamanho HIPOTÉTICO do item (baseado no conteúdo, ex.: um nome de cartão longo) contra o
+     espaço disponível ANTES de aplicar o encolhimento — ou seja, um nome longo o bastante empurrava o botão
+     "Importar arquivo do banco" para a linha de baixo mesmo podendo caber (item 13 do requisito: sempre na
+     mesma linha). Com flex-basis:0, a distribuição de espaço passa a ser guiada só por flex-grow/min-width,
+     nunca pelo conteúdo, então os dois sempre ficam na mesma linha. */
+  /* justify-content:flex-start explícito: sem isto, a regra genérica ".tabela-cartoes td{justify-content:
+     space-around}" (item 18) centralizava logo/nome/badges no meio da célula em vez de alinhá-los à
+     esquerda — só o ícone de "Importar arquivo do banco" (td.col-importar-cartao, com seu próprio
+     flex-end) deve ficar à direita nesta linha; o restante fica à esquerda. */
+  .tabela-cartoes td:first-child{flex:1 1 0;min-width:0;order:1;border-bottom:none;padding-bottom:8px;justify-content:flex-start;}
+  /* Sem isto, .cartao-col (flex item de td:first-child, que também é flex por herdar a regra genérica
+     ".tabela-cartoes td{display:flex}") mantém seu min-width:auto padrão e nunca encolhe abaixo do seu
+     conteúdo — em nomes de cartão longos, isso empurra a coluna Ações para a linha de baixo em vez de
+     ficar na mesma linha (item 13 do requisito), mesmo com overflow:hidden/ellipsis no nome. */
+  .tabela-cartoes td:first-child .cartao-col{min-width:0;}
+  /* Ordem "Ordem das Colunas, Limite e Ações": Cartão(1)+Ações(3) na 1ª linha do card, Limite(2) logo
+     abaixo ocupando a linha inteira, depois Valor da fatura(4), Fechamento+Vencimento(5/6) lado a lado,
+     Status(7) e Saldo parcelado em aberto(8) — mesma hierarquia visual da tabela desktop. */
+  .tabela-cartoes td.col-acoes-cartao{flex:0 0 auto;order:2;border-bottom:none;padding-bottom:8px;justify-content:flex-end;}
+  .tabela-cartoes td:nth-child(2){order:3;flex:1 1 100%;}
+  .tabela-cartoes td:nth-child(4){order:4;}
+  .tabela-cartoes td:nth-child(7){order:6;}
+  .tabela-cartoes td:nth-child(8){order:7;}
+  /* Fechamento e Vencimento (colunas 5 e 6) formam duas colunas de largura equilibrada na mesma linha, em
+     vez de duas linhas cheias empilhadas — mesma técnica flex-basis:0 já usada nesta sessão para dividir
+     largura igualmente entre itens sem depender do tamanho do conteúdo. Sem mais ícone de editar aqui (foi
+     para a coluna Ações), então a divisão volta a ser 50/50. */
+  /* Coluna estreita demais para rótulo+valor lado a lado (como nas outras linhas) — rótulo empilha ACIMA
+     do valor em vez de à esquerda, senão o texto "Fechamento"/"Vencimento" espreme a data a ponto de
+     quebrar caractere por caractere (largura efetiva de cada metade gira em torno de 110-170px). */
+  .tabela-cartoes td:nth-child(5),.tabela-cartoes td:nth-child(6){
+    flex:1 1 45%;min-width:0;order:5;flex-direction:column;align-items:flex-start;gap:2px;
+  }
+  /* Vencimento (coluna 6) alinhado à direita — Fechamento (coluna 5) continua à esquerda; as duas bordas
+     externas do par ficam alinhadas com o restante do card (rótulo à esquerda / valor à direita nas demais
+     linhas), em vez das duas datas empurradas para o mesmo lado. */
+  .tabela-cartoes td:nth-child(6){align-items:flex-end;}
+  /* Item 18: linha de Status — a tag e a informação complementar (progresso/"Totalmente"/"Parcialmente")
+     ficam lado a lado (não mais empilhadas) e alinhadas à direita do card. */
+  .tabela-cartoes .status-col{flex-direction:row;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;}
+  /* Saldo parcelado em aberto: o valor continua na linha principal (rótulo à esquerda, valor+ícone à
+     direita, igual às demais linhas), mas o hint "N compras · M parcelas" quebra para a linha de baixo em
+     vez de ficar espremido ao lado do valor — flex-basis:100% força a quebra (mesma técnica já usada acima
+     para Fechamento/Vencimento). Item 18: gap reduzido (2px, não os 10px herdados de ".tabela-cartoes td")
+     para o hint ficar mais próximo verticalmente do valor, em vez do espaçamento grande anterior. */
+  .tabela-cartoes td:nth-child(8){flex-wrap:wrap;gap:2px;}
+  .tabela-cartoes td:nth-child(8) .val-cell + .hint{flex:1 1 100%;min-width:0;text-align:right;margin-top:0!important;}
+  .tabela-cartoes td:last-child{border-bottom:none;}
+  .tabela-cartoes td[data-label]:not([data-label=""])::before{
+    content:attr(data-label);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;
+    color:#8393ac;flex-shrink:0;
+  }
+  .tabela-cartoes .edit-data-icon{min-width:var(--touch-min);}  
+}
 .status-col{display:flex;flex-direction:column;gap:5px;align-items:center;}
 .status-pill-novo{
   border:none;border-radius:999px;padding:5px 12px;font-size:11.5px;font-weight:700;cursor:default;
@@ -9305,7 +9390,7 @@ function renderHistoricoContrachequeModal(){
       <div class="modal-body">
         ${cabecalhoContaModalHtml(conta)}
         ${historico.length ? `
-        <div class="table-wrap table-wrap-registros reg-tabela-principal" style="margin-top:14px;" data-ordenar-tabela="historicoContracheque"><table>
+        <div class="table-wrap table-wrap-registros" style="margin-top:14px;" data-ordenar-tabela="historicoContracheque"><table>
           <thead><tr>
             ${thOrdenavel('historicoContracheque','competencia','Competência')}${thOrdenavel('historicoContracheque','margemConsignavel','Margem Consignável',{style:'text-align:right;'})}${thOrdenavel('historicoContracheque','bruto','Bruto',{style:'text-align:right;'})}
             ${thOrdenavel('historicoContracheque','descontos','Descontos',{style:'text-align:right;'})}${thOrdenavel('historicoContracheque','liquido','Líquido',{style:'text-align:right;'})}${thOrdenavel('historicoContracheque','dataCredito','Data do Crédito')}<th class="no-print"></th>
@@ -9322,15 +9407,6 @@ function renderHistoricoContrachequeModal(){
             </tr>`).join('')}
           </tbody>
         </table></div>
-        <div class="reg-lista-mobile">${historicoPagina.map(h=>construirRegCard({
-          chave: h.competencia,
-          icone: '📄',
-          titulo: escapeHtml(competenciaLabel(h.competencia)),
-          valorTexto: fmtBRL(h.liquido),
-          secundario: `Bruto: <span class="val-cell pos">${fmtBRL(h.bruto)}</span> · Descontos: <span class="val-cell neg">${fmtBRL(h.descontos)}</span>`,
-          extraHtml: `<div class="reg-card-extra">Margem consignável: ${fmtBRL(h.margemConsignavel)}${h.dataCredito ? ` · Crédito em ${fmtData(h.dataCredito)}` : ''}</div>`,
-          acoesHtml: `<div class="reg-card-acoes-inline"><button type="button" class="btn btn-ghost btn-sm" data-abrir-competencia-contracheque="${escapeHtml(conta)}|${h.competencia}">Ver detalhes</button></div>`,
-        })).join('')}</div>
         <div class="registros-rodape no-print">${rodapePaginacaoHistorico}</div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhum contracheque importado ainda para esta conta.</div>`}
       </div>
       <div class="modal-foot">
@@ -9364,7 +9440,7 @@ function renderEvolucaoReservaModal(){
           ${temRendimentos ? `<div class="cartoes-resumo-item"><span class="ico">🌱</span><div><div class="val">${fmtBRL(totalRendimentos)}</div><div class="lbl">rendimentos nos últimos 12 meses</div></div></div>` : ''}
         </div>
         <div class="chart-box" style="height:260px;margin-top:14px;"><canvas id="chartEvolucaoReserva"></canvas></div>
-        <div class="table-wrap table-wrap-registros reg-tabela-principal" style="margin-top:14px;" data-ordenar-tabela="evolucaoReserva"><table>
+        <div class="table-wrap table-wrap-registros" style="margin-top:14px;" data-ordenar-tabela="evolucaoReserva"><table>
           <thead><tr>
             ${thOrdenavel('evolucaoReserva','competencia','Competência')}${thOrdenavel('evolucaoReserva','saldo','Saldo',{style:'text-align:right;'})}${thOrdenavel('evolucaoReserva','aportes','Aportes',{style:'text-align:right;'})}
             ${thOrdenavel('evolucaoReserva','resgates','Resgates',{style:'text-align:right;'})}${temRendimentos ? thOrdenavel('evolucaoReserva','rendimentos','Rendimentos',{style:'text-align:right;'}) : ''}
@@ -9382,17 +9458,6 @@ function renderEvolucaoReservaModal(){
             </tr>`).join('')}
           </tbody>
         </table></div>
-        <div class="reg-lista-mobile">${aplicarOrdenacaoClique(serie.slice().reverse(), 'evolucaoReserva', {
-          competencia:{tipo:'texto', valor:m=>m.competencia}, saldo:{tipo:'moeda', valor:m=>m.saldoFinal}, aportes:{tipo:'moeda', valor:m=>m.aportes},
-          resgates:{tipo:'moeda', valor:m=>m.resgates}, rendimentos:{tipo:'moeda', valor:m=>m.rendimentos},
-        }).map(m=>construirRegCard({
-          chave: m.competencia, semAcao: true,
-          icone: '📈',
-          titulo: escapeHtml(competenciaLabel(m.competencia)),
-          valorTexto: fmtBRL(m.saldoFinal),
-          secundario: `Aportes: ${m.aportes>0?`<span class="val-cell pos">${fmtBRL(m.aportes)}</span>`:'—'} · Resgates: ${m.resgates>0?`<span class="val-cell neg">${fmtBRL(m.resgates)}</span>`:'—'}`,
-          extraHtml: temRendimentos ? `<div class="reg-card-extra">Rendimentos: ${m.rendimentos>0?fmtBRL(m.rendimentos):'—'}</div>` : '',
-        })).join('')}</div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-primary" id="closeEvolucaoReserva2">Fechar</button>
@@ -9441,7 +9506,7 @@ function renderModalAportes(){
                 return `
                 <div class="aportes-subcategoria-bloco">
                   <div class="aportes-subcategoria-cabecalho"><span>${escapeHtml(subcategoria)}</span><span>${fmtBRL(totalSub)}</span></div>
-                  <table class="aportes-tabela-itens reg-tabela-principal"><tbody>
+                  <table class="aportes-tabela-itens"><tbody>
                     ${txsSub.map(t=>`<tr${txInPeriod(t,ano,mes) ? ' style="background:var(--navy-50);"' : ''}>
                       <td data-label="Data" style="white-space:nowrap;">${fmtData(t.data)}</td>
                       <td data-label="Descrição">${escapeHtml(t.descricao)}${Number(t.totalParcelas)>1 ? ` <span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}</td>
@@ -9449,13 +9514,6 @@ function renderModalAportes(){
                       <td data-label="Valor" class="val-cell pos" style="text-align:right;">${fmtBRL(t.valor)}</td>
                     </tr>`).join('')}
                   </tbody></table>
-                  ${renderCardsLancamentosModal(txsSub, {
-                    valorTexto: t=>fmtBRL(t.valor), valorClasse: ()=>'pos',
-                    secundario: t=>`${fmtData(t.data)} · ${escapeHtml(t.conta)}`,
-                    tags: t=> Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : '',
-                    extra: t=> txInPeriod(t,ano,mes) ? `<div class="reg-card-extra">📅 Dentro do mês selecionado (${MESES[mes-1]}/${ano})</div>` : '',
-                    semAcao: ()=>true, detalhe:false,
-                  })}
                 </div>`;
               }).join('')}
             </div>`;
@@ -13428,27 +13486,38 @@ function renderListaMobileRegistros(pageList){
     ${grupos.map(g=>`
     <div class="reg-grupo-data">
       <div class="reg-grupo-data-titulo">${escapeHtml(g.rotulo)}</div>
-      ${g.itens.map(t=>construirRegCard({
-        chave: t.id, detalhe: true,
-        icone: iconeGrupo(t.grupo),
-        checkboxHtml: `<label class="reg-card-check"><input type="checkbox" class="chkLoteReg" value="${escapeHtml(t.id)}" ${UI.regSelecionados.has(t.id)?'checked':''} aria-label="Selecionar lançamento"></label>`,
-        titulo: escapeHtml(t.descricao),
-        valorTexto: `${t.tipo==='Despesa'?'-':''}${fmtBRL(t.valor)}`, valorClasse: t.tipo==='Despesa'?'neg':'pos',
-        // A data já aparece uma única vez no cabeçalho do grupo (.reg-grupo-data-titulo) — repeti-la aqui
-        // seria redundante; a linha secundária mostra grupo+conta, a informação mais útil que sobra.
-        secundario: `${t.grupo ? escapeHtml(t.grupo) : 'Sem Grupo'} · ${escapeHtml(t.conta)}`,
-        tagsHtml: `<span class="tag ${t.tipo}">${t.tipo}</span>`,
-        extraHtml: (t.totalParcelas || (t.parcelaFutura && t.competencia && t.competencia>chaveMes(UI.ano,UI.mes)) || t.responsavel || t.entreFamilia) ? `<div class="reg-descricao-tags">${t.totalParcelas ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}${(t.parcelaFutura && t.competencia && t.competencia>chaveMes(UI.ano,UI.mes)) ? `<span class="tag Variavel">⌛ Parcela futura</span>` : ''}${t.responsavel ? `<span class="tag Receita">🧑 ${escapeHtml(t.responsavel)}</span>` : ''}${t.entreFamilia ? `<span class="tag Variavel">🔁 Interna</span>` : ''}</div>` : '',
-      })).join('')}
+      ${g.itens.map(t=>`
+      <div class="reg-card" data-reg-card-detalhe="${escapeHtml(t.id)}">
+        <label class="reg-card-check"><input type="checkbox" class="chkLoteReg" value="${escapeHtml(t.id)}" ${UI.regSelecionados.has(t.id)?'checked':''} aria-label="Selecionar lançamento"></label>
+        <div class="reg-card-principal">
+          <div class="reg-card-linha1">
+            <span class="reg-card-descricao">${escapeHtml(t.descricao)}</span>
+            <span class="reg-card-valor ${t.tipo==='Despesa'?'neg':'pos'}">${t.tipo==='Despesa'?'-':''}${fmtBRL(t.valor)}</span>
+          </div>
+          <div class="reg-card-linha2">
+            <span class="reg-card-secundario">${t.grupo ? `${iconeGrupo(t.grupo)} ${escapeHtml(t.grupo)}` : 'Sem Grupo'} · ${escapeHtml(t.conta)}</span>
+            <span class="tag ${t.tipo}">${t.tipo}</span>
+          </div>
+          ${(t.totalParcelas || (t.parcelaFutura && t.competencia && t.competencia>chaveMes(UI.ano,UI.mes)) || t.responsavel || t.entreFamilia) ? `<div class="reg-descricao-tags">${t.totalParcelas ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}${(t.parcelaFutura && t.competencia && t.competencia>chaveMes(UI.ano,UI.mes)) ? `<span class="tag Variavel">⌛ Parcela futura</span>` : ''}${t.responsavel ? `<span class="tag Receita">🧑 ${escapeHtml(t.responsavel)}</span>` : ''}${t.entreFamilia ? `<span class="tag Variavel">🔁 Interna</span>` : ''}</div>` : ''}
+        </div>
+        <div class="reg-card-menu">
+          <button type="button" class="icon-btn reg-card-menu-btn" data-reg-card-menu="${t.id}" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.regCardMenuAberto===t.id?'true':'false'}">⋮</button>
+          ${UI.regCardMenuAberto===t.id ? `
+          <div class="reg-card-menu-lista">
+            <button type="button" data-edit="${t.id}">✏️ Editar</button>
+            <button type="button" data-duplicar="${t.id}">📄 Duplicar</button>
+            <button type="button" data-del="${t.id}">🗑️ Excluir</button>
+          </div>` : ''}
+        </div>
+      </div>`).join('')}
     </div>`).join('')}
   </div>`;
 }
-/* Item 13 do requisito original + "Reformulação visual do .reg-card": modal de detalhe completo de um
-   lançamento, aberto ao tocar num .reg-card (mobile) fora da caixa de seleção — mostra todos os campos
-   existentes, sem cortar/truncar nada (ao contrário do card, que precisa ser compacto). As ações Editar/
-   Duplicar/Excluir, que antes ficavam atrás do menu ⋮ do próprio card, passaram para o rodapé deste modal
-   (o card resumido não perdeu nenhuma ação — só transferiu a apresentação delas para a visualização
-   detalhada, junto com o resto do rodapé "Fechar" já existente). */
+/* Item 13 do requisito: modal de detalhe completo de um lançamento, aberto ao tocar num .reg-card (mobile)
+   fora da caixa de seleção/menu ⋮ — mostra todos os campos existentes, sem cortar/truncar nada (ao
+   contrário do card, que precisa ser compacto). Rodapé só com "Fechar" (alinhado à esquerda no mobile via
+   a regra global de .modal-foot — item 2 do requisito); as ações (editar/duplicar/excluir) continuam
+   exclusivas do menu ⋮ do card, não duplicadas aqui. */
 function renderRegCardDetalheModal(){
   const t = STATE.transactions.find(tx=>tx.id===UI.regCardDetalheId);
   if(!t){ return ''; }
@@ -13480,131 +13549,29 @@ function renderRegCardDetalheModal(){
         </div>
       </div>
       <div class="modal-foot">
-        <button class="btn btn-ghost" id="closeRegCardDetalhe2">Fechar</button>
-        <button type="button" class="btn btn-danger" data-del="${t.id}">🗑️ Excluir</button>
-        <button type="button" class="btn btn-ghost" data-duplicar="${t.id}">📄 Duplicar</button>
-        <button type="button" class="btn btn-primary" data-edit="${t.id}">✏️ Editar</button>
+        <button class="btn btn-primary" id="closeRegCardDetalhe2">Fechar</button>
       </div>
     </div>
   </div>`;
 }
-/* Monta o HTML de UM ".reg-card" isolado — bloco visual atômico reaproveitado por QUALQUER lista/tabela do
-   app no mobile (não só lançamentos, ver "Padronização da visualização mobile em .reg-lista-mobile" e a
-   "Reformulação visual do .reg-card"): mesma estrutura/classes/espaçamento/tipografia/comportamento sempre
-   — linha 1 (.reg-card-topo) com a descrição completa (nunca truncada) + o valor no topo à direita, depois
-   linha 2 (.reg-card-linha2) com ícone + secundário + tags + indicador de interação —, o que muda de
-   chamador para chamador é só o CONTEÚDO de cada slot. Extraído de dentro de renderCardsLancamentosModal
-   (que continua sendo o único lugar que gera o menu ⋮ padrão de Editar/Duplicar/Excluir) para poder ser
-   reusado por tabelas cujas ações não são essas (ou não têm ação nenhuma) — nunca duplicando o markup/CSS
-   de ".reg-card" em cada lugar nem criando um componente visual paralelo. `cfg`:
-   - chave: identificador único do item (usado em data-reg-card-detalhe, quando `detalhe` for true)
-   - icone: HTML/emoji do bloco .reg-card-icone no início da linha 2 (item 1 do requisito visual); '🧾'
-     quando omitido, para todo .reg-card continuar com a mesma estrutura mesmo antes de receber um ícone
-     específico; passar '' (string vazia) suprime o bloco inteiro nos raros casos em que nem um ícone
-     genérico faz sentido.
-   - titulo: texto (já escapado, se vier de dado do usuário) do título principal, sozinho na linha 1 (junto
-     do valor) — nunca deve embutir o mesmo emoji já passado em `icone`
-   - valorTexto/valorClasse: texto/classe do valor em destaque, na linha 1, alinhado ao topo à direita
-   - secundario: HTML da linha 2 (grupo/categoria), ao lado do ícone
-   - tagsHtml: HTML complementar (badges/tags — ex.: conta, tipo) na mesma linha 2, quando houver espaço
-   - extraHtml: HTML de linha(s) adicionais, abaixo da linha 2 (ex.: saldo acumulado, barra de progresso)
-   - checkboxHtml: HTML do <label class="reg-card-check"> (seleção em lote), quando existir — fica fora de
-     .reg-card-corpo, ancorado no topo do card (ver .reg-card-check)
-   - acoesHtml: HTML da área de ações (dropdown ⋮, botões inline) — só é exibida quando o card NÃO abre um
-     modal de detalhe (`detalhe`/`clickAttr` ausentes); nesses dois casos o clique no próprio card já é a
-     ação (chevron/➕-➖), então `acoesHtml` nunca aparece (mesmo se informada) — os controles que antes
-     ficavam nela passam para dentro do modal/conteúdo aberto pelo clique.
-   - semAcao: true esconde INTEIRAMENTE a área de ações (equivalente a acoesHtml='' + classe reg-card-sem-acao)
-   - detalhe: true adiciona data-reg-card-detalhe (abre o modal de detalhe completo, com o chevron › como
-     indicador visual) — só faz sentido para lançamentos (STATE.transactions, ver renderRegCardDetalheModal)
-   - clickAttr: quando informado (ex.: 'data-drill-grupo="X"'), substitui data-reg-card-detalhe por este
-     atributo — sozinho, só injeta os atributos no próprio elemento (ex.: "Lançamentos não listados", cujo
-     card em si não é clicável, só o botão dentro de `acoesHtml`); combinado com `expandeInline:true`, marca
-     que o TOQUE NO CARD expande conteúdo inline (ex.: "Onde o dinheiro está mudando?" — mesmo comportamento
-     da <tr> desktop, nunca abre um modal) e some com `acoesHtml`, sem chevron (o sinal visual desses é o
-     ➕/➖ já embutido no próprio título)
-   - classeExtra/estiloExtra: classe/style adicionais no próprio .reg-card (equivalente ao style="background:
-     ...;" já usado em várias linhas <tr> de tabela desktop — ex.: destacar risco alto, duplicidade) */
-function construirRegCard(cfg){
-  const semAcaoFlag = !!cfg.semAcao;
-  const abreDetalhe = !!cfg.detalhe;
-  const atributoClique = cfg.clickAttr ? cfg.clickAttr : (abreDetalhe ? `data-reg-card-detalhe="${escapeHtml(cfg.chave)}"` : '');
-  const iconeHtml = cfg.icone===undefined ? '🧾' : cfg.icone;
-  // O clique no card inteiro (chevron) ou o toque que expande conteúdo inline (`expandeInline`, ex.: "Onde o
-  // dinheiro está mudando?") já É a ação — `acoesHtml`/⋮ nunca aparece nesses dois casos (as ações que antes
-  // ficavam ali passaram para dentro do modal/conteúdo aberto pelo clique, ver renderRegCardDetalheModal).
-  // `clickAttr` sozinho (sem `expandeInline`) só injeta atributos no elemento — não torna o card clicável
-  // por si (ex.: "Lançamentos não listados", cujo card não é clicável, só o botão dentro de `acoesHtml`) —
-  // nesse caso `acoesHtml` continua aparecendo normalmente. Sem nenhum dos dois, mantém exatamente o
-  // comportamento anterior (menu ⋮, botões inline, ou nada, conforme `acoesHtml`/`semAcao`).
-  const ladoAcao = abreDetalhe
-    ? `<span class="reg-card-chevron" aria-hidden="true">›</span>`
-    : (cfg.expandeInline || semAcaoFlag ? '' : (cfg.acoesHtml||''));
-  return `
-    <div class="reg-card${(semAcaoFlag&&!abreDetalhe)?' reg-card-sem-acao':''}${cfg.classeExtra?` ${cfg.classeExtra}`:''}" ${cfg.estiloExtra?`style="${cfg.estiloExtra}"`:''} ${atributoClique}>
-      ${cfg.checkboxHtml||''}
-      <div class="reg-card-corpo">
-        <div class="reg-card-topo">
-          <span class="reg-card-descricao">${cfg.titulo}</span>
-          <span class="reg-card-valor ${cfg.valorClasse||''}">${cfg.valorTexto}</span>
-        </div>
-        <div class="reg-card-linha2">
-          ${iconeHtml ? `<div class="reg-card-icone">${iconeHtml}</div>` : ''}
-          ${cfg.secundario ? `<span class="reg-card-secundario">${cfg.secundario}</span>` : ''}
-          ${cfg.tagsHtml||''}
-          ${ladoAcao ? `<span class="reg-card-lado">${ladoAcao}</span>` : ''}
-        </div>
-        ${cfg.extraHtml||''}
-      </div>
-    </div>`;
-}
-/* Menu ⋮ padrão de ações de um lançamento (Editar/Duplicar/Excluir) — mesmo mecanismo/estado
-   (UI.regCardMenuAberto) reaproveitado em toda a aplicação; os ids de lançamento são únicos em toda a
-   aplicação, então não há risco de colisão entre as várias listas que usam este menu. */
-function menuAcoesLancamentoHtml(id){
-  return `
-      <div class="reg-card-menu">
-        <button type="button" class="icon-btn reg-card-menu-btn" data-reg-card-menu="${id}" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.regCardMenuAberto===id?'true':'false'}">⋮</button>
-        ${UI.regCardMenuAberto===id ? `
-        <div class="reg-card-menu-lista">
-          <button type="button" data-edit="${id}">✏️ Editar</button>
-          <button type="button" data-duplicar="${id}">📄 Duplicar</button>
-          <button type="button" data-del="${id}">🗑️ Excluir</button>
-        </div>` : ''}
-      </div>`;
-}
 /* ---------- Lista mobile de lançamentos para os modais Ver Extrato/Lançamentos futuros/Ver Fatura/Ver
-   Próximas Faturas/Mapa de Calor do dia (item 12 do requisito de responsividade) — mesmo padrão visual
-   (.reg-card/.reg-lista-mobile) já usado na lista mobile de Registros (ver renderListaMobileRegistros),
-   adaptado aos campos de cada modal via `opts`. A tabela desktop de cada modal continua existindo/
-   funcionando sem alteração nenhuma, só fica oculta neste breakpoint (mesma classe reg-tabela-principal/
-   reg-lista-mobile). Quando `detalhe` não é informado (o caso de todos os modais acima — lançamentos de
-   verdade), o card inteiro abre o modal de detalhe completo (chevron ›, ver renderRegCardDetalheModal, que
-   também reúne as ações Editar/Duplicar/Excluir); nesses casos `acoesHtml`/menuAcoesLancamentoHtml nunca
-   aparece no card (ver construirRegCard) — só é calculado como reserva para quando `opts.detalhe:false`
-   for passado (usos que não são lançamentos de verdade). Os ids de lançamento são únicos em toda a
-   aplicação (cada item aqui é o próprio registro de STATE.transactions por padrão), então não há risco de
-   colisão entre as várias listas que usam esta função.
-   "Padronização da visualização mobile em .reg-lista-mobile": além dos usos de lançamentos de sempre, esta
-   função também passou a ser reaproveitada por listas de OUTROS tipos de registro (ver `titulo`/`chave`/
-   `acoesHtml`/`detalhe`/`icone` abaixo) — nunca uma segunda implementação paralela do mesmo cartão. */
+   Próximas Faturas (item 12 do requisito de responsividade) — mesmo padrão visual (.reg-card/.reg-lista-
+   mobile) já usado na lista mobile de Registros (ver renderListaMobileRegistros), adaptado aos campos de
+   cada modal via `opts`. A tabela desktop de cada modal continua existindo/funcionando sem alteração
+   nenhuma, só fica oculta neste breakpoint (mesma classe reg-tabela-principal/reg-lista-mobile). Reaproveita
+   o mesmo menu de ações (⋮ Editar/Duplicar/Excluir) e o mesmo estado UI.regCardMenuAberto — os ids de
+   lançamento são únicos em toda a aplicação (cada item aqui é o próprio registro de STATE.transactions),
+   então não há risco de colisão entre os vários modais que usam esta função. */
 function renderCardsLancamentosModal(itens, opts){
   if(!itens.length) return '';
   const { valorTexto, valorClasse, secundario, tags, extra, semAcao, tituloGrupo, prefixo, selecionados } = opts;
-  const chaveDe = opts.chave || (t=>t.id);
-  const tituloDe = opts.titulo || (t=>escapeHtml(t.descricao));
-  const detalhePadrao = opts.detalhe===undefined ? true : opts.detalhe;
-  // Ícone do card ("Reformulação visual do .reg-card", item 1: sempre a 1ª informação do card) — por
-  // padrão o ícone do grupo do lançamento (mesma fonte usada em toda a aplicação, ver iconeGrupo), já que
-  // todo item passado aqui é um registro de STATE.transactions (ou equivalente) com esse campo.
-  const iconeDe = opts.icone || (t=>iconeGrupo(t.grupo));
   // Itens 4/13 do requisito: seleção em lote também disponível no mobile — cada card ganha uma caixa
   // própria (classe chkLote<prefixo>, mesma convenção da tabela desktop, então bindSelecaoLote já liga o
   // evento de ambas sem nenhum código extra) e a lista ganha "Selecionar todos" no mesmo padrão visual da
   // aba Registros (renderListaMobileRegistros). Só existe quando o chamador passa `prefixo`+`selecionados`.
   let cabecalhoSelecao = '';
   if(prefixo && selecionados){
-    const idsVisiveis = itens.filter(t=> !(semAcao && semAcao(t))).map(chaveDe);
+    const idsVisiveis = itens.filter(t=> !(semAcao && semAcao(t))).map(t=>t.id);
     const todosMarcados = idsVisiveis.every(id=>selecionados.has(id));
     const algunsMarcados = !todosMarcados && idsVisiveis.some(id=>selecionados.has(id));
     cabecalhoSelecao = `
@@ -13620,17 +13587,32 @@ function renderCardsLancamentosModal(itens, opts){
       const g = tituloGrupo(t);
       if(g!==grupoAtual){ grupoAtual = g; corpo += `<div class="reg-grupo-data-titulo">${escapeHtml(g)}</div>`; }
     }
-    const id = chaveDe(t);
     const semAcaoItem = semAcao ? semAcao(t) : false;
-    corpo += construirRegCard({
-      chave: id, detalhe: detalhePadrao,
-      icone: iconeDe(t),
-      titulo: tituloDe(t), valorTexto: valorTexto(t), valorClasse: valorClasse(t),
-      secundario: secundario(t), tagsHtml: tags ? (tags(t)||'') : '', extraHtml: extra ? (extra(t)||'') : '',
-      checkboxHtml: (prefixo && selecionados && !semAcaoItem) ? `<label class="reg-card-check"><input type="checkbox" class="chkLote${prefixo}" value="${escapeHtml(id)}" ${selecionados.has(id)?'checked':''} aria-label="Selecionar lançamento"></label>` : '',
-      semAcao: semAcaoItem,
-      acoesHtml: opts.acoesHtml ? opts.acoesHtml(t) : menuAcoesLancamentoHtml(id),
-    });
+    corpo += `
+    <div class="reg-card${semAcaoItem?' reg-card-sem-acao':''}" data-reg-card-detalhe="${escapeHtml(t.id)}">
+      ${(prefixo && selecionados && !semAcaoItem) ? `<label class="reg-card-check"><input type="checkbox" class="chkLote${prefixo}" value="${escapeHtml(t.id)}" ${selecionados.has(t.id)?'checked':''} aria-label="Selecionar lançamento"></label>` : ''}
+      <div class="reg-card-principal">
+        <div class="reg-card-linha1">
+          <span class="reg-card-descricao">${escapeHtml(t.descricao)}</span>
+          <span class="reg-card-valor ${valorClasse(t)}">${valorTexto(t)}</span>
+        </div>
+        <div class="reg-card-linha2">
+          <span class="reg-card-secundario">${secundario(t)}</span>
+          ${tags ? (tags(t)||'') : ''}
+        </div>
+        ${extra ? (extra(t)||'') : ''}
+      </div>
+      ${semAcaoItem ? '' : `
+      <div class="reg-card-menu">
+        <button type="button" class="icon-btn reg-card-menu-btn" data-reg-card-menu="${t.id}" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.regCardMenuAberto===t.id?'true':'false'}">⋮</button>
+        ${UI.regCardMenuAberto===t.id ? `
+        <div class="reg-card-menu-lista">
+          <button type="button" data-edit="${t.id}">✏️ Editar</button>
+          <button type="button" data-duplicar="${t.id}">📄 Duplicar</button>
+          <button type="button" data-del="${t.id}">🗑️ Excluir</button>
+        </div>` : ''}
+      </div>`}
+    </div>`;
   });
   return `<div class="reg-lista-mobile">${cabecalhoSelecao}${corpo}</div>`;
 }
@@ -13893,61 +13875,6 @@ function renderModalDuplicidade(){
 }
 
 /* ---------- CARTÕES ---------- */
-/* Versão ".reg-card" de uma linha da tabela de Cartões ("Padronização da visualização mobile em
-   .reg-lista-mobile") — mesmos dados/ações de uma <tr class="linha-fatura"> (ver renderCartoes), só
-   reorganizados no formato de card: nome do cartão + valor da fatura (com 👁 Ver fatura embutido, igual ao
-   desktop) na linha 1; Fechamento/Vencimento + Status na linha 2; bandeira/responsável/🏆, barra de
-   progresso até o vencimento, informação de pagamento, bloco de Limite (reaproveita
-   blocoLimiteCartaoHtml sem alterações) e Saldo parcelado em aberto (com 👁 Ver próximas faturas) em
-   linhas extras — nada calculado aqui que não venha pronto das mesmas funções já usadas pela tabela.
-   As ações genéricas da linha (📥 Importar/✏️ Ajustar fechamento e vencimento) ficam em
-   .reg-card-acoes-inline (mesmo padrão já usado pelo card de Backup Histórico), nunca atrás de um menu ⋮
-   — nenhuma das 4 ações desta linha (Importar/Ajustar/Ver fatura/Ver próximas faturas) é escondida.
-   A imagem do logotipo da instituição (decorativa, só na tabela desktop) não é reproduzida no card — nenhum
-   outro .reg-card da aplicação usa imagem, só texto/emoji (mesma convenção de nomeMeta/iconeGrupo em
-   Metas); a cor de identidade do cartão (corCartao) é preservada via a faixa lateral esquerda do card. */
-function renderCardCartao(c, competencia, melhorCartao){
-  const v = faturaPorCompetencia(c,competencia);
-  const venc = vencimentoLabel(competencia, c);
-  const fech = fechamentoLabel(competencia, c);
-  const ovFatura = faturaOverride(c, competencia);
-  const fechAjustado = !!(ovFatura && ovFatura.fechamento);
-  const vencAjustado = !!(ovFatura && ovFatura.vencimento);
-  const fechData = fechAjustado ? fmtData(ovFatura.fechamento) : fech;
-  const vencData = vencAjustado ? fmtData(ovFatura.vencimento) : venc;
-  const resp = STATE.contaResponsavel[c];
-  const detalheParcelado = detalheSaldoParceladoEmAberto(c, competencia);
-  const ehMelhor = melhorCartao.vencedor===c;
-  const st = statusDetalhadoFatura(c, competencia);
-  const progresso = (st.chave!=='paga' && st.chave!=='proxima' && st.chave!=='fechada-sem-lancamentos') ? progressoAteVencimento(st) : null;
-  const infoPagamento = st.chave==='paga' ? (st.pagamento==='parcial' ? 'Parcialmente' : 'Totalmente') : (st.chave==='fechada-sem-lancamentos' ? 'Sem lançamentos' : null);
-  const badges = `${bandeiraCartaoHtml(c)}${resp ? `<span class="tag" style="background:var(--navy-100);color:var(--navy-900);">${escapeHtml(resp)}</span>` : ''}${ehMelhor ? `<span class="tag melhor-hoje-badge" title="Compras realizadas neste cartão terão o maior prazo até o pagamento da fatura">🏆</span>` : ''}`;
-  const limiteHtml = blocoLimiteCartaoHtml(c);
-  return construirRegCard({
-    chave: c, detalhe: false,
-    classeExtra: `linha-fatura ${st.chave}`,
-    estiloExtra: `border-left:4px solid ${corCartao(c)};`,
-    icone: '💳',
-    titulo: escapeHtml(c),
-    valorTexto: `${fmtBRL(v)}<button type="button" class="icon-btn btn-projecao" data-ver-fatura="${escapeHtml(c)}" title="Ver fatura">👁</button>`,
-    valorClasse: v===0?'valor-zero':'valor-destaque',
-    secundario: `Fecha ${fechData||'—'}${fechAjustado?' (ajustado)':''} · Vence ${vencData||'—'}${vencAjustado?' (ajustado)':''}`,
-    tagsHtml: `<span class="status-pill-novo ${st.chave}" title="${escapeHtml(tituloStatusFatura(st))}">${st.emoji} ${st.label}</span>`,
-    extraHtml: `
-      ${badges ? `<div class="reg-descricao-tags">${badges}</div>` : ''}
-      ${progresso!==null ? `<div class="status-progresso" style="margin-top:4px;" title="${escapeHtml(tooltipProgressoFatura(st))}"><div class="progress-track"><div class="progress-fill" style="width:${(progresso*100).toFixed(0)}%;background:${COR_STATUS_FATURA[st.chave]};"></div></div></div>` : ''}
-      ${infoPagamento ? `<div class="reg-card-extra" style="margin-top:2px;">${infoPagamento}</div>` : ''}
-      ${limiteHtml ? `<div class="reg-card-extra" style="margin-top:6px;">${limiteHtml}</div>` : ''}
-      <div class="reg-card-extra" style="margin-top:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
-        <span>${detalheParcelado.valor>0 ? `Parcelado em aberto: <b>${fmtBRL(detalheParcelado.valor)}</b> (${detalheParcelado.compras} compra${detalheParcelado.compras===1?'':'s'} · ${detalheParcelado.parcelas} parcela${detalheParcelado.parcelas===1?'':'s'})` : 'Sem saldo parcelado em aberto'}</span>
-        ${detalheParcelado.valor>0 ? `<button type="button" class="icon-btn btn-projecao" data-projecao-cartao="${escapeHtml(c)}" title="Ver próximas faturas">👁</button>` : ''}
-      </div>`,
-    acoesHtml: `<div class="reg-card-acoes-inline">
-      <button type="button" class="icon-btn" data-importar-conta="${escapeHtml(c)}" title="Importar arquivo do banco" aria-label="Importar arquivo do banco">📥</button>
-      <button type="button" class="icon-btn edit-data-icon" data-edit-fatura="${escapeHtml(c)}|${competencia}" title="Ajustar fechamento e vencimento desta fatura" aria-label="Ajustar fechamento e vencimento desta fatura">✏️</button>
-    </div>`,
-  });
-}
 function renderCartoes(){
   const competencia = `${UI.ano}-${pad2(UI.mes)}`;
   const melhorCartao = calcularMelhorCartaoHoje();
@@ -13961,15 +13888,6 @@ function renderCartoes(){
   const chCartao = 17, chLimite = 17, chAcoes = 6, chData = 8, chStatus = 13, chValor = 15, chSaldo = 16;
   const chTotal = chCartao + chLimite + chAcoes + chData*2 + chStatus + chValor + chSaldo;
   const pct = ch => (ch/chTotal*100).toFixed(2);
-  // Mesma lista ordenada reaproveitada pela tabela desktop e pelo .reg-lista-mobile abaixo — calculada uma
-  // única vez para que os dois nunca divirjam (mesma ordenação, mesmos cartões).
-  const cartoesOrdenados = aplicarOrdenacaoClique(cartoesOrdenadosPorVencimento(), 'cartoes', {
-    cartao:{tipo:'texto', valor:c=>c},
-    valorFatura:{tipo:'moeda', valor:c=>faturaPorCompetencia(c,competencia)},
-    fechamento:{tipo:'data', valor:c=>(faturaOverride(c,competencia)&&faturaOverride(c,competencia).fechamento)||fechamentoDataCalculada(competencia,c)},
-    vencimento:{tipo:'data', valor:c=>(faturaOverride(c,competencia)&&faturaOverride(c,competencia).vencimento)||vencimentoDataCalculada(competencia,c)},
-    saldoParcelado:{tipo:'moeda', valor:c=>detalheSaldoParceladoEmAberto(c,competencia).valor},
-  });
   // "Novos ajustes de interface — FinUs" (4ª rodada, item 1 / 5ª rodada, item 4): título da aba dentro de
   // main, mesmo padrão estrutural já usado por Registros (.panel > h2, ícone dentro do próprio <span> do
   // título — mesma convenção de Registros/Extrato Consolidado) — sem cartoes-resumo-grid, pois esta aba não
@@ -14008,7 +13926,7 @@ function renderCartoes(){
       <div class="cartoes-resumo-item"><span class="ico">🟡</span><div><div class="val">${resumo.pendentes}</div><div class="lbl">pendente${resumo.pendentes===1?'':'s'}</div></div></div>
       <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(resumo.saldoParceladoTotal)}</div><div class="lbl">total parcelado em aberto</div></div></div>
     </div>
-    <div class="table-wrap table-wrap-cartoes reg-tabela-principal" style="overflow-x:auto;" data-ordenar-tabela="cartoes"><table class="tabela-cartoes" style="table-layout:fixed;width:100%;">
+    <div class="table-wrap table-wrap-cartoes" style="overflow-x:auto;" data-ordenar-tabela="cartoes"><table class="tabela-cartoes" style="table-layout:fixed;width:100%;">
       <thead><tr>
         ${thOrdenavel('cartoes','cartao','Cartão',{style:`text-align:left;width:${pct(chCartao)}%;`})}
         <th style="text-align:center;width:${pct(chLimite)}%;">Limite</th>
@@ -14020,7 +13938,13 @@ function renderCartoes(){
         ${thOrdenavel('cartoes','saldoParcelado','Saldo parcelado em aberto',{style:`text-align:right;width:${pct(chSaldo)}%;`})}
       </tr></thead>
       <tbody>
-      ${cartoesOrdenados.map(c=>{
+      ${aplicarOrdenacaoClique(cartoesOrdenadosPorVencimento(), 'cartoes', {
+        cartao:{tipo:'texto', valor:c=>c},
+        valorFatura:{tipo:'moeda', valor:c=>faturaPorCompetencia(c,competencia)},
+        fechamento:{tipo:'data', valor:c=>(faturaOverride(c,competencia)&&faturaOverride(c,competencia).fechamento)||fechamentoDataCalculada(competencia,c)},
+        vencimento:{tipo:'data', valor:c=>(faturaOverride(c,competencia)&&faturaOverride(c,competencia).vencimento)||vencimentoDataCalculada(competencia,c)},
+        saldoParcelado:{tipo:'moeda', valor:c=>detalheSaldoParceladoEmAberto(c,competencia).valor},
+      }).map(c=>{
         const v = faturaPorCompetencia(c,competencia);
         const venc = vencimentoLabel(competencia, c);
         const fech = fechamentoLabel(competencia, c);
@@ -14098,7 +14022,6 @@ function renderCartoes(){
       }).join('') || '<tr><td colspan="8" class="hint" style="text-align:center;padding:14px;">Nenhum cartão cadastrado. Adicione um em Configurações → Contas.</td></tr>'}
       </tbody>
     </table></div>
-    <div class="reg-lista-mobile">${cartoesOrdenados.length ? cartoesOrdenados.map(c=>renderCardCartao(c, competencia, melhorCartao)).join('') : '<div class="empty-state"><div class="big">💳</div>Nenhum cartão cadastrado. Adicione um em Configurações → Contas.</div>'}</div>
     ${!melhorCartao.vencedor && melhorCartao.candidatos && melhorCartao.candidatos.length>0 ? `<p class="hint">Nenhum cartão com 🏆 ainda: há um empate no prazo até o vencimento entre ${melhorCartao.empatados.length} cartões — <button type="button" class="btn btn-ghost btn-sm" id="btnResolverEmpateCartao" style="padding:2px 8px;">escolher manualmente</button>.</p>` : ''}
       </div>
     </div>
@@ -14733,36 +14656,6 @@ function renderLinhaProjecao(l){
       </td>
     </tr>`;
 }
-/* Versão ".reg-card" da mesma linha de projeção acima ("Padronização da visualização mobile em
-   .reg-lista-mobile") — mesmos dados/campos, mesmas ações (🔓 desfazer conciliação quando há vínculo,
-   ✏️ editar, 🗑️ excluir), só reorganizados no formato de card: Descrição+selo na linha 1 junto do Valor,
-   Dia+Conta/Cartão na linha 2 junto de Tipo/Status, Saldo em destaque numa linha extra — e as ações atrás
-   do mesmo menu ⋮ já usado por Registros/Extrato/Futuros (nunca um componente novo). Nenhum cálculo
-   próprio: todos os campos vêm prontos de `l` (calcProjecoesMes), igual à variante de tabela. */
-function renderCardLinhaProjecao(l){
-  const tagTipo = l.tipo==='Receita' ? 'Receita' : 'Despesa';
-  const temVinculo = ['conciliado','antecipado','postecipado'].includes(l.statusConciliacao);
-  return construirRegCard({
-    chave: l.id, detalhe: false,
-    icone: iconeGrupo(l.grupo),
-    titulo: `${escapeHtml(l.descricao)}${seloConciliacaoProjecao(l)}`,
-    valorTexto: fmtBRL(l.valorCalculado),
-    valorClasse: l.tipo==='Despesa'?'neg':'pos',
-    secundario: `Dia ${pad2(l.dia)} · ${contaOuCartaoDaLinha(l)}`,
-    tagsHtml: `<span class="tag ${tagTipo}">${tagTipo}</span> ${badgeStatusExtratoConsolidado(l)}`,
-    extraHtml: `<div class="reg-card-extra"><span class="saldo-destaque" style="padding:2px 6px;">Saldo: ${fmtBRL(l.saldo)}</span></div>`,
-    acoesHtml: `
-    <div class="reg-card-menu">
-      <button type="button" class="icon-btn reg-card-menu-btn" data-reg-card-menu="${l.id}" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.regCardMenuAberto===l.id?'true':'false'}">⋮</button>
-      ${UI.regCardMenuAberto===l.id ? `
-      <div class="reg-card-menu-lista">
-        ${temVinculo ? `<button type="button" data-proj-desvincular="${l.id}" data-proj-desvincular-mes="${l.competencia}">🔓 Desfazer conciliação</button>` : ''}
-        <button type="button" data-proj-edit="${l.id}" data-proj-mes="${l.competencia}">✏️ Editar</button>
-        <button type="button" data-proj-del="${l.id}" data-proj-del-mes="${l.competencia}">🗑️ Excluir</button>
-      </div>` : ''}
-    </div>`,
-  });
-}
 /* Linha especial "Saldo do Dia"/"Saldo Atual (Hoje)" (ver aplicarLinhasSaldoDiario) — mesma estrutura de 6
    colunas das demais linhas (Dia/Descrição+Tipo+Valor mesclados/Saldo/Ações), sem botões de editar/excluir,
    pois não é um lançamento previsto de verdade: é o saldo real já apurado no Extrato até aquele dia. Ambas
@@ -14778,22 +14671,6 @@ function renderLinhaSaldoAtual(l){
       <td data-label="Saldo" class="val-cell saldo-destaque" style="text-align:right;">${fmtBRL(l.saldo)}</td>
       <td data-label=""></td>
     </tr>`;
-}
-/* Versão ".reg-card" da linha "Saldo do Dia"/"Saldo Atual (Hoje)" — sem lançamento de verdade (nunca é
-   editável/excluível, ver comentário de renderLinhaSaldoAtual acima), então usa semAcao (esconde o menu ⋮
-   inteiro, igual à tabela não ter ícones de ação nesta linha). O destaque gold do "hoje" (mesmo visual de
-   tr.linha-saldo-hoje no desktop) é reaplicado via classeExtra + regra própria .reg-card.linha-saldo-hoje
-   no <style>. */
-function renderCardLinhaSaldoAtual(l){
-  return construirRegCard({
-    chave: `saldo-${l.dia}`, detalhe: false,
-    classeExtra: `linha-saldo-atual${l.ehHoje ? ' linha-saldo-hoje' : ''}`,
-    icone: l.ehHoje ? '📍' : '📅',
-    titulo: l.ehHoje ? 'Saldo Atual (Hoje)' : 'Saldo do Dia',
-    valorTexto: fmtBRL(l.saldo), valorClasse: 'saldo-destaque',
-    secundario: `Dia ${pad2(l.dia)}`,
-    semAcao: true,
-  });
 }
 /* Linha especial "Lançamentos não listados" (ver calcProjecoesMes/idsJaRepresentadosNoFluxoCaixa) — mesma
    estrutura de colunas das demais linhas (Dia/Descrição/Conta-Cartão/Tipo/Status/Valor/Saldo/Ações), sem
@@ -14830,29 +14707,6 @@ function renderLinhaNaoListados(l){
         <button type="button" class="icon-btn" data-nao-listados-abrir title="Ver os lançamentos que compõem este total">🔍</button>
       </td>
     </tr>`;
-}
-/* Versão ".reg-card" da linha "Lançamentos não listados" — mesma regra da tabela (card em si NÃO é
-   clicável, só o botão 🔍 abre o modal de auditoria): usa `clickAttr` (em vez de `detalhe`) só para carregar
-   os data-attributes do intervalo no próprio elemento, sem virar `data-reg-card-detalhe` (que ligaria
-   cursor:pointer + abertura de modal ao tocar em qualquer parte do card). O botão lê esses data-attributes
-   via closest('[data-nao-listados-dia-ini]') — troca de closest('tr') feita em bindEvents para funcionar
-   tanto na linha da tabela (desktop) quanto no card (mobile). */
-function renderCardLinhaNaoListados(l){
-  const diaIniExibicao = Math.min(l.diaIni, l.diaFim), diaFimExibicao = Math.max(l.diaIni, l.diaFim);
-  const intervaloCompacto = diaIniExibicao===diaFimExibicao ? pad2(diaIniExibicao) : `${pad2(diaIniExibicao)}–${pad2(diaFimExibicao)}`;
-  const intervalo = diaIniExibicao===diaFimExibicao ? `dia ${pad2(diaIniExibicao)}` : `dias ${pad2(diaIniExibicao)} a ${pad2(diaFimExibicao)}`;
-  const titulo = `Soma de ${l.qtd} lançamento${l.qtd===1?'':'s'} ${l.qtd===1?'real':'reais'} das contas do Extrato Consolidado (${intervalo}) sem linha própria nesta tabela`;
-  return construirRegCard({
-    chave: `nao-listados-${diaIniExibicao}-${diaFimExibicao}`, detalhe: false,
-    classeExtra: 'linha-nao-listados',
-    clickAttr: `title="${escapeHtml(titulo)}" data-nao-listados-dia-ini="${diaIniExibicao}" data-nao-listados-dia-fim="${diaFimExibicao}" data-nao-listados-ano="${l.ano}" data-nao-listados-mes="${l.mes}"`,
-    titulo: `Lançamentos não listados <span class="hint" style="font-weight:400;">(${intervaloCompacto})</span>`,
-    valorTexto: fmtBRL(l.valor), valorClasse: l.valor<0?'neg':(l.valor>0?'pos':''),
-    secundario: `Dias ${intervaloCompacto}`,
-    tagsHtml: badgeStatusExtratoConsolidado(l),
-    extraHtml: `<div class="reg-card-extra"><span class="saldo-destaque" style="padding:2px 6px;">Saldo: ${fmtBRL(l.saldo)}</span></div>`,
-    acoesHtml: `<button type="button" class="icon-btn" data-nao-listados-abrir title="Ver os lançamentos que compõem este total">🔍</button>`,
-  });
 }
 /* Modal de auditoria/rastreabilidade de UMA linha "Lançamentos não listados" (requisito "Ajustes no
    Extrato Consolidado" item 7) — mostra os registros individuais que compõem a soma exibida naquela linha,
@@ -14898,7 +14752,7 @@ function renderNaoListadosModal(){
       <div class="modal-body">
         <p class="hint" style="margin-top:0;">Registros reais das contas do Extrato Consolidado neste intervalo, sem linha própria na tabela (nem projeção, nem realização de nenhum lançamento previsto), somados na linha "Lançamentos não listados". Somente consulta — para editar ou excluir um lançamento, use a aba Registros.</p>
         ${itens.length ? `
-        <div class="table-wrap reg-tabela-principal" style="overflow:visible;max-height:none;"><table style="width:100%;table-layout:fixed;">
+        <div class="table-wrap" style="overflow:visible;max-height:none;"><table class="tabela-cards-mobile" style="width:100%;table-layout:fixed;">
           <thead><tr>
             <th style="width:9%;">Data</th><th style="width:36%;">Descrição</th><th style="width:16%;">Conta</th>
             <th style="width:16%;">Categoria</th><th style="width:8%;">Tipo</th><th style="width:15%;text-align:right;">Valor</th>
@@ -14912,13 +14766,6 @@ function renderNaoListadosModal(){
             <td data-label="Valor" style="text-align:right;" class="val-cell ${t.tipo==='Despesa'?'neg':'pos'}">${fmtBRL(t.valor)}</td>
           </tr>`).join('')}</tbody>
         </table></div>
-        ${renderCardsLancamentosModal(itensPagina, {
-          valorTexto: t=>fmtBRL(t.valor), valorClasse: t=>t.tipo==='Despesa'?'neg':'pos',
-          secundario: t=>`${fmtData(t.data)} · ${escapeHtml(t.conta)}`,
-          tags: t=>`<span class="tag ${t.tipo}">${t.tipo}</span>`,
-          extra: t=> t.categoria ? `<div class="reg-card-extra">${escapeHtml(t.categoria)}</div>` : '',
-          semAcao: ()=>true, detalhe:false,
-        })}
         <div class="registros-rodape">${rodapePaginacao}</div>
         <div class="saldo-final-projetado ${classeSinalMoeda(total)}" style="margin-top:10px;"><span>Soma (${itens.length} lançamento${itens.length===1?'':'s'})</span><span class="val">${fmtBRL(total)}</span></div>
         ` : `<div class="empty-state"><div class="big">🧾</div>Nenhum lançamento encontrado neste intervalo.</div>`}
@@ -14965,14 +14812,6 @@ function renderTabelaMesExtrato(m){
     : l.especial==='nao-listados' ? renderLinhaNaoListados(l)
     : renderLinhaProjecao(l)
   ).join('') : `<tr><td colspan="8" class="hint" style="text-align:center;padding:14px;">Nenhum lançamento previsto ainda. Use "+ Novo lançamento previsto" para começar.</td></tr>`;
-  // "Padronização da visualização mobile em .reg-lista-mobile": mesmas linhas/dados de linhasHtml acima,
-  // só na estrutura de card (ver renderCardLinha*) — a tabela desktop continua intacta, só oculta neste
-  // breakpoint (ver .reg-tabela-principal no <style>).
-  const cardsHtml = m.linhas.length ? m.linhas.map(l=>
-    l.especial==='saldo-dia' ? renderCardLinhaSaldoAtual(l)
-    : l.especial==='nao-listados' ? renderCardLinhaNaoListados(l)
-    : renderCardLinhaProjecao(l)
-  ).join('') : `<div class="empty-state"><div class="big">🧾</div>Nenhum lançamento previsto ainda. Use "+ Novo lançamento previsto" para começar.</div>`;
   // DOCUMENTAÇÃO — ver o comentário completo junto à classe CSS ".tabela-fluxo" (procure por
   // "DOCUMENTAÇÃO — Largura das colunas" no <style> desta página). Proporção FIXA (requisito explícito):
   // sempre a mesma em toda tabela/competência, nunca recalculada a partir do maior valor/saldo exibido
@@ -14986,7 +14825,7 @@ function renderTabelaMesExtrato(m){
       <span class="fluxo-mes-titulo">📅 ${MESES[m.mes-1]}/${m.ano}</span>
       <span class="hint" style="margin:0;">Saldo inicial ${fmtBRL(m.saldoInicial)}</span>
     </div>
-    <div class="table-wrap tabela-fluxo-wrap reg-tabela-principal" style="overflow-x:auto;"><table class="tabela-fluxo" style="table-layout:fixed;width:100%;">
+    <div class="table-wrap tabela-fluxo-wrap" style="overflow-x:auto;"><table class="tabela-fluxo" style="table-layout:fixed;width:100%;">
       <thead><tr>
         <th style="text-align:center;width:${pct.dia}%;">Dia</th>
         <th style="text-align:left;width:${pct.descricao}%;">Descrição</th>
@@ -14999,7 +14838,6 @@ function renderTabelaMesExtrato(m){
       </tr></thead>
       <tbody>${linhasHtml}</tbody>
     </table></div>
-    <div class="reg-lista-mobile">${cardsHtml}</div>
     <div class="saldo-final-projetado ${classeSinalMoeda(m.saldoFinal)}"><span>Saldo final</span><span class="val">${fmtBRL(m.saldoFinal)}</span></div>
   </div>`;
 }
@@ -15069,7 +14907,7 @@ function renderEditarSaldoInicialFluxoCaixaModal(){
       <div class="modal-head"><h3>✏️ Saldo Inicial — Extrato Consolidado</h3><button class="close-x" id="closeEditarSaldoInicialFluxoCaixa">✕</button></div>
       <div class="modal-body">
         <p class="hint" style="margin-top:0;">O Saldo Inicial do Extrato Consolidado é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança em <b>${MESES[UI.mes-1]}/${UI.ano}</b>. Edite cada conta abaixo — o total não pode ser alterado diretamente.</p>
-        ${contas.length ? `<table class="reg-tabela-principal" style="width:100%;" data-ordenar-tabela="saldoInicialFC">
+        ${contas.length ? `<table style="width:100%;" data-ordenar-tabela="saldoInicialFC">
           <thead><tr>${thOrdenavel('saldoInicialFC','conta','Conta')}${thOrdenavel('saldoInicialFC','valor','Saldo Inicial',{style:'text-align:right;'})}</tr></thead>
           <tbody>
             ${aplicarOrdenacaoClique(valores, 'saldoInicialFC', { conta:{tipo:'texto', valor:v=>v.conta}, valor:{tipo:'moeda', valor:v=>v.valor} }).map(v=>`<tr>
@@ -15078,16 +14916,7 @@ function renderEditarSaldoInicialFluxoCaixaModal(){
             </tr>`).join('')}
             <tr style="border-top:2px solid var(--line);"><td><b>Total</b></td><td style="text-align:right;"><b id="totalSaldoInicialFC">${fmtBRL(total)}</b></td></tr>
           </tbody>
-        </table>
-        <div class="reg-lista-mobile">${aplicarOrdenacaoClique(valores, 'saldoInicialFC', { conta:{tipo:'texto', valor:v=>v.conta}, valor:{tipo:'moeda', valor:v=>v.valor} }).map(v=>construirRegCard({
-          chave: v.conta, semAcao: true,
-          icone: '🏦',
-          titulo: escapeHtml(v.conta),
-          valorTexto: `<input type="text" inputmode="decimal" class="inp-saldo-inicial-fc" data-conta="${escapeHtml(v.conta)}" value="${fmtMoedaInput(v.valor)}" style="width:110px;text-align:right;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-family:var(--mono);">`,
-          secundario: escapeHtml(STATE.contaTipos[v.conta]||''),
-        })).join('')}
-        <div class="saldo-final-projetado"><span>Total</span><span class="val" id="totalSaldoInicialFCMobile">${fmtBRL(total)}</span></div>
-        </div>` : `<div class="empty-state"><div class="big">🏦</div>Nenhuma conta do tipo Corrente, PJ ou Poupança cadastrada. Adicione em Configurações → Contas.</div>`}
+        </table>` : `<div class="empty-state"><div class="big">🏦</div>Nenhuma conta do tipo Corrente, PJ ou Poupança cadastrada. Adicione em Configurações → Contas.</div>`}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" id="cancelEditarSaldoInicialFluxoCaixa">Cancelar</button>
@@ -15097,28 +14926,6 @@ function renderEditarSaldoInicialFluxoCaixaModal(){
   </div>`;
 }
 /* ===================== ABA: INTELIGÊNCIA FINANCEIRA ===================== */
-/* Versão ".reg-card" de uma linha de grupo da tabela "Onde o dinheiro está mudando?"
-   ("Padronização da visualização mobile em .reg-lista-mobile") — usa `clickAttr` (não `detalhe`) para que
-   o toque no card expanda o detalhamento INLINE logo abaixo dele (mesmo comportamento da <tr> desktop:
-   nunca abre um modal), reaproveitando o data-drill-grupo/handler já existentes (ver bindEvents). O
-   conteúdo expandido (renderDrillIntel) é o mesmo dos dois modos — nenhuma lógica de drill duplicada, só
-   a linha de resumo do grupo vira card. */
-function renderCardIntelGrupo(g){
-  const info = TENDENCIA_INFO[g.tendencia];
-  const expandido = UI.intelDrill.grupo===g.grupo;
-  return construirRegCard({
-    chave: g.grupo,
-    clickAttr: `data-drill-grupo="${escapeHtml(g.grupo)}"`,
-    estiloExtra: `cursor:pointer;${expandido ? 'background:var(--navy-50,#eef2f9);' : ''}`,
-    semAcao: true,
-    icone: iconeGrupo(g.grupo),
-    titulo: `${expandido?'➖':'➕'} ${escapeHtml(g.grupo)}`,
-    valorTexto: fmtBRL(g.atual),
-    secundario: `Média: ${fmtBRL(g.mediaHist)} · Projeção: ${fmtBRL(g.projecao)}`,
-    tagsHtml: `<span class="status-extrato" title="${escapeHtml(info.tooltip)}" style="color:${info.cor};">${info.emoji} ${info.label}</span>`,
-    extraHtml: `<div class="reg-card-extra"><span style="color:${g.variacao>=0?'var(--despesa)':'var(--receita)'};">Variação: ${g.variacao>=0?'+':''}${fmtPercentSmart(g.variacao*100)}</span></div>`,
-  });
-}
 /* Conteúdo expansível da tabela "Onde o dinheiro está mudando?" — Grupo → Categoria → Subcategoria →
    Lançamentos (seção 15), sempre sobre o mês atualmente selecionado no topo da aplicação. Cada nível só
    aparece quando o nível anterior está expandido (ver UI.intelDrill, alternado pelos handlers
@@ -15154,15 +14961,9 @@ function renderDrillIntelLancamentos(grupo, subgrupo, categoria, f){
   return `
   <div class="drill-intel-nivel drill-intel-nivel-3">
     ${txs.length===0 ? `<p class="hint">Nenhum lançamento encontrado.</p>` : `
-    <table class="drill-intel-tabela reg-tabela-principal"><tbody>
+    <table class="drill-intel-tabela"><tbody>
       ${txs.map(t=>`<tr><td>${fmtData(t.data)}</td><td>${escapeHtml(t.descricao)}${Number(t.totalParcelas)>1 ? ` <span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}</td><td style="text-align:right;">${fmtBRL(t.valor)}</td></tr>`).join('')}
-    </tbody></table>
-    ${renderCardsLancamentosModal(txs, {
-      valorTexto: t=>fmtBRL(t.valor), valorClasse: t=>t.tipo==='Receita'?'pos':'neg',
-      secundario: t=>fmtData(t.data),
-      tags: t=> Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : '',
-      semAcao: ()=>true, detalhe:false,
-    })}`}
+    </tbody></table>`}
     <button type="button" class="btn btn-ghost btn-sm" data-drill-ver-registros="${escapeHtml(grupo)}|||${escapeHtml(categoria)}" style="margin-top:8px;">🔎 Ver estes lançamentos em Registros</button>
   </div>`;
 }
@@ -15309,7 +15110,7 @@ function renderInteligencia(){
           <div class="intel-faixa-previsao-linha intel-faixa-previsao-confiabilidade"><b>Confiabilidade:</b> ${ctx.confiabilidade.nivel}</div>
         </div>
       </div>`; })() : ''}
-      <div class="table-wrap reg-tabela-principal" style="max-height:none;"><table class="tabela-previsao-financeira">
+      <div class="table-wrap" style="max-height:none;"><table class="tabela-cards-mobile tabela-previsao-financeira">
         <thead><tr>
           <th style="width:19%;">Mês</th>
           <th style="text-align:right;width:19%;">Receita Prevista</th>
@@ -15327,15 +15128,6 @@ function renderInteligencia(){
           </tr>`).join('')}
         </tbody>
       </table></div>
-      <div class="reg-lista-mobile">${ctx.projecoes.map(p=>construirRegCard({
-        chave: `${p.ano}-${p.mes}`, semAcao: true,
-        estiloExtra: p.risco==='alto' ? 'background:#fbe4e1;' : (p.risco==='medio' ? 'background:#fdf3d8;' : ''),
-        icone: '📅',
-        titulo: `${MESES[p.mes-1]}/${p.ano} ${p.risco==='alto'?'🔴':(p.risco==='medio'?'🟡':'')}`,
-        valorTexto: fmtBRL(p.saldoProjetado), valorClasse: classeSinalMoeda(p.saldoProjetado),
-        secundario: `Receita: ${fmtBRL(p.receitaProjetada)} · Despesa: ${fmtBRL(p.despesaProjetada)}`,
-        extraHtml: `<div class="reg-card-extra">Faixa provável: ${fmtBRL(p.faixaInferior)} a ${fmtBRL(p.faixaSuperior)} · Poupança: ${fmtPercentSmart(p.poupancaProjetada*100)}</div>`,
-      })).join('')}</div>
     </div>
     <div class="panel" style="margin-bottom:0;">
       <div class="intel-cenarios-col">
@@ -15396,16 +15188,8 @@ function renderInteligencia(){
 
   <div class="panel">
     <h2>Onde o dinheiro está mudando?</h2>
-    <p class="hint" style="margin-top:-6px;">Clique numa linha (ou num card) para detalhar até os lançamentos que originaram o valor.</p>
-    ${(() => {
-      // Mesma lista ordenada reaproveitada pela tabela desktop e pelo .reg-lista-mobile abaixo — calculada
-      // uma única vez para que os dois nunca divirjam (mesma ordenação, mesmos grupos).
-      const gruposOrdenados = aplicarOrdenacaoClique(ctx.gruposAnalise, 'intelGrupos', {
-        grupo:{tipo:'texto', valor:g=>g.grupo}, atual:{tipo:'moeda', valor:g=>g.atual}, mediaHist:{tipo:'moeda', valor:g=>g.mediaHist},
-        ordemTendencia:{tipo:'numero', valor:g=>g.ordemTendencia}, projecao:{tipo:'moeda', valor:g=>g.projecao}, variacao:{tipo:'percentual', valor:g=>g.variacao},
-      });
-      return `
-    <div class="table-wrap reg-tabela-principal" style="max-height:none;" data-ordenar-tabela="intelGrupos"><table class="tabela-cards-mobile">
+    <p class="hint" style="margin-top:-6px;">Clique numa linha para detalhar até os lançamentos que originaram o valor.</p>
+    <div class="table-wrap" style="max-height:none;" data-ordenar-tabela="intelGrupos"><table class="tabela-cards-mobile">
       <thead><tr>
         ${thOrdenavel('intelGrupos','grupo','Grupo')}
         ${thOrdenavel('intelGrupos','atual','Atual',{style:'text-align:right;'})}
@@ -15415,7 +15199,10 @@ function renderInteligencia(){
         ${thOrdenavel('intelGrupos','variacao','Variação',{style:'text-align:right;'})}
       </tr></thead>
       <tbody>
-        ${gruposOrdenados.map(g=>`<tr class="linha-drill-intel" data-drill-grupo="${escapeHtml(g.grupo)}" style="cursor:pointer;${UI.intelDrill.grupo===g.grupo?'background:var(--navy-50,#eef2f9);':''}">
+        ${aplicarOrdenacaoClique(ctx.gruposAnalise, 'intelGrupos', {
+          grupo:{tipo:'texto', valor:g=>g.grupo}, atual:{tipo:'moeda', valor:g=>g.atual}, mediaHist:{tipo:'moeda', valor:g=>g.mediaHist},
+          ordemTendencia:{tipo:'numero', valor:g=>g.ordemTendencia}, projecao:{tipo:'moeda', valor:g=>g.projecao}, variacao:{tipo:'percentual', valor:g=>g.variacao},
+        }).map(g=>`<tr class="linha-drill-intel" data-drill-grupo="${escapeHtml(g.grupo)}" style="cursor:pointer;${UI.intelDrill.grupo===g.grupo?'background:var(--navy-50,#eef2f9);':''}">
           <td data-label="Grupo">${UI.intelDrill.grupo===g.grupo?'➖':'➕'} ${iconeGrupo(g.grupo)} ${escapeHtml(g.grupo)}</td>
           <td data-label="Atual" style="text-align:right;">${fmtBRL(g.atual)}</td>
           <td data-label="Média Histórica" style="text-align:right;">${fmtBRL(g.mediaHist)}</td>
@@ -15426,9 +15213,6 @@ function renderInteligencia(){
         ${UI.intelDrill.grupo===g.grupo ? `<tr><td colspan="6" style="padding:0;border-top:none;">${renderDrillIntel(f)}</td></tr>` : ''}`).join('')}
       </tbody>
     </table></div>
-    <div class="reg-lista-mobile">${gruposOrdenados.map(g=>`${renderCardIntelGrupo(g)}${UI.intelDrill.grupo===g.grupo ? renderDrillIntel(f) : ''}`).join('')}</div>
-      `;
-    })()}
   </div>
 
   <div class="panel">
@@ -15805,21 +15589,13 @@ function renderConciliarProjecaoModal(){
         </table>
         ${reaisVinculados.length ? `
         <p class="field-section-label" style="margin:14px 0 4px;">Vínculos já confirmados</p>
-        <div class="table-wrap reg-tabela-principal" style="overflow-x:auto;"><table class="tabela-vinculos-confirmados" style="width:100%;table-layout:fixed;">
+        <div class="table-wrap" style="overflow-x:auto;"><table class="tabela-cards-mobile tabela-vinculos-confirmados" style="width:100%;table-layout:fixed;">
           <thead><tr><th style="width:9%;">Data</th><th style="width:33%;">Descrição</th><th style="width:13%;">Conta</th><th style="width:13%;">Categoria</th><th style="width:8%;">Tipo</th><th style="width:15%;text-align:right;">Valor</th><th style="width:9%;"></th></tr></thead>
           <tbody>${reaisVinculados.map(t=>linhaRegistro(t, `<button type="button" class="icon-btn" data-conciliar-remover-vinculo="${t.id}" title="Remover este vínculo (volta a ser um candidato disponível)">🗑️</button>`)).join('')}</tbody>
-        </table></div>
-        ${renderCardsLancamentosModal(reaisVinculados, {
-          valorTexto: t=>fmtBRL(t.valor), valorClasse: t=>t.tipo==='Receita'?'pos':'neg',
-          secundario: t=>`${fmtData(t.data)} · ${escapeHtml(t.conta)}`,
-          tags: t=>`<span class="tag ${t.tipo}">${t.tipo}</span>`,
-          extra: t=> t.categoria ? `<div class="reg-card-extra">${escapeHtml(t.categoria)}</div>` : '',
-          detalhe: false,
-          acoesHtml: t=>`<div class="reg-card-acoes-inline"><button type="button" class="icon-btn" data-conciliar-remover-vinculo="${t.id}" title="Remover este vínculo (volta a ser um candidato disponível)">🗑️</button></div>`,
-        })}` : ''}
+        </table></div>` : ''}
         <p class="field-section-label" style="margin:14px 0 4px;">Candidatos disponíveis${candidatos.length ? ` (${candidatos.length})` : ''}</p>
         <p class="hint" style="margin-top:0;">Marque um ou mais registros que correspondem de fato a este previsto (não é preciso que a data ou o valor sejam exatamente iguais) e confirme a seleção. Clique num cabeçalho para ordenar.</p>
-        ${candidatos.length ? `<div class="table-wrap reg-tabela-principal" style="overflow-x:auto;" data-ordenar-tabela="conciliarCandidatos"><table style="width:100%;table-layout:fixed;">
+        ${candidatos.length ? `<div class="table-wrap" style="overflow-x:auto;" data-ordenar-tabela="conciliarCandidatos"><table class="tabela-cards-mobile" style="width:100%;table-layout:fixed;">
           <thead><tr>
             <th style="width:5%;"></th>
             ${thOrdenavel('conciliarCandidatos','data','Data',{style:'width:9%;'})}
@@ -15841,19 +15617,6 @@ function renderConciliarProjecaoModal(){
             </tr>`).join('')}
           </tbody>
         </table></div>
-        <div class="reg-lista-mobile">${pageList.map(c=>construirRegCard({
-          chave: c.t.id, detalhe: false,
-          icone: iconeGrupo(c.t.grupo),
-          checkboxHtml: `<label class="reg-card-check"><input type="checkbox" data-conciliar-check="${c.t.id}" ${selecionados.includes(c.t.id)?'checked':''} aria-label="Selecionar candidato"></label>`,
-          titulo: escapeHtml(c.t.descricao),
-          valorTexto: fmtBRL(c.t.valor), valorClasse: c.t.tipo==='Receita'?'pos':'neg',
-          secundario: `${fmtData(c.t.data)} · ${escapeHtml(c.t.conta)}`,
-          tagsHtml: `<span class="tag ${c.t.tipo}">${c.t.tipo}</span>`,
-          extraHtml: c.t.categoria ? `<div class="reg-card-extra">${escapeHtml(c.t.categoria)}</div>` : '',
-          // Sem semAcao/acoesHtml de propósito: a "ação" deste card é o próprio checkbox de seleção (já
-          // presente via checkboxHtml acima), não um menu ⋮ nem uma ação inline — não faz sentido aplicar
-          // a classe/opacidade de "sem ação" (reg-card-sem-acao), que é para itens não-interativos.
-        })).join('')}</div>
         <div class="registros-rodape">${rodapePaginacaoCandidatos}</div>` : `<div class="empty-state"><div class="big">🔎</div>Nenhum candidato restante — todos já foram vinculados ou descartados.</div>`}
       </div>
       <div class="modal-foot" style="flex-wrap:wrap;gap:8px;">
@@ -15994,7 +15757,7 @@ function renderDuplicarMesesModal(){
         <p class="hint" style="margin:8px 0 0;">O primeiro lançamento é gerado em <b>${fmtData(ocorrencias[0].data)}</b> — mesmo dia do mês seguinte ao lançamento original — e os demais avançam um mês por vez a partir dali, preservando o dia sempre que possível (quando o dia não existir no mês de destino, ex.: 31/01, usa o último dia válido do mês). Use o ✏️ de cada linha da prévia abaixo para ajustar manualmente a data e/ou o valor de um lançamento específico antes de gerar.</p>
         ${qtdAlertas>0 ? `<div class="info-card warn" style="margin-top:10px;"><span class="info-card-icon">⚠️</span><span><b>${qtdAlertas}</b> das datas abaixo já ${qtdAlertas===1?'tem':'têm'} um lançamento igual (mesma conta, data, valor e tipo) — destacada(s) em laranja. Revise antes de confirmar.</span></div>` : ''}
         <div class="field-section-label" style="margin-top:14px;">Prévia dos lançamentos que serão criados (${qtd})</div>
-        <div class="table-wrap reg-tabela-principal" style="max-height:none;overflow:visible;">
+        <div class="table-wrap" style="max-height:none;overflow:visible;">
           <table>
             <thead><tr><th>#</th><th>Data</th><th style="text-align:right;">Valor</th><th></th><th class="col-acoes">Ações</th></tr></thead>
             <tbody>
@@ -16009,16 +15772,6 @@ function renderDuplicarMesesModal(){
             </tbody>
           </table>
         </div>
-        <div class="reg-lista-mobile">${pageList.map(o=>construirRegCard({
-          chave: String(o.idx), detalhe: false,
-          estiloExtra: o.duplicado ? 'background:#fff3ea;' : '',
-          icone: '📅',
-          titulo: `${fmtData(o.data)}${o.editado?' <span class="hint" style="margin:0;font-style:italic;">(editado)</span>':''}`,
-          valorTexto: `${original.tipo==='Despesa'?'-':''}${fmtBRL(o.valor)}`, valorClasse: original.tipo==='Despesa'?'neg':'pos',
-          secundario: `#${o.idx+1}`,
-          tagsHtml: o.duplicado ? `<span title="Já existe um lançamento igual nesta data, conta, valor e tipo" style="color:#c0392b;white-space:nowrap;font-size:11px;">⚠️ possível duplicidade</span>` : '',
-          acoesHtml: `<div class="reg-card-acoes-inline"><button type="button" class="icon-btn" data-editar-ocorrencia-duplicar="${o.idx}" title="Editar">✏️</button></div>`,
-        })).join('')}</div>
         <div class="registros-rodape">${rodapePaginacao}</div>
       </div>
       <div class="modal-foot">
@@ -16117,7 +15870,7 @@ function renderMetas(){
     </div>
     ${r.lista.length===0 ? `<div class="empty-state"><div class="big">🎯</div>Nenhuma meta cadastrada para este mês. Use "+ Nova meta" para começar.</div>` : `
     <div class="chart-box" style="height:${alturaBarra}px;margin-top:14px;"><canvas id="chartMetas"></canvas></div>
-    <div class="table-wrap reg-tabela-principal" style="margin-top:16px;" data-ordenar-tabela="metas"><table>
+    <div class="table-wrap" style="margin-top:16px;" data-ordenar-tabela="metas"><table class="tabela-cards-mobile">
       <thead><tr>${thOrdenavel('metas','grupo','Grupo')}${thOrdenavel('metas','categoria','Categoria')}${thOrdenavel('metas','subcategoria','Subcategoria')}${thOrdenavel('metas','valor','Meta',{style:'text-align:right;'})}${thOrdenavel('metas','gasto','Gasto',{style:'text-align:right;'})}${thOrdenavel('metas','saldo','Saldo',{style:'text-align:right;'})}${thOrdenavel('metas','pct','% Utilizado')}${thOrdenavel('metas','recorrencia','Período')}${thOrdenavel('metas','situacao','Situação')}<th class="col-acoes">Ações</th></tr></thead>
       <tbody>
       ${aplicarOrdenacaoClique(r.lista, 'metas', {
@@ -16148,37 +15901,7 @@ function renderMetas(){
         </tr>`;
       }).join('')}
       </tbody>
-    </table></div>
-    <div class="reg-lista-mobile">${aplicarOrdenacaoClique(r.lista, 'metas', {
-      grupo:{tipo:'texto', valor:m=>m.grupo}, categoria:{tipo:'texto', valor:m=>m.categoria}, subcategoria:{tipo:'texto', valor:m=>m.subcategoria},
-      valor:{tipo:'moeda', valor:m=>m.valor}, gasto:{tipo:'moeda', valor:m=>m.gasto}, saldo:{tipo:'moeda', valor:m=>m.saldo},
-      pct:{tipo:'percentual', valor:m=>m.pct}, recorrencia:{tipo:'texto', valor:m=>RECORRENCIA_LABEL[m.recorrencia]},
-      situacao:{tipo:'texto', valor:m=>SITUACAO_META_INFO[m.situacao].label},
-    }).map(m=>{
-      const info = SITUACAO_META_INFO[m.situacao];
-      return construirRegCard({
-        chave: m.id, detalhe: false,
-        icone: iconeGrupo(m.grupo),
-        titulo: escapeHtml(nomeMeta(m)),
-        valorTexto: fmtBRL(m.saldo), valorClasse: classeSinalMoeda(m.saldo),
-        secundario: `Meta: ${fmtBRL(m.valor)} · Gasto: ${fmtBRL(m.gasto)}`,
-        tagsHtml: `<span class="meta-situacao-tag" style="background:${info.cor}1a;color:${info.cor};">${info.emoji} ${info.label}</span>`,
-        extraHtml: `<div class="reg-card-extra">
-          <div class="progress-track" style="margin-top:4px;"><div class="progress-fill" style="width:${Math.min(100,m.pct)}%;background:${info.cor};"></div></div>
-          <span>${fmtPercentSmart(m.pct)} utilizado · ${RECORRENCIA_LABEL[m.recorrencia]||'—'}</span>
-        </div>`,
-        acoesHtml: `
-        <div class="reg-card-menu">
-          <button type="button" class="icon-btn reg-card-menu-btn" data-reg-card-menu="${m.id}" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.regCardMenuAberto===m.id?'true':'false'}">⋮</button>
-          ${UI.regCardMenuAberto===m.id ? `
-          <div class="reg-card-menu-lista">
-            <button type="button" data-editar-meta="${m.id}">✏️ Editar</button>
-            <button type="button" data-historico-meta="${m.id}">📈 Ver histórico</button>
-            <button type="button" data-excluir-meta="${m.id}">🗑️ Excluir</button>
-          </div>` : ''}
-        </div>`,
-      });
-    }).join('')}</div>`}
+    </table></div>`}
   </div>
   ${indicadores ? renderIndicadoresMetas(indicadores) : ''}
   ${renderHistoricoMetaPanel(competencia)}
@@ -16251,10 +15974,9 @@ function renderHistoricoMetaPanel(competencia){
     </div>
     <!-- Detalhamento mês a mês (item 17 do requisito de responsividade): apresentação hierárquica e
          comparável (Meta x Gasto x Diferença x Situação) de cada um dos 12 meses do gráfico acima — antes
-         só existia o gráfico, sem o dado mês a mês. No mobile vira uma lista de cards (.reg-lista-mobile,
-         mesmo padrão já usado em toda a aplicação — ver "Padronização da visualização mobile"), mantendo a
-         tabela no desktop. -->
-    <div class="table-wrap reg-tabela-principal" style="margin-top:16px;" data-ordenar-tabela="historicoMeta"><table>
+         só existia o gráfico, sem o dado mês a mês; usa tabela-cards-mobile (mesmo padrão genérico já
+         usado em Cartões/Metas), então no mobile vira uma lista de cards, mantendo a tabela no desktop. -->
+    <div class="table-wrap" style="margin-top:16px;" data-ordenar-tabela="historicoMeta"><table class="tabela-cards-mobile">
       <thead><tr>${thOrdenavel('historicoMeta','competencia','Mês')}${thOrdenavel('historicoMeta','meta','Meta',{style:'text-align:right;'})}${thOrdenavel('historicoMeta','gasto','Gasto',{style:'text-align:right;'})}${thOrdenavel('historicoMeta','diferenca','Diferença',{style:'text-align:right;'})}${thOrdenavel('historicoMeta','situacao','Situação')}</tr></thead>
       <tbody>
       ${aplicarOrdenacaoClique([...h.historico].reverse(), 'historicoMeta', {
@@ -16274,21 +15996,6 @@ function renderHistoricoMetaPanel(competencia){
       }).join('')}
       </tbody>
     </table></div>
-    <div class="reg-lista-mobile">${aplicarOrdenacaoClique([...h.historico].reverse(), 'historicoMeta', {
-      competencia:{tipo:'texto', valor:x=>x.competencia}, meta:{tipo:'moeda', valor:x=>x.meta}, gasto:{tipo:'moeda', valor:x=>x.gasto},
-      diferenca:{tipo:'moeda', valor:x=>x.meta-x.gasto}, situacao:{tipo:'texto', valor:x=>SITUACAO_META_INFO[situacaoMeta(x.gasto,x.meta)].label},
-    }).map(x=>{
-      const diferenca = x.meta - x.gasto;
-      const info = SITUACAO_META_INFO[situacaoMeta(x.gasto, x.meta)];
-      return construirRegCard({
-        chave: x.competencia, semAcao: true,
-        icone: '📅',
-        titulo: escapeHtml(competenciaLabel(x.competencia)),
-        valorTexto: fmtBRL(diferenca), valorClasse: classeSinalMoeda(diferenca),
-        secundario: `Meta: ${fmtBRL(x.meta)} · Gasto: ${fmtBRL(x.gasto)}`,
-        tagsHtml: `<span class="meta-situacao-tag" style="background:${info.cor}1a;color:${info.cor};">${info.emoji} ${info.label}</span>`,
-      });
-    }).join('')}</div>
   </div>`;
 }
 
@@ -17293,7 +17000,7 @@ function renderBackupConteudo(){
           <input type="checkbox" id="chkSelecionarTodosBackupMobile" ${nomesVisiveis.length>0 && nomesVisiveis.every(n=>sel.has(n))?'checked':''} data-indet-lote="${sel.size>0 && !nomesVisiveis.every(n=>sel.has(n))}" ${bloqueado?'disabled':''}>
           Selecionar todos nesta página (${nomesVisiveis.length})
         </label>` : ''}
-        <div class="table-wrap reg-tabela-principal" data-ordenar-tabela="backups"><table>
+        <div class="table-wrap" data-ordenar-tabela="backups"><table class="tabela-cards-mobile">
           <thead><tr>
             ${podeExcluir ? `<th style="width:1%;"><input type="checkbox" id="chkSelecionarTodosBackup" ${nomesVisiveis.length>0 && nomesVisiveis.every(n=>sel.has(n))?'checked':''} ${bloqueado?'disabled':''}></th>` : ''}
             ${thOrdenavel('backups','criadoEm','Data/Hora')}${thOrdenavel('backups','tipo','Tipo')}${thOrdenavel('backups','nome','Arquivo')}${thOrdenavel('backups','tamanho','Tamanho',{style:'text-align:right;'})}${thOrdenavel('backups','qtdTransacoes','Registros',{style:'text-align:right;'})}${thOrdenavel('backups','integridade','Integridade',{style:'text-align:center;'})}<th class="col-acoes">Ações</th></tr></thead>
@@ -17315,21 +17022,6 @@ function renderBackupConteudo(){
             </tr>`).join('')}
           </tbody>
         </table></div>
-        <div class="reg-lista-mobile">${pageList.map(b=>construirRegCard({
-          chave: b.nome, detalhe: false,
-          icone: BACKUP_TIPO_INFO[b.tipo]?.icone || '☁️',
-          checkboxHtml: podeExcluir ? `<label class="reg-card-check"><input type="checkbox" class="chk-selecionar-backup" data-backup-nome="${escapeHtml(b.nome)}" ${sel.has(b.nome)?'checked':''} ${bloqueado?'disabled':''} aria-label="Selecionar backup"></label>` : '',
-          titulo: formatarDataHoraCurta(b.criadoEm),
-          valorTexto: formatarTamanhoArquivo(b.tamanho),
-          secundario: `${BACKUP_TIPO_INFO[b.tipo]?.label||b.tipo} · ${b.qtdTransacoes ?? '—'} registros`,
-          tagsHtml: `<span class="hint" style="margin:0;" title="${escapeHtml(b.motivoInvalido||'')}">${b.integro ? (b.semMetadados?'⚠ Sem checksum':'✓ Válido') : '✕ Inválido'}</span>`,
-          extraHtml: `<div class="reg-card-extra" style="word-break:break-all;">${escapeHtml(b.nome)}</div>`,
-          semAcao: nivelAcessoPasta==='leitura',
-          acoesHtml: `<div class="reg-card-acoes-inline">
-            <button type="button" class="btn btn-primary btn-sm" data-restaurar-backup="${escapeHtml(b.nome)}" ${(!b.integro||bloqueado)?'disabled':''} ${!b.integro?'title="Backup inválido — restauração bloqueada"':''}>Restaurar</button>
-            <button type="button" class="icon-btn" data-excluir-backup="${escapeHtml(b.nome)}" title="Excluir" ${bloqueado?'disabled':''}>🗑️</button>
-          </div>`,
-        })).join('')}</div>
         <div class="registros-rodape">${rodapePaginacaoBackup}</div>`;
         })()}`}
         `;
@@ -17728,7 +17420,7 @@ function renderModalTaxasConversao(){
   return `
   <span class="step-badge">Compra(s) internacional(is) detectada(s)</span>
   <div class="info-card" style="margin-top:0;"><span class="info-card-icon">💱</span><span>O banco calcula o valor em reais somando a cotação do dia, um spread (variável e não informado no arquivo) e o IOF — por isso o valor certo só é obtido conferindo a fatura real e informando a taxa efetiva de cada compra abaixo. A taxa do arquivo já vem preenchida como estimativa inicial; ajuste se necessário.</span></div>
-  <div class="table-wrap reg-tabela-principal" style="margin-top:14px;"><table>
+  <div class="table-wrap" style="margin-top:14px;"><table>
     <thead><tr><th>Data</th><th>Descrição</th><th style="text-align:right;">Valor original</th><th style="text-align:right;">Taxa efetiva</th><th style="text-align:right;">Valor em R$</th></tr></thead>
     <tbody>
       ${rows.map((r,i)=>{
@@ -17740,24 +17432,11 @@ function renderModalTaxasConversao(){
           <td>${escapeHtml(r[1])}</td>
           <td style="text-align:right;">${info.moeda} ${Math.abs(info.valorOriginal).toFixed(2)}</td>
           <td style="text-align:right;"><input type="text" inputmode="decimal" placeholder="Ex.: 5,3786" data-taxa-idx="${i}" value="${escapeHtml(taxaAtual)}" style="width:90px;text-align:right;border:1px solid var(--line);border-radius:5px;padding:4px;"></td>
-          <td style="text-align:right;" class="val-cell" data-taxa-valor-idx="${i}">${fmtBRL(valorBRL)}</td>
+          <td style="text-align:right;" class="val-cell">${fmtBRL(valorBRL)}</td>
         </tr>`;
       }).join('')}
     </tbody>
   </table></div>
-  <div class="reg-lista-mobile">${rows.map((r,i)=>{
-    const info = r[3];
-    const taxaAtual = info._taxaInformada!==undefined ? info._taxaInformada : String(info.taxaArquivo).replace('.', ',');
-    const valorBRL = Math.abs(info.valorOriginal) * (parseTaxaDecimal(taxaAtual)||0);
-    return construirRegCard({
-      chave: String(i), semAcao: true,
-      icone: '💱',
-      titulo: escapeHtml(r[1]),
-      valorTexto: `<span class="val-cell" data-taxa-valor-idx="${i}">${fmtBRL(valorBRL)}</span>`,
-      secundario: `${fmtData(r[0])} · Original: ${info.moeda} ${Math.abs(info.valorOriginal).toFixed(2)}`,
-      extraHtml: `<div class="reg-card-extra">Taxa efetiva <input type="text" inputmode="decimal" placeholder="Ex.: 5,3786" data-taxa-idx="${i}" value="${escapeHtml(taxaAtual)}" style="width:90px;text-align:right;border:1px solid var(--line);border-radius:5px;padding:4px;margin-left:6px;"></div>`,
-    });
-  }).join('')}</div>
   <div class="modal-foot" style="padding:14px 0 0;">
     <button class="btn btn-ghost" id="cancelModalTaxas">Cancelar importação</button>
     <button class="btn btn-primary" id="confirmModalTaxas">💾 Confirmar taxas e continuar</button>
@@ -17768,7 +17447,7 @@ function renderModalParcelasEmprestimo(){
   return `
   <span class="step-badge">Empréstimo(s) novo(s) detectado(s) no contracheque</span>
   <div class="info-card" style="margin-top:0;"><span class="info-card-icon">🏦</span><span>O contracheque informa quantas parcelas <b>ainda faltam</b> de cada empréstimo, mas não o total contratado. Informe o total de parcelas de cada um abaixo — a parcela atual é calculada automaticamente. Da próxima vez que você importar um contracheque com o mesmo empréstimo, o total já vem preenchido sozinho.</span></div>
-  <div class="table-wrap reg-tabela-principal" style="margin-top:14px;"><table>
+  <div class="table-wrap" style="margin-top:14px;"><table>
     <thead><tr><th>Empréstimo</th><th style="text-align:center;">Parcelas restantes</th><th style="text-align:center;">Total de parcelas</th><th style="text-align:center;">Parcela atual</th></tr></thead>
     <tbody>
       ${itens.map((it,i)=>{
@@ -17778,23 +17457,11 @@ function renderModalParcelasEmprestimo(){
           <td>${escapeHtml(it.descricao)}</td>
           <td style="text-align:center;">${it.parcelasRestantes}</td>
           <td style="text-align:center;"><input type="text" inputmode="numeric" placeholder="Ex.: 180" data-total-parcelas-idx="${i}" value="${escapeHtml(it.totalInformado||'')}" style="width:70px;text-align:center;border:1px solid var(--line);border-radius:5px;padding:4px;"></td>
-          <td style="text-align:center;" class="val-cell" data-parcela-atual-idx="${i}">${atual!==null ? `${atual}/${total}` : '<span class="hint">—</span>'}</td>
+          <td style="text-align:center;" class="val-cell">${atual!==null ? `${atual}/${total}` : '<span class="hint">—</span>'}</td>
         </tr>`;
       }).join('')}
     </tbody>
   </table></div>
-  <div class="reg-lista-mobile">${itens.map((it,i)=>{
-    const total = Number(it.totalInformado)||0;
-    const atual = total>0 && total>=it.parcelasRestantes ? (total - it.parcelasRestantes + 1) : null;
-    return construirRegCard({
-      chave: String(i), semAcao: true,
-      icone: '🏦',
-      titulo: escapeHtml(it.descricao),
-      valorTexto: `<span class="val-cell" data-parcela-atual-idx="${i}">${atual!==null ? `${atual}/${total}` : '<span class="hint">—</span>'}</span>`,
-      secundario: `Parcelas restantes: ${it.parcelasRestantes}`,
-      extraHtml: `<div class="reg-card-extra">Total de parcelas <input type="text" inputmode="numeric" placeholder="Ex.: 180" data-total-parcelas-idx="${i}" value="${escapeHtml(it.totalInformado||'')}" style="width:70px;text-align:center;border:1px solid var(--line);border-radius:5px;padding:4px;margin-left:6px;"></div>`,
-    });
-  }).join('')}</div>
   <div class="modal-foot" style="padding:14px 0 0;">
     <button class="btn btn-ghost" id="cancelModalParcelasEmprestimo">Cancelar importação</button>
     <button class="btn btn-primary" id="confirmModalParcelasEmprestimo">💾 Confirmar e continuar</button>
@@ -19837,9 +19504,6 @@ function bindEvents(){
     abrirNovoLancamento(b.dataset.modalNovoLanc);
   }));
   document.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=>{
-    // Fecha o modal de detalhe do .reg-card (se for essa a origem do clique — ver renderRegCardDetalheModal)
-    // antes de abrir o modal de edição, para nunca deixar um modal de detalhe "fantasma" por baixo.
-    UI.regCardDetalheId = null;
     const tx = {...STATE.transactions.find(t=>t.id===b.dataset.edit)};
     const info = catInfo(tx.categoria);
     tx._grupo = info.grupo; tx._categoria = info.subgrupo;
@@ -19864,7 +19528,6 @@ function bindEvents(){
     UI.editingTx = tx; render();
   }));
   document.querySelectorAll('[data-duplicar]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.regCardDetalheId = null;
     const original = STATE.transactions.find(t=>t.id===b.dataset.duplicar);
     if(!original) return;
     // Duplicação por vários meses consecutivos, a partir do mesmo dia do mês seguinte ao lançamento
@@ -19877,10 +19540,7 @@ function bindEvents(){
     const tx = STATE.transactions.find(t=>t.id===id);
     if(!tx) return;
     const temFuturas = tx.parcelamentoId && Number(tx.totalParcelas)>1 && STATE.transactions.some(t=>t.parcelamentoId===tx.parcelamentoId && Number(t.parcelaAtual)>Number(tx.parcelaAtual));
-    // Fecha o modal de detalhe do .reg-card (se for essa a origem do clique — ver renderRegCardDetalheModal),
-    // já que a confirmação de exclusão (aqui ou no modal de parcela) assume o lugar dele; nunca antes de o
-    // usuário efetivamente confirmar, senão um "Cancelar" deixaria o card fechado sem o lançamento excluído.
-    if(temFuturas){ UI.regCardDetalheId = null; UI.confirmDelParcela = { id }; render(); return; }
+    if(temFuturas){ UI.confirmDelParcela = { id }; render(); return; }
     // Se faz parte de uma transferência interna, o lado espelhado (na outra conta) é excluído junto —
     // manter só um dos lados criaria uma movimentação órfã e incorreta.
     const ehTransferenciaVinculada = tx.transferenciaVinculoId && STATE.transactions.some(t=>t.id!==id && t.transferenciaVinculoId===tx.transferenciaVinculoId);
@@ -19893,7 +19553,6 @@ function bindEvents(){
       ? `Excluir o lançamento "${identificacao}"?\n\nEle faz parte de uma transferência interna entre contas — o lançamento espelhado na outra conta também será removido.`
       : `Excluir o lançamento "${identificacao}"?`;
     if(!confirm(msgConfirmacao)) return;
-    UI.regCardDetalheId = null;
     if(ehTransferenciaVinculada){
       STATE.transactions = STATE.transactions.filter(t=>t.transferenciaVinculoId!==tx.transferenciaVinculoId);
     } else {
@@ -20300,34 +19959,16 @@ function bindEvents(){
   });
   document.getElementById('closeEditarSaldoInicialFluxoCaixa')?.addEventListener('click', ()=>{ UI.editarSaldoInicialFluxoCaixaModal=null; render(); });
   document.getElementById('cancelEditarSaldoInicialFluxoCaixa')?.addEventListener('click', ()=>{ UI.editarSaldoInicialFluxoCaixaModal=null; render(); });
-  // "Padronização da visualização mobile em .reg-lista-mobile": a tabela desktop e a lista de cards mobile
-  // deste modal agora coexistem no DOM (uma delas sempre oculta só por CSS, ver .reg-tabela-principal/
-  // .reg-lista-mobile) — cada conta passa a ter DOIS inputs .inp-saldo-inicial-fc com o mesmo data-conta.
-  // Diferente da seleção em lote (checkboxes, cujo estado marcado vem sempre de um Set em UI, nunca do
-  // próprio DOM), estes inputs guardam a edição ainda não salva diretamente no elemento — por isso os dois
-  // precisam ser mantidos sincronizados a cada tecla (nunca um "estado" desatualizado pronto para
-  // sobrescrever o valor editado no outro) e o total/o salvamento precisam processar cada conta só uma vez.
   document.querySelectorAll('.inp-saldo-inicial-fc').forEach(inp=>{
     inp.addEventListener('input', ()=>{
-      document.querySelectorAll(`.inp-saldo-inicial-fc[data-conta="${CSS.escape(inp.dataset.conta)}"]`).forEach(irmao=>{ if(irmao!==inp) irmao.value = inp.value; });
       let total = 0;
-      const contasVistas = new Set();
-      document.querySelectorAll('.inp-saldo-inicial-fc').forEach(i=>{
-        if(contasVistas.has(i.dataset.conta)) return;
-        contasVistas.add(i.dataset.conta);
-        total += parseMoedaTexto(i.value);
-      });
+      document.querySelectorAll('.inp-saldo-inicial-fc').forEach(i=> total += parseMoedaTexto(i.value));
       const totalEl = document.getElementById('totalSaldoInicialFC');
       if(totalEl) totalEl.textContent = fmtBRL(total);
-      const totalElMobile = document.getElementById('totalSaldoInicialFCMobile');
-      if(totalElMobile) totalElMobile.textContent = fmtBRL(total);
     });
   });
   document.getElementById('salvarSaldoInicialFluxoCaixa')?.addEventListener('click', ()=>{
-    const contasProcessadas = new Set();
     document.querySelectorAll('.inp-saldo-inicial-fc').forEach(inp=>{
-      if(contasProcessadas.has(inp.dataset.conta)) return;
-      contasProcessadas.add(inp.dataset.conta);
       aplicarSaldoAnteriorConta(inp.dataset.conta, UI.ano, UI.mes, parseMoedaTexto(inp.value));
     });
     UI.editarSaldoInicialFluxoCaixaModal=null; scheduleSave(); render();
@@ -20632,14 +20273,12 @@ function bindEvents(){
   }));
   /* ---- Extrato Consolidado: o botão de ação 🔍 (nunca a linha inteira — "Ajustes no Extrato Consolidado
      #3" item 5) abre o modal de auditoria de uma linha "Lançamentos não listados". Os dados do intervalo
-     ficam no dataset do próprio elemento — <tr> no desktop (ver renderLinhaNaoListados) ou .reg-card no
-     mobile (ver renderCardLinhaNaoListados) — o botão lê via closest('[data-nao-listados-dia-ini]'), que
-     casa com qualquer um dos dois (em vez de closest('tr'), que só existia na variante de tabela). ---- */
+     ficam no dataset da própria <tr> (ver renderLinhaNaoListados); o botão só lê via closest('tr'). ---- */
   document.querySelectorAll('[data-nao-listados-abrir]').forEach(btn=> btn.addEventListener('click', ()=>{
-    const origem = btn.closest('[data-nao-listados-dia-ini]');
+    const tr = btn.closest('tr');
     UI.naoListadosModal = {
-      ano: Number(origem.dataset.naoListadosAno), mes: Number(origem.dataset.naoListadosMes),
-      diaIni: Number(origem.dataset.naoListadosDiaIni), diaFim: Number(origem.dataset.naoListadosDiaFim),
+      ano: Number(tr.dataset.naoListadosAno), mes: Number(tr.dataset.naoListadosMes),
+      diaIni: Number(tr.dataset.naoListadosDiaIni), diaFim: Number(tr.dataset.naoListadosDiaFim),
       pagina: 1, porPagina: 10,
     };
     render();
@@ -21920,18 +21559,13 @@ function bindEvents(){
   });
 
   document.getElementById('closeImport')?.addEventListener('click', ()=>{ UI.importStep=0; UI.modalTaxasConversao=null; UI.importContrachequeResumo=null; UI.importContrachequeEspelho=null; render(); });
-  // "Padronização da visualização mobile em .reg-lista-mobile": a tabela desktop e a lista .reg-lista-mobile
-  // coexistem no DOM (uma sempre oculta só por CSS) — cada linha/card tem seu próprio input data-taxa-idx
-  // com o mesmo índice. Sincroniza os dois inputs do mesmo índice a cada tecla (nunca um "desatualizado"
-  // pronto para sobrescrever a edição do outro) e atualiza TODOS os elementos data-taxa-valor-idx desse
-  // índice (célula desktop + card mobile), não só o mais próximo do input que disparou o evento.
   document.querySelectorAll('[data-taxa-idx]').forEach(inp=> inp.addEventListener('input', e=>{
     const i = Number(inp.dataset.taxaIdx);
-    document.querySelectorAll(`[data-taxa-idx="${i}"]`).forEach(irmao=>{ if(irmao!==inp) irmao.value = e.target.value; });
     const info = UI.modalTaxasConversao.rows[i][3];
     info._taxaInformada = e.target.value;
     const valorBRL = Math.abs(info.valorOriginal) * (parseTaxaDecimal(info._taxaInformada)||0);
-    document.querySelectorAll(`[data-taxa-valor-idx="${i}"]`).forEach(el=> el.textContent = fmtBRL(valorBRL));
+    const celulaValor = inp.closest('tr')?.querySelector('.val-cell');
+    if(celulaValor) celulaValor.textContent = fmtBRL(valorBRL);
   }));
   document.getElementById('cancelModalTaxas')?.addEventListener('click', ()=>{
     if(!confirm('Cancelar a importação deste arquivo?')) return;
@@ -21953,18 +21587,15 @@ function bindEvents(){
     }
     render();
   });
-  // Mesmo motivo/mecanismo do bloco de Taxas de Conversão acima: tabela desktop e lista .reg-lista-mobile
-  // coexistem no DOM, então sincroniza os dois inputs do mesmo índice e atualiza todos os elementos
-  // data-parcela-atual-idx desse índice (nunca só o mais próximo do input que disparou o evento).
   document.querySelectorAll('[data-total-parcelas-idx]').forEach(inp=> inp.addEventListener('input', e=>{
     const i = Number(inp.dataset.totalParcelasIdx);
     const it = UI.modalParcelasEmprestimo.itens[i];
     it.totalInformado = e.target.value.replace(/\D/g,'');
     if(String(it.totalInformado)!==e.target.value) inp.value = it.totalInformado; // remove dígitos não numéricos sem perder a posição do cursor
-    document.querySelectorAll(`[data-total-parcelas-idx="${i}"]`).forEach(irmao=>{ if(irmao!==inp) irmao.value = it.totalInformado; });
     const total = Number(it.totalInformado)||0;
     const atual = total>0 && total>=it.parcelasRestantes ? (total - it.parcelasRestantes + 1) : null;
-    document.querySelectorAll(`[data-parcela-atual-idx="${i}"]`).forEach(el=> el.innerHTML = atual!==null ? `${atual}/${total}` : '<span class="hint">—</span>');
+    const celulaAtual = inp.closest('tr')?.querySelector('.val-cell');
+    if(celulaAtual) celulaAtual.innerHTML = atual!==null ? `${atual}/${total}` : '<span class="hint">—</span>';
   }));
   document.getElementById('cancelModalParcelasEmprestimo')?.addEventListener('click', ()=>{
     if(!confirm('Cancelar a importação deste arquivo?')) return;
