@@ -1207,22 +1207,30 @@ tbody tr:hover{background:var(--navy-50);}
   .reg-lista-mobile{display:block;}
 }
 .reg-grupo-data{margin-bottom:var(--sp-4);}
-.reg-grupo-data-titulo{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#8393ac;padding:0 2px 6px;}
-/* "Ajustes de interface — modo mobile", item 7: align-items:center (em vez do antigo flex-start) garante
-   que a caixa de seleção (.reg-card-check) fique sempre verticalmente centralizada em relação ao conteúdo
-   principal do card (.reg-card-principal), nunca alinhada ao topo/base — vale para qualquer quantidade de
-   linhas em .reg-card-principal (descrição+valor, grupo/conta+tag, e as tags extras opcionais de parcela/
-   responsável/lançamento interno), já que o alinhamento passa a acompanhar o item mais alto do card
-   automaticamente, sem precisar calcular a altura manualmente. O menu ⋮ (.reg-card-menu) também passa a
-   ficar centralizado pelo mesmo motivo — mesma lógica de alinhamento para os 3 itens do flex-row. */
+.reg-grupo-data-titulo{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5b6b85;padding:0 2px 8px;}
+/* "Reformulação visual do .reg-card no mobile" (referência: extrato estilo app bancário — ícone à esquerda,
+   título em destaque, linha secundária com data/resumo, valor + indicador de navegação à direita, tudo
+   centralizado verticalmente): estrutura interna de QUALQUER .reg-card da aplicação passa a ser sempre
+   ícone (.reg-card-icone, opcional) → bloco de texto (.reg-card-principal, cresce livremente) → bloco à
+   direita (.reg-card-lado, com o valor e o chevron ›/menu ⋮/ações inline, o que já existir para aquele
+   registro — ver construirRegCard). align-items:center garante que os 3 blocos fiquem sempre alinhados
+   pelo centro vertical, qualquer que seja a altura do bloco de texto (1 ou 2 linhas). */
 .reg-card{
-  display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--line);
-  border-radius:var(--radius-md);padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-2);position:relative;
+  display:flex;align-items:center;gap:12px;background:var(--paper);border:1px solid var(--line);
+  border-radius:16px;padding:14px 16px;margin-bottom:10px;position:relative;
+  box-shadow:0 1px 2px rgba(16,24,40,.04);
 }
-/* Item 13 do requisito: no mobile, tocar em qualquer parte do card (fora da caixa de seleção e do menu ⋮)
-   abre um modal com o detalhe completo do lançamento — só os cards com data-reg-card-detalhe (lista de
-   Registros) ganham esse comportamento. */
+/* Item 13 do requisito original + "Reformulação visual do .reg-card": tocar em qualquer parte do card (fora
+   da caixa de seleção/menu ⋮/ações) abre o modal de detalhe completo do lançamento — só os cards com
+   data-reg-card-detalhe (lançamentos de verdade: Registros/Extrato/Futuros/Fatura/Próximas Faturas) ganham
+   esse comportamento e o indicador visual (.reg-card-chevron). Listas cujo toque expande conteúdo inline
+   (clickAttr, ex.: "Onde o dinheiro está mudando?") continuam clicáveis mas sem o chevron — o sinal visual
+   delas é o ➕/➖ já embutido no próprio título. */
 .reg-card[data-reg-card-detalhe]{cursor:pointer;}
+.reg-card-icone{
+  width:44px;height:44px;border-radius:12px;flex-shrink:0;background:var(--navy-50);
+  display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1;
+}
 /* Seleção em lote na lista mobile (item 18 do requisito de responsividade) — caixa de seleção do card,
    mesma altura mínima de toque das demais ações da lista. */
 .reg-card-check{display:flex;align-items:center;justify-content:center;flex-shrink:0;min-width:var(--touch-min);margin:calc(-1*var(--sp-3)) 0;}
@@ -1267,15 +1275,25 @@ tbody tr:hover{background:var(--navy-50);}
   .panel.backup-config-mobile .hint{ margin-top:4px; }
   .panel.backup-config-mobile .backup-config-acoes{ margin-top:10px;padding-top:10px; }
 }
-.reg-card-principal{flex:1;min-width:0;}
-.reg-card-linha1{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
-.reg-card-descricao{font-size:14px;font-weight:600;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.reg-card-principal{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
+/* Título/descrição principal (item 3 do requisito "Reformulação visual do .reg-card": nunca truncar com
+   reticências) — quebra em até 2 linhas livremente; a informação essencial nunca some, só ocupa mais altura
+   nos poucos casos de texto realmente longo. */
+.reg-card-descricao{
+  font-size:15px;font-weight:700;color:var(--ink);min-width:0;
+  overflow-wrap:anywhere;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
 .reg-card-valor{font-family:var(--mono);font-weight:700;font-size:15px;white-space:nowrap;}
 .reg-card-valor.neg{color:var(--despesa);}
 .reg-card-valor.pos{color:var(--receita);}
-.reg-card-linha2{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:3px;}
+.reg-card-linha2{display:flex;flex-wrap:wrap;align-items:center;gap:6px;}
 .reg-card-linha2 .tag{white-space:nowrap;flex-shrink:0;}
-.reg-card-secundario{font-size:12px;color:#6a7a97;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.reg-card-secundario{font-size:13px;color:#6a7a97;overflow-wrap:anywhere;white-space:normal;}
+/* Bloco à direita do card (valor + o que quer que sinalize a interação: chevron de detalhe, menu ⋮ ou
+   ações inline) — sempre alinhado pelo centro vertical do card inteiro, nunca competindo por espaço com o
+   título/descrição (que agora tem a largura toda do card para si, ver .reg-card-principal). */
+.reg-card-lado{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:auto;}
+.reg-card-chevron{color:#b7c0d1;font-size:20px;line-height:1;flex-shrink:0;}
 .reg-card-menu{position:relative;flex-shrink:0;}
 .reg-card-menu-btn{min-width:var(--touch-min);font-size:18px;}
 /* "Padronização da visualização mobile em .reg-lista-mobile": área de ações de um .reg-card quando a
@@ -13404,38 +13422,27 @@ function renderListaMobileRegistros(pageList){
     ${grupos.map(g=>`
     <div class="reg-grupo-data">
       <div class="reg-grupo-data-titulo">${escapeHtml(g.rotulo)}</div>
-      ${g.itens.map(t=>`
-      <div class="reg-card" data-reg-card-detalhe="${escapeHtml(t.id)}">
-        <label class="reg-card-check"><input type="checkbox" class="chkLoteReg" value="${escapeHtml(t.id)}" ${UI.regSelecionados.has(t.id)?'checked':''} aria-label="Selecionar lançamento"></label>
-        <div class="reg-card-principal">
-          <div class="reg-card-linha1">
-            <span class="reg-card-descricao">${escapeHtml(t.descricao)}</span>
-            <span class="reg-card-valor ${t.tipo==='Despesa'?'neg':'pos'}">${t.tipo==='Despesa'?'-':''}${fmtBRL(t.valor)}</span>
-          </div>
-          <div class="reg-card-linha2">
-            <span class="reg-card-secundario">${t.grupo ? `${iconeGrupo(t.grupo)} ${escapeHtml(t.grupo)}` : 'Sem Grupo'} · ${escapeHtml(t.conta)}</span>
-            <span class="tag ${t.tipo}">${t.tipo}</span>
-          </div>
-          ${(t.totalParcelas || (t.parcelaFutura && t.competencia && t.competencia>chaveMes(UI.ano,UI.mes)) || t.responsavel || t.entreFamilia) ? `<div class="reg-descricao-tags">${t.totalParcelas ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}${(t.parcelaFutura && t.competencia && t.competencia>chaveMes(UI.ano,UI.mes)) ? `<span class="tag Variavel">⌛ Parcela futura</span>` : ''}${t.responsavel ? `<span class="tag Receita">🧑 ${escapeHtml(t.responsavel)}</span>` : ''}${t.entreFamilia ? `<span class="tag Variavel">🔁 Interna</span>` : ''}</div>` : ''}
-        </div>
-        <div class="reg-card-menu">
-          <button type="button" class="icon-btn reg-card-menu-btn" data-reg-card-menu="${t.id}" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.regCardMenuAberto===t.id?'true':'false'}">⋮</button>
-          ${UI.regCardMenuAberto===t.id ? `
-          <div class="reg-card-menu-lista">
-            <button type="button" data-edit="${t.id}">✏️ Editar</button>
-            <button type="button" data-duplicar="${t.id}">📄 Duplicar</button>
-            <button type="button" data-del="${t.id}">🗑️ Excluir</button>
-          </div>` : ''}
-        </div>
-      </div>`).join('')}
+      ${g.itens.map(t=>construirRegCard({
+        chave: t.id, detalhe: true,
+        icone: iconeGrupo(t.grupo),
+        checkboxHtml: `<label class="reg-card-check"><input type="checkbox" class="chkLoteReg" value="${escapeHtml(t.id)}" ${UI.regSelecionados.has(t.id)?'checked':''} aria-label="Selecionar lançamento"></label>`,
+        titulo: escapeHtml(t.descricao),
+        valorTexto: `${t.tipo==='Despesa'?'-':''}${fmtBRL(t.valor)}`, valorClasse: t.tipo==='Despesa'?'neg':'pos',
+        // A data já aparece uma única vez no cabeçalho do grupo (.reg-grupo-data-titulo) — repeti-la aqui
+        // seria redundante; a linha secundária mostra grupo+conta, a informação mais útil que sobra.
+        secundario: `${t.grupo ? escapeHtml(t.grupo) : 'Sem Grupo'} · ${escapeHtml(t.conta)}`,
+        tagsHtml: `<span class="tag ${t.tipo}">${t.tipo}</span>`,
+        extraHtml: (t.totalParcelas || (t.parcelaFutura && t.competencia && t.competencia>chaveMes(UI.ano,UI.mes)) || t.responsavel || t.entreFamilia) ? `<div class="reg-descricao-tags">${t.totalParcelas ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}${(t.parcelaFutura && t.competencia && t.competencia>chaveMes(UI.ano,UI.mes)) ? `<span class="tag Variavel">⌛ Parcela futura</span>` : ''}${t.responsavel ? `<span class="tag Receita">🧑 ${escapeHtml(t.responsavel)}</span>` : ''}${t.entreFamilia ? `<span class="tag Variavel">🔁 Interna</span>` : ''}</div>` : '',
+      })).join('')}
     </div>`).join('')}
   </div>`;
 }
-/* Item 13 do requisito: modal de detalhe completo de um lançamento, aberto ao tocar num .reg-card (mobile)
-   fora da caixa de seleção/menu ⋮ — mostra todos os campos existentes, sem cortar/truncar nada (ao
-   contrário do card, que precisa ser compacto). Rodapé só com "Fechar" (alinhado à esquerda no mobile via
-   a regra global de .modal-foot — item 2 do requisito); as ações (editar/duplicar/excluir) continuam
-   exclusivas do menu ⋮ do card, não duplicadas aqui. */
+/* Item 13 do requisito original + "Reformulação visual do .reg-card": modal de detalhe completo de um
+   lançamento, aberto ao tocar num .reg-card (mobile) fora da caixa de seleção — mostra todos os campos
+   existentes, sem cortar/truncar nada (ao contrário do card, que precisa ser compacto). As ações Editar/
+   Duplicar/Excluir, que antes ficavam atrás do menu ⋮ do próprio card, passaram para o rodapé deste modal
+   (o card resumido não perdeu nenhuma ação — só transferiu a apresentação delas para a visualização
+   detalhada, junto com o resto do rodapé "Fechar" já existente). */
 function renderRegCardDetalheModal(){
   const t = STATE.transactions.find(tx=>tx.id===UI.regCardDetalheId);
   if(!t){ return ''; }
@@ -13467,50 +13474,80 @@ function renderRegCardDetalheModal(){
         </div>
       </div>
       <div class="modal-foot">
-        <button class="btn btn-primary" id="closeRegCardDetalhe2">Fechar</button>
+        <button class="btn btn-ghost" id="closeRegCardDetalhe2">Fechar</button>
+        <button type="button" class="btn btn-danger" data-del="${t.id}">🗑️ Excluir</button>
+        <button type="button" class="btn btn-ghost" data-duplicar="${t.id}">📄 Duplicar</button>
+        <button type="button" class="btn btn-primary" data-edit="${t.id}">✏️ Editar</button>
       </div>
     </div>
   </div>`;
 }
 /* Monta o HTML de UM ".reg-card" isolado — bloco visual atômico reaproveitado por QUALQUER lista/tabela do
-   app no mobile (não só lançamentos, ver "Padronização da visualização mobile em .reg-lista-mobile"):
-   mesma estrutura/classes/espaçamento/tipografia sempre, o que muda de chamador para chamador é só o
-   CONTEÚDO de cada slot. Extraído de dentro de renderCardsLancamentosModal (que continua sendo o único
-   lugar que gera o menu ⋮ padrão de Editar/Duplicar/Excluir) para poder ser reusado por tabelas cujas
-   ações não são essas (ou não têm ação nenhuma) — nunca duplicando o markup/CSS de ".reg-card" em cada
-   lugar nem criando um componente visual paralelo. `cfg`:
+   app no mobile (não só lançamentos, ver "Padronização da visualização mobile em .reg-lista-mobile" e a
+   "Reformulação visual do .reg-card"): mesma estrutura/classes/espaçamento/tipografia/comportamento sempre
+   — ícone → texto (título + secundário, nunca truncado) → valor + indicador de interação —, o que muda de
+   chamador para chamador é só o CONTEÚDO de cada slot. Extraído de dentro de renderCardsLancamentosModal
+   (que continua sendo o único lugar que gera o menu ⋮ padrão de Editar/Duplicar/Excluir) para poder ser
+   reusado por tabelas cujas ações não são essas (ou não têm ação nenhuma) — nunca duplicando o markup/CSS
+   de ".reg-card" em cada lugar nem criando um componente visual paralelo. `cfg`:
    - chave: identificador único do item (usado em data-reg-card-detalhe, quando `detalhe` for true)
-   - titulo: texto (já escapado, se vier de dado do usuário) da linha 1 esquerda
-   - valorTexto/valorClasse: texto/classe do destaque da linha 1 direita
-   - secundario: HTML da linha 2 esquerda
-   - tagsHtml: HTML da linha 2 direita (badges/tags)
-   - extraHtml: HTML de linha(s) adicionais, abaixo da linha 2 (ex.: saldo acumulado, barra de progresso)
+   - icone: HTML/emoji do bloco .reg-card-icone à esquerda (item 1 do requisito visual — sempre a 1ª coisa
+     lida no card); '🧾' quando omitido, para todo .reg-card continuar com a mesma estrutura mesmo antes de
+     receber um ícone específico; passar '' (string vazia) suprime o bloco inteiro nos raros casos em que
+     nem um ícone genérico faz sentido.
+   - titulo: texto (já escapado, se vier de dado do usuário) do título principal — nunca deve embutir o
+     mesmo emoji já passado em `icone` (ver comentário de cada chamador ao mover um emoji existente para lá)
+   - valorTexto/valorClasse: texto/classe do valor em destaque, à direita
+   - secundario: HTML da linha secundária (data/resumo), abaixo do título
+   - tagsHtml: HTML complementar (badges/tags) na mesma linha do secundário, quando houver espaço
+   - extraHtml: HTML de linha(s) adicionais, abaixo da linha secundária (ex.: saldo acumulado, barra de progresso)
    - checkboxHtml: HTML do <label class="reg-card-check"> (seleção em lote), quando existir
-   - acoesHtml: HTML da área de ações (à direita) — dropdown ⋮, botões inline, ou nada
+   - acoesHtml: HTML da área de ações (dropdown ⋮, botões inline) — só é exibida quando o card NÃO abre um
+     modal de detalhe (`detalhe`/`clickAttr` ausentes); nesses dois casos o clique no próprio card já é a
+     ação (chevron/➕-➖), então `acoesHtml` nunca aparece (mesmo se informada) — os controles que antes
+     ficavam nela passam para dentro do modal/conteúdo aberto pelo clique.
    - semAcao: true esconde INTEIRAMENTE a área de ações (equivalente a acoesHtml='' + classe reg-card-sem-acao)
-   - detalhe: true adiciona data-reg-card-detalhe (abre modal de detalhe) — só faz sentido para lançamentos
+   - detalhe: true adiciona data-reg-card-detalhe (abre o modal de detalhe completo, com o chevron › como
+     indicador visual) — só faz sentido para lançamentos (STATE.transactions, ver renderRegCardDetalheModal)
    - clickAttr: quando informado (ex.: 'data-drill-grupo="X"'), substitui data-reg-card-detalhe por este
-     atributo (usado por listas cujo toque no card expande conteúdo inline, em vez de abrir um modal)
+     atributo — sozinho, só injeta os atributos no próprio elemento (ex.: "Lançamentos não listados", cujo
+     card em si não é clicável, só o botão dentro de `acoesHtml`); combinado com `expandeInline:true`, marca
+     que o TOQUE NO CARD expande conteúdo inline (ex.: "Onde o dinheiro está mudando?" — mesmo comportamento
+     da <tr> desktop, nunca abre um modal) e some com `acoesHtml`, sem chevron (o sinal visual desses é o
+     ➕/➖ já embutido no próprio título)
    - classeExtra/estiloExtra: classe/style adicionais no próprio .reg-card (equivalente ao style="background:
      ...;" já usado em várias linhas <tr> de tabela desktop — ex.: destacar risco alto, duplicidade) */
 function construirRegCard(cfg){
   const semAcaoFlag = !!cfg.semAcao;
-  const atributoClique = cfg.clickAttr ? cfg.clickAttr : (cfg.detalhe ? `data-reg-card-detalhe="${escapeHtml(cfg.chave)}"` : '');
+  const abreDetalhe = !!cfg.detalhe;
+  const atributoClique = cfg.clickAttr ? cfg.clickAttr : (abreDetalhe ? `data-reg-card-detalhe="${escapeHtml(cfg.chave)}"` : '');
+  const iconeHtml = cfg.icone===undefined ? '🧾' : cfg.icone;
+  // O clique no card inteiro (chevron) ou o toque que expande conteúdo inline (`expandeInline`, ex.: "Onde o
+  // dinheiro está mudando?") já É a ação — `acoesHtml`/⋮ nunca aparece nesses dois casos (as ações que antes
+  // ficavam ali passaram para dentro do modal/conteúdo aberto pelo clique, ver renderRegCardDetalheModal).
+  // `clickAttr` sozinho (sem `expandeInline`) só injeta atributos no elemento — não torna o card clicável
+  // por si (ex.: "Lançamentos não listados", cujo card não é clicável, só o botão dentro de `acoesHtml`) —
+  // nesse caso `acoesHtml` continua aparecendo normalmente. Sem nenhum dos dois, mantém exatamente o
+  // comportamento anterior (menu ⋮, botões inline, ou nada, conforme `acoesHtml`/`semAcao`).
+  const ladoAcao = abreDetalhe
+    ? `<span class="reg-card-chevron" aria-hidden="true">›</span>`
+    : (cfg.expandeInline || semAcaoFlag ? '' : (cfg.acoesHtml||''));
   return `
-    <div class="reg-card${semAcaoFlag?' reg-card-sem-acao':''}${cfg.classeExtra?` ${cfg.classeExtra}`:''}" ${cfg.estiloExtra?`style="${cfg.estiloExtra}"`:''} ${atributoClique}>
+    <div class="reg-card${(semAcaoFlag&&!abreDetalhe)?' reg-card-sem-acao':''}${cfg.classeExtra?` ${cfg.classeExtra}`:''}" ${cfg.estiloExtra?`style="${cfg.estiloExtra}"`:''} ${atributoClique}>
       ${cfg.checkboxHtml||''}
+      ${iconeHtml ? `<div class="reg-card-icone">${iconeHtml}</div>` : ''}
       <div class="reg-card-principal">
-        <div class="reg-card-linha1">
-          <span class="reg-card-descricao">${cfg.titulo}</span>
-          <span class="reg-card-valor ${cfg.valorClasse||''}">${cfg.valorTexto}</span>
-        </div>
+        <span class="reg-card-descricao">${cfg.titulo}</span>
         <div class="reg-card-linha2">
-          <span class="reg-card-secundario">${cfg.secundario||''}</span>
+          ${cfg.secundario ? `<span class="reg-card-secundario">${cfg.secundario}</span>` : ''}
           ${cfg.tagsHtml||''}
         </div>
         ${cfg.extraHtml||''}
       </div>
-      ${semAcaoFlag ? '' : (cfg.acoesHtml||'')}
+      <div class="reg-card-lado">
+        <span class="reg-card-valor ${cfg.valorClasse||''}">${cfg.valorTexto}</span>
+        ${ladoAcao}
+      </div>
     </div>`;
 }
 /* Menu ⋮ padrão de ações de um lançamento (Editar/Duplicar/Excluir) — mesmo mecanismo/estado
@@ -13529,23 +13566,30 @@ function menuAcoesLancamentoHtml(id){
       </div>`;
 }
 /* ---------- Lista mobile de lançamentos para os modais Ver Extrato/Lançamentos futuros/Ver Fatura/Ver
-   Próximas Faturas (item 12 do requisito de responsividade) — mesmo padrão visual (.reg-card/.reg-lista-
-   mobile) já usado na lista mobile de Registros (ver renderListaMobileRegistros), adaptado aos campos de
-   cada modal via `opts`. A tabela desktop de cada modal continua existindo/funcionando sem alteração
-   nenhuma, só fica oculta neste breakpoint (mesma classe reg-tabela-principal/reg-lista-mobile). Reaproveita
-   o mesmo menu de ações (⋮ Editar/Duplicar/Excluir, ver menuAcoesLancamentoHtml) e o mesmo estado
-   UI.regCardMenuAberto — os ids de lançamento são únicos em toda a aplicação (cada item aqui é o próprio
-   registro de STATE.transactions por padrão), então não há risco de colisão entre as várias listas que
-   usam esta função.
+   Próximas Faturas/Mapa de Calor do dia (item 12 do requisito de responsividade) — mesmo padrão visual
+   (.reg-card/.reg-lista-mobile) já usado na lista mobile de Registros (ver renderListaMobileRegistros),
+   adaptado aos campos de cada modal via `opts`. A tabela desktop de cada modal continua existindo/
+   funcionando sem alteração nenhuma, só fica oculta neste breakpoint (mesma classe reg-tabela-principal/
+   reg-lista-mobile). Quando `detalhe` não é informado (o caso de todos os modais acima — lançamentos de
+   verdade), o card inteiro abre o modal de detalhe completo (chevron ›, ver renderRegCardDetalheModal, que
+   também reúne as ações Editar/Duplicar/Excluir); nesses casos `acoesHtml`/menuAcoesLancamentoHtml nunca
+   aparece no card (ver construirRegCard) — só é calculado como reserva para quando `opts.detalhe:false`
+   for passado (usos que não são lançamentos de verdade). Os ids de lançamento são únicos em toda a
+   aplicação (cada item aqui é o próprio registro de STATE.transactions por padrão), então não há risco de
+   colisão entre as várias listas que usam esta função.
    "Padronização da visualização mobile em .reg-lista-mobile": além dos usos de lançamentos de sempre, esta
    função também passou a ser reaproveitada por listas de OUTROS tipos de registro (ver `titulo`/`chave`/
-   `acoesHtml`/`detalhe` abaixo) — nunca uma segunda implementação paralela do mesmo cartão. */
+   `acoesHtml`/`detalhe`/`icone` abaixo) — nunca uma segunda implementação paralela do mesmo cartão. */
 function renderCardsLancamentosModal(itens, opts){
   if(!itens.length) return '';
   const { valorTexto, valorClasse, secundario, tags, extra, semAcao, tituloGrupo, prefixo, selecionados } = opts;
   const chaveDe = opts.chave || (t=>t.id);
   const tituloDe = opts.titulo || (t=>escapeHtml(t.descricao));
   const detalhePadrao = opts.detalhe===undefined ? true : opts.detalhe;
+  // Ícone do card ("Reformulação visual do .reg-card", item 1: sempre a 1ª informação do card) — por
+  // padrão o ícone do grupo do lançamento (mesma fonte usada em toda a aplicação, ver iconeGrupo), já que
+  // todo item passado aqui é um registro de STATE.transactions (ou equivalente) com esse campo.
+  const iconeDe = opts.icone || (t=>iconeGrupo(t.grupo));
   // Itens 4/13 do requisito: seleção em lote também disponível no mobile — cada card ganha uma caixa
   // própria (classe chkLote<prefixo>, mesma convenção da tabela desktop, então bindSelecaoLote já liga o
   // evento de ambas sem nenhum código extra) e a lista ganha "Selecionar todos" no mesmo padrão visual da
@@ -13572,6 +13616,7 @@ function renderCardsLancamentosModal(itens, opts){
     const semAcaoItem = semAcao ? semAcao(t) : false;
     corpo += construirRegCard({
       chave: id, detalhe: detalhePadrao,
+      icone: iconeDe(t),
       titulo: tituloDe(t), valorTexto: valorTexto(t), valorClasse: valorClasse(t),
       secundario: secundario(t), tagsHtml: tags ? (tags(t)||'') : '', extraHtml: extra ? (extra(t)||'') : '',
       checkboxHtml: (prefixo && selecionados && !semAcaoItem) ? `<label class="reg-card-check"><input type="checkbox" class="chkLote${prefixo}" value="${escapeHtml(id)}" ${selecionados.has(id)?'checked':''} aria-label="Selecionar lançamento"></label>` : '',
@@ -19771,6 +19816,9 @@ function bindEvents(){
     abrirNovoLancamento(b.dataset.modalNovoLanc);
   }));
   document.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=>{
+    // Fecha o modal de detalhe do .reg-card (se for essa a origem do clique — ver renderRegCardDetalheModal)
+    // antes de abrir o modal de edição, para nunca deixar um modal de detalhe "fantasma" por baixo.
+    UI.regCardDetalheId = null;
     const tx = {...STATE.transactions.find(t=>t.id===b.dataset.edit)};
     const info = catInfo(tx.categoria);
     tx._grupo = info.grupo; tx._categoria = info.subgrupo;
@@ -19795,6 +19843,7 @@ function bindEvents(){
     UI.editingTx = tx; render();
   }));
   document.querySelectorAll('[data-duplicar]').forEach(b=> b.addEventListener('click', ()=>{
+    UI.regCardDetalheId = null;
     const original = STATE.transactions.find(t=>t.id===b.dataset.duplicar);
     if(!original) return;
     // Duplicação por vários meses consecutivos, a partir do mesmo dia do mês seguinte ao lançamento
@@ -19807,7 +19856,10 @@ function bindEvents(){
     const tx = STATE.transactions.find(t=>t.id===id);
     if(!tx) return;
     const temFuturas = tx.parcelamentoId && Number(tx.totalParcelas)>1 && STATE.transactions.some(t=>t.parcelamentoId===tx.parcelamentoId && Number(t.parcelaAtual)>Number(tx.parcelaAtual));
-    if(temFuturas){ UI.confirmDelParcela = { id }; render(); return; }
+    // Fecha o modal de detalhe do .reg-card (se for essa a origem do clique — ver renderRegCardDetalheModal),
+    // já que a confirmação de exclusão (aqui ou no modal de parcela) assume o lugar dele; nunca antes de o
+    // usuário efetivamente confirmar, senão um "Cancelar" deixaria o card fechado sem o lançamento excluído.
+    if(temFuturas){ UI.regCardDetalheId = null; UI.confirmDelParcela = { id }; render(); return; }
     // Se faz parte de uma transferência interna, o lado espelhado (na outra conta) é excluído junto —
     // manter só um dos lados criaria uma movimentação órfã e incorreta.
     const ehTransferenciaVinculada = tx.transferenciaVinculoId && STATE.transactions.some(t=>t.id!==id && t.transferenciaVinculoId===tx.transferenciaVinculoId);
@@ -19820,6 +19872,7 @@ function bindEvents(){
       ? `Excluir o lançamento "${identificacao}"?\n\nEle faz parte de uma transferência interna entre contas — o lançamento espelhado na outra conta também será removido.`
       : `Excluir o lançamento "${identificacao}"?`;
     if(!confirm(msgConfirmacao)) return;
+    UI.regCardDetalheId = null;
     if(ehTransferenciaVinculada){
       STATE.transactions = STATE.transactions.filter(t=>t.transferenciaVinculoId!==tx.transferenciaVinculoId);
     } else {
