@@ -1208,15 +1208,16 @@ tbody tr:hover{background:var(--navy-50);}
 }
 .reg-grupo-data{margin-bottom:var(--sp-4);}
 .reg-grupo-data-titulo{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#5b6b85;padding:0 2px 8px;}
-/* "Reformulação visual do .reg-card no mobile" (referência: extrato estilo app bancário — ícone à esquerda,
-   título em destaque, linha secundária com data/resumo, valor + indicador de navegação à direita, tudo
-   centralizado verticalmente): estrutura interna de QUALQUER .reg-card da aplicação passa a ser sempre
-   ícone (.reg-card-icone, opcional) → bloco de texto (.reg-card-principal, cresce livremente) → bloco à
-   direita (.reg-card-lado, com o valor e o chevron ›/menu ⋮/ações inline, o que já existir para aquele
-   registro — ver construirRegCard). align-items:center garante que os 3 blocos fiquem sempre alinhados
-   pelo centro vertical, qualquer que seja a altura do bloco de texto (1 ou 2 linhas). */
+/* "Reformulação visual do .reg-card no mobile" (referência: extrato de app bancário real do usuário —
+   linha 1 = caixa de seleção (quando houver) + descrição completa (nunca truncada, com toda a largura do
+   card para si) + valor no topo à direita; linha 2 = ícone de identidade (pequeno, próprio bloco) +
+   grupo/categoria + informação complementar (conta, tag de tipo) + indicador de interação (chevron ›/
+   menu ⋮/ações inline) empurrado para a direita): estrutura interna de QUALQUER .reg-card da aplicação
+   passa a ser sempre .reg-card-topo (descrição + valor) seguida de .reg-card-linha2 (ícone + secundário +
+   tags + ação), dentro de .reg-card-corpo — ver construirRegCard. align-items:flex-start no .reg-card
+   mantém a caixa de seleção ancorada no topo do card mesmo quando a descrição ocupa várias linhas. */
 .reg-card{
-  display:flex;align-items:center;gap:12px;background:var(--paper);border:1px solid var(--line);
+  display:flex;align-items:flex-start;gap:10px;background:var(--paper);border:1px solid var(--line);
   border-radius:16px;padding:14px 16px;margin-bottom:10px;position:relative;
   box-shadow:0 1px 2px rgba(16,24,40,.04);
 }
@@ -1227,13 +1228,16 @@ tbody tr:hover{background:var(--navy-50);}
    (clickAttr, ex.: "Onde o dinheiro está mudando?") continuam clicáveis mas sem o chevron — o sinal visual
    delas é o ➕/➖ já embutido no próprio título. */
 .reg-card[data-reg-card-detalhe]{cursor:pointer;}
+.reg-card-corpo{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;}
+.reg-card-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
 .reg-card-icone{
-  width:44px;height:44px;border-radius:12px;flex-shrink:0;background:var(--navy-50);
-  display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1;
+  width:24px;height:24px;border-radius:7px;flex-shrink:0;background:var(--navy-50);
+  display:flex;align-items:center;justify-content:center;font-size:13px;line-height:1;
 }
 /* Seleção em lote na lista mobile (item 18 do requisito de responsividade) — caixa de seleção do card,
-   mesma altura mínima de toque das demais ações da lista. */
-.reg-card-check{display:flex;align-items:center;justify-content:center;flex-shrink:0;min-width:var(--touch-min);margin:calc(-1*var(--sp-3)) 0;}
+   ancorada no início da 1ª linha (mesma altura da descrição), mesma altura mínima de toque das demais
+   ações da lista. */
+.reg-card-check{display:flex;align-items:flex-start;justify-content:center;flex-shrink:0;min-width:var(--touch-min);padding-top:2px;}
 .reg-card-check input{width:18px;height:18px;}
 .reg-select-all-mobile{
   display:flex;align-items:center;gap:8px;font-size:12.5px;color:#5b6b85;font-weight:600;
@@ -1275,23 +1279,23 @@ tbody tr:hover{background:var(--navy-50);}
   .panel.backup-config-mobile .hint{ margin-top:4px; }
   .panel.backup-config-mobile .backup-config-acoes{ margin-top:10px;padding-top:10px; }
 }
-.reg-card-principal{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
 /* Título/descrição principal (item 3 do requisito "Reformulação visual do .reg-card": nunca truncar com
-   reticências) — quebra em até 2 linhas livremente; a informação essencial nunca some, só ocupa mais altura
-   nos poucos casos de texto realmente longo. */
+   reticências, nem sequer via -webkit-line-clamp) — quebra livremente em quantas linhas o texto precisar;
+   fica sozinha na linha 1 do card (ver .reg-card-topo), então tem toda a largura disponível (menos a caixa
+   de seleção, quando houver) para nunca precisar cortar a informação principal. */
 .reg-card-descricao{
-  font-size:15px;font-weight:700;color:var(--ink);min-width:0;
-  overflow-wrap:anywhere;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  flex:1;min-width:0;font-size:15px;font-weight:700;color:var(--ink);
+  overflow-wrap:anywhere;white-space:normal;
 }
-.reg-card-valor{font-family:var(--mono);font-weight:700;font-size:15px;white-space:nowrap;}
+.reg-card-valor{flex-shrink:0;font-family:var(--mono);font-weight:700;font-size:15px;white-space:nowrap;}
 .reg-card-valor.neg{color:var(--despesa);}
 .reg-card-valor.pos{color:var(--receita);}
 .reg-card-linha2{display:flex;flex-wrap:wrap;align-items:center;gap:6px;}
 .reg-card-linha2 .tag{white-space:nowrap;flex-shrink:0;}
 .reg-card-secundario{font-size:13px;color:#6a7a97;overflow-wrap:anywhere;white-space:normal;}
-/* Bloco à direita do card (valor + o que quer que sinalize a interação: chevron de detalhe, menu ⋮ ou
-   ações inline) — sempre alinhado pelo centro vertical do card inteiro, nunca competindo por espaço com o
-   título/descrição (que agora tem a largura toda do card para si, ver .reg-card-principal). */
+/* Área de ação da linha 2 (o que quer que sinalize a interação: chevron de detalhe, menu ⋮ ou ações
+   inline) — sempre empurrada para a extremidade direita da linha 2 (ver ícone+secundário+tags à esquerda),
+   nunca competindo por espaço com a descrição (que agora tem sua própria linha, ver .reg-card-topo). */
 .reg-card-lado{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:auto;}
 .reg-card-chevron{color:#b7c0d1;font-size:20px;line-height:1;flex-shrink:0;}
 .reg-card-menu{position:relative;flex-shrink:0;}
@@ -13487,23 +13491,25 @@ function renderRegCardDetalheModal(){
 /* Monta o HTML de UM ".reg-card" isolado — bloco visual atômico reaproveitado por QUALQUER lista/tabela do
    app no mobile (não só lançamentos, ver "Padronização da visualização mobile em .reg-lista-mobile" e a
    "Reformulação visual do .reg-card"): mesma estrutura/classes/espaçamento/tipografia/comportamento sempre
-   — ícone → texto (título + secundário, nunca truncado) → valor + indicador de interação —, o que muda de
+   — linha 1 (.reg-card-topo) com a descrição completa (nunca truncada) + o valor no topo à direita, depois
+   linha 2 (.reg-card-linha2) com ícone + secundário + tags + indicador de interação —, o que muda de
    chamador para chamador é só o CONTEÚDO de cada slot. Extraído de dentro de renderCardsLancamentosModal
    (que continua sendo o único lugar que gera o menu ⋮ padrão de Editar/Duplicar/Excluir) para poder ser
    reusado por tabelas cujas ações não são essas (ou não têm ação nenhuma) — nunca duplicando o markup/CSS
    de ".reg-card" em cada lugar nem criando um componente visual paralelo. `cfg`:
    - chave: identificador único do item (usado em data-reg-card-detalhe, quando `detalhe` for true)
-   - icone: HTML/emoji do bloco .reg-card-icone à esquerda (item 1 do requisito visual — sempre a 1ª coisa
-     lida no card); '🧾' quando omitido, para todo .reg-card continuar com a mesma estrutura mesmo antes de
-     receber um ícone específico; passar '' (string vazia) suprime o bloco inteiro nos raros casos em que
-     nem um ícone genérico faz sentido.
-   - titulo: texto (já escapado, se vier de dado do usuário) do título principal — nunca deve embutir o
-     mesmo emoji já passado em `icone` (ver comentário de cada chamador ao mover um emoji existente para lá)
-   - valorTexto/valorClasse: texto/classe do valor em destaque, à direita
-   - secundario: HTML da linha secundária (data/resumo), abaixo do título
-   - tagsHtml: HTML complementar (badges/tags) na mesma linha do secundário, quando houver espaço
-   - extraHtml: HTML de linha(s) adicionais, abaixo da linha secundária (ex.: saldo acumulado, barra de progresso)
-   - checkboxHtml: HTML do <label class="reg-card-check"> (seleção em lote), quando existir
+   - icone: HTML/emoji do bloco .reg-card-icone no início da linha 2 (item 1 do requisito visual); '🧾'
+     quando omitido, para todo .reg-card continuar com a mesma estrutura mesmo antes de receber um ícone
+     específico; passar '' (string vazia) suprime o bloco inteiro nos raros casos em que nem um ícone
+     genérico faz sentido.
+   - titulo: texto (já escapado, se vier de dado do usuário) do título principal, sozinho na linha 1 (junto
+     do valor) — nunca deve embutir o mesmo emoji já passado em `icone`
+   - valorTexto/valorClasse: texto/classe do valor em destaque, na linha 1, alinhado ao topo à direita
+   - secundario: HTML da linha 2 (grupo/categoria), ao lado do ícone
+   - tagsHtml: HTML complementar (badges/tags — ex.: conta, tipo) na mesma linha 2, quando houver espaço
+   - extraHtml: HTML de linha(s) adicionais, abaixo da linha 2 (ex.: saldo acumulado, barra de progresso)
+   - checkboxHtml: HTML do <label class="reg-card-check"> (seleção em lote), quando existir — fica fora de
+     .reg-card-corpo, ancorado no topo do card (ver .reg-card-check)
    - acoesHtml: HTML da área de ações (dropdown ⋮, botões inline) — só é exibida quando o card NÃO abre um
      modal de detalhe (`detalhe`/`clickAttr` ausentes); nesses dois casos o clique no próprio card já é a
      ação (chevron/➕-➖), então `acoesHtml` nunca aparece (mesmo se informada) — os controles que antes
@@ -13537,18 +13543,18 @@ function construirRegCard(cfg){
   return `
     <div class="reg-card${(semAcaoFlag&&!abreDetalhe)?' reg-card-sem-acao':''}${cfg.classeExtra?` ${cfg.classeExtra}`:''}" ${cfg.estiloExtra?`style="${cfg.estiloExtra}"`:''} ${atributoClique}>
       ${cfg.checkboxHtml||''}
-      ${iconeHtml ? `<div class="reg-card-icone">${iconeHtml}</div>` : ''}
-      <div class="reg-card-principal">
-        <span class="reg-card-descricao">${cfg.titulo}</span>
+      <div class="reg-card-corpo">
+        <div class="reg-card-topo">
+          <span class="reg-card-descricao">${cfg.titulo}</span>
+          <span class="reg-card-valor ${cfg.valorClasse||''}">${cfg.valorTexto}</span>
+        </div>
         <div class="reg-card-linha2">
+          ${iconeHtml ? `<div class="reg-card-icone">${iconeHtml}</div>` : ''}
           ${cfg.secundario ? `<span class="reg-card-secundario">${cfg.secundario}</span>` : ''}
           ${cfg.tagsHtml||''}
+          ${ladoAcao ? `<span class="reg-card-lado">${ladoAcao}</span>` : ''}
         </div>
         ${cfg.extraHtml||''}
-      </div>
-      <div class="reg-card-lado">
-        <span class="reg-card-valor ${cfg.valorClasse||''}">${cfg.valorTexto}</span>
-        ${ladoAcao}
       </div>
     </div>`;
 }
