@@ -1312,6 +1312,13 @@ tbody tr:hover{background:var(--navy-50);}
 .reg-card-secundario{font-size:12px;color:#6a7a97;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .reg-card-menu{position:relative;flex-shrink:0;}
 .reg-card-menu-btn{min-width:var(--touch-min);font-size:18px;}
+/* "Padronização da visualização mobile em .reg-lista-mobile": área de ações de um .reg-card quando a
+   tabela desktop de origem já mostra a(s) ação(ões) como botão(ões) visíveis (em vez de escondidos atrás
+   de um menu ⋮) — ex.: "Restaurar" do Backup Histórico, "Ver detalhes" do Histórico do Contracheque. Meros
+   botões (mesmos .btn/.icon-btn de sempre) dentro de um contêiner flex vertical, nunca um componente visual
+   novo; usado só quando a área de ações do card não precisa da lógica de abrir/fechar do menu ⋮. */
+.reg-card-acoes-inline{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;}
+.reg-card-acoes-inline .btn{white-space:nowrap;}
 .reg-card-menu-lista{
   position:absolute;right:0;top:100%;z-index:30;background:#fff;border:1px solid var(--line);
   border-radius:var(--radius-sm);box-shadow:0 10px 24px rgba(11,42,94,.18);min-width:160px;overflow:hidden;
@@ -9390,7 +9397,7 @@ function renderHistoricoContrachequeModal(){
       <div class="modal-body">
         ${cabecalhoContaModalHtml(conta)}
         ${historico.length ? `
-        <div class="table-wrap table-wrap-registros" style="margin-top:14px;" data-ordenar-tabela="historicoContracheque"><table>
+        <div class="table-wrap table-wrap-registros reg-tabela-principal" style="margin-top:14px;" data-ordenar-tabela="historicoContracheque"><table>
           <thead><tr>
             ${thOrdenavel('historicoContracheque','competencia','Competência')}${thOrdenavel('historicoContracheque','margemConsignavel','Margem Consignável',{style:'text-align:right;'})}${thOrdenavel('historicoContracheque','bruto','Bruto',{style:'text-align:right;'})}
             ${thOrdenavel('historicoContracheque','descontos','Descontos',{style:'text-align:right;'})}${thOrdenavel('historicoContracheque','liquido','Líquido',{style:'text-align:right;'})}${thOrdenavel('historicoContracheque','dataCredito','Data do Crédito')}<th class="no-print"></th>
@@ -9407,6 +9414,14 @@ function renderHistoricoContrachequeModal(){
             </tr>`).join('')}
           </tbody>
         </table></div>
+        <div class="reg-lista-mobile">${historicoPagina.map(h=>construirRegCard({
+          chave: h.competencia,
+          titulo: escapeHtml(competenciaLabel(h.competencia)),
+          valorTexto: fmtBRL(h.liquido),
+          secundario: `Bruto: <span class="val-cell pos">${fmtBRL(h.bruto)}</span> · Descontos: <span class="val-cell neg">${fmtBRL(h.descontos)}</span>`,
+          extraHtml: `<div class="reg-card-extra">Margem consignável: ${fmtBRL(h.margemConsignavel)}${h.dataCredito ? ` · Crédito em ${fmtData(h.dataCredito)}` : ''}</div>`,
+          acoesHtml: `<div class="reg-card-acoes-inline"><button type="button" class="btn btn-ghost btn-sm" data-abrir-competencia-contracheque="${escapeHtml(conta)}|${h.competencia}">Ver detalhes</button></div>`,
+        })).join('')}</div>
         <div class="registros-rodape no-print">${rodapePaginacaoHistorico}</div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhum contracheque importado ainda para esta conta.</div>`}
       </div>
       <div class="modal-foot">
@@ -9440,7 +9455,7 @@ function renderEvolucaoReservaModal(){
           ${temRendimentos ? `<div class="cartoes-resumo-item"><span class="ico">🌱</span><div><div class="val">${fmtBRL(totalRendimentos)}</div><div class="lbl">rendimentos nos últimos 12 meses</div></div></div>` : ''}
         </div>
         <div class="chart-box" style="height:260px;margin-top:14px;"><canvas id="chartEvolucaoReserva"></canvas></div>
-        <div class="table-wrap table-wrap-registros" style="margin-top:14px;" data-ordenar-tabela="evolucaoReserva"><table>
+        <div class="table-wrap table-wrap-registros reg-tabela-principal" style="margin-top:14px;" data-ordenar-tabela="evolucaoReserva"><table>
           <thead><tr>
             ${thOrdenavel('evolucaoReserva','competencia','Competência')}${thOrdenavel('evolucaoReserva','saldo','Saldo',{style:'text-align:right;'})}${thOrdenavel('evolucaoReserva','aportes','Aportes',{style:'text-align:right;'})}
             ${thOrdenavel('evolucaoReserva','resgates','Resgates',{style:'text-align:right;'})}${temRendimentos ? thOrdenavel('evolucaoReserva','rendimentos','Rendimentos',{style:'text-align:right;'}) : ''}
@@ -9458,6 +9473,16 @@ function renderEvolucaoReservaModal(){
             </tr>`).join('')}
           </tbody>
         </table></div>
+        <div class="reg-lista-mobile">${aplicarOrdenacaoClique(serie.slice().reverse(), 'evolucaoReserva', {
+          competencia:{tipo:'texto', valor:m=>m.competencia}, saldo:{tipo:'moeda', valor:m=>m.saldoFinal}, aportes:{tipo:'moeda', valor:m=>m.aportes},
+          resgates:{tipo:'moeda', valor:m=>m.resgates}, rendimentos:{tipo:'moeda', valor:m=>m.rendimentos},
+        }).map(m=>construirRegCard({
+          chave: m.competencia, semAcao: true,
+          titulo: escapeHtml(competenciaLabel(m.competencia)),
+          valorTexto: fmtBRL(m.saldoFinal),
+          secundario: `Aportes: ${m.aportes>0?`<span class="val-cell pos">${fmtBRL(m.aportes)}</span>`:'—'} · Resgates: ${m.resgates>0?`<span class="val-cell neg">${fmtBRL(m.resgates)}</span>`:'—'}`,
+          extraHtml: temRendimentos ? `<div class="reg-card-extra">Rendimentos: ${m.rendimentos>0?fmtBRL(m.rendimentos):'—'}</div>` : '',
+        })).join('')}</div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-primary" id="closeEvolucaoReserva2">Fechar</button>
@@ -9506,7 +9531,7 @@ function renderModalAportes(){
                 return `
                 <div class="aportes-subcategoria-bloco">
                   <div class="aportes-subcategoria-cabecalho"><span>${escapeHtml(subcategoria)}</span><span>${fmtBRL(totalSub)}</span></div>
-                  <table class="aportes-tabela-itens"><tbody>
+                  <table class="aportes-tabela-itens reg-tabela-principal"><tbody>
                     ${txsSub.map(t=>`<tr${txInPeriod(t,ano,mes) ? ' style="background:var(--navy-50);"' : ''}>
                       <td data-label="Data" style="white-space:nowrap;">${fmtData(t.data)}</td>
                       <td data-label="Descrição">${escapeHtml(t.descricao)}${Number(t.totalParcelas)>1 ? ` <span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}</td>
@@ -9514,6 +9539,13 @@ function renderModalAportes(){
                       <td data-label="Valor" class="val-cell pos" style="text-align:right;">${fmtBRL(t.valor)}</td>
                     </tr>`).join('')}
                   </tbody></table>
+                  ${renderCardsLancamentosModal(txsSub, {
+                    valorTexto: t=>fmtBRL(t.valor), valorClasse: ()=>'pos',
+                    secundario: t=>`${fmtData(t.data)} · ${escapeHtml(t.conta)}`,
+                    tags: t=> Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : '',
+                    extra: t=> txInPeriod(t,ano,mes) ? `<div class="reg-card-extra">📅 Dentro do mês selecionado (${MESES[mes-1]}/${ano})</div>` : '',
+                    semAcao: ()=>true, detalhe:false,
+                  })}
                 </div>`;
               }).join('')}
             </div>`;
@@ -13554,24 +13586,87 @@ function renderRegCardDetalheModal(){
     </div>
   </div>`;
 }
+/* Monta o HTML de UM ".reg-card" isolado — bloco visual atômico reaproveitado por QUALQUER lista/tabela do
+   app no mobile (não só lançamentos, ver "Padronização da visualização mobile em .reg-lista-mobile"):
+   mesma estrutura/classes/espaçamento/tipografia sempre, o que muda de chamador para chamador é só o
+   CONTEÚDO de cada slot. Extraído de dentro de renderCardsLancamentosModal (que continua sendo o único
+   lugar que gera o menu ⋮ padrão de Editar/Duplicar/Excluir) para poder ser reusado por tabelas cujas
+   ações não são essas (ou não têm ação nenhuma) — nunca duplicando o markup/CSS de ".reg-card" em cada
+   lugar nem criando um componente visual paralelo. `cfg`:
+   - chave: identificador único do item (usado em data-reg-card-detalhe, quando `detalhe` for true)
+   - titulo: texto (já escapado, se vier de dado do usuário) da linha 1 esquerda
+   - valorTexto/valorClasse: texto/classe do destaque da linha 1 direita
+   - secundario: HTML da linha 2 esquerda
+   - tagsHtml: HTML da linha 2 direita (badges/tags)
+   - extraHtml: HTML de linha(s) adicionais, abaixo da linha 2 (ex.: saldo acumulado, barra de progresso)
+   - checkboxHtml: HTML do <label class="reg-card-check"> (seleção em lote), quando existir
+   - acoesHtml: HTML da área de ações (à direita) — dropdown ⋮, botões inline, ou nada
+   - semAcao: true esconde INTEIRAMENTE a área de ações (equivalente a acoesHtml='' + classe reg-card-sem-acao)
+   - detalhe: true adiciona data-reg-card-detalhe (abre modal de detalhe) — só faz sentido para lançamentos
+   - clickAttr: quando informado (ex.: 'data-drill-grupo="X"'), substitui data-reg-card-detalhe por este
+     atributo (usado por listas cujo toque no card expande conteúdo inline, em vez de abrir um modal)
+   - classeExtra/estiloExtra: classe/style adicionais no próprio .reg-card (equivalente ao style="background:
+     ...;" já usado em várias linhas <tr> de tabela desktop — ex.: destacar risco alto, duplicidade) */
+function construirRegCard(cfg){
+  const semAcaoFlag = !!cfg.semAcao;
+  const atributoClique = cfg.clickAttr ? cfg.clickAttr : (cfg.detalhe ? `data-reg-card-detalhe="${escapeHtml(cfg.chave)}"` : '');
+  return `
+    <div class="reg-card${semAcaoFlag?' reg-card-sem-acao':''}${cfg.classeExtra?` ${cfg.classeExtra}`:''}" ${cfg.estiloExtra?`style="${cfg.estiloExtra}"`:''} ${atributoClique}>
+      ${cfg.checkboxHtml||''}
+      <div class="reg-card-principal">
+        <div class="reg-card-linha1">
+          <span class="reg-card-descricao">${cfg.titulo}</span>
+          <span class="reg-card-valor ${cfg.valorClasse||''}">${cfg.valorTexto}</span>
+        </div>
+        <div class="reg-card-linha2">
+          <span class="reg-card-secundario">${cfg.secundario||''}</span>
+          ${cfg.tagsHtml||''}
+        </div>
+        ${cfg.extraHtml||''}
+      </div>
+      ${semAcaoFlag ? '' : (cfg.acoesHtml||'')}
+    </div>`;
+}
+/* Menu ⋮ padrão de ações de um lançamento (Editar/Duplicar/Excluir) — mesmo mecanismo/estado
+   (UI.regCardMenuAberto) reaproveitado em toda a aplicação; os ids de lançamento são únicos em toda a
+   aplicação, então não há risco de colisão entre as várias listas que usam este menu. */
+function menuAcoesLancamentoHtml(id){
+  return `
+      <div class="reg-card-menu">
+        <button type="button" class="icon-btn reg-card-menu-btn" data-reg-card-menu="${id}" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.regCardMenuAberto===id?'true':'false'}">⋮</button>
+        ${UI.regCardMenuAberto===id ? `
+        <div class="reg-card-menu-lista">
+          <button type="button" data-edit="${id}">✏️ Editar</button>
+          <button type="button" data-duplicar="${id}">📄 Duplicar</button>
+          <button type="button" data-del="${id}">🗑️ Excluir</button>
+        </div>` : ''}
+      </div>`;
+}
 /* ---------- Lista mobile de lançamentos para os modais Ver Extrato/Lançamentos futuros/Ver Fatura/Ver
    Próximas Faturas (item 12 do requisito de responsividade) — mesmo padrão visual (.reg-card/.reg-lista-
    mobile) já usado na lista mobile de Registros (ver renderListaMobileRegistros), adaptado aos campos de
    cada modal via `opts`. A tabela desktop de cada modal continua existindo/funcionando sem alteração
    nenhuma, só fica oculta neste breakpoint (mesma classe reg-tabela-principal/reg-lista-mobile). Reaproveita
-   o mesmo menu de ações (⋮ Editar/Duplicar/Excluir) e o mesmo estado UI.regCardMenuAberto — os ids de
-   lançamento são únicos em toda a aplicação (cada item aqui é o próprio registro de STATE.transactions),
-   então não há risco de colisão entre os vários modais que usam esta função. */
+   o mesmo menu de ações (⋮ Editar/Duplicar/Excluir, ver menuAcoesLancamentoHtml) e o mesmo estado
+   UI.regCardMenuAberto — os ids de lançamento são únicos em toda a aplicação (cada item aqui é o próprio
+   registro de STATE.transactions por padrão), então não há risco de colisão entre as várias listas que
+   usam esta função.
+   "Padronização da visualização mobile em .reg-lista-mobile": além dos usos de lançamentos de sempre, esta
+   função também passou a ser reaproveitada por listas de OUTROS tipos de registro (ver `titulo`/`chave`/
+   `acoesHtml`/`detalhe` abaixo) — nunca uma segunda implementação paralela do mesmo cartão. */
 function renderCardsLancamentosModal(itens, opts){
   if(!itens.length) return '';
   const { valorTexto, valorClasse, secundario, tags, extra, semAcao, tituloGrupo, prefixo, selecionados } = opts;
+  const chaveDe = opts.chave || (t=>t.id);
+  const tituloDe = opts.titulo || (t=>escapeHtml(t.descricao));
+  const detalhePadrao = opts.detalhe===undefined ? true : opts.detalhe;
   // Itens 4/13 do requisito: seleção em lote também disponível no mobile — cada card ganha uma caixa
   // própria (classe chkLote<prefixo>, mesma convenção da tabela desktop, então bindSelecaoLote já liga o
   // evento de ambas sem nenhum código extra) e a lista ganha "Selecionar todos" no mesmo padrão visual da
   // aba Registros (renderListaMobileRegistros). Só existe quando o chamador passa `prefixo`+`selecionados`.
   let cabecalhoSelecao = '';
   if(prefixo && selecionados){
-    const idsVisiveis = itens.filter(t=> !(semAcao && semAcao(t))).map(t=>t.id);
+    const idsVisiveis = itens.filter(t=> !(semAcao && semAcao(t))).map(chaveDe);
     const todosMarcados = idsVisiveis.every(id=>selecionados.has(id));
     const algunsMarcados = !todosMarcados && idsVisiveis.some(id=>selecionados.has(id));
     cabecalhoSelecao = `
@@ -13587,32 +13682,16 @@ function renderCardsLancamentosModal(itens, opts){
       const g = tituloGrupo(t);
       if(g!==grupoAtual){ grupoAtual = g; corpo += `<div class="reg-grupo-data-titulo">${escapeHtml(g)}</div>`; }
     }
+    const id = chaveDe(t);
     const semAcaoItem = semAcao ? semAcao(t) : false;
-    corpo += `
-    <div class="reg-card${semAcaoItem?' reg-card-sem-acao':''}" data-reg-card-detalhe="${escapeHtml(t.id)}">
-      ${(prefixo && selecionados && !semAcaoItem) ? `<label class="reg-card-check"><input type="checkbox" class="chkLote${prefixo}" value="${escapeHtml(t.id)}" ${selecionados.has(t.id)?'checked':''} aria-label="Selecionar lançamento"></label>` : ''}
-      <div class="reg-card-principal">
-        <div class="reg-card-linha1">
-          <span class="reg-card-descricao">${escapeHtml(t.descricao)}</span>
-          <span class="reg-card-valor ${valorClasse(t)}">${valorTexto(t)}</span>
-        </div>
-        <div class="reg-card-linha2">
-          <span class="reg-card-secundario">${secundario(t)}</span>
-          ${tags ? (tags(t)||'') : ''}
-        </div>
-        ${extra ? (extra(t)||'') : ''}
-      </div>
-      ${semAcaoItem ? '' : `
-      <div class="reg-card-menu">
-        <button type="button" class="icon-btn reg-card-menu-btn" data-reg-card-menu="${t.id}" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.regCardMenuAberto===t.id?'true':'false'}">⋮</button>
-        ${UI.regCardMenuAberto===t.id ? `
-        <div class="reg-card-menu-lista">
-          <button type="button" data-edit="${t.id}">✏️ Editar</button>
-          <button type="button" data-duplicar="${t.id}">📄 Duplicar</button>
-          <button type="button" data-del="${t.id}">🗑️ Excluir</button>
-        </div>` : ''}
-      </div>`}
-    </div>`;
+    corpo += construirRegCard({
+      chave: id, detalhe: detalhePadrao,
+      titulo: tituloDe(t), valorTexto: valorTexto(t), valorClasse: valorClasse(t),
+      secundario: secundario(t), tagsHtml: tags ? (tags(t)||'') : '', extraHtml: extra ? (extra(t)||'') : '',
+      checkboxHtml: (prefixo && selecionados && !semAcaoItem) ? `<label class="reg-card-check"><input type="checkbox" class="chkLote${prefixo}" value="${escapeHtml(id)}" ${selecionados.has(id)?'checked':''} aria-label="Selecionar lançamento"></label>` : '',
+      semAcao: semAcaoItem,
+      acoesHtml: opts.acoesHtml ? opts.acoesHtml(t) : menuAcoesLancamentoHtml(id),
+    });
   });
   return `<div class="reg-lista-mobile">${cabecalhoSelecao}${corpo}</div>`;
 }
@@ -14752,7 +14831,7 @@ function renderNaoListadosModal(){
       <div class="modal-body">
         <p class="hint" style="margin-top:0;">Registros reais das contas do Extrato Consolidado neste intervalo, sem linha própria na tabela (nem projeção, nem realização de nenhum lançamento previsto), somados na linha "Lançamentos não listados". Somente consulta — para editar ou excluir um lançamento, use a aba Registros.</p>
         ${itens.length ? `
-        <div class="table-wrap" style="overflow:visible;max-height:none;"><table class="tabela-cards-mobile" style="width:100%;table-layout:fixed;">
+        <div class="table-wrap reg-tabela-principal" style="overflow:visible;max-height:none;"><table style="width:100%;table-layout:fixed;">
           <thead><tr>
             <th style="width:9%;">Data</th><th style="width:36%;">Descrição</th><th style="width:16%;">Conta</th>
             <th style="width:16%;">Categoria</th><th style="width:8%;">Tipo</th><th style="width:15%;text-align:right;">Valor</th>
@@ -14766,6 +14845,13 @@ function renderNaoListadosModal(){
             <td data-label="Valor" style="text-align:right;" class="val-cell ${t.tipo==='Despesa'?'neg':'pos'}">${fmtBRL(t.valor)}</td>
           </tr>`).join('')}</tbody>
         </table></div>
+        ${renderCardsLancamentosModal(itensPagina, {
+          valorTexto: t=>fmtBRL(t.valor), valorClasse: t=>t.tipo==='Despesa'?'neg':'pos',
+          secundario: t=>`${fmtData(t.data)} · ${escapeHtml(t.conta)}`,
+          tags: t=>`<span class="tag ${t.tipo}">${t.tipo}</span>`,
+          extra: t=> t.categoria ? `<div class="reg-card-extra">${escapeHtml(t.categoria)}</div>` : '',
+          semAcao: ()=>true, detalhe:false,
+        })}
         <div class="registros-rodape">${rodapePaginacao}</div>
         <div class="saldo-final-projetado ${classeSinalMoeda(total)}" style="margin-top:10px;"><span>Soma (${itens.length} lançamento${itens.length===1?'':'s'})</span><span class="val">${fmtBRL(total)}</span></div>
         ` : `<div class="empty-state"><div class="big">🧾</div>Nenhum lançamento encontrado neste intervalo.</div>`}
@@ -14907,7 +14993,7 @@ function renderEditarSaldoInicialFluxoCaixaModal(){
       <div class="modal-head"><h3>✏️ Saldo Inicial — Extrato Consolidado</h3><button class="close-x" id="closeEditarSaldoInicialFluxoCaixa">✕</button></div>
       <div class="modal-body">
         <p class="hint" style="margin-top:0;">O Saldo Inicial do Extrato Consolidado é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança em <b>${MESES[UI.mes-1]}/${UI.ano}</b>. Edite cada conta abaixo — o total não pode ser alterado diretamente.</p>
-        ${contas.length ? `<table style="width:100%;" data-ordenar-tabela="saldoInicialFC">
+        ${contas.length ? `<table class="reg-tabela-principal" style="width:100%;" data-ordenar-tabela="saldoInicialFC">
           <thead><tr>${thOrdenavel('saldoInicialFC','conta','Conta')}${thOrdenavel('saldoInicialFC','valor','Saldo Inicial',{style:'text-align:right;'})}</tr></thead>
           <tbody>
             ${aplicarOrdenacaoClique(valores, 'saldoInicialFC', { conta:{tipo:'texto', valor:v=>v.conta}, valor:{tipo:'moeda', valor:v=>v.valor} }).map(v=>`<tr>
@@ -14916,7 +15002,15 @@ function renderEditarSaldoInicialFluxoCaixaModal(){
             </tr>`).join('')}
             <tr style="border-top:2px solid var(--line);"><td><b>Total</b></td><td style="text-align:right;"><b id="totalSaldoInicialFC">${fmtBRL(total)}</b></td></tr>
           </tbody>
-        </table>` : `<div class="empty-state"><div class="big">🏦</div>Nenhuma conta do tipo Corrente, PJ ou Poupança cadastrada. Adicione em Configurações → Contas.</div>`}
+        </table>
+        <div class="reg-lista-mobile">${aplicarOrdenacaoClique(valores, 'saldoInicialFC', { conta:{tipo:'texto', valor:v=>v.conta}, valor:{tipo:'moeda', valor:v=>v.valor} }).map(v=>construirRegCard({
+          chave: v.conta, semAcao: true,
+          titulo: escapeHtml(v.conta),
+          valorTexto: `<input type="text" inputmode="decimal" class="inp-saldo-inicial-fc" data-conta="${escapeHtml(v.conta)}" value="${fmtMoedaInput(v.valor)}" style="width:110px;text-align:right;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-family:var(--mono);">`,
+          secundario: escapeHtml(STATE.contaTipos[v.conta]||''),
+        })).join('')}
+        <div class="saldo-final-projetado"><span>Total</span><span class="val" id="totalSaldoInicialFCMobile">${fmtBRL(total)}</span></div>
+        </div>` : `<div class="empty-state"><div class="big">🏦</div>Nenhuma conta do tipo Corrente, PJ ou Poupança cadastrada. Adicione em Configurações → Contas.</div>`}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" id="cancelEditarSaldoInicialFluxoCaixa">Cancelar</button>
@@ -14961,9 +15055,15 @@ function renderDrillIntelLancamentos(grupo, subgrupo, categoria, f){
   return `
   <div class="drill-intel-nivel drill-intel-nivel-3">
     ${txs.length===0 ? `<p class="hint">Nenhum lançamento encontrado.</p>` : `
-    <table class="drill-intel-tabela"><tbody>
+    <table class="drill-intel-tabela reg-tabela-principal"><tbody>
       ${txs.map(t=>`<tr><td>${fmtData(t.data)}</td><td>${escapeHtml(t.descricao)}${Number(t.totalParcelas)>1 ? ` <span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}</td><td style="text-align:right;">${fmtBRL(t.valor)}</td></tr>`).join('')}
-    </tbody></table>`}
+    </tbody></table>
+    ${renderCardsLancamentosModal(txs, {
+      valorTexto: t=>fmtBRL(t.valor), valorClasse: t=>t.tipo==='Receita'?'pos':'neg',
+      secundario: t=>fmtData(t.data),
+      tags: t=> Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : '',
+      semAcao: ()=>true, detalhe:false,
+    })}`}
     <button type="button" class="btn btn-ghost btn-sm" data-drill-ver-registros="${escapeHtml(grupo)}|||${escapeHtml(categoria)}" style="margin-top:8px;">🔎 Ver estes lançamentos em Registros</button>
   </div>`;
 }
@@ -15110,7 +15210,7 @@ function renderInteligencia(){
           <div class="intel-faixa-previsao-linha intel-faixa-previsao-confiabilidade"><b>Confiabilidade:</b> ${ctx.confiabilidade.nivel}</div>
         </div>
       </div>`; })() : ''}
-      <div class="table-wrap" style="max-height:none;"><table class="tabela-cards-mobile tabela-previsao-financeira">
+      <div class="table-wrap reg-tabela-principal" style="max-height:none;"><table class="tabela-previsao-financeira">
         <thead><tr>
           <th style="width:19%;">Mês</th>
           <th style="text-align:right;width:19%;">Receita Prevista</th>
@@ -15128,6 +15228,14 @@ function renderInteligencia(){
           </tr>`).join('')}
         </tbody>
       </table></div>
+      <div class="reg-lista-mobile">${ctx.projecoes.map(p=>construirRegCard({
+        chave: `${p.ano}-${p.mes}`, semAcao: true,
+        estiloExtra: p.risco==='alto' ? 'background:#fbe4e1;' : (p.risco==='medio' ? 'background:#fdf3d8;' : ''),
+        titulo: `${MESES[p.mes-1]}/${p.ano} ${p.risco==='alto'?'🔴':(p.risco==='medio'?'🟡':'')}`,
+        valorTexto: fmtBRL(p.saldoProjetado), valorClasse: classeSinalMoeda(p.saldoProjetado),
+        secundario: `Receita: ${fmtBRL(p.receitaProjetada)} · Despesa: ${fmtBRL(p.despesaProjetada)}`,
+        extraHtml: `<div class="reg-card-extra">Faixa provável: ${fmtBRL(p.faixaInferior)} a ${fmtBRL(p.faixaSuperior)} · Poupança: ${fmtPercentSmart(p.poupancaProjetada*100)}</div>`,
+      })).join('')}</div>
     </div>
     <div class="panel" style="margin-bottom:0;">
       <div class="intel-cenarios-col">
@@ -15974,9 +16082,10 @@ function renderHistoricoMetaPanel(competencia){
     </div>
     <!-- Detalhamento mês a mês (item 17 do requisito de responsividade): apresentação hierárquica e
          comparável (Meta x Gasto x Diferença x Situação) de cada um dos 12 meses do gráfico acima — antes
-         só existia o gráfico, sem o dado mês a mês; usa tabela-cards-mobile (mesmo padrão genérico já
-         usado em Cartões/Metas), então no mobile vira uma lista de cards, mantendo a tabela no desktop. -->
-    <div class="table-wrap" style="margin-top:16px;" data-ordenar-tabela="historicoMeta"><table class="tabela-cards-mobile">
+         só existia o gráfico, sem o dado mês a mês. No mobile vira uma lista de cards (.reg-lista-mobile,
+         mesmo padrão já usado em toda a aplicação — ver "Padronização da visualização mobile"), mantendo a
+         tabela no desktop. -->
+    <div class="table-wrap reg-tabela-principal" style="margin-top:16px;" data-ordenar-tabela="historicoMeta"><table>
       <thead><tr>${thOrdenavel('historicoMeta','competencia','Mês')}${thOrdenavel('historicoMeta','meta','Meta',{style:'text-align:right;'})}${thOrdenavel('historicoMeta','gasto','Gasto',{style:'text-align:right;'})}${thOrdenavel('historicoMeta','diferenca','Diferença',{style:'text-align:right;'})}${thOrdenavel('historicoMeta','situacao','Situação')}</tr></thead>
       <tbody>
       ${aplicarOrdenacaoClique([...h.historico].reverse(), 'historicoMeta', {
@@ -15996,6 +16105,20 @@ function renderHistoricoMetaPanel(competencia){
       }).join('')}
       </tbody>
     </table></div>
+    <div class="reg-lista-mobile">${aplicarOrdenacaoClique([...h.historico].reverse(), 'historicoMeta', {
+      competencia:{tipo:'texto', valor:x=>x.competencia}, meta:{tipo:'moeda', valor:x=>x.meta}, gasto:{tipo:'moeda', valor:x=>x.gasto},
+      diferenca:{tipo:'moeda', valor:x=>x.meta-x.gasto}, situacao:{tipo:'texto', valor:x=>SITUACAO_META_INFO[situacaoMeta(x.gasto,x.meta)].label},
+    }).map(x=>{
+      const diferenca = x.meta - x.gasto;
+      const info = SITUACAO_META_INFO[situacaoMeta(x.gasto, x.meta)];
+      return construirRegCard({
+        chave: x.competencia, semAcao: true,
+        titulo: escapeHtml(competenciaLabel(x.competencia)),
+        valorTexto: fmtBRL(diferenca), valorClasse: classeSinalMoeda(diferenca),
+        secundario: `Meta: ${fmtBRL(x.meta)} · Gasto: ${fmtBRL(x.gasto)}`,
+        tagsHtml: `<span class="meta-situacao-tag" style="background:${info.cor}1a;color:${info.cor};">${info.emoji} ${info.label}</span>`,
+      });
+    }).join('')}</div>
   </div>`;
 }
 
@@ -19959,16 +20082,34 @@ function bindEvents(){
   });
   document.getElementById('closeEditarSaldoInicialFluxoCaixa')?.addEventListener('click', ()=>{ UI.editarSaldoInicialFluxoCaixaModal=null; render(); });
   document.getElementById('cancelEditarSaldoInicialFluxoCaixa')?.addEventListener('click', ()=>{ UI.editarSaldoInicialFluxoCaixaModal=null; render(); });
+  // "Padronização da visualização mobile em .reg-lista-mobile": a tabela desktop e a lista de cards mobile
+  // deste modal agora coexistem no DOM (uma delas sempre oculta só por CSS, ver .reg-tabela-principal/
+  // .reg-lista-mobile) — cada conta passa a ter DOIS inputs .inp-saldo-inicial-fc com o mesmo data-conta.
+  // Diferente da seleção em lote (checkboxes, cujo estado marcado vem sempre de um Set em UI, nunca do
+  // próprio DOM), estes inputs guardam a edição ainda não salva diretamente no elemento — por isso os dois
+  // precisam ser mantidos sincronizados a cada tecla (nunca um "estado" desatualizado pronto para
+  // sobrescrever o valor editado no outro) e o total/o salvamento precisam processar cada conta só uma vez.
   document.querySelectorAll('.inp-saldo-inicial-fc').forEach(inp=>{
     inp.addEventListener('input', ()=>{
+      document.querySelectorAll(`.inp-saldo-inicial-fc[data-conta="${CSS.escape(inp.dataset.conta)}"]`).forEach(irmao=>{ if(irmao!==inp) irmao.value = inp.value; });
       let total = 0;
-      document.querySelectorAll('.inp-saldo-inicial-fc').forEach(i=> total += parseMoedaTexto(i.value));
+      const contasVistas = new Set();
+      document.querySelectorAll('.inp-saldo-inicial-fc').forEach(i=>{
+        if(contasVistas.has(i.dataset.conta)) return;
+        contasVistas.add(i.dataset.conta);
+        total += parseMoedaTexto(i.value);
+      });
       const totalEl = document.getElementById('totalSaldoInicialFC');
       if(totalEl) totalEl.textContent = fmtBRL(total);
+      const totalElMobile = document.getElementById('totalSaldoInicialFCMobile');
+      if(totalElMobile) totalElMobile.textContent = fmtBRL(total);
     });
   });
   document.getElementById('salvarSaldoInicialFluxoCaixa')?.addEventListener('click', ()=>{
+    const contasProcessadas = new Set();
     document.querySelectorAll('.inp-saldo-inicial-fc').forEach(inp=>{
+      if(contasProcessadas.has(inp.dataset.conta)) return;
+      contasProcessadas.add(inp.dataset.conta);
       aplicarSaldoAnteriorConta(inp.dataset.conta, UI.ano, UI.mes, parseMoedaTexto(inp.value));
     });
     UI.editarSaldoInicialFluxoCaixaModal=null; scheduleSave(); render();
