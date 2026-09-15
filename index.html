@@ -2372,14 +2372,6 @@ summary::marker{content:'';}
      lado a lado, preservando a quebra de linha interna da célula. */
   .tabela-cards-mobile td.val-cell{display:block;text-align:right!important;}
   .tabela-cards-mobile td.val-cell[data-label]:not([data-label=""])::before{display:block;text-align:left;margin-bottom:2px;}
-  /* Backups (item 1 do requisito de responsividade): "Restaurar" e "Excluir" ficam na MESMA linha — Restaurar
-     ocupa o espaço disponível à esquerda, Excluir (só ícone) fica alinhado à direita do card. */
-  .tabela-cards-mobile td.backup-linha-acoes{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:8px;padding-top:10px;}
-  .tabela-cards-mobile td.backup-linha-acoes .btn{flex:1 1 auto;}
-  .tabela-cards-mobile td.backup-linha-acoes .icon-btn{flex:0 0 auto;margin-left:auto;min-width:var(--touch-min);}
-  /* Checkbox de seleção de cada card de backup: mesma célula "sem rótulo" das ações, mas alinhada à
-     esquerda no topo do card em vez de dentro da linha de botões. */
-  .tabela-cards-mobile td.backup-linha-checkbox{justify-content:flex-start;border-bottom:none;padding-bottom:0;}
   /* Revisão da importação (item 20 do requisito): cada linha vira um card com os campos editáveis
      empilhados (rótulo acima do campo, não ao lado) — os mesmos <input>/<select>, sem duplicar estado. */
   .tabela-import-revisao td{display:block;padding:8px 0;}
@@ -17184,20 +17176,20 @@ function renderBackupConteudo(){
           <input type="checkbox" id="chkSelecionarTodosBackupMobile" ${nomesVisiveis.length>0 && nomesVisiveis.every(n=>sel.has(n))?'checked':''} data-indet-lote="${sel.size>0 && !nomesVisiveis.every(n=>sel.has(n))}" ${bloqueado?'disabled':''}>
           Selecionar todos nesta página (${nomesVisiveis.length})
         </label>` : ''}
-        <div class="table-wrap" data-ordenar-tabela="backups"><table class="tabela-cards-mobile">
+        <div class="table-wrap reg-tabela-principal" data-ordenar-tabela="backups"><table>
           <thead><tr>
             ${podeExcluir ? `<th style="width:1%;"><input type="checkbox" id="chkSelecionarTodosBackup" ${nomesVisiveis.length>0 && nomesVisiveis.every(n=>sel.has(n))?'checked':''} ${bloqueado?'disabled':''}></th>` : ''}
             ${thOrdenavel('backups','criadoEm','Data/Hora')}${thOrdenavel('backups','tipo','Tipo')}${thOrdenavel('backups','nome','Arquivo')}${thOrdenavel('backups','tamanho','Tamanho',{style:'text-align:right;'})}${thOrdenavel('backups','qtdTransacoes','Registros',{style:'text-align:right;'})}${thOrdenavel('backups','integridade','Integridade',{style:'text-align:center;'})}<th class="col-acoes">Ações</th></tr></thead>
           <tbody>
             ${pageList.map(b=>`<tr>
-              ${podeExcluir ? `<td data-label="" class="backup-linha-checkbox"><input type="checkbox" class="chk-selecionar-backup" data-backup-nome="${escapeHtml(b.nome)}" ${sel.has(b.nome)?'checked':''} ${bloqueado?'disabled':''}></td>` : ''}
+              ${podeExcluir ? `<td data-label=""><input type="checkbox" class="chk-selecionar-backup" data-backup-nome="${escapeHtml(b.nome)}" ${sel.has(b.nome)?'checked':''} ${bloqueado?'disabled':''}></td>` : ''}
               <td data-label="Data/Hora" style="white-space:nowrap;">${formatarDataHoraCurta(b.criadoEm)}</td>
               <td data-label="Tipo">${BACKUP_TIPO_INFO[b.tipo]?.icone||''} ${BACKUP_TIPO_INFO[b.tipo]?.label||b.tipo}</td>
               <td data-label="Arquivo" style="word-break:break-all;">${escapeHtml(b.nome)}</td>
               <td data-label="Tamanho" style="text-align:right;white-space:nowrap;">${formatarTamanhoArquivo(b.tamanho)}</td>
               <td data-label="Registros" style="text-align:right;">${b.qtdTransacoes ?? '—'}</td>
               <td data-label="Integridade" style="text-align:center;" title="${escapeHtml(b.motivoInvalido||'')}">${b.integro ? (b.semMetadados?'⚠ Sem checksum':'✓ Válido') : '✕ Inválido'}</td>
-              <td data-label="" class="backup-linha-acoes" style="white-space:nowrap;text-align:right;">
+              <td data-label="" class="col-acoes" style="white-space:nowrap;text-align:right;">
                 ${nivelAcessoPasta!=='leitura' ? `
                 <button type="button" class="btn btn-primary btn-sm" data-restaurar-backup="${escapeHtml(b.nome)}" ${(!b.integro||bloqueado)?'disabled':''} ${!b.integro?'title="Backup inválido — restauração bloqueada"':''}>Restaurar</button>
                 <button type="button" class="icon-btn" data-excluir-backup="${escapeHtml(b.nome)}" title="Excluir" ${bloqueado?'disabled':''}>🗑️</button>
@@ -17206,6 +17198,29 @@ function renderBackupConteudo(){
             </tr>`).join('')}
           </tbody>
         </table></div>
+        <div class="reg-lista-mobile">${pageList.map(b=>{
+          const integridadeTexto = b.integro ? (b.semMetadados?'⚠ Sem checksum':'✓ Válido') : '✕ Inválido';
+          return `
+          <div class="reg-card">
+            ${podeExcluir ? `<label class="reg-card-check"><input type="checkbox" class="chk-selecionar-backup" data-backup-nome="${escapeHtml(b.nome)}" ${sel.has(b.nome)?'checked':''} ${bloqueado?'disabled':''} aria-label="Selecionar backup"></label>` : ''}
+            <div class="reg-card-linha1">
+              <span class="reg-card-data">${formatarDataHoraCurta(b.criadoEm)}</span>
+              <span class="reg-card-conta">${BACKUP_TIPO_INFO[b.tipo]?.icone||''} ${BACKUP_TIPO_INFO[b.tipo]?.label||b.tipo}</span>
+              <span class="reg-card-valor">${formatarTamanhoArquivo(b.tamanho)}</span>
+            </div>
+            <div class="reg-card-linha2">
+              <span class="reg-card-descricao">${escapeHtml(b.nome)}</span>
+            </div>
+            <div class="reg-card-linha3">
+              <span class="reg-card-secundario">${b.qtdTransacoes ?? '—'} registro${b.qtdTransacoes===1?'':'s'}</span>
+              <span class="reg-card-secundario" title="${escapeHtml(b.motivoInvalido||'')}">${integridadeTexto}</span>
+              ${nivelAcessoPasta!=='leitura' ? `
+              <button type="button" class="btn btn-primary btn-sm" data-restaurar-backup="${escapeHtml(b.nome)}" ${(!b.integro||bloqueado)?'disabled':''} ${!b.integro?'title="Backup inválido — restauração bloqueada"':''}>Restaurar</button>
+              <button type="button" class="icon-btn" data-excluir-backup="${escapeHtml(b.nome)}" title="Excluir" ${bloqueado?'disabled':''}>🗑️</button>
+              ` : ''}
+            </div>
+          </div>`;
+        }).join('')}</div>
         <div class="registros-rodape">${rodapePaginacaoBackup}</div>`;
         })()}`}
         `;
