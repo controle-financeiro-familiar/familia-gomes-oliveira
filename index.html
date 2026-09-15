@@ -1199,31 +1199,27 @@ tbody tr:hover{background:var(--navy-50);}
 .registros-pagina-btn:disabled{opacity:.4;cursor:default;}
 .registros-pagina-btn.ativa{background:var(--navy-900);border-color:var(--navy-900);color:#fff;font-weight:700;}
 .registros-pagina-reticencias{padding:0 3px;color:#8a97ad;}
-@media (max-width:640px){
-  .registros-rodape{flex-direction:column;align-items:stretch;}
-  .registros-rodape-intervalo{text-align:center;}
-  .registros-paginacao{justify-content:center;}
-}
-/* Item 13 do requisito: nos 4 modais de lançamentos (Ver Extrato/Lançamentos futuros/Ver Fatura/Ver
-   Próximas Faturas), a paginação do rodapé precisa caber numa única linha no mobile — ao contrário da aba
-   Registros acima, aqui NÃO empilha em coluna; em vez disso compacta tudo (fonte/gaps/paddings menores) e,
-   se mesmo assim não couber, ganha rolagem horizontal só dela (nunca da página toda). */
+/* "Ajustes de layout — modo mobile", item 1: .registros-rodape (rodapé de paginação, reaproveitado por
+   TODA lista paginada do app — Registros, os modais de lançamentos, Backup Histórico, Conciliação etc.)
+   precisa caber numa ÚNICA linha no mobile, sempre — nunca empilhar em coluna (removido o antigo
+   flex-direction:column por breakpoint, que jogava os elementos para linhas separadas). Antes essa
+   compactação em linha única só existia, escopada, para os modais Ver Extrato/Ver Fatura (ver histórico) —
+   agora é o comportamento PADRÃO de qualquer .registros-rodape abaixo de 700px: fonte/gaps/paddings/botões
+   menores para caber tudo, e overflow-x:auto só como rede de segurança PRÓPRIA do rodapé (nunca da página
+   inteira) se a tela for extremamente estreita — a página em si nunca ganha rolagem horizontal por causa
+   disso. Nenhum elemento é ocultado: os mesmos "Exibir"/intervalo/paginação continuam todos visíveis. */
 @media(max-width:700px){
-  .modal-extrato-futuros .registros-rodape,
-  .modal-fatura-cartao .registros-rodape{
-    flex-direction:row;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+  .registros-rodape{
+    flex-direction:row;flex-wrap:nowrap;align-items:center;width:100%;min-width:0;
+    overflow-x:auto;-webkit-overflow-scrolling:touch;
     gap:8px;padding:7px 10px;font-size:11px;
   }
-  .modal-extrato-futuros .registros-rodape-exibir,
-  .modal-fatura-cartao .registros-rodape-exibir,
-  .modal-extrato-futuros .registros-rodape-intervalo,
-  .modal-fatura-cartao .registros-rodape-intervalo,
-  .modal-extrato-futuros .registros-paginacao,
-  .modal-fatura-cartao .registros-paginacao{
+  .registros-rodape-exibir,
+  .registros-rodape-intervalo,
+  .registros-paginacao{
     flex-shrink:0;white-space:nowrap;
   }
-  .modal-extrato-futuros .registros-pagina-btn,
-  .modal-fatura-cartao .registros-pagina-btn{
+  .registros-pagina-btn{
     min-width:22px;height:22px;padding:0 4px;font-size:11px;
   }
 }
@@ -2447,6 +2443,19 @@ summary::marker{content:'';}
   .tabela-import-revisao td select{width:100%!important;box-sizing:border-box;}
   .tabela-import-revisao td[data-label="Importar"]{display:flex;align-items:center;gap:8px;}
   .tabela-import-revisao td[data-label="Importar"]::before{margin-bottom:0;}
+  /* "Ajustes de layout — modo mobile", itens 2/3: .table-wrap (o container que embrulha QUALQUER tabela,
+     ver a regra ".table-wrap" no topo do CSS) tem seu próprio border+border-radius — que, ao redor de uma
+     .tabela-cards-mobile (cujas próprias <tr> já viram cards individuais, com border/radius/background
+     próprios — ver ".tabela-cards-mobile > tbody > tr" acima), cria uma moldura externa envolvendo TODOS os
+     cards, dando a impressão de uma única tabela/cartão grande em vez de vários itens independentes. Nas
+     duas tabelas citadas explicitamente (Previsão Financeira e Cartões), o wrapper vira só uma estrutura de
+     distribuição — sem fundo/borda/raio/sombra própria — para cada card manter, sozinho, a mesma
+     identidade visual dos demais cards mobile do app (:has() já é usado em outro lugar do app, ver
+     "#root:has(.grafico-expandido-overlay)"). */
+  .table-wrap:has(> .tabela-cartoes),
+  .table-wrap:has(> .tabela-previsao-financeira){
+    border:none;border-radius:0;background:transparent;box-shadow:none;overflow:visible;max-height:none;
+  }
 }
 /* Economias — modal "Aportes" no mobile (item 16 do requisito de responsividade): a hierarquia
    Categoria → Subcategoria já é uma lista, não uma tabela; só a tabela de lançamentos de cada subcategoria
