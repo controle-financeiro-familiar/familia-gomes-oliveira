@@ -1100,53 +1100,13 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
    convenção de acessibilidade do restante da tabela: nunca só uma cor de fundo/borda sem texto/ícone
    equivalente), então o texto ao lado só reforça visualmente, sem depender de cor para ser lido. */
 .status-extrato{font-size:11px;}
-/* Fluxo de Caixa no mobile (item 13 do requisito de responsividade): a mesma tabela vira uma lista
-   vertical de cards — cada <tr> um card, cada <td> uma linha "rótulo: valor" — sem tocar no cálculo da
-   projeção nem duplicar a lógica de renderTabelaMesExtrato/renderLinhaProjecao, só a apresentação. As
-   linhas especiais "Lançamentos não listados" (ver calcProjecoesMes/renderLinhaNaoListados) continuam na
-   posição calculada dinamicamente entre os lançamentos listados, com o mesmo cartão/borda desta lista (ver
-   regra própria logo abaixo). A linha "Saldo do Dia"/"Saldo Atual (Hoje)"
-   (aplicarLinhasSaldoDiario/.linha-saldo-atual) não é mais usada nesta tabela — as regras abaixo continuam
-   valendo para ela só por compatibilidade, caso volte a ser usada em algum outro lugar. */
-@media(max-width:700px){
-  .tabela-fluxo{min-width:0;width:100%;display:block;}
-  .tabela-fluxo thead{display:none;}
-  .tabela-fluxo tbody{display:block;}
-  .tabela-fluxo tr{
-    display:block;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-md);
-    padding:8px 12px;margin-bottom:8px;
-  }
-  .tabela-fluxo tr.linha-saldo-hoje{border-color:var(--gold);border-width:2px;}
-  .tabela-fluxo td{
-    display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;font-size:13px;
-    border-bottom:1px solid var(--navy-50);
-  }
-  .tabela-fluxo td:last-child{border-bottom:none;}
-  .tabela-fluxo td[data-label]:not([data-label=""])::before{
-    content:attr(data-label);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;
-    color:#8393ac;flex-shrink:0;
-  }
-  .tabela-fluxo td.tabela-fluxo-acoes{justify-content:flex-end;gap:14px;}
-  .tabela-fluxo td.tabela-fluxo-acoes .icon-btn{min-width:var(--touch-min);font-size:16px;}
-  .tabela-fluxo .linha-saldo-atual-label{display:block;padding:5px 0;font-weight:700;}
-  /* "Novos ajustes de interface — modo mobile", item 10: corrige uma regressão introduzida na rodada
-     anterior — display:block (para "alinhar à direita" o texto) na verdade colava o rótulo "Descrição"
-     (::before) ao conteúdo "Lançamentos não listados", porque removia o justify-content:space-between
-     padrão do .tabela-fluxo td (ver regra genérica acima). Sem NENHUMA regra própria aqui, o td volta a
-     usar esse mesmo padrão — "Descrição" à esquerda, "Lançamentos não listados" à direita, cada um numa
-     extremidade da linha, exatamente como qualquer outra linha do card — que é o resultado esperado tanto
-     do requisito original (à direita) quanto deste (nunca colado ao rótulo). Nada no texto/dado muda. */
-  /* Item 8 do requisito: a primeira linha do card (coluna "Dia") fica inteira em negrito — rótulo e valor —
-     não só o valor da data — e com um background de destaque, sangrando até as bordas do card (a mesma
-     margin negativa do padding do card, ver .tabela-fluxo tr acima) para ler como um "cabeçalho" da linha,
-     sem alterar a hierarquia visual do restante do card. */
-  .tabela-fluxo td:first-child{
-    font-weight:700;background:var(--navy-50);margin:-8px -12px 5px;padding:8px 12px;
-    border-radius:var(--radius-md) var(--radius-md) 0 0;border-bottom:1px solid var(--line);
-  }
-  .tabela-fluxo td:first-child::before{font-weight:700;}
-  .tabela-fluxo tr.linha-saldo-hoje td:first-child{background:var(--gold-light,#fbf0d9);}
-}
+/* "Padronização dos cards de lançamentos no modo mobile": a tabela mensal do Extrato Consolidado
+   (tabela-fluxo) passa a ficar oculta no mobile (classe .reg-tabela-principal no wrapper, ver
+   renderTabelaMesExtrato) e dá lugar a um .reg-lista-mobile próprio — mesma estrutura .reg-card de 3 linhas
+   do resto do app (ver renderCardFluxoProjecao/renderCardFluxoSaldoAtual/renderCardFluxoNaoListados),
+   preservando toda a lógica cronológica/saldos/agrupamento (só a apresentação muda). A antiga conversão
+   bespoke de <tr>/<td> em cards (specific a esta tabela) foi removida — não é mais usada. */
+.reg-card-saldo-hoje{border-color:var(--gold);border-width:2px;background:var(--gold-light,#fbf0d9);}
 thead th{
   text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.3px;text-transform:uppercase;
   color:#fff;background:var(--navy-800);padding:9px 10px;position:sticky;top:0;
@@ -14820,6 +14780,82 @@ function renderLinhaNaoListados(l){
       </td>
     </tr>`;
 }
+/* "Padronização dos cards de lançamentos no modo mobile": versão .reg-card (mesma estrutura de 3 linhas do
+   resto do app) das 3 variantes de linha da tabela mensal do Extrato Consolidado — renderTabelaMesExtrato
+   chama uma destas para CADA linha ao montar o .reg-lista-mobile que substitui a tabela no mobile (a
+   tabela em si, com renderLinha*, continua existindo e é a única visível no desktop — ver
+   .reg-tabela-principal). Nenhuma delas tem checkbox (esta tabela não tem seleção em lote); a coluna 1 da
+   grade (mesma do checkbox nos outros .reg-card) fica reservada só para as ações (.reg-card-menu), quando a
+   linha tem alguma — os 3 ícones já existentes (🔓/✏️/🗑️) continuam soltos, sem virar um menu ⋮, para não
+   mudar nenhum data-attribute/handler já ligado em bindEvents. */
+function renderCardFluxoProjecao(l){
+  const tagTipo = l.tipo==='Receita' ? 'Receita' : 'Despesa';
+  const statusComValorReal = ['conciliado','antecipado','postecipado','contracheque-importado'].includes(l.statusConciliacao);
+  const tituloValorReal = l.statusConciliacao==='contracheque-importado'
+    ? `Valor Líquido do contracheque importado (previsto: ${fmtBRL(l.valorPrevisto)})`
+    : `Valor real do Extrato (previsto: ${fmtBRL(l.valorPrevisto)})`;
+  const temVinculo = ['conciliado','antecipado','postecipado'].includes(l.statusConciliacao);
+  const valorHtml = l.cartao
+    ? (l.qtdVinculos>0
+        ? `<span title="Valor efetivamente pago no Extrato (fatura projetada: ${fmtBRL(l.valorPrevisto)})">${fmtBRL(l.valorCalculado)}</span>`
+        : `<span title="Calculado automaticamente pelo total atual da fatura deste cartão no mês">${fmtBRL(l.valorCalculado)}</span>`)
+    : statusComValorReal ? `<span title="${escapeHtml(tituloValorReal)}">${fmtBRL(l.valorCalculado)}</span>`
+    : fmtBRL(l.valorCalculado);
+  return `
+    <div class="reg-card" data-proj-id="${l.id}">
+      <div class="reg-card-linha1">
+        <span class="reg-card-data">${pad2(l.dia)}</span>
+        <span class="reg-card-conta">${contaOuCartaoDaLinha(l)}</span>
+        <span class="reg-card-valor ${l.tipo==='Despesa'?'neg':'pos'}">${valorHtml}</span>
+      </div>
+      <div class="reg-card-linha2">
+        <span class="reg-card-descricao">${escapeHtml(l.descricao)}${seloConciliacaoProjecao(l)}</span>
+      </div>
+      <div class="reg-card-menu">
+        ${temVinculo ? `<button class="icon-btn" data-proj-desvincular="${l.id}" data-proj-desvincular-mes="${l.competencia}" title="Desfazer a conciliação com o Extrato (remove ${l.qtdVinculos>1?`os ${l.qtdVinculos} vínculos`:'o vínculo'} desta competência — volta a ser projeção)">🔓</button>` : ''}
+        <button class="icon-btn" data-proj-edit="${l.id}" data-proj-mes="${l.competencia}" title="Editar dia, descrição, tipo, valor, classificação ou cartão vinculado">✏️</button>
+        <button class="icon-btn" data-proj-del="${l.id}" data-proj-del-mes="${l.competencia}" title="Remover lançamento">🗑️</button>
+      </div>
+      <div class="reg-card-linha3">
+        <span class="reg-card-secundario">${badgeStatusExtratoConsolidado(l)}</span>
+        <span class="tag ${tagTipo}">${tagTipo}</span>
+      </div>
+      <div class="reg-card-extra">Saldo: <b class="val-cell saldo-destaque">${fmtBRL(l.saldo)}</b></div>
+    </div>`;
+}
+function renderCardFluxoSaldoAtual(l){
+  return `
+    <div class="reg-card reg-card-sem-acao${l.ehHoje ? ' reg-card-saldo-hoje' : ''}" data-saldo-dia="${l.dia}">
+      <div class="reg-card-linha1">
+        <span class="reg-card-data">${pad2(l.dia)}</span>
+        <span class="reg-card-conta"><b>${l.ehHoje ? '📍 Saldo Atual (Hoje)' : '📅 Saldo do Dia'}</b></span>
+        <span class="reg-card-valor saldo-destaque">${fmtBRL(l.saldo)}</span>
+      </div>
+    </div>`;
+}
+function renderCardFluxoNaoListados(l){
+  const diaIniExibicao = Math.min(l.diaIni, l.diaFim), diaFimExibicao = Math.max(l.diaIni, l.diaFim);
+  const intervaloCompacto = diaIniExibicao===diaFimExibicao ? pad2(diaIniExibicao) : `${pad2(diaIniExibicao)}–${pad2(diaFimExibicao)}`;
+  const intervalo = diaIniExibicao===diaFimExibicao ? `dia ${pad2(diaIniExibicao)}` : `dias ${pad2(diaIniExibicao)} a ${pad2(diaFimExibicao)}`;
+  const titulo = `Soma de ${l.qtd} lançamento${l.qtd===1?'':'s'} ${l.qtd===1?'real':'reais'} das contas do Extrato Consolidado (${intervalo}) sem linha própria nesta tabela`;
+  return `
+    <div class="reg-card" title="${escapeHtml(titulo)}" data-nao-listados-dia-ini="${diaIniExibicao}" data-nao-listados-dia-fim="${diaFimExibicao}" data-nao-listados-ano="${l.ano}" data-nao-listados-mes="${l.mes}">
+      <div class="reg-card-linha1">
+        <span class="reg-card-data">${intervaloCompacto}</span>
+        <span class="reg-card-valor ${l.valor<0?'neg':(l.valor>0?'pos':'')}">${fmtBRL(l.valor)}</span>
+      </div>
+      <div class="reg-card-linha2">
+        <span class="reg-card-descricao">Lançamentos não listados</span>
+      </div>
+      <div class="reg-card-menu">
+        <button type="button" class="icon-btn" data-nao-listados-abrir title="Ver os lançamentos que compõem este total">🔍</button>
+      </div>
+      <div class="reg-card-linha3">
+        <span class="reg-card-secundario">${badgeStatusExtratoConsolidado(l)}</span>
+      </div>
+      <div class="reg-card-extra">Saldo: <b class="val-cell saldo-destaque">${fmtBRL(l.saldo)}</b></div>
+    </div>`;
+}
 /* Modal de auditoria/rastreabilidade de UMA linha "Lançamentos não listados" (requisito "Ajustes no
    Extrato Consolidado" item 7) — mostra os registros individuais que compõem a soma exibida naquela linha,
    reaproveitando exatamente a mesma função que já calculou o valor (registrosNaoListadosDoIntervalo, que
@@ -14864,20 +14900,28 @@ function renderNaoListadosModal(){
       <div class="modal-body">
         <p class="hint" style="margin-top:0;">Registros reais das contas do Extrato Consolidado neste intervalo, sem linha própria na tabela (nem projeção, nem realização de nenhum lançamento previsto), somados na linha "Lançamentos não listados". Somente consulta — para editar ou excluir um lançamento, use a aba Registros.</p>
         ${itens.length ? `
-        <div class="table-wrap" style="overflow:visible;max-height:none;"><table class="tabela-cards-mobile" style="width:100%;table-layout:fixed;">
+        <div class="table-wrap reg-tabela-principal" style="overflow:visible;max-height:none;"><table style="width:100%;table-layout:fixed;">
           <thead><tr>
             <th style="width:9%;">Data</th><th style="width:36%;">Descrição</th><th style="width:16%;">Conta</th>
             <th style="width:16%;">Categoria</th><th style="width:8%;">Tipo</th><th style="width:15%;text-align:right;">Valor</th>
           </tr></thead>
           <tbody>${itensPagina.map(t=>`<tr>
-            <td data-label="Data">${fmtData(t.data)}</td>
-            <td data-label="Descrição">${escapeHtml(t.descricao)}</td>
-            <td data-label="Conta">${escapeHtml(t.conta)}</td>
-            <td data-label="Categoria">${escapeHtml(t.categoria||'—')}</td>
-            <td data-label="Tipo"><span class="tag ${t.tipo}" style="font-size:9px;">${t.tipo}</span></td>
-            <td data-label="Valor" style="text-align:right;" class="val-cell ${t.tipo==='Despesa'?'neg':'pos'}">${fmtBRL(t.valor)}</td>
+            <td>${fmtData(t.data)}</td>
+            <td>${escapeHtml(t.descricao)}</td>
+            <td>${escapeHtml(t.conta)}</td>
+            <td>${escapeHtml(t.categoria||'—')}</td>
+            <td><span class="tag ${t.tipo}" style="font-size:9px;">${t.tipo}</span></td>
+            <td style="text-align:right;" class="val-cell ${t.tipo==='Despesa'?'neg':'pos'}">${fmtBRL(t.valor)}</td>
           </tr>`).join('')}</tbody>
         </table></div>
+        ${renderCardsLancamentosModal(itensPagina, {
+          data: t=>fmtData(t.data),
+          contaLinha1: t=>escapeHtml(t.conta),
+          valorTexto: t=>fmtBRL(t.valor), valorClasse: t=> t.tipo==='Despesa'?'neg':'pos',
+          secundario: t=>escapeHtml(t.categoria||'—'),
+          tags: t=>`<span class="tag ${t.tipo}">${t.tipo}</span>`,
+          semAcao: ()=>true,
+        })}
         <div class="registros-rodape">${rodapePaginacao}</div>
         <div class="saldo-final-projetado ${classeSinalMoeda(total)}" style="margin-top:10px;"><span>Soma (${itens.length} lançamento${itens.length===1?'':'s'})</span><span class="val">${fmtBRL(total)}</span></div>
         ` : `<div class="empty-state"><div class="big">🧾</div>Nenhum lançamento encontrado neste intervalo.</div>`}
@@ -14924,6 +14968,14 @@ function renderTabelaMesExtrato(m){
     : l.especial==='nao-listados' ? renderLinhaNaoListados(l)
     : renderLinhaProjecao(l)
   ).join('') : `<tr><td colspan="8" class="hint" style="text-align:center;padding:14px;">Nenhum lançamento previsto ainda. Use "+ Novo lançamento previsto" para começar.</td></tr>`;
+  // "Padronização dos cards de lançamentos no modo mobile": mesmas m.linhas, agora também em .reg-card
+  // (ver renderCardFluxo*), para o .reg-lista-mobile abaixo — nunca um cálculo/ordem paralela, é
+  // exatamente a mesma lista já calculada para a tabela acima.
+  const cardsHtml = m.linhas.length ? m.linhas.map(l=>
+    l.especial==='saldo-dia' ? renderCardFluxoSaldoAtual(l)
+    : l.especial==='nao-listados' ? renderCardFluxoNaoListados(l)
+    : renderCardFluxoProjecao(l)
+  ).join('') : `<div class="empty-state"><div class="big">📦</div>Nenhum lançamento previsto ainda. Use "+ Novo lançamento previsto" para começar.</div>`;
   // DOCUMENTAÇÃO — ver o comentário completo junto à classe CSS ".tabela-fluxo" (procure por
   // "DOCUMENTAÇÃO — Largura das colunas" no <style> desta página). Proporção FIXA (requisito explícito):
   // sempre a mesma em toda tabela/competência, nunca recalculada a partir do maior valor/saldo exibido
@@ -14937,7 +14989,7 @@ function renderTabelaMesExtrato(m){
       <span class="fluxo-mes-titulo">📅 ${MESES[m.mes-1]}/${m.ano}</span>
       <span class="hint" style="margin:0;">Saldo inicial ${fmtBRL(m.saldoInicial)}</span>
     </div>
-    <div class="table-wrap tabela-fluxo-wrap" style="overflow-x:auto;"><table class="tabela-fluxo" style="table-layout:fixed;width:100%;">
+    <div class="table-wrap tabela-fluxo-wrap reg-tabela-principal" style="overflow-x:auto;"><table class="tabela-fluxo" style="table-layout:fixed;width:100%;">
       <thead><tr>
         <th style="text-align:center;width:${pct.dia}%;">Dia</th>
         <th style="text-align:left;width:${pct.descricao}%;">Descrição</th>
@@ -14950,6 +15002,7 @@ function renderTabelaMesExtrato(m){
       </tr></thead>
       <tbody>${linhasHtml}</tbody>
     </table></div>
+    <div class="reg-lista-mobile">${cardsHtml}</div>
     <div class="saldo-final-projetado ${classeSinalMoeda(m.saldoFinal)}"><span>Saldo final</span><span class="val">${fmtBRL(m.saldoFinal)}</span></div>
   </div>`;
 }
@@ -20421,11 +20474,12 @@ function bindEvents(){
     delete item.vinculosExtrato[competencia];
     scheduleSave(); render();
   }));
-  /* ---- Extrato Consolidado: o botão de ação 🔍 (nunca a linha inteira — "Ajustes no Extrato Consolidado
-     #3" item 5) abre o modal de auditoria de uma linha "Lançamentos não listados". Os dados do intervalo
-     ficam no dataset da própria <tr> (ver renderLinhaNaoListados); o botão só lê via closest('tr'). ---- */
+  /* ---- Extrato Consolidado: o botão de ação 🔍 (nunca a linha/card inteiro — "Ajustes no Extrato
+     Consolidado #3" item 5) abre o modal de auditoria de uma linha "Lançamentos não listados". Os dados do
+     intervalo ficam no dataset do próprio <tr> (desktop, ver renderLinhaNaoListados) ou .reg-card (mobile,
+     ver renderCardFluxoNaoListados) — o botão só lê via closest('tr, .reg-card'), qualquer um dos dois. ---- */
   document.querySelectorAll('[data-nao-listados-abrir]').forEach(btn=> btn.addEventListener('click', ()=>{
-    const tr = btn.closest('tr');
+    const tr = btn.closest('tr, .reg-card');
     UI.naoListadosModal = {
       ano: Number(tr.dataset.naoListadosAno), mes: Number(tr.dataset.naoListadosMes),
       diaIni: Number(tr.dataset.naoListadosDiaIni), diaFim: Number(tr.dataset.naoListadosDiaFim),
