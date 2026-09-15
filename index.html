@@ -1312,9 +1312,22 @@ tbody tr:hover{background:var(--navy-50);}
 .reg-card-secundario{font-size:12px;color:#6a7a97;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .reg-card-menu{position:relative;flex-shrink:0;}
 .reg-card-menu-btn{min-width:var(--touch-min);font-size:18px;}
+/* "Corrigir posicionamento do menu de ações do .reg-card — modo mobile": o botão ⋮ agora pode estar tanto
+   à direita do card (modais Ver Extrato/Futuros/Fatura/Próximas Faturas, e o .reg-card "puro" de qualquer
+   outro lugar da aplicação) quanto à esquerda (aba Registros, ver .reg-card-registros — linha 3), então um
+   right:0/top:100% fixo (assumindo sempre "botão no canto direito") não serve mais para os dois casos: com
+   o botão à esquerda, o menu abria estourando para fora da tela pela esquerda. A lista passa a ser
+   position:fixed (nunca fica presa pelo overflow:hidden de nenhum ancestral, ver requisito) com left/top
+   calculados em JS a partir da posição REAL do botão na tela e do espaço disponível na viewport — ver
+   posicionarMenuRegCard(), chamada ao final de bindEvents() (então roda de novo a cada render() enquanto o
+   menu estiver aberto) e no handler de resize. left:0/top:0 aqui são só um valor inicial neutro — sempre
+   sobrescrito por JS antes de qualquer pintura da tela, nunca visível. z-index:230 fica acima da bottom-nav/
+   FABs (máx. 223) para o menu nunca ficar escondido atrás deles perto do fim da lista, mas abaixo de
+   qualquer .overlay de modal (500). */
 .reg-card-menu-lista{
-  position:absolute;right:0;top:100%;z-index:30;background:#fff;border:1px solid var(--line);
-  border-radius:var(--radius-sm);box-shadow:0 10px 24px rgba(11,42,94,.18);min-width:160px;overflow:hidden;
+  position:fixed;left:0;top:0;z-index:230;background:#fff;border:1px solid var(--line);
+  border-radius:var(--radius-sm);box-shadow:0 10px 24px rgba(11,42,94,.18);min-width:160px;
+  max-width:calc(100vw - 16px);overflow:hidden;
 }
 .reg-card-menu-lista button{
   display:block;width:100%;text-align:left;padding:10px 16px;
@@ -11545,7 +11558,7 @@ function ajustarAgrupamentoFiltros(){
 let ajustarNavResponsivaTimer=null;
 window.addEventListener('resize', ()=>{
   clearTimeout(ajustarNavResponsivaTimer);
-  ajustarNavResponsivaTimer = setTimeout(()=>{ ajustarNavResponsiva(); ajustarAgrupamentoFiltros(); ajustarFonteCartoesResumo(); ajustarFonteContaFinanceiraSaldo(); ajustarAlturaContaFinanceiraGrid(); ajustarAbasMesesExtrato(); }, 120);
+  ajustarNavResponsivaTimer = setTimeout(()=>{ ajustarNavResponsiva(); ajustarAgrupamentoFiltros(); ajustarFonteCartoesResumo(); ajustarFonteContaFinanceiraSaldo(); ajustarAlturaContaFinanceiraGrid(); ajustarAbasMesesExtrato(); posicionarMenuRegCard(); }, 120);
 });
 /* Tela inicial: exibida sempre que a sessão está zerada (nenhum arquivo .cfg/.log conectado ainda) — ao
    abrir a aplicação, ou depois de desconectar/fechar a sessão. Modelo semelhante a softwares tradicionais
@@ -19173,6 +19186,37 @@ function buildParsedFromMap(){
   });
 }
 
+/* "Corrigir posicionamento do menu de ações do .reg-card — modo mobile": posiciona a lista de ações
+   (.reg-card-menu-lista, ⋮ Editar/Duplicar/Excluir) SEMPRE dentro dos limites visíveis da viewport,
+   calculado a partir da posição REAL do botão que a abriu (nunca um left/right fixo — o botão pode estar à
+   esquerda do card, aba Registros, ou à direita, nos demais .reg-card da aplicação). Chamada ao final de
+   bindEvents() (então roda de novo a cada render() enquanto UI.regCardMenuAberto estiver preenchido) e no
+   handler de resize (para reposicionar se a tela girar/redimensionar com o menu já aberto); no-op quando
+   não há menu aberto (querySelector retorna null). Preferência de abertura (na ordem do requisito):
+   1) alinhar a borda esquerda do menu com a borda esquerda do botão (o menu abre "para a direita" dele);
+   2) se isso ultrapassar a borda direita da viewport, desloca para a esquerda o suficiente para caber,
+      sem nunca deixar a borda esquerda do menu passar da margem de segurança do lado esquerdo;
+   3) verticalmente, prefere abrir abaixo do botão; se não houver espaço embaixo, abre acima dele. */
+function posicionarMenuRegCard(){
+  const btn = document.querySelector('.reg-card-menu-btn[aria-expanded="true"]');
+  const lista = document.querySelector('.reg-card-menu-lista');
+  if(!btn || !lista) return;
+  const margem = 8;
+  const rBtn = btn.getBoundingClientRect();
+  const larguraLista = lista.offsetWidth;
+  const alturaLista = lista.offsetHeight;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let left = rBtn.left;
+  if(left + larguraLista > vw - margem) left = vw - margem - larguraLista;
+  if(left < margem) left = margem;
+  let top = rBtn.bottom + 4;
+  if(top + alturaLista > vh - margem){
+    const acima = rBtn.top - alturaLista - 4;
+    top = acima >= margem ? acima : Math.max(margem, vh - margem - alturaLista);
+  }
+  lista.style.left = `${left}px`;
+  lista.style.top = `${top}px`;
+}
 /* ===================== EVENTOS ===================== */
 function bindEvents(){
   // Ordenação por clique no cabeçalho (item 4/8 do requisito): um único handler delegado, genérico para
@@ -20269,7 +20313,14 @@ function bindEvents(){
   }));
   if(UI.regCardMenuAberto){
     document.addEventListener('click', ()=>{ UI.regCardMenuAberto = null; render(); }, { once:true });
+    // "Corrigir posicionamento do menu de ações": rolar a página com o menu aberto o fecha (em vez de deixá-lo
+    // "flutuando" desconectado do botão que o abriu, já que a lista agora é position:fixed — ver
+    // posicionarMenuRegCard) — mesmo padrão de "fecha ao interagir fora dele" do clique acima.
+    window.addEventListener('scroll', ()=>{ UI.regCardMenuAberto = null; render(); }, { once:true, capture:true });
   }
+  // Reposiciona a lista de ações (.reg-card-menu-lista) com base na posição real do botão ⋮ que a abriu —
+  // precisa rodar DEPOIS do render() acima ter colocado a lista no DOM (senão não há o que medir/posicionar).
+  posicionarMenuRegCard();
   // Item 13 do requisito: tocar em qualquer parte do card (fora da caixa de seleção e do menu ⋮ — inclusive
   // os itens Editar/Duplicar/Excluir dentro dele, que não chamam stopPropagation) abre o modal de detalhe.
   document.querySelectorAll('.reg-card[data-reg-card-detalhe]').forEach(card=> card.addEventListener('click', e=>{
