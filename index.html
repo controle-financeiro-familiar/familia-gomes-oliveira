@@ -1357,44 +1357,59 @@ tbody tr:hover{background:var(--navy-50);}
    reaproveitam a MESMA base .reg-card/.reg-lista-mobile mas NÃO recebem esta classe, e o desktop nem entra
    em cogitação (.reg-lista-mobile só existe dentro de @media(max-width:700px) acima).
 
-   O .reg-card em si vira uma COLUNA flex (display:flex;flex-direction:column), com 3 linhas internas —
-   cada uma sua própria linha flex:
-   - .reg-card-linha1 (topo): checkbox | data | conta/cartão | valor. Valor empurrado para a direita
-     (margin-left:auto) e nunca espremido (flex-shrink:0) — sempre visível por inteiro. Conta ocupa o
-     espaço que sobra entre data e valor (flex:1;min-width:0), truncando com reticências só ela mesma,
-     nunca o valor.
-   - .reg-card-linha2: só a descrição, display:block (ocupa 100% da largura do card) — quebra livremente em
-     quantas linhas forem necessárias (white-space:normal + overflow-wrap:break-word como rede de segurança
-     para textos sem espaços; NUNCA ellipsis, NUNCA nowrap — regra herdada de "Ajuste do
-     .reg-card-descricao — quebra de linha", agora a única responsabilidade desta linha).
-   - .reg-card-linha3 (rodapé): menu ⋮ | grupo | tag de tipo (Receita/Despesa) | tags extras (parcela/
+   O .reg-card vira uma GRADE CSS (display:grid) de 2 colunas — [ícone/controle] [conteúdo] — e 3 linhas:
+   - Coluna 1 (auto, do tamanho natural do maior item nela): linha 1 tem o checkbox, linha 3 tem o botão de
+     ações ⋮ (mesma coluna das duas — igual a como um ícone de identidade fica alinhado em apps bancários) —
+     a linha 2 (só a descrição) fica vazia nessa coluna. Como CSS Grid dá à coluna 1 uma ÚNICA largura em
+     TODA a grade (nunca uma por linha), a linha 2 (.reg-card-linha2) e o conteúdo textual da linha 3
+     (.reg-card-linha3, que começa com o grupo) ficam ambas na coluna 2 — nunca na 1 —, então seus
+     conteúdos começam automaticamente no MESMO eixo vertical que a Data (também coluna 2, linha 1): esse é
+     exatamente o "Ajuste de alinhamento do .reg-card-descricao" pedido, sem nenhuma margem/padding fixo
+     escolhido à mão — a largura da coluna 1 é medida pelo próprio navegador a partir do maior dos dois
+     controles (checkbox/botão ⋮), então o alinhamento nunca se desalinha, seja qual for o tamanho de
+     qualquer um dos elementos do card.
+   - .reg-card-linha1 (linha 1, coluna 2): data | conta/cartão | valor, dispostos em flex row dentro dessa
+     célula da grade. Valor empurrado para a direita (margin-left:auto) e nunca espremido (flex-shrink:0) —
+     sempre visível por inteiro. Conta ocupa o espaço que sobra entre data e valor (flex:1;min-width:0),
+     truncando com reticências só ela mesma, nunca o valor.
+   - .reg-card-linha2 (linha 2, coluna 2): só a descrição, display:block (ocupa 100% da largura da coluna 2,
+     do eixo da Data/Grupo até a margem direita do card) — quebra livremente em quantas linhas forem
+     necessárias (white-space:normal + overflow-wrap:break-word como rede de segurança para textos sem
+     espaços; NUNCA ellipsis, NUNCA nowrap — regra herdada de "Ajuste do .reg-card-descricao — quebra de
+     linha", agora a única responsabilidade desta linha).
+   - .reg-card-menu (linha 3, coluna 1): o botão ⋮ + a lista de ações que ele abre — mesma coluna do
+     checkbox, para o grupo (linha 3, coluna 2) nascer alinhado com a Data/Descrição, como pedido.
+   - .reg-card-linha3 (linha 3, coluna 2): grupo | tag de tipo (Receita/Despesa) | tags extras (parcela/
      responsável/interna — antes numa 4ª linha própria, .reg-descricao-tags, agora dobradas aqui para
      respeitar a estrutura de exatamente 3 linhas pedida); flex-wrap:wrap, então nunca estoura a largura do
      card mesmo com várias tags ao mesmo tempo.
+   .reg-card-check/.reg-card-menu ganham align-self:center (a grade em si usa align-items:start, para as
+   linhas de texto nunca esticarem verticalmente) só para continuar centralizados em relação à altura da
+   própria linha (1 ou 3), como antes.
 
    Tipografia: TODO elemento do card usa 11px, com a ÚNICA exceção de .reg-card-descricao (12px) — a
    hierarquia visual vem de peso de fonte/posição/organização, nunca de tamanhos individuais maiores. */
 .reg-card-registros{
-  display:flex;flex-direction:column;align-items:stretch;
-  padding:8px 10px;margin-bottom:6px;border-radius:var(--radius-sm);gap:4px;
+  display:grid;grid-template-columns:auto 1fr;align-items:start;
+  column-gap:6px;row-gap:4px;padding:8px 10px;margin-bottom:6px;border-radius:var(--radius-sm);
 }
-.reg-card-registros .reg-card-linha1{display:flex;align-items:center;gap:6px;}
-.reg-card-registros .reg-card-check{min-width:0;margin:0;flex-shrink:0;font-size:11px;}
+.reg-card-registros .reg-card-check{grid-column:1;grid-row:1;align-self:center;min-width:0;margin:0;font-size:11px;}
 .reg-card-registros .reg-card-check input{width:15px;height:15px;}
+.reg-card-registros .reg-card-linha1{grid-column:2;grid-row:1;align-self:center;display:flex;align-items:center;gap:6px;min-width:0;}
 .reg-card-registros .reg-card-data{font-size:11px;font-weight:700;color:var(--ink);flex-shrink:0;white-space:nowrap;}
 .reg-card-registros .reg-card-conta{
   font-size:11px;font-weight:400;color:#5b6b85;flex:1;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .reg-card-registros .reg-card-valor{font-size:11px;font-weight:700;flex-shrink:0;margin-left:auto;white-space:nowrap;}
-.reg-card-registros .reg-card-linha2{display:block;}
+.reg-card-registros .reg-card-linha2{grid-column:2;grid-row:2;display:block;min-width:0;}
 .reg-card-registros .reg-card-descricao{
   display:block;font-size:12px;font-weight:600;color:var(--ink);
   white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word;word-break:normal;
 }
-.reg-card-registros .reg-card-linha3{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-.reg-card-registros .reg-card-menu{flex-shrink:0;font-size:11px;}
+.reg-card-registros .reg-card-menu{grid-column:1;grid-row:3;align-self:center;flex-shrink:0;font-size:11px;}
 .reg-card-registros .reg-card-menu-btn{min-width:22px;min-height:22px;font-size:13px;padding:1px 3px;}
+.reg-card-registros .reg-card-linha3{grid-column:2;grid-row:3;align-self:center;display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0;}
 .reg-card-registros .reg-card-secundario{
   font-size:11px;font-weight:400;color:#8393ac;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
@@ -13561,8 +13576,8 @@ function renderListaMobileRegistros(pageList){
       <div class="reg-grupo-data-titulo">${escapeHtml(g.rotulo)}</div>
       ${g.itens.map(t=>`
       <div class="reg-card reg-card-registros" data-reg-card-detalhe="${escapeHtml(t.id)}">
+        <label class="reg-card-check"><input type="checkbox" class="chkLoteReg" value="${escapeHtml(t.id)}" ${UI.regSelecionados.has(t.id)?'checked':''} aria-label="Selecionar lançamento"></label>
         <div class="reg-card-linha1">
-          <label class="reg-card-check"><input type="checkbox" class="chkLoteReg" value="${escapeHtml(t.id)}" ${UI.regSelecionados.has(t.id)?'checked':''} aria-label="Selecionar lançamento"></label>
           <span class="reg-card-data">${fmtData(t.data)}</span>
           <span class="reg-card-conta">${escapeHtml(t.conta)}</span>
           <span class="reg-card-valor ${t.tipo==='Despesa'?'neg':'pos'}">${t.tipo==='Despesa'?'-':''}${fmtBRL(t.valor)}</span>
@@ -13570,16 +13585,16 @@ function renderListaMobileRegistros(pageList){
         <div class="reg-card-linha2">
           <span class="reg-card-descricao">${escapeHtml(t.descricao)}</span>
         </div>
+        <div class="reg-card-menu">
+          <button type="button" class="icon-btn reg-card-menu-btn" data-reg-card-menu="${t.id}" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.regCardMenuAberto===t.id?'true':'false'}">⋮</button>
+          ${UI.regCardMenuAberto===t.id ? `
+          <div class="reg-card-menu-lista">
+            <button type="button" data-edit="${t.id}">✏️ Editar</button>
+            <button type="button" data-duplicar="${t.id}">📄 Duplicar</button>
+            <button type="button" data-del="${t.id}">🗑️ Excluir</button>
+          </div>` : ''}
+        </div>
         <div class="reg-card-linha3">
-          <div class="reg-card-menu">
-            <button type="button" class="icon-btn reg-card-menu-btn" data-reg-card-menu="${t.id}" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.regCardMenuAberto===t.id?'true':'false'}">⋮</button>
-            ${UI.regCardMenuAberto===t.id ? `
-            <div class="reg-card-menu-lista">
-              <button type="button" data-edit="${t.id}">✏️ Editar</button>
-              <button type="button" data-duplicar="${t.id}">📄 Duplicar</button>
-              <button type="button" data-del="${t.id}">🗑️ Excluir</button>
-            </div>` : ''}
-          </div>
           <span class="reg-card-secundario">${t.grupo ? `${iconeGrupo(t.grupo)} ${escapeHtml(t.grupo)}` : 'Sem Grupo'}</span>
           <span class="tag ${t.tipo}">${t.tipo}</span>
           ${t.totalParcelas ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}
