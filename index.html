@@ -1337,6 +1337,38 @@ tbody tr:hover{background:var(--navy-50);}
 .reg-detalhe-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:#8393ac;flex-shrink:0;}
 .reg-detalhe-valor{font-size:13.5px;color:var(--ink);text-align:right;overflow-wrap:break-word;word-break:break-word;min-width:0;flex:1;}
 .reg-card-sem-acao{opacity:.72;}
+/* "Redesenho do .reg-card da aba Registros — modo mobile": pedido explícito e escopado SOMENTE à lista
+   mobile de Registros (renderListaMobileRegistros) — os modais Ver Extrato/Lançamentos futuros/Ver Fatura/
+   Ver Próximas Faturas (renderCardsLancamentosModal) reaproveitam a MESMA base .reg-card/.reg-lista-mobile,
+   mas NÃO recebem esta classe, então continuam com a aparência anterior a este ajuste, intocados — e o
+   desktop nem entra em cogitação (.reg-lista-mobile só existe dentro de @media(max-width:700px) acima).
+   Referência visual/de usabilidade: extrato de lançamentos de apps bancários (ex.: Banco do Brasil) — a
+   descrição é o elemento principal, com a maior largura possível e preferencialmente em 1 única linha (a
+   base .reg-card-descricao já usa white-space:nowrap+text-overflow:ellipsis; aqui não mudamos ESSE
+   mecanismo, só encolhemos tudo o que competia por espaço ao redor dela: a caixa de seleção deixa de
+   reservar uma coluna de --touch-min/44px e volta a ser um controle discreto do tamanho do próprio
+   checkbox; o botão de menu ⋮ também encolhe; paddings/gaps do card ficam mais compactos). A linha
+   secundária (conta + categoria) foi dividida em dois spans com pesos visuais diferentes (.reg-card-conta,
+   destaque intermediário; .reg-card-secundario, destaque secundário — ver requisito de hierarquia visual),
+   em vez do texto único "grupo · conta" de antes. Ações (editar/duplicar/excluir) continuam exatamente onde
+   estavam — atrás do menu ⋮, nunca expostas permanentemente no card fechado, já satisfazendo o requisito
+   ("menu de ações quando houver muitas opções") sem precisar duplicá-las no modal de detalhe (que é
+   compartilhado com os outros 4 modais acima — alterar o rodapé dele sairia do escopo pedido, que é
+   estritamente a aba Registros). */
+.reg-card-registros{padding:9px 10px;margin-bottom:6px;border-radius:var(--radius-sm);gap:6px;}
+.reg-card-registros .reg-card-check{min-width:0;margin:0;}
+.reg-card-registros .reg-card-check input{width:18px;height:18px;}
+.reg-card-registros .reg-card-principal{display:flex;flex-direction:column;gap:1px;}
+.reg-card-registros .reg-card-linha1{gap:6px;}
+.reg-card-registros .reg-card-descricao{font-size:13.5px;}
+.reg-card-registros .reg-card-valor{font-size:13.5px;}
+.reg-card-registros .reg-card-linha2{justify-content:flex-start;margin-top:1px;gap:5px;flex-wrap:wrap;}
+.reg-card-registros .reg-card-linha2 .tag{margin-left:auto;}
+.reg-card-registros .reg-card-conta{font-size:12px;font-weight:600;color:#4a5b78;min-width:0;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.reg-card-registros .reg-card-separador{color:#c3ccdb;font-size:11px;flex-shrink:0;}
+.reg-card-registros .reg-card-secundario{font-size:11.5px;color:#8393ac;font-weight:400;}
+.reg-card-registros .reg-card-menu-btn{min-width:28px;min-height:28px;font-size:15px;padding:2px 4px;}
+.reg-card-registros .reg-descricao-tags{margin-top:2px;}
 .val-cell.neg{color:var(--despesa);}
 .val-cell.pos{color:var(--receita);}
 
@@ -13458,7 +13490,19 @@ function rotuloGrupoDataRegistro(dataISO){
   return `${dia} de ${MESES[mes-1].toLowerCase()}${ano!==anoAtual?` de ${ano}`:''}`;
 }
 /* Lista mobile de Registros (item 10/11 do requisito): mesmos `pageList`/filtros/paginação da tabela
-   desktop, agrupados por cabeçalho de data, com cards em vez de colunas — sem rolagem horizontal. */
+   desktop, agrupados por cabeçalho de data, com cards em vez de colunas — sem rolagem horizontal.
+   "Redesenho do .reg-card da aba Registros — modo mobile": cada card ganha a classe .reg-card-registros
+   (CSS escopada, ver a regra ".reg-card-registros" — não afeta os modais que reaproveitam .reg-card/
+   .reg-lista-mobile, ver renderCardsLancamentosModal, nem o desktop), com referência visual/de usabilidade
+   em extratos de apps bancários: descrição como elemento principal (maior largura possível, 1 linha,
+   reticências só quando não há espaço mesmo após reduzir tudo o resto ao redor — mecanismo já existente em
+   .reg-card-descricao, não alterado), valor sempre visível à direita, caixa de seleção reduzida a um
+   controle discreto (não mais uma coluna de toque de 44px), e linha secundária dividida em conta (destaque
+   intermediário) + categoria (destaque secundário) em vez do texto único "grupo · conta" de antes — mesmos
+   dados, só com hierarquia visual mais clara. Ações (editar/duplicar/excluir) continuam atrás do menu ⋮
+   (nunca expostas permanentemente no card fechado); o clique no card inteiro (fora do checkbox/menu) segue
+   abrindo o modal de detalhe completo já existente (ver renderRegCardDetalheModal), sem nenhuma mudança de
+   comportamento — só a apresentação do card fechado mudou. */
 function renderListaMobileRegistros(pageList){
   if(!pageList.length) return '';
   const grupos = [];
@@ -13487,7 +13531,7 @@ function renderListaMobileRegistros(pageList){
     <div class="reg-grupo-data">
       <div class="reg-grupo-data-titulo">${escapeHtml(g.rotulo)}</div>
       ${g.itens.map(t=>`
-      <div class="reg-card" data-reg-card-detalhe="${escapeHtml(t.id)}">
+      <div class="reg-card reg-card-registros" data-reg-card-detalhe="${escapeHtml(t.id)}">
         <label class="reg-card-check"><input type="checkbox" class="chkLoteReg" value="${escapeHtml(t.id)}" ${UI.regSelecionados.has(t.id)?'checked':''} aria-label="Selecionar lançamento"></label>
         <div class="reg-card-principal">
           <div class="reg-card-linha1">
@@ -13495,7 +13539,9 @@ function renderListaMobileRegistros(pageList){
             <span class="reg-card-valor ${t.tipo==='Despesa'?'neg':'pos'}">${t.tipo==='Despesa'?'-':''}${fmtBRL(t.valor)}</span>
           </div>
           <div class="reg-card-linha2">
-            <span class="reg-card-secundario">${t.grupo ? `${iconeGrupo(t.grupo)} ${escapeHtml(t.grupo)}` : 'Sem Grupo'} · ${escapeHtml(t.conta)}</span>
+            <span class="reg-card-conta">${escapeHtml(t.conta)}</span>
+            <span class="reg-card-separador" aria-hidden="true">·</span>
+            <span class="reg-card-secundario">${t.grupo ? `${iconeGrupo(t.grupo)} ${escapeHtml(t.grupo)}` : 'Sem Grupo'}</span>
             <span class="tag ${t.tipo}">${t.tipo}</span>
           </div>
           ${(t.totalParcelas || (t.parcelaFutura && t.competencia && t.competencia>chaveMes(UI.ano,UI.mes)) || t.responsavel || t.entreFamilia) ? `<div class="reg-descricao-tags">${t.totalParcelas ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}${(t.parcelaFutura && t.competencia && t.competencia>chaveMes(UI.ano,UI.mes)) ? `<span class="tag Variavel">⌛ Parcela futura</span>` : ''}${t.responsavel ? `<span class="tag Receita">🧑 ${escapeHtml(t.responsavel)}</span>` : ''}${t.entreFamilia ? `<span class="tag Variavel">🔁 Interna</span>` : ''}</div>` : ''}
