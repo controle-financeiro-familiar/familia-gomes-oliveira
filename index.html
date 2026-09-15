@@ -1107,6 +1107,10 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
    preservando toda a lógica cronológica/saldos/agrupamento (só a apresentação muda). A antiga conversão
    bespoke de <tr>/<td> em cards (specific a esta tabela) foi removida — não é mais usada. */
 .reg-card-saldo-hoje{border-color:var(--gold);border-width:2px;background:var(--gold-light,#fbf0d9);}
+/* Modal Conciliar com o Extrato: mantém claramente identificável a diferença entre um vínculo JÁ
+   confirmado (borda esquerda verde de acento, mesma cor de "Receita"/positivo já usada no resto do app) e
+   um candidato ainda não confirmado (.reg-card comum, sem acento) — ver renderConciliarProjecaoModal. */
+.reg-card-vinculo-confirmado{border-left:3px solid var(--receita);}
 thead th{
   text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.3px;text-transform:uppercase;
   color:#fff;background:var(--navy-800);padding:9px 10px;position:sticky;top:0;
@@ -2363,24 +2367,6 @@ summary::marker{content:'';}
     color:#8393ac;flex-shrink:0;
   }
   .tabela-cards-mobile td[colspan]{display:block;border-bottom:none;padding:8px 0 0;}
-  /* Descrição nos cards de "Lançamentos não listados" (modal de auditoria) e "Candidatos disponíveis"
-     (modal Conciliar com o Extrato): o rótulo e o valor continuam lado a lado, com justify-content:
-     space-between (herdado da regra genérica acima) — mas como a descrição real de um lançamento costuma
-     ser mais longa que "DESCRIÇÃO" e quebra em várias linhas dentro do próprio flex item, sem text-align a
-     quebra faz cada linha nascer colada à esquerda (encostada no rótulo), em vez de ocupar a extremidade
-     direita da linha como todo o resto do card. text-align:right aqui não muda o texto/dado nem empilha
-     rótulo/valor (ver .val-cell abaixo, usado só quando o requisito pede empilhar) — só alinha o texto (de
-     uma ou várias linhas) à direita dentro do próprio espaço que o space-between já reserva para ele. */
-  #ovNaoListadosModal td[data-label="Descrição"],
-  [data-ordenar-tabela="conciliarCandidatos"] td[data-label="Descrição"]{ text-align:right!important; }
-  /* Mesmo caso acima, para os cards de "Vínculos já confirmados" (modal Conciliar com o Extrato, ver
-     linhaRegistro): tanto Descrição quanto Categoria podem ser mais longas que o próprio rótulo e quebrar
-     em várias linhas dentro do flex item — sem text-align, cada linha nascia colada ao rótulo em vez de
-     ocupar a extremidade direita, como Data/Conta/Tipo/Valor (que nunca quebram) já fazem. Escopado só a
-     esta tabela (.tabela-vinculos-confirmados) e só a estes dois campos — os demais elementos do card
-     continuam exatamente como estão. */
-  .tabela-vinculos-confirmados td[data-label="Descrição"],
-  .tabela-vinculos-confirmados td[data-label="Categoria"]{ text-align:right!important; }
   /* Células com conteúdo em mais de uma linha (ex.: valor + faixa provável abaixo, via <br>) não cabem
      lado a lado com o rótulo em flex-row sem estourar a largura — empilha rótulo acima do valor em vez de
      lado a lado, preservando a quebra de linha interna da célula. */
@@ -15754,13 +15740,31 @@ function renderConciliarProjecaoModal(){
         </table>
         ${reaisVinculados.length ? `
         <p class="field-section-label" style="margin:14px 0 4px;">Vínculos já confirmados</p>
-        <div class="table-wrap" style="overflow-x:auto;"><table class="tabela-cards-mobile tabela-vinculos-confirmados" style="width:100%;table-layout:fixed;">
+        <div class="table-wrap reg-tabela-principal" style="overflow-x:auto;"><table class="tabela-vinculos-confirmados" style="width:100%;table-layout:fixed;">
           <thead><tr><th style="width:9%;">Data</th><th style="width:33%;">Descrição</th><th style="width:13%;">Conta</th><th style="width:13%;">Categoria</th><th style="width:8%;">Tipo</th><th style="width:15%;text-align:right;">Valor</th><th style="width:9%;"></th></tr></thead>
           <tbody>${reaisVinculados.map(t=>linhaRegistro(t, `<button type="button" class="icon-btn" data-conciliar-remover-vinculo="${t.id}" title="Remover este vínculo (volta a ser um candidato disponível)">🗑️</button>`)).join('')}</tbody>
-        </table></div>` : ''}
+        </table></div>
+        <div class="reg-lista-mobile">${reaisVinculados.map(t=>`
+          <div class="reg-card reg-card-vinculo-confirmado">
+            <div class="reg-card-linha1">
+              <span class="reg-card-data">${fmtData(t.data)}</span>
+              <span class="reg-card-conta">${escapeHtml(t.conta)}</span>
+              <span class="reg-card-valor ${t.tipo==='Despesa'?'neg':'pos'}">${fmtBRL(t.valor)}</span>
+            </div>
+            <div class="reg-card-linha2">
+              <span class="reg-card-descricao">${escapeHtml(t.descricao)}</span>
+            </div>
+            <div class="reg-card-menu">
+              <button type="button" class="icon-btn" data-conciliar-remover-vinculo="${t.id}" title="Remover este vínculo (volta a ser um candidato disponível)">🗑️</button>
+            </div>
+            <div class="reg-card-linha3">
+              <span class="reg-card-secundario">${escapeHtml(t.categoria||'—')}</span>
+              <span class="tag ${t.tipo}">${t.tipo}</span>
+            </div>
+          </div>`).join('')}</div>` : ''}
         <p class="field-section-label" style="margin:14px 0 4px;">Candidatos disponíveis${candidatos.length ? ` (${candidatos.length})` : ''}</p>
         <p class="hint" style="margin-top:0;">Marque um ou mais registros que correspondem de fato a este previsto (não é preciso que a data ou o valor sejam exatamente iguais) e confirme a seleção. Clique num cabeçalho para ordenar.</p>
-        ${candidatos.length ? `<div class="table-wrap" style="overflow-x:auto;" data-ordenar-tabela="conciliarCandidatos"><table class="tabela-cards-mobile" style="width:100%;table-layout:fixed;">
+        ${candidatos.length ? `<div class="table-wrap reg-tabela-principal" style="overflow-x:auto;" data-ordenar-tabela="conciliarCandidatos"><table style="width:100%;table-layout:fixed;">
           <thead><tr>
             <th style="width:5%;"></th>
             ${thOrdenavel('conciliarCandidatos','data','Data',{style:'width:9%;'})}
@@ -15782,6 +15786,22 @@ function renderConciliarProjecaoModal(){
             </tr>`).join('')}
           </tbody>
         </table></div>
+        <div class="reg-lista-mobile">${pageList.map(c=>`
+          <div class="reg-card">
+            <label class="reg-card-check"><input type="checkbox" data-conciliar-check="${c.t.id}" ${selecionados.includes(c.t.id)?'checked':''} aria-label="Selecionar candidato"></label>
+            <div class="reg-card-linha1">
+              <span class="reg-card-data">${fmtData(c.t.data)}</span>
+              <span class="reg-card-conta">${escapeHtml(c.t.conta)}</span>
+              <span class="reg-card-valor ${c.t.tipo==='Despesa'?'neg':'pos'}">${fmtBRL(c.t.valor)}</span>
+            </div>
+            <div class="reg-card-linha2">
+              <span class="reg-card-descricao">${escapeHtml(c.t.descricao)}</span>
+            </div>
+            <div class="reg-card-linha3">
+              <span class="reg-card-secundario">${escapeHtml(c.t.categoria||'—')}</span>
+              <span class="tag ${c.t.tipo}">${c.t.tipo}</span>
+            </div>
+          </div>`).join('')}</div>
         <div class="registros-rodape">${rodapePaginacaoCandidatos}</div>` : `<div class="empty-state"><div class="big">🔎</div>Nenhum candidato restante — todos já foram vinculados ou descartados.</div>`}
       </div>
       <div class="modal-foot" style="flex-wrap:wrap;gap:8px;">
