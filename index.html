@@ -2403,18 +2403,6 @@ summary::marker{content:'';}
     border:none;border-radius:0;background:transparent;box-shadow:none;overflow:visible;max-height:none;
   }
 }
-/* Economias — modal "Aportes" no mobile (item 16 do requisito de responsividade): a hierarquia
-   Categoria → Subcategoria já é uma lista, não uma tabela; só a tabela de lançamentos de cada subcategoria
-   vira cards empilhados, sem rolagem horizontal. */
-@media(max-width:700px){
-  .aportes-tabela-itens{display:block;}
-  .aportes-tabela-itens tbody{display:block;}
-  .aportes-tabela-itens tr{display:block;padding:6px 4px;border-bottom:1px solid var(--line);}
-  .aportes-tabela-itens td{display:flex;justify-content:space-between;gap:8px;padding:2px 0;white-space:normal!important;}
-  .aportes-tabela-itens td[data-label]::before{
-    content:attr(data-label);font-size:10.5px;font-weight:600;text-transform:uppercase;color:#8393ac;flex-shrink:0;
-  }
-}
 .aportes-tabela-itens td{padding:4px 10px;border-bottom:1px solid var(--line);}
 /* Colunas fixas (nunca dependentes do conteúdo dos cards — ver .conta-financeira-saldo-bancaria abaixo):
    4 no desktop, 2 nos breakpoints intermediário/mobile já usados no resto da aplicação (900px/700px, ver
@@ -9533,7 +9521,7 @@ function renderModalAportes(){
                 return `
                 <div class="aportes-subcategoria-bloco">
                   <div class="aportes-subcategoria-cabecalho"><span>${escapeHtml(subcategoria)}</span><span>${fmtBRL(totalSub)}</span></div>
-                  <table class="aportes-tabela-itens"><tbody>
+                  <table class="aportes-tabela-itens reg-tabela-principal"><tbody>
                     ${txsSub.map(t=>`<tr${txInPeriod(t,ano,mes) ? ' style="background:var(--navy-50);"' : ''}>
                       <td data-label="Data" style="white-space:nowrap;">${fmtData(t.data)}</td>
                       <td data-label="Descrição">${escapeHtml(t.descricao)}${Number(t.totalParcelas)>1 ? ` <span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}</td>
@@ -9541,6 +9529,17 @@ function renderModalAportes(){
                       <td data-label="Valor" class="val-cell pos" style="text-align:right;">${fmtBRL(t.valor)}</td>
                     </tr>`).join('')}
                   </tbody></table>
+                  <div class="reg-lista-mobile">${txsSub.map(t=>`
+                    <div class="reg-card"${txInPeriod(t,ano,mes) ? ' style="background:var(--navy-50);"' : ''}>
+                      <div class="reg-card-linha1">
+                        <span class="reg-card-data">${fmtData(t.data)}</span>
+                        <span class="reg-card-conta">${escapeHtml(t.conta)}</span>
+                        <span class="reg-card-valor pos">${fmtBRL(t.valor)}</span>
+                      </div>
+                      <div class="reg-card-linha2">
+                        <span class="reg-card-descricao">${escapeHtml(t.descricao)}${Number(t.totalParcelas)>1 ? ` <span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}</span>
+                      </div>
+                    </div>`).join('')}</div>
                 </div>`;
               }).join('')}
             </div>`;
