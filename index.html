@@ -1343,9 +1343,7 @@ tbody tr:hover{background:var(--navy-50);}
    mas NÃO recebem esta classe, então continuam com a aparência anterior a este ajuste, intocados — e o
    desktop nem entra em cogitação (.reg-lista-mobile só existe dentro de @media(max-width:700px) acima).
    Referência visual/de usabilidade: extrato de lançamentos de apps bancários (ex.: Banco do Brasil) — a
-   descrição é o elemento principal, com a maior largura possível e preferencialmente em 1 única linha (a
-   base .reg-card-descricao já usa white-space:nowrap+text-overflow:ellipsis; aqui não mudamos ESSE
-   mecanismo, só encolhemos tudo o que competia por espaço ao redor dela: a caixa de seleção deixa de
+   descrição é o elemento principal, com a maior largura possível ao redor dela (a caixa de seleção deixa de
    reservar uma coluna de --touch-min/44px e volta a ser um controle discreto do tamanho do próprio
    checkbox; o botão de menu ⋮ também encolhe; paddings/gaps do card ficam mais compactos). A linha
    secundária (conta + categoria) foi dividida em dois spans com pesos visuais diferentes (.reg-card-conta,
@@ -1354,14 +1352,27 @@ tbody tr:hover{background:var(--navy-50);}
    estavam — atrás do menu ⋮, nunca expostas permanentemente no card fechado, já satisfazendo o requisito
    ("menu de ações quando houver muitas opções") sem precisar duplicá-las no modal de detalhe (que é
    compartilhado com os outros 4 modais acima — alterar o rodapé dele sairia do escopo pedido, que é
-   estritamente a aba Registros). */
-.reg-card-registros{padding:9px 10px;margin-bottom:6px;border-radius:var(--radius-sm);gap:6px;}
+   estritamente a aba Registros).
+   "Ajuste do .reg-card-descricao — quebra de linha": a versão original deste redesenho manteve o mecanismo
+   herdado de .reg-card-descricao (white-space:nowrap + text-overflow:ellipsis, 1 linha só, corta com "...").
+   Pedido explícito do usuário para inverter essa prioridade especificamente aqui: quebrar em várias linhas
+   (white-space:normal) em vez de cortar — a descrição nunca deve ser truncada horizontalmente; o card cresce
+   em altura (sem nenhuma height fixa, é o fluxo normal do flexbox) o quanto for preciso para mostrá-la
+   inteira. overflow-wrap:break-word entra só como rede de segurança para um token sem espaços mais longo que
+   a própria linha (ex.: um identificador colado). .reg-card-valor ganha flex-shrink:0 para nunca ser
+   espremido/empurrado para fora quando a descrição ocupa mais de 1 linha — continua sempre visível por
+   inteiro, alinhado ao topo da 1ª linha da descrição (align-items:baseline, herdado de .reg-card-linha1).
+   gap do .reg-card e da .reg-card-linha1 reduzidos de 6px para 5px/4px — mais um pouco de largura real
+   devolvida à descrição antes de decidir se ela precisa ocupar 2+ linhas. */
+.reg-card-registros{padding:9px 10px;margin-bottom:6px;border-radius:var(--radius-sm);gap:5px;}
 .reg-card-registros .reg-card-check{min-width:0;margin:0;}
 .reg-card-registros .reg-card-check input{width:18px;height:18px;}
 .reg-card-registros .reg-card-principal{display:flex;flex-direction:column;gap:1px;}
-.reg-card-registros .reg-card-linha1{gap:6px;}
-.reg-card-registros .reg-card-descricao{font-size:13.5px;}
-.reg-card-registros .reg-card-valor{font-size:13.5px;}
+.reg-card-registros .reg-card-linha1{gap:4px;}
+.reg-card-registros .reg-card-descricao{
+  font-size:13.5px;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word;
+}
+.reg-card-registros .reg-card-valor{font-size:13.5px;flex-shrink:0;}
 .reg-card-registros .reg-card-linha2{justify-content:flex-start;margin-top:1px;gap:5px;flex-wrap:wrap;}
 .reg-card-registros .reg-card-linha2 .tag{margin-left:auto;}
 .reg-card-registros .reg-card-conta{font-size:12px;font-weight:600;color:#4a5b78;min-width:0;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -13494,15 +13505,17 @@ function rotuloGrupoDataRegistro(dataISO){
    "Redesenho do .reg-card da aba Registros — modo mobile": cada card ganha a classe .reg-card-registros
    (CSS escopada, ver a regra ".reg-card-registros" — não afeta os modais que reaproveitam .reg-card/
    .reg-lista-mobile, ver renderCardsLancamentosModal, nem o desktop), com referência visual/de usabilidade
-   em extratos de apps bancários: descrição como elemento principal (maior largura possível, 1 linha,
-   reticências só quando não há espaço mesmo após reduzir tudo o resto ao redor — mecanismo já existente em
-   .reg-card-descricao, não alterado), valor sempre visível à direita, caixa de seleção reduzida a um
-   controle discreto (não mais uma coluna de toque de 44px), e linha secundária dividida em conta (destaque
-   intermediário) + categoria (destaque secundário) em vez do texto único "grupo · conta" de antes — mesmos
-   dados, só com hierarquia visual mais clara. Ações (editar/duplicar/excluir) continuam atrás do menu ⋮
-   (nunca expostas permanentemente no card fechado); o clique no card inteiro (fora do checkbox/menu) segue
-   abrindo o modal de detalhe completo já existente (ver renderRegCardDetalheModal), sem nenhuma mudança de
-   comportamento — só a apresentação do card fechado mudou. */
+   em extratos de apps bancários: descrição como elemento principal (maior largura possível, quebrando
+   livremente em quantas linhas forem necessárias — "Ajuste do .reg-card-descricao — quebra de linha": nunca
+   corta horizontalmente com "...", o card cresce em altura o quanto for preciso para mostrá-la inteira),
+   valor sempre visível à direita (nunca espremido/empurrado para fora, mesmo com a descrição em várias
+   linhas), caixa de seleção reduzida a um controle discreto (não mais uma coluna de toque de 44px), e linha
+   secundária dividida em conta (destaque intermediário) + categoria (destaque secundário) em vez do texto
+   único "grupo · conta" de antes — mesmos dados, só com hierarquia visual mais clara. Ações (editar/
+   duplicar/excluir) continuam atrás do menu ⋮ (nunca expostas permanentemente no card fechado); o clique no
+   card inteiro (fora do checkbox/menu) segue abrindo o modal de detalhe completo já existente (ver
+   renderRegCardDetalheModal), sem nenhuma mudança de comportamento — só a apresentação do card fechado
+   mudou. */
 function renderListaMobileRegistros(pageList){
   if(!pageList.length) return '';
   const grupos = [];
