@@ -79,7 +79,10 @@ input,select{font-family:var(--sans);}
 .app{display:flex;flex-direction:column;min-height:100vh;}
 
 .sticky-top{position:sticky;top:0;z-index:200;box-shadow:0 4px 14px rgba(11,42,94,.18);background: var(--navy-800);}
-.tela-inicial{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:74px 24px 24px;background:linear-gradient(180deg,var(--navy-50,#f4f7fc),#fff);}
+/* padding-top:calc(12px + var(--safe-top)) — mesma lógica de área segura já usada pelo .app-header (ver o
+   ajuste equivalente feito lá), em vez de um valor fixo (74px) chutado para caber o notch/Dynamic Island de
+   um aparelho específico: --safe-top cresce sozinho conforme a área segura de cada dispositivo. */
+.tela-inicial{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:calc(12px + var(--safe-top)) 24px 24px;background:linear-gradient(180deg,var(--navy-50,#f4f7fc),#fff);}
 .tela-inicial-card{max-width:1000px;width:100%;background:#fff;border:1px solid var(--line);border-radius:20px;padding:36px 40px;box-shadow:0 20px 60px rgba(16,64,141,.14);}
 .tela-inicial-card button:disabled{opacity:.5;cursor:not-allowed;}
 .ti-cabecalho{display:flex;align-items:center;gap:24px;margin-bottom:28px;}
@@ -5586,7 +5589,17 @@ let STATE = {
   contrachequeResumos: {}, // { [conta]: { [competencia AAAA-MM]: {bruto,descontos,liquido,margemConsignavel,remuneracaoConsignacao} } } — valores oficiais extraídos do PDF do contracheque na importação (ver renderExtratoContaModal/resumoContrachequeCompetencia), nunca recalculados a partir dos lançamentos quando existem
   projecaoExclusoesPorCompetencia: {}, // { [lancamentoId]: { [competencia AAAA-MM]: true } } — exclusão de um lançamento previsto (STATE.projecoes) de UMA competência específica, sem excluir o cadastro nem as demais competências (ver itemAtivoNaCompetencia/renderConfirmDelProjecaoModal). Identificado sempre pelo id imutável do lançamento, nunca por descrição/valor/data/classificação — sobrevive a edições do lançamento e nunca é recriado automaticamente numa atualização do Fluxo de Caixa.
 };
-let UI = {
+/* "Fechar aplicação" (menu ☰, ver fecharAppVoltarTelaInicial): a interface precisa voltar a se comportar
+   como se tivesse acabado de ser aberta — sem restaurar aba, scroll, modal, filtro, ordenação, página de
+   tabela, seleção ou qualquer outro estado de navegação da sessão anterior. Em vez de listar manualmente
+   cada campo "temporário" de UI para zerar (frágil: qualquer campo novo adicionado no futuro entraria
+   nessa lista por acidente ou seria esquecido), a estrutura inteira de UI vira esta função-fábrica —
+   fecharAppVoltarTelaInicial() simplesmente chama UI = criarUIPadrao() de novo, do mesmo jeito que a
+   primeira atribuição abaixo. Isso NUNCA toca em STATE (lançamentos/contas/cartões/categorias/config —
+   dados persistentes, que sobrevivem ao "Fechar aplicação" normalmente) nem na conexão com o OneDrive
+   (msalConta/fileHandle*), só no estado de navegação/uso da interface. */
+function criarUIPadrao(){
+  return {
   tab: "dashboard",
   ano: new Date().getFullYear(),
   mes: new Date().getMonth()+1,
@@ -5700,7 +5713,9 @@ let UI = {
   editarSaldoInicialFluxoCaixaModal: null, // true — editar os saldos iniciais das contas que compõem o Fluxo de Caixa
   modalEmpateCartao: null, // { empatados:[...], chaveEmpate, hojeISO } — escolha manual quando há empate persistente
   mapaCalorDiaModal: null, // { ano, mes, dia, filtros, busca, selecionados } — modal de transações do dia, aberto ao clicar numa célula do Mapa de Calor de Despesas
-};
+  };
+}
+let UI = criarUIPadrao();
 
 /* =====================================================================================
    CAMADAS (z-index) DOS MODAIS — solução única e global para "modal sobre modal"
@@ -6781,21 +6796,23 @@ async function reconectarArquivo(tipo){
 }
 async function reconectarPacote(){ await carregarArquivosDoOneDrive(); render(); }
 /* "Fechar aplicação" (menu ☰) — volta para a tela inicial (card) sem sair da conta Microsoft nem
-   desconectar os arquivos: STATE, msalConta e fileHandleCfg/fileHandleReg continuam intactos, só
-   UI.appIniciado volta a false (mesma flag que renderTelaInicial() usa — ver render()). Ao clicar em
-   "Iniciar App" de novo, os mesmos dados já carregados voltam a aparecer, sem precisar reconectar ao
-   OneDrive. Mesma proteção contra perda de dados usada em desconectarArquivos/reconectarPacote: se houver
-   alterações não salvas, pergunta antes de sair. */
+   desconectar os arquivos: STATE, msalConta e fileHandleCfg/fileHandleReg continuam intactos (dados
+   financeiros/configurações persistentes e a conexão com o OneDrive nunca são apagados por isto), só o
+   estado de navegação/uso da interface (UI inteiro) é substituído por um novo criarUIPadrao() — mesma
+   estrutura da primeira inicialização do app (ver "let UI = criarUIPadrao()" mais acima), então a próxima
+   entrada não recupera aba/scroll/modal/filtro/ordenação/página/seleção/expansão nenhum da sessão anterior:
+   é como se a interface tivesse acabado de ser aberta pela primeira vez, com os mesmos dados já carregados.
+   Mesma proteção contra perda de dados usada em desconectarArquivos/reconectarPacote: se houver alterações
+   não salvas, pergunta antes de sair. */
 async function fecharAppVoltarTelaInicial(){
   if(STATE.dirty){
     const decisao = await confirmarFecharComAlteracoes();
     if(decisao==='cancelar') return;
     if(decisao==='salvar'){ const ok = await salvarArquivos(); if(!ok) return; }
   }
-  UI.appIniciado = false;
-  UI.tab = "dashboard";
-  UI.menuArquivoAberto = false;
+  UI = criarUIPadrao();
   render();
+  window.scrollTo(0, 0);
 }
 /* "Desconectar" agora significa sair da conta Microsoft conectada (logoutRedirect) — verifica alterações
    não salvas primeiro, do mesmo jeito que antes, para nunca perder dados ainda não gravados no OneDrive. */
