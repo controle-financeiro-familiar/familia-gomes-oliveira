@@ -2221,13 +2221,28 @@ summary::marker{content:'';}
 .cat-sub-nome{flex:1 1 0;min-width:0;overflow-wrap:break-word;}
 .cat-sub-tags{display:flex;gap:4px;flex-shrink:0;}
 .cat-sub-acoes{display:flex;gap:2px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;}
+/* "Ajustes de interface — modo mobile", itens 9/10: cada nível (grupo/categoria/subcategoria) passou a
+   renderizar DOIS blocos de ações — .cat-acoes-desktop (os mesmos botões soltos de sempre) e .cat-acoes-
+   mobile (um único ⋮ que abre todos eles num menu, ver .reg-card-menu-lista reaproveitado do resto do app)
+   — e o CSS escolhe qual mostrar por breakpoint, mesma técnica já usada em .reg-tabela-principal/.reg-
+   lista-mobile. Desktop nunca muda: só .cat-acoes-desktop existe visualmente aqui fora da media query. */
+.cat-acoes-mobile{display:none;}
 @media(max-width:700px){
-  .cat-grupo-nome,.cat-categoria-nome{flex-basis:100%;}
-  .cat-grupo-acoes,.cat-categoria-acoes{flex:1 1 100%;margin-top:2px;}
-  .cat-sub-nome{flex-basis:100%;}
-  .cat-sub-tags{order:2;}
-  .cat-sub-acoes{order:3;margin-left:0;margin-top:2px;}
-  .cat-grupo-acoes .icon-btn,.cat-categoria-acoes .icon-btn,.cat-sub-acoes .icon-btn{min-width:var(--touch-min);}
+  .cat-acoes-desktop{display:none;}
+  .cat-acoes-mobile{display:flex;}
+  /* Item 9/10: expand-arrow | nome | ⋮ sempre numa única linha, nunca quebrando — o nome encolhe com
+     reticências em vez de empurrar o ⋮ para fora ou quebrar para uma segunda linha. */
+  .cat-grupo-summary,.cat-categoria-summary,.cat-sub-item{flex-wrap:nowrap;}
+  .cat-grupo-nome,.cat-categoria-nome,.cat-sub-nome{
+    flex-basis:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .cat-grupo-acoes,.cat-categoria-acoes,.cat-sub-acoes{flex:0 0 auto;margin:0 0 0 auto;}
+  .cat-sub-tags{flex-shrink:0;}
+  /* "Ajustes de interface — modo mobile", item 6: tipografia só no mobile — desktop mantém os tamanhos
+     originais definidos acima (fora desta media query). */
+  .cat-grupo-summary{font-size:14px;}
+  .cat-categoria-summary{font-size:12px;}
+  .cat-sub-lista{font-size:11px;}
 }
 .chip{
   display:inline-flex;align-items:center;gap:2px;background:var(--navy-50);border:1px solid var(--line);
@@ -5587,6 +5602,7 @@ function criarUIPadrao(){
   regPagina: 1,        // página atual (1-based) da tabela de Registros
   regSelecionados: new Set(),
   regCardMenuAberto: null, // id do lançamento com o menu de ações (✏️/📄/🗑️) aberto na lista mobile de Registros
+  catMenuAberto: null, // chave ("grupo:X"/"cat:X"/"sub:X") do menu ⋮ aberto na aba Configurações → Categorias (modo mobile)
   regCardDetalheId: null, // id do lançamento com o modal de detalhes (item 13 do requisito) aberto — null = fechado
   filtrosMobileAberto: null, // prefixo ('Reg', ...) da barra de filtros aberta como painel/bottom sheet no mobile
   importStep: 0, // 0=fechado · 1=período+conta (pré-importação) · 2=escolher arquivo · 3=confirmar/mapear · 4=revisar e classificar
@@ -16420,10 +16436,19 @@ function renderCategorias(){
         <summary class="cat-grupo-summary">
           <span class="expand-arrow" data-arrow-for="grupo-${escapeHtml(grupo)}">${UI.gruposAbertos.has(grupo)?'➖':'➕'}</span>
           <span class="cat-grupo-nome">${iconeGrupo(grupo)} ${escapeHtml(grupo)}</span>
-          <span class="cat-grupo-acoes">
+          <span class="cat-grupo-acoes cat-acoes-desktop">
             <button type="button" class="icon-btn" data-pos-grupo="${escapeHtml(grupo)}" onclick="event.stopPropagation()" title="Reposicionar grupo">↕️</button>
             <button type="button" class="icon-btn" data-edit-grupo="${escapeHtml(grupo)}" onclick="event.stopPropagation()" title="Editar grupo">✏️</button>
             <button type="button" class="icon-btn" data-del-grupo="${escapeHtml(grupo)}" onclick="event.stopPropagation()" title="Excluir grupo" style="color:var(--despesa);">🗑️</button>
+          </span>
+          <span class="cat-grupo-acoes cat-acoes-mobile">
+            <button type="button" class="icon-btn reg-card-menu-btn" data-cat-menu="grupo:${escapeHtml(grupo)}" onclick="event.stopPropagation()" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.catMenuAberto===('grupo:'+grupo)?'true':'false'}">⋮</button>
+            ${UI.catMenuAberto===('grupo:'+grupo) ? `
+            <div class="reg-card-menu-lista">
+              <button type="button" data-pos-grupo="${escapeHtml(grupo)}" onclick="event.stopPropagation()">↕️ Reposicionar</button>
+              <button type="button" data-edit-grupo="${escapeHtml(grupo)}" onclick="event.stopPropagation()">✏️ Editar</button>
+              <button type="button" data-del-grupo="${escapeHtml(grupo)}" onclick="event.stopPropagation()" style="color:var(--despesa);">🗑️ Excluir</button>
+            </div>` : ''}
           </span>
         </summary>
         ${Object.keys(porGrupo[grupo]).map(sub=>{
@@ -16434,27 +16459,50 @@ function renderCategorias(){
             <summary class="cat-categoria-summary">
               <span class="expand-arrow" data-arrow-for="cat-${escapeHtml(chaveCat)}" style="color:var(--gold-dark);">${catAberta?'➖':'➕'}</span>
               <span class="cat-categoria-nome">${escapeHtml(sub)} <span class="hint" style="margin:0;">(${itens.length})</span></span>
-              <span class="cat-categoria-acoes">
+              <span class="cat-categoria-acoes cat-acoes-desktop">
                 <button type="button" class="icon-btn" data-pos-categoria-grupo="${escapeHtml(grupo)}" data-pos-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()" title="Reposicionar categoria">↕️</button>
                 <button type="button" class="icon-btn" data-edit-categoria-grupo="${escapeHtml(grupo)}" data-edit-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()" title="Editar categoria">✏️</button>
                 <button type="button" class="icon-btn" data-mover-categoria-grupo="${escapeHtml(grupo)}" data-mover-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()" title="Mover categoria para outro grupo">🔀</button>
                 <button type="button" class="icon-btn" data-del-categoria-grupo="${escapeHtml(grupo)}" data-del-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()" title="Excluir categoria" style="color:var(--despesa);">🗑️</button>
               </span>
+              <span class="cat-categoria-acoes cat-acoes-mobile">
+                <button type="button" class="icon-btn reg-card-menu-btn" data-cat-menu="cat:${escapeHtml(chaveCat)}" onclick="event.stopPropagation()" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.catMenuAberto===('cat:'+chaveCat)?'true':'false'}">⋮</button>
+                ${UI.catMenuAberto===('cat:'+chaveCat) ? `
+                <div class="reg-card-menu-lista">
+                  <button type="button" data-pos-categoria-grupo="${escapeHtml(grupo)}" data-pos-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()">↕️ Reposicionar</button>
+                  <button type="button" data-edit-categoria-grupo="${escapeHtml(grupo)}" data-edit-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()">✏️ Editar</button>
+                  <button type="button" data-mover-categoria-grupo="${escapeHtml(grupo)}" data-mover-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()">🔀 Mover</button>
+                  <button type="button" data-del-categoria-grupo="${escapeHtml(grupo)}" data-del-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()" style="color:var(--despesa);">🗑️ Excluir</button>
+                </div>` : ''}
+              </span>
             </summary>
             <ul class="cat-sub-lista">
-              ${itens.map(i=>`<li class="cat-sub-item">
+              ${itens.map(i=>{
+                const chaveSub = `${grupo}|||${sub}|||${i.nome}|||${i.tipo}`;
+                return `<li class="cat-sub-item">
                 <span class="cat-sub-nome">${escapeHtml(i.nome)}</span>
                 <span class="cat-sub-tags">
                   <span class="tag ${i.tipo}">${i.tipo}</span>
                   <span class="tag ${i.natureza==='Fixo'?'Fixo':'Variavel'}">${i.natureza}</span>
                 </span>
-                <span class="cat-sub-acoes">
+                <span class="cat-sub-acoes cat-acoes-desktop">
                   <button type="button" class="icon-btn" data-pos-sub-grupo="${escapeHtml(grupo)}" data-pos-sub-categoria="${escapeHtml(sub)}" data-pos-sub="${escapeHtml(i.nome)}" title="Reposicionar subcategoria">↕️</button>
                   <button type="button" class="icon-btn" data-edit-sub="${escapeHtml(i.nome)}" data-edit-sub-tipo="${escapeHtml(i.tipo)}" title="Editar subcategoria">✏️</button>
                   <button type="button" class="icon-btn" data-mover-sub="${escapeHtml(i.nome)}" data-mover-sub-tipo="${escapeHtml(i.tipo)}" data-mover-sub-grupo="${escapeHtml(grupo)}" data-mover-sub-categoria="${escapeHtml(sub)}" title="Mover subcategoria para outra categoria ou grupo">🔀</button>
                   <button type="button" class="icon-btn" data-del-sub="${escapeHtml(i.nome)}" data-del-sub-tipo="${escapeHtml(i.tipo)}" title="Excluir subcategoria" style="color:var(--despesa);">🗑️</button>
                 </span>
-              </li>`).join('')}
+                <span class="cat-sub-acoes cat-acoes-mobile">
+                  <button type="button" class="icon-btn reg-card-menu-btn" data-cat-menu="sub:${escapeHtml(chaveSub)}" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.catMenuAberto===('sub:'+chaveSub)?'true':'false'}">⋮</button>
+                  ${UI.catMenuAberto===('sub:'+chaveSub) ? `
+                  <div class="reg-card-menu-lista">
+                    <button type="button" data-pos-sub-grupo="${escapeHtml(grupo)}" data-pos-sub-categoria="${escapeHtml(sub)}" data-pos-sub="${escapeHtml(i.nome)}">↕️ Reposicionar</button>
+                    <button type="button" data-edit-sub="${escapeHtml(i.nome)}" data-edit-sub-tipo="${escapeHtml(i.tipo)}">✏️ Editar</button>
+                    <button type="button" data-mover-sub="${escapeHtml(i.nome)}" data-mover-sub-tipo="${escapeHtml(i.tipo)}" data-mover-sub-grupo="${escapeHtml(grupo)}" data-mover-sub-categoria="${escapeHtml(sub)}">🔀 Mover</button>
+                    <button type="button" data-del-sub="${escapeHtml(i.nome)}" data-del-sub-tipo="${escapeHtml(i.tipo)}" style="color:var(--despesa);">🗑️ Excluir</button>
+                  </div>` : ''}
+                </span>
+              </li>`;
+              }).join('')}
             </ul>
           </details>`;
         }).join('')}
@@ -20522,6 +20570,20 @@ function bindEvents(){
     // "flutuando" desconectado do botão que o abriu, já que a lista agora é position:fixed — ver
     // posicionarMenuRegCard) — mesmo padrão de "fecha ao interagir fora dele" do clique acima.
     window.addEventListener('scroll', ()=>{ UI.regCardMenuAberto = null; render(); }, { once:true, capture:true });
+  }
+  // "Ajustes de interface — modo mobile", itens 9/10: mesmo padrão de menu único acima (✏️/📄/🗑️ do
+  // .reg-card), agora para os ⋮ de grupo/categoria/subcategoria da aba Configurações → Categorias — reaproveita
+  // as MESMAS classes/CSS (.reg-card-menu-btn/.reg-card-menu-lista) e a mesma posicionarMenuRegCard() abaixo,
+  // só com um estado (UI.catMenuAberto) e uma chave ("grupo:"/"cat:"/"sub:"+identificador) próprios, para não
+  // colidir com o menu de lançamentos em outra aba.
+  document.querySelectorAll('[data-cat-menu]').forEach(b=> b.addEventListener('click', e=>{
+    e.stopPropagation();
+    UI.catMenuAberto = UI.catMenuAberto===b.dataset.catMenu ? null : b.dataset.catMenu;
+    render();
+  }));
+  if(UI.catMenuAberto){
+    document.addEventListener('click', ()=>{ UI.catMenuAberto = null; render(); }, { once:true });
+    window.addEventListener('scroll', ()=>{ UI.catMenuAberto = null; render(); }, { once:true, capture:true });
   }
   // Reposiciona a lista de ações (.reg-card-menu-lista) com base na posição real do botão ⋮ que a abriu —
   // precisa rodar DEPOIS do render() acima ter colocado a lista no DOM (senão não há o que medir/posicionar).
