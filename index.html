@@ -1326,6 +1326,13 @@ tbody tr:hover{background:var(--navy-50);}
   white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word;word-break:normal;
 }
 .reg-card-menu{grid-column:1;grid-row:3;align-self:center;flex-shrink:0;font-size:11px;}
+/* "Ajustes de interface — modo mobile", item 4.2: o .reg-card de lançamento normal do Extrato Consolidado
+   (ver renderCardFluxoProjecao) precisa de um ícone na coluna 1 JUNTO de cada uma das 3 linhas (🔓 na
+   linha1, ✏️ na linha2, 🗑️ na linha3 — reaproveita .reg-card-menu acima, já na linha3), não só checkbox/menu
+   nas linhas 1/3 como no padrão universal — mesma coluna 1 da grade, centralizados verticalmente em cada
+   linha (mesmo princípio de .reg-card-check/.reg-card-menu). */
+.reg-card-acao-linha1{grid-column:1;grid-row:1;align-self:center;flex-shrink:0;font-size:11px;}
+.reg-card-acao-linha2{grid-column:1;grid-row:2;align-self:center;flex-shrink:0;font-size:11px;}
 .reg-card-menu-btn{min-width:22px;min-height:22px;font-size:13px;padding:1px 3px;}
 /* "Corrigir posicionamento do menu de ações do .reg-card — modo mobile": o botão ⋮ mora na coluna 1 da
    grade (mesma do checkbox — ver comentário acima da definição de .reg-card), então um right:0/top:100%
@@ -1352,11 +1359,11 @@ tbody tr:hover{background:var(--navy-50);}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .reg-card-linha3 .tag{font-size:11px;white-space:nowrap;flex-shrink:0;}
-/* .reg-card-extra é um bloco opcional ABAIXO das 3 linhas padrão, só para informação específica de uma tela
-   que não caiba na linha 3 sem perder sentido (ex.: saldo acumulado/projetado do Extrato Consolidado, uma
-   sequência que não existe em nenhuma outra lista) — nunca usado para recriar Grupo/Tipo/Tag fora do lugar.
-   .reg-card-sem-acao remove o menu ⋮ de um item técnico não editável (ex.: "Saldo Anterior" do extrato). */
-.reg-card-extra{font-size:11.5px;color:#8393ac;margin-top:4px;grid-column:2;grid-row:4;}
+/* "Ajustes de interface — modo mobile", itens 4.1/4.2/5: Saldo passa a integrar a própria linha3 (ao lado
+   de Status/Grupo/Tag), em vez do bloco .reg-card-extra abaixo das 3 linhas — empurrado para a extremidade
+   direita da linha (mesmo princípio de .reg-card-valor na linha1), sempre totalmente visível. */
+.reg-card-linha3-saldo{margin-left:auto;white-space:nowrap;flex-shrink:0;font-size:11px;}
+/* .reg-card-sem-acao remove o menu ⋮ de um item técnico não editável (ex.: "Saldo Anterior" do extrato). */
 /* Item 13 do requisito: modal de detalhe completo do .reg-card — lista de campos "rótulo: valor", com
    quebra de linha livre (nunca corta/trunca), diferente do card compacto que o originou. */
 .reg-detalhe-lista{display:flex;flex-direction:column;gap:2px;}
@@ -1553,7 +1560,7 @@ html.forcar-nav-mobile .back-to-top{
 .extrato-conta-acoes-topo{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
 @media(max-width:480px){
   .extrato-conta-acoes-topo{flex-direction:column;align-items:stretch;width:100%;}
-  .extrato-conta-acoes-topo .btn{width:100%;text-align:center;}
+  .extrato-conta-acoes-topo .btn{width:100%;text-align:center;justify-content:center;}
 }
 /* Compacta os espaçamentos verticais internos destes dois modais (mesma lógica de .modal-fatura-cartao
    logo abaixo, aplicada aqui aos modais "Ver Extrato"/"Lançamentos futuros") — cabeçalho + botões de ação
@@ -2216,13 +2223,28 @@ summary::marker{content:'';}
 .cat-sub-nome{flex:1 1 0;min-width:0;overflow-wrap:break-word;}
 .cat-sub-tags{display:flex;gap:4px;flex-shrink:0;}
 .cat-sub-acoes{display:flex;gap:2px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;}
+/* "Ajustes de interface — modo mobile", itens 9/10: cada nível (grupo/categoria/subcategoria) passou a
+   renderizar DOIS blocos de ações — .cat-acoes-desktop (os mesmos botões soltos de sempre) e .cat-acoes-
+   mobile (um único ⋮ que abre todos eles num menu, ver .reg-card-menu-lista reaproveitado do resto do app)
+   — e o CSS escolhe qual mostrar por breakpoint, mesma técnica já usada em .reg-tabela-principal/.reg-
+   lista-mobile. Desktop nunca muda: só .cat-acoes-desktop existe visualmente aqui fora da media query. */
+.cat-acoes-mobile{display:none;}
 @media(max-width:700px){
-  .cat-grupo-nome,.cat-categoria-nome{flex-basis:100%;}
-  .cat-grupo-acoes,.cat-categoria-acoes{flex:1 1 100%;margin-top:2px;}
-  .cat-sub-nome{flex-basis:100%;}
-  .cat-sub-tags{order:2;}
-  .cat-sub-acoes{order:3;margin-left:0;margin-top:2px;}
-  .cat-grupo-acoes .icon-btn,.cat-categoria-acoes .icon-btn,.cat-sub-acoes .icon-btn{min-width:var(--touch-min);}
+  .cat-acoes-desktop{display:none;}
+  .cat-acoes-mobile{display:flex;}
+  /* Item 9/10: expand-arrow | nome | ⋮ sempre numa única linha, nunca quebrando — o nome encolhe com
+     reticências em vez de empurrar o ⋮ para fora ou quebrar para uma segunda linha. */
+  .cat-grupo-summary,.cat-categoria-summary,.cat-sub-item{flex-wrap:nowrap;}
+  .cat-grupo-nome,.cat-categoria-nome,.cat-sub-nome{
+    flex-basis:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .cat-grupo-acoes,.cat-categoria-acoes,.cat-sub-acoes{flex:0 0 auto;margin:0 0 0 auto;}
+  .cat-sub-tags{flex-shrink:0;}
+  /* "Ajustes de interface — modo mobile", item 6: tipografia só no mobile — desktop mantém os tamanhos
+     originais definidos acima (fora desta media query). */
+  .cat-grupo-summary{font-size:14px;}
+  .cat-categoria-summary{font-size:12px;}
+  .cat-sub-lista{font-size:11px;}
 }
 .chip{
   display:inline-flex;align-items:center;gap:2px;background:var(--navy-50);border:1px solid var(--line);
@@ -2344,6 +2366,13 @@ summary::marker{content:'';}
 @media(max-width:700px){
   .cartoes-resumo-grid-contas{grid-template-columns:repeat(2,1fr);}
   .cartoes-resumo-grid-contas .cartoes-resumo-item:first-child{grid-column:1 / -1;}
+  /* "Ajustes de interface — modo mobile", item 8: no modal 📈 Evolução da Reserva de Emergência, o 1º
+     card-resumo (saldo atual) ocupa a largura inteira do painel, e os demais (aportes/resgates/rendimentos,
+     quando existir) formam pares lado a lado em 2 colunas — mesmo princípio de .cartoes-resumo-grid-contas
+     acima, escopado só a este modal (#ovEvolucaoReserva) para não afetar os demais usos genéricos de
+     .cartoes-resumo-grid no resto do app. */
+  #ovEvolucaoReserva .cartoes-resumo-grid{grid-template-columns:repeat(2,1fr);}
+  #ovEvolucaoReserva .cartoes-resumo-grid .cartoes-resumo-item:first-child{grid-column:1 / -1;}
 }
 /* Modal "Ver detalhes" de Economias — agrupamento Categoria → Subcategoria → lançamentos. */
 .aportes-categoria-bloco{margin-bottom:14px;}
@@ -2410,11 +2439,43 @@ summary::marker{content:'';}
      duas tabelas citadas explicitamente (Previsão Financeira e Cartões), o wrapper vira só uma estrutura de
      distribuição — sem fundo/borda/raio/sombra própria — para cada card manter, sozinho, a mesma
      identidade visual dos demais cards mobile do app (:has() já é usado em outro lugar do app, ver
-     "#root:has(.grafico-expandido-overlay)"). */
+     "#root:has(.grafico-expandido-overlay)"). "Ajustes de interface — modo mobile" (item 3) estende o mesmo
+     tratamento à tabela "Onde o dinheiro está mudando?" (Inteligência Financeira, ver data-ordenar-tabela=
+     "intelGrupos") — mesmo problema, mesma causa raiz. */
   .table-wrap:has(> .tabela-cartoes),
-  .table-wrap:has(> .tabela-previsao-financeira){
+  .table-wrap:has(> .tabela-previsao-financeira),
+  .table-wrap[data-ordenar-tabela="intelGrupos"]{
     border:none;border-radius:0;background:transparent;box-shadow:none;overflow:visible;max-height:none;
   }
+  /* "Ajustes de interface — modo mobile", item 1: mesma causa raiz, mas aqui o wrapper (.table-wrap dentro
+     do modal "Ver detalhes" de Aportes) não embrulha uma <table> e sim uma pilha de .aportes-categoria-
+     bloco diretamente — cada bloco vira um card independente (fundo/borda/raio/espaçamento próprios,
+     mesma identidade visual do resto do app), e o wrapper perde a própria moldura para não dar a
+     impressão de um único painel grande contendo todas as categorias. */
+  .table-wrap:has(> .aportes-categoria-bloco){
+    border:none;border-radius:0;background:transparent;box-shadow:none;overflow:visible;max-height:none;
+  }
+  .aportes-categoria-bloco{
+    border:1px solid var(--line);border-radius:var(--radius-md);background:var(--paper);
+    padding:10px 12px;margin-bottom:10px;
+  }
+  .aportes-categoria-bloco:last-child{margin-bottom:0;}
+  /* "Ajustes de interface — modo mobile", item 7: Histórico do Contracheque abandona a tabela compactada e
+     vira um card financeiro por competência, na mesma linguagem visual do .conta-financeira-card (borda,
+     raio, fundo, padding) — mas com altura dinâmica (nunca a altura fixa de 240px usada nos cards de Contas
+     e Cartões, que não se aplica aqui). Hierarquia: competência+valor líquido (topo) → informações
+     secundárias em grid (bruto/descontos/margem consignável) → status+ação (rodapé: data do crédito + "Ver
+     detalhes"). A tabela desktop (ver reg-tabela-principal acima) continua exatamente como antes. */
+  .contracheque-historico-card{
+    border:1px solid var(--line);border-radius:10px;background:var(--paper);
+    padding:10px 12px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;
+  }
+  .contracheque-historico-card:last-child{margin-bottom:0;}
+  .contracheque-historico-topo{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+  .contracheque-historico-competencia{font-weight:700;font-size:13px;color:var(--navy-900);}
+  .contracheque-historico-valor{font-size:15px;font-weight:700;}
+  .contracheque-historico-secundarias{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:6px;font-size:11px;}
+  .contracheque-historico-rodape{display:flex;justify-content:space-between;align-items:center;gap:8px;padding-top:6px;border-top:1px solid var(--navy-50);}
 }
 .aportes-tabela-itens td{padding:4px 10px;border-bottom:1px solid var(--line);}
 /* Colunas fixas (nunca dependentes do conteúdo dos cards — ver .conta-financeira-saldo-bancaria abaixo):
@@ -2584,7 +2645,7 @@ summary::marker{content:'';}
 .conta-cabecalho-bancario-item .val{color:var(--ink);font-weight:700;}
 .limite-cartao-info-cabecalho{margin-top:0;margin-left:auto;max-width:260px;text-align:right;}
 @media (max-width: 760px){
-  .fatura-digital-head-top-principal{gap:8px 16px;}
+  .fatura-digital-head-top-principal{gap:8px 16px;min-width:200px;}
   .conta-cabecalho-bancario,.limite-cartao-info-cabecalho{margin-left:0;}
 }
 .linha-grupo-competencia td{background:var(--navy-50,#f4f7fc);font-weight:700;font-size:12px;color:#4a5468;padding:6px 10px;}
@@ -5543,6 +5604,7 @@ function criarUIPadrao(){
   regPagina: 1,        // página atual (1-based) da tabela de Registros
   regSelecionados: new Set(),
   regCardMenuAberto: null, // id do lançamento com o menu de ações (✏️/📄/🗑️) aberto na lista mobile de Registros
+  catMenuAberto: null, // chave ("grupo:X"/"cat:X"/"sub:X") do menu ⋮ aberto na aba Configurações → Categorias (modo mobile)
   regCardDetalheId: null, // id do lançamento com o modal de detalhes (item 13 do requisito) aberto — null = fechado
   filtrosMobileAberto: null, // prefixo ('Reg', ...) da barra de filtros aberta como painel/bottom sheet no mobile
   importStep: 0, // 0=fechado · 1=período+conta (pré-importação) · 2=escolher arquivo · 3=confirmar/mapear · 4=revisar e classificar
@@ -9256,8 +9318,7 @@ function renderExtratoContaModal(){
           data: t=>fmtData(t.data),
           valorTexto: t=>fmtBRL(t.valor), valorClasse: t=> ehSaldoAnterior(t)?'':(t.tipo==='Receita'?'pos':'neg'),
           secundario: t=> t.grupo||'Sem Grupo',
-          tags: t=> ehSaldoAnterior(t) ? '' : `<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`,
-          extra: t=>`<div class="reg-card-extra">Saldo: <b class="val-cell ${classeSinalMoeda(t.saldoAcumulado)}">${fmtBRL(t.saldoAcumulado)}</b></div>`,
+          tags: t=> `${ehSaldoAnterior(t) ? '' : `<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`}<span class="reg-card-linha3-saldo">Saldo: <b class="val-cell ${classeSinalMoeda(t.saldoAcumulado)}">${fmtBRL(t.saldoAcumulado)}</b></span>`,
           prefixo: 'Extrato', selecionados: UI.extratoContaModal.selecionados,
         })}
         <div class="registros-rodape no-print">${rodapePaginacaoExtrato}</div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhum lançamento encontrado com esses filtros.</div>`}` : `${renderBotoesAcoesLancamentoModal(conta, false)}<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhum lançamento nesta conta na competência selecionada.</div>`}
@@ -9375,8 +9436,7 @@ function renderFuturosContaModal(){
         ${renderCardsLancamentosModal(futurosPagina, {
           data: t=>`${fmtData(t.data)} (prevista)`,
           valorTexto: t=>`${t.tipo==='Despesa'?'-':''}${fmtBRL(t.valor)}`, valorClasse: t=> t.tipo==='Receita'?'pos':'neg',
-          tags: t=>`<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`,
-          extra: t=>`<div class="reg-card-extra">Saldo projetado: <b class="val-cell ${classeSinalMoeda(t.saldoProjetado)}">${fmtBRL(t.saldoProjetado)}</b></div>`,
+          tags: t=>`<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}<span class="reg-card-linha3-saldo">Saldo projetado: <b class="val-cell ${classeSinalMoeda(t.saldoProjetado)}">${fmtBRL(t.saldoProjetado)}</b></span>`,
           prefixo: 'Futuros', selecionados: UI.futurosContaModal.selecionados,
         })}
         <div class="registros-rodape no-print">${rodapePaginacaoFuturos}</div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">📅</div>Nenhum lançamento encontrado com esses filtros.</div>`}` : `${renderBotoesAcoesLancamentoModal(conta, false)}<div class="empty-state" style="margin-top:14px;"><div class="big">📅</div>Nenhum lançamento futuro cadastrado para esta conta.</div>`}
@@ -9418,7 +9478,7 @@ function renderHistoricoContrachequeModal(){
       <div class="modal-body">
         ${cabecalhoContaModalHtml(conta)}
         ${historico.length ? `
-        <div class="table-wrap table-wrap-registros" style="margin-top:14px;" data-ordenar-tabela="historicoContracheque"><table>
+        <div class="table-wrap table-wrap-registros reg-tabela-principal" style="margin-top:14px;" data-ordenar-tabela="historicoContracheque"><table>
           <thead><tr>
             ${thOrdenavel('historicoContracheque','competencia','Competência')}${thOrdenavel('historicoContracheque','margemConsignavel','Margem Consignável',{style:'text-align:right;'})}${thOrdenavel('historicoContracheque','bruto','Bruto',{style:'text-align:right;'})}
             ${thOrdenavel('historicoContracheque','descontos','Descontos',{style:'text-align:right;'})}${thOrdenavel('historicoContracheque','liquido','Líquido',{style:'text-align:right;'})}${thOrdenavel('historicoContracheque','dataCredito','Data do Crédito')}<th class="no-print"></th>
@@ -9435,6 +9495,22 @@ function renderHistoricoContrachequeModal(){
             </tr>`).join('')}
           </tbody>
         </table></div>
+        <div class="reg-lista-mobile">${historicoPagina.map(h=>`
+          <div class="contracheque-historico-card">
+            <div class="contracheque-historico-topo">
+              <span class="contracheque-historico-competencia">${competenciaLabel(h.competencia)}</span>
+              <span class="contracheque-historico-valor">${fmtBRL(h.liquido)}</span>
+            </div>
+            <div class="contracheque-historico-secundarias">
+              <div><span class="hint">Bruto</span><br><b class="val-cell pos">${fmtBRL(h.bruto)}</b></div>
+              <div><span class="hint">Descontos</span><br><b class="val-cell neg">${fmtBRL(h.descontos)}</b></div>
+              <div><span class="hint">Margem Consignável</span><br><b>${fmtBRL(h.margemConsignavel)}</b></div>
+            </div>
+            <div class="contracheque-historico-rodape">
+              <span class="hint">${h.dataCredito ? fmtData(h.dataCredito) : '—'}</span>
+              <button type="button" class="btn btn-ghost btn-sm" data-abrir-competencia-contracheque="${escapeHtml(conta)}|${h.competencia}">Ver detalhes</button>
+            </div>
+          </div>`).join('')}</div>
         <div class="registros-rodape no-print">${rodapePaginacaoHistorico}</div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhum contracheque importado ainda para esta conta.</div>`}
       </div>
       <div class="modal-foot">
@@ -12284,10 +12360,11 @@ function renderMapaCalorDiaModal(){
           </tr>`).join('')}</tbody>
         </table></div>
         ${renderCardsLancamentosModal(itensPagina, {
+          data: t=>fmtData(t.data),
           contaLinha1: t=> t.conta ? escapeHtml(t.conta) : '<span class="hint">—</span>',
           valorTexto: t=>fmtBRL(t.valor), valorClasse: ()=>'neg',
-          secundario: t=>`${t.categoria||'Sem categoria'} · ${t.grupo||'Sem Grupo'}`,
-          tags: t=> Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : '',
+          secundario: t=>`${t.grupo||'Sem Grupo'} · ${t.categoria||'Sem categoria'}`,
+          tags: t=>`<span class="tag Despesa">Despesa</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`,
           prefixo: 'MapaCalor', selecionados: UI.mapaCalorDiaModal.selecionados,
         })}
         <div class="registros-rodape no-print">${rodapePaginacaoMapaCalor}</div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhuma despesa encontrada com esses filtros.</div>`}`}
@@ -13630,8 +13707,10 @@ function renderRegCardDetalheModal(){
    - `descricao`: linha 2 (default: t.descricao) — permite uma tela customizar o texto principal do card
      quando o campo relevante não é `descricao` (ex.: nome de um arquivo).
    - `secundario`/`tags`: linha 3 — metadados/tags específicos da tela (grupo, categoria, tipo, parcela...).
-   - `extra`: bloco opcional ABAIXO das 3 linhas, só para informação que não caiba na linha 3 sem perder
-     sentido (ex.: saldo acumulado/projetado do Extrato Consolidado — ver .reg-card-extra no CSS).
+   - `extra`: bloco opcional ABAIXO das 3 linhas, para informação que não caiba na linha 3 sem perder
+     sentido — nenhum consumidor atual precisa dele (Saldo/Saldo projetado passaram a integrar a própria
+     linha3 via .reg-card-linha3-saldo, ver "Ajustes de interface — modo mobile" item 5), mas o slot
+     continua suportado no helper para uma futura tela que realmente precise de uma linha extra.
    `semAcao`/`tituloGrupo`/`prefixo`/`selecionados` mantêm o mesmo papel de antes (item técnico sem menu de
    ações, agrupamento por cabeçalho, seleção em lote). */
 function renderCardsLancamentosModal(itens, opts){
@@ -14778,16 +14857,18 @@ function renderLinhaNaoListados(l){
       </td>
     </tr>`;
 }
-/* "Padronização dos cards de lançamentos no modo mobile": versão .reg-card (mesma estrutura de 3 linhas do
-   resto do app) das 3 variantes de linha da tabela mensal do Extrato Consolidado — renderTabelaMesExtrato
+/* "Padronização dos cards de lançamentos no modo mobile" + "Ajustes de interface — modo mobile" (item 4):
+   versão .reg-card das 3 variantes de linha da tabela mensal do Extrato Consolidado — renderTabelaMesExtrato
    chama uma destas para CADA linha ao montar o .reg-lista-mobile que substitui a tabela no mobile (a
    tabela em si, com renderLinha*, continua existindo e é a única visível no desktop — ver
-   .reg-tabela-principal). Nenhuma delas tem checkbox (esta tabela não tem seleção em lote); a coluna 1 da
-   grade (mesma do checkbox nos outros .reg-card) fica reservada só para as ações (.reg-card-menu), quando a
-   linha tem alguma — os 3 ícones já existentes (🔓/✏️/🗑️) continuam soltos, sem virar um menu ⋮, para não
-   mudar nenhum data-attribute/handler já ligado em bindEvents. */
+   .reg-tabela-principal). Nenhuma delas tem checkbox (esta tabela não tem seleção em lote).
+   renderCardFluxoProjecao (item 4.2) e renderCardFluxoNaoListados (item 4.1) usam um layout próprio, mais
+   rico que o padrão universal: cada ícone de ação (🔓/✏️/🗑️ ou 🔍) ocupa a coluna 1 da grade JUNTO da linha
+   correspondente (.reg-card-acao-linha1/.reg-card-acao-linha2/.reg-card-menu, já na linha3), em vez de todos
+   juntos numa única célula — sempre soltos, nunca um menu ⋮, para não mudar nenhum data-attribute/handler já
+   ligado em bindEvents. Saldo passa a integrar a própria linha3 (.reg-card-linha3-saldo), não mais um bloco
+   .reg-card-extra separado. */
 function renderCardFluxoProjecao(l){
-  const tagTipo = l.tipo==='Receita' ? 'Receita' : 'Despesa';
   const statusComValorReal = ['conciliado','antecipado','postecipado','contracheque-importado'].includes(l.statusConciliacao);
   const tituloValorReal = l.statusConciliacao==='contracheque-importado'
     ? `Valor Líquido do contracheque importado (previsto: ${fmtBRL(l.valorPrevisto)})`
@@ -14801,24 +14882,24 @@ function renderCardFluxoProjecao(l){
     : fmtBRL(l.valorCalculado);
   return `
     <div class="reg-card" data-proj-id="${l.id}">
+      ${temVinculo ? `<div class="reg-card-acao-linha1"><button class="icon-btn" data-proj-desvincular="${l.id}" data-proj-desvincular-mes="${l.competencia}" title="Desfazer a conciliação com o Extrato (remove ${l.qtdVinculos>1?`os ${l.qtdVinculos} vínculos`:'o vínculo'} desta competência — volta a ser projeção)">🔓</button></div>` : ''}
       <div class="reg-card-linha1">
         <span class="reg-card-data">${pad2(l.dia)}</span>
-        <span class="reg-card-conta">${contaOuCartaoDaLinha(l)}</span>
         <span class="reg-card-valor ${l.tipo==='Despesa'?'neg':'pos'}">${valorHtml}</span>
+      </div>
+      <div class="reg-card-acao-linha2">
+        <button class="icon-btn" data-proj-edit="${l.id}" data-proj-mes="${l.competencia}" title="Editar dia, descrição, tipo, valor, classificação ou cartão vinculado">✏️</button>
       </div>
       <div class="reg-card-linha2">
         <span class="reg-card-descricao">${escapeHtml(l.descricao)}${seloConciliacaoProjecao(l)}</span>
       </div>
       <div class="reg-card-menu">
-        ${temVinculo ? `<button class="icon-btn" data-proj-desvincular="${l.id}" data-proj-desvincular-mes="${l.competencia}" title="Desfazer a conciliação com o Extrato (remove ${l.qtdVinculos>1?`os ${l.qtdVinculos} vínculos`:'o vínculo'} desta competência — volta a ser projeção)">🔓</button>` : ''}
-        <button class="icon-btn" data-proj-edit="${l.id}" data-proj-mes="${l.competencia}" title="Editar dia, descrição, tipo, valor, classificação ou cartão vinculado">✏️</button>
         <button class="icon-btn" data-proj-del="${l.id}" data-proj-del-mes="${l.competencia}" title="Remover lançamento">🗑️</button>
       </div>
       <div class="reg-card-linha3">
         <span class="reg-card-secundario">${badgeStatusExtratoConsolidado(l)}</span>
-        <span class="tag ${tagTipo}">${tagTipo}</span>
+        <span class="reg-card-linha3-saldo">Saldo: <b class="val-cell saldo-destaque">${fmtBRL(l.saldo)}</b></span>
       </div>
-      <div class="reg-card-extra">Saldo: <b class="val-cell saldo-destaque">${fmtBRL(l.saldo)}</b></div>
     </div>`;
 }
 function renderCardFluxoSaldoAtual(l){
@@ -14838,6 +14919,9 @@ function renderCardFluxoNaoListados(l){
   const titulo = `Soma de ${l.qtd} lançamento${l.qtd===1?'':'s'} ${l.qtd===1?'real':'reais'} das contas do Extrato Consolidado (${intervalo}) sem linha própria nesta tabela`;
   return `
     <div class="reg-card" title="${escapeHtml(titulo)}" data-nao-listados-dia-ini="${diaIniExibicao}" data-nao-listados-dia-fim="${diaFimExibicao}" data-nao-listados-ano="${l.ano}" data-nao-listados-mes="${l.mes}">
+      <div class="reg-card-acao-linha1">
+        <button type="button" class="icon-btn" data-nao-listados-abrir title="Ver os lançamentos que compõem este total">🔍</button>
+      </div>
       <div class="reg-card-linha1">
         <span class="reg-card-data">${intervaloCompacto}</span>
         <span class="reg-card-valor ${l.valor<0?'neg':(l.valor>0?'pos':'')}">${fmtBRL(l.valor)}</span>
@@ -14845,13 +14929,10 @@ function renderCardFluxoNaoListados(l){
       <div class="reg-card-linha2">
         <span class="reg-card-descricao">Lançamentos não listados</span>
       </div>
-      <div class="reg-card-menu">
-        <button type="button" class="icon-btn" data-nao-listados-abrir title="Ver os lançamentos que compõem este total">🔍</button>
-      </div>
       <div class="reg-card-linha3">
         <span class="reg-card-secundario">${badgeStatusExtratoConsolidado(l)}</span>
+        <span class="reg-card-linha3-saldo">Saldo: <b class="val-cell saldo-destaque">${fmtBRL(l.saldo)}</b></span>
       </div>
-      <div class="reg-card-extra">Saldo: <b class="val-cell saldo-destaque">${fmtBRL(l.saldo)}</b></div>
     </div>`;
 }
 /* Modal de auditoria/rastreabilidade de UMA linha "Lançamentos não listados" (requisito "Ajustes no
@@ -14916,8 +14997,8 @@ function renderNaoListadosModal(){
           data: t=>fmtData(t.data),
           contaLinha1: t=>escapeHtml(t.conta),
           valorTexto: t=>fmtBRL(t.valor), valorClasse: t=> t.tipo==='Despesa'?'neg':'pos',
-          secundario: t=>escapeHtml(t.categoria||'—'),
-          tags: t=>`<span class="tag ${t.tipo}">${t.tipo}</span>`,
+          secundario: t=> t.grupo||'Sem Grupo',
+          tags: t=>`<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`,
           semAcao: ()=>true,
         })}
         <div class="registros-rodape">${rodapePaginacao}</div>
@@ -16357,10 +16438,19 @@ function renderCategorias(){
         <summary class="cat-grupo-summary">
           <span class="expand-arrow" data-arrow-for="grupo-${escapeHtml(grupo)}">${UI.gruposAbertos.has(grupo)?'➖':'➕'}</span>
           <span class="cat-grupo-nome">${iconeGrupo(grupo)} ${escapeHtml(grupo)}</span>
-          <span class="cat-grupo-acoes">
+          <span class="cat-grupo-acoes cat-acoes-desktop">
             <button type="button" class="icon-btn" data-pos-grupo="${escapeHtml(grupo)}" onclick="event.stopPropagation()" title="Reposicionar grupo">↕️</button>
             <button type="button" class="icon-btn" data-edit-grupo="${escapeHtml(grupo)}" onclick="event.stopPropagation()" title="Editar grupo">✏️</button>
             <button type="button" class="icon-btn" data-del-grupo="${escapeHtml(grupo)}" onclick="event.stopPropagation()" title="Excluir grupo" style="color:var(--despesa);">🗑️</button>
+          </span>
+          <span class="cat-grupo-acoes cat-acoes-mobile">
+            <button type="button" class="icon-btn reg-card-menu-btn" data-cat-menu="grupo:${escapeHtml(grupo)}" onclick="event.stopPropagation()" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.catMenuAberto===('grupo:'+grupo)?'true':'false'}">⋮</button>
+            ${UI.catMenuAberto===('grupo:'+grupo) ? `
+            <div class="reg-card-menu-lista">
+              <button type="button" data-pos-grupo="${escapeHtml(grupo)}" onclick="event.stopPropagation()">↕️ Reposicionar</button>
+              <button type="button" data-edit-grupo="${escapeHtml(grupo)}" onclick="event.stopPropagation()">✏️ Editar</button>
+              <button type="button" data-del-grupo="${escapeHtml(grupo)}" onclick="event.stopPropagation()" style="color:var(--despesa);">🗑️ Excluir</button>
+            </div>` : ''}
           </span>
         </summary>
         ${Object.keys(porGrupo[grupo]).map(sub=>{
@@ -16371,27 +16461,50 @@ function renderCategorias(){
             <summary class="cat-categoria-summary">
               <span class="expand-arrow" data-arrow-for="cat-${escapeHtml(chaveCat)}" style="color:var(--gold-dark);">${catAberta?'➖':'➕'}</span>
               <span class="cat-categoria-nome">${escapeHtml(sub)} <span class="hint" style="margin:0;">(${itens.length})</span></span>
-              <span class="cat-categoria-acoes">
+              <span class="cat-categoria-acoes cat-acoes-desktop">
                 <button type="button" class="icon-btn" data-pos-categoria-grupo="${escapeHtml(grupo)}" data-pos-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()" title="Reposicionar categoria">↕️</button>
                 <button type="button" class="icon-btn" data-edit-categoria-grupo="${escapeHtml(grupo)}" data-edit-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()" title="Editar categoria">✏️</button>
                 <button type="button" class="icon-btn" data-mover-categoria-grupo="${escapeHtml(grupo)}" data-mover-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()" title="Mover categoria para outro grupo">🔀</button>
                 <button type="button" class="icon-btn" data-del-categoria-grupo="${escapeHtml(grupo)}" data-del-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()" title="Excluir categoria" style="color:var(--despesa);">🗑️</button>
               </span>
+              <span class="cat-categoria-acoes cat-acoes-mobile">
+                <button type="button" class="icon-btn reg-card-menu-btn" data-cat-menu="cat:${escapeHtml(chaveCat)}" onclick="event.stopPropagation()" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.catMenuAberto===('cat:'+chaveCat)?'true':'false'}">⋮</button>
+                ${UI.catMenuAberto===('cat:'+chaveCat) ? `
+                <div class="reg-card-menu-lista">
+                  <button type="button" data-pos-categoria-grupo="${escapeHtml(grupo)}" data-pos-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()">↕️ Reposicionar</button>
+                  <button type="button" data-edit-categoria-grupo="${escapeHtml(grupo)}" data-edit-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()">✏️ Editar</button>
+                  <button type="button" data-mover-categoria-grupo="${escapeHtml(grupo)}" data-mover-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()">🔀 Mover</button>
+                  <button type="button" data-del-categoria-grupo="${escapeHtml(grupo)}" data-del-categoria-nome="${escapeHtml(sub)}" onclick="event.stopPropagation()" style="color:var(--despesa);">🗑️ Excluir</button>
+                </div>` : ''}
+              </span>
             </summary>
             <ul class="cat-sub-lista">
-              ${itens.map(i=>`<li class="cat-sub-item">
+              ${itens.map(i=>{
+                const chaveSub = `${grupo}|||${sub}|||${i.nome}|||${i.tipo}`;
+                return `<li class="cat-sub-item">
                 <span class="cat-sub-nome">${escapeHtml(i.nome)}</span>
                 <span class="cat-sub-tags">
                   <span class="tag ${i.tipo}">${i.tipo}</span>
                   <span class="tag ${i.natureza==='Fixo'?'Fixo':'Variavel'}">${i.natureza}</span>
                 </span>
-                <span class="cat-sub-acoes">
+                <span class="cat-sub-acoes cat-acoes-desktop">
                   <button type="button" class="icon-btn" data-pos-sub-grupo="${escapeHtml(grupo)}" data-pos-sub-categoria="${escapeHtml(sub)}" data-pos-sub="${escapeHtml(i.nome)}" title="Reposicionar subcategoria">↕️</button>
                   <button type="button" class="icon-btn" data-edit-sub="${escapeHtml(i.nome)}" data-edit-sub-tipo="${escapeHtml(i.tipo)}" title="Editar subcategoria">✏️</button>
                   <button type="button" class="icon-btn" data-mover-sub="${escapeHtml(i.nome)}" data-mover-sub-tipo="${escapeHtml(i.tipo)}" data-mover-sub-grupo="${escapeHtml(grupo)}" data-mover-sub-categoria="${escapeHtml(sub)}" title="Mover subcategoria para outra categoria ou grupo">🔀</button>
                   <button type="button" class="icon-btn" data-del-sub="${escapeHtml(i.nome)}" data-del-sub-tipo="${escapeHtml(i.tipo)}" title="Excluir subcategoria" style="color:var(--despesa);">🗑️</button>
                 </span>
-              </li>`).join('')}
+                <span class="cat-sub-acoes cat-acoes-mobile">
+                  <button type="button" class="icon-btn reg-card-menu-btn" data-cat-menu="sub:${escapeHtml(chaveSub)}" title="Mais ações" aria-haspopup="true" aria-expanded="${UI.catMenuAberto===('sub:'+chaveSub)?'true':'false'}">⋮</button>
+                  ${UI.catMenuAberto===('sub:'+chaveSub) ? `
+                  <div class="reg-card-menu-lista">
+                    <button type="button" data-pos-sub-grupo="${escapeHtml(grupo)}" data-pos-sub-categoria="${escapeHtml(sub)}" data-pos-sub="${escapeHtml(i.nome)}">↕️ Reposicionar</button>
+                    <button type="button" data-edit-sub="${escapeHtml(i.nome)}" data-edit-sub-tipo="${escapeHtml(i.tipo)}">✏️ Editar</button>
+                    <button type="button" data-mover-sub="${escapeHtml(i.nome)}" data-mover-sub-tipo="${escapeHtml(i.tipo)}" data-mover-sub-grupo="${escapeHtml(grupo)}" data-mover-sub-categoria="${escapeHtml(sub)}">🔀 Mover</button>
+                    <button type="button" data-del-sub="${escapeHtml(i.nome)}" data-del-sub-tipo="${escapeHtml(i.tipo)}" style="color:var(--despesa);">🗑️ Excluir</button>
+                  </div>` : ''}
+                </span>
+              </li>`;
+              }).join('')}
             </ul>
           </details>`;
         }).join('')}
@@ -20459,6 +20572,20 @@ function bindEvents(){
     // "flutuando" desconectado do botão que o abriu, já que a lista agora é position:fixed — ver
     // posicionarMenuRegCard) — mesmo padrão de "fecha ao interagir fora dele" do clique acima.
     window.addEventListener('scroll', ()=>{ UI.regCardMenuAberto = null; render(); }, { once:true, capture:true });
+  }
+  // "Ajustes de interface — modo mobile", itens 9/10: mesmo padrão de menu único acima (✏️/📄/🗑️ do
+  // .reg-card), agora para os ⋮ de grupo/categoria/subcategoria da aba Configurações → Categorias — reaproveita
+  // as MESMAS classes/CSS (.reg-card-menu-btn/.reg-card-menu-lista) e a mesma posicionarMenuRegCard() abaixo,
+  // só com um estado (UI.catMenuAberto) e uma chave ("grupo:"/"cat:"/"sub:"+identificador) próprios, para não
+  // colidir com o menu de lançamentos em outra aba.
+  document.querySelectorAll('[data-cat-menu]').forEach(b=> b.addEventListener('click', e=>{
+    e.stopPropagation();
+    UI.catMenuAberto = UI.catMenuAberto===b.dataset.catMenu ? null : b.dataset.catMenu;
+    render();
+  }));
+  if(UI.catMenuAberto){
+    document.addEventListener('click', ()=>{ UI.catMenuAberto = null; render(); }, { once:true });
+    window.addEventListener('scroll', ()=>{ UI.catMenuAberto = null; render(); }, { once:true, capture:true });
   }
   // Reposiciona a lista de ações (.reg-card-menu-lista) com base na posição real do botão ⋮ que a abriu —
   // precisa rodar DEPOIS do render() acima ter colocado a lista no DOM (senão não há o que medir/posicionar).
