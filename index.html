@@ -2349,6 +2349,13 @@ summary::marker{content:'';}
 @media(max-width:700px){
   .cartoes-resumo-grid-contas{grid-template-columns:repeat(2,1fr);}
   .cartoes-resumo-grid-contas .cartoes-resumo-item:first-child{grid-column:1 / -1;}
+  /* "Ajustes de interface — modo mobile", item 8: no modal 📈 Evolução da Reserva de Emergência, o 1º
+     card-resumo (saldo atual) ocupa a largura inteira do painel, e os demais (aportes/resgates/rendimentos,
+     quando existir) formam pares lado a lado em 2 colunas — mesmo princípio de .cartoes-resumo-grid-contas
+     acima, escopado só a este modal (#ovEvolucaoReserva) para não afetar os demais usos genéricos de
+     .cartoes-resumo-grid no resto do app. */
+  #ovEvolucaoReserva .cartoes-resumo-grid{grid-template-columns:repeat(2,1fr);}
+  #ovEvolucaoReserva .cartoes-resumo-grid .cartoes-resumo-item:first-child{grid-column:1 / -1;}
 }
 /* Modal "Ver detalhes" de Economias — agrupamento Categoria → Subcategoria → lançamentos. */
 .aportes-categoria-bloco{margin-bottom:14px;}
