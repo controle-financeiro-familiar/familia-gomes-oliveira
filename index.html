@@ -1324,6 +1324,13 @@ tbody tr:hover{background:var(--navy-50);}
   white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word;word-break:normal;
 }
 .reg-card-menu{grid-column:1;grid-row:3;align-self:center;flex-shrink:0;font-size:11px;}
+/* "Ajustes de interface — modo mobile", item 4.2: o .reg-card de lançamento normal do Extrato Consolidado
+   (ver renderCardFluxoProjecao) precisa de um ícone na coluna 1 JUNTO de cada uma das 3 linhas (🔓 na
+   linha1, ✏️ na linha2, 🗑️ na linha3 — reaproveita .reg-card-menu acima, já na linha3), não só checkbox/menu
+   nas linhas 1/3 como no padrão universal — mesma coluna 1 da grade, centralizados verticalmente em cada
+   linha (mesmo princípio de .reg-card-check/.reg-card-menu). */
+.reg-card-acao-linha1{grid-column:1;grid-row:1;align-self:center;flex-shrink:0;font-size:11px;}
+.reg-card-acao-linha2{grid-column:1;grid-row:2;align-self:center;flex-shrink:0;font-size:11px;}
 .reg-card-menu-btn{min-width:22px;min-height:22px;font-size:13px;padding:1px 3px;}
 /* "Corrigir posicionamento do menu de ações do .reg-card — modo mobile": o botão ⋮ mora na coluna 1 da
    grade (mesma do checkbox — ver comentário acima da definição de .reg-card), então um right:0/top:100%
@@ -1350,11 +1357,11 @@ tbody tr:hover{background:var(--navy-50);}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .reg-card-linha3 .tag{font-size:11px;white-space:nowrap;flex-shrink:0;}
-/* .reg-card-extra é um bloco opcional ABAIXO das 3 linhas padrão, só para informação específica de uma tela
-   que não caiba na linha 3 sem perder sentido (ex.: saldo acumulado/projetado do Extrato Consolidado, uma
-   sequência que não existe em nenhuma outra lista) — nunca usado para recriar Grupo/Tipo/Tag fora do lugar.
-   .reg-card-sem-acao remove o menu ⋮ de um item técnico não editável (ex.: "Saldo Anterior" do extrato). */
-.reg-card-extra{font-size:11.5px;color:#8393ac;margin-top:4px;grid-column:2;grid-row:4;}
+/* "Ajustes de interface — modo mobile", itens 4.1/4.2/5: Saldo passa a integrar a própria linha3 (ao lado
+   de Status/Grupo/Tag), em vez do bloco .reg-card-extra abaixo das 3 linhas — empurrado para a extremidade
+   direita da linha (mesmo princípio de .reg-card-valor na linha1), sempre totalmente visível. */
+.reg-card-linha3-saldo{margin-left:auto;white-space:nowrap;flex-shrink:0;font-size:11px;}
+/* .reg-card-sem-acao remove o menu ⋮ de um item técnico não editável (ex.: "Saldo Anterior" do extrato). */
 /* Item 13 do requisito: modal de detalhe completo do .reg-card — lista de campos "rótulo: valor", com
    quebra de linha livre (nunca corta/trunca), diferente do card compacto que o originou. */
 .reg-detalhe-lista{display:flex;flex-direction:column;gap:2px;}
@@ -9286,8 +9293,7 @@ function renderExtratoContaModal(){
           data: t=>fmtData(t.data),
           valorTexto: t=>fmtBRL(t.valor), valorClasse: t=> ehSaldoAnterior(t)?'':(t.tipo==='Receita'?'pos':'neg'),
           secundario: t=> t.grupo||'Sem Grupo',
-          tags: t=> ehSaldoAnterior(t) ? '' : `<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`,
-          extra: t=>`<div class="reg-card-extra">Saldo: <b class="val-cell ${classeSinalMoeda(t.saldoAcumulado)}">${fmtBRL(t.saldoAcumulado)}</b></div>`,
+          tags: t=> `${ehSaldoAnterior(t) ? '' : `<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`}<span class="reg-card-linha3-saldo">Saldo: <b class="val-cell ${classeSinalMoeda(t.saldoAcumulado)}">${fmtBRL(t.saldoAcumulado)}</b></span>`,
           prefixo: 'Extrato', selecionados: UI.extratoContaModal.selecionados,
         })}
         <div class="registros-rodape no-print">${rodapePaginacaoExtrato}</div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhum lançamento encontrado com esses filtros.</div>`}` : `${renderBotoesAcoesLancamentoModal(conta, false)}<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhum lançamento nesta conta na competência selecionada.</div>`}
@@ -9405,8 +9411,7 @@ function renderFuturosContaModal(){
         ${renderCardsLancamentosModal(futurosPagina, {
           data: t=>`${fmtData(t.data)} (prevista)`,
           valorTexto: t=>`${t.tipo==='Despesa'?'-':''}${fmtBRL(t.valor)}`, valorClasse: t=> t.tipo==='Receita'?'pos':'neg',
-          tags: t=>`<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`,
-          extra: t=>`<div class="reg-card-extra">Saldo projetado: <b class="val-cell ${classeSinalMoeda(t.saldoProjetado)}">${fmtBRL(t.saldoProjetado)}</b></div>`,
+          tags: t=>`<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}<span class="reg-card-linha3-saldo">Saldo projetado: <b class="val-cell ${classeSinalMoeda(t.saldoProjetado)}">${fmtBRL(t.saldoProjetado)}</b></span>`,
           prefixo: 'Futuros', selecionados: UI.futurosContaModal.selecionados,
         })}
         <div class="registros-rodape no-print">${rodapePaginacaoFuturos}</div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">📅</div>Nenhum lançamento encontrado com esses filtros.</div>`}` : `${renderBotoesAcoesLancamentoModal(conta, false)}<div class="empty-state" style="margin-top:14px;"><div class="big">📅</div>Nenhum lançamento futuro cadastrado para esta conta.</div>`}
@@ -13677,8 +13682,10 @@ function renderRegCardDetalheModal(){
    - `descricao`: linha 2 (default: t.descricao) — permite uma tela customizar o texto principal do card
      quando o campo relevante não é `descricao` (ex.: nome de um arquivo).
    - `secundario`/`tags`: linha 3 — metadados/tags específicos da tela (grupo, categoria, tipo, parcela...).
-   - `extra`: bloco opcional ABAIXO das 3 linhas, só para informação que não caiba na linha 3 sem perder
-     sentido (ex.: saldo acumulado/projetado do Extrato Consolidado — ver .reg-card-extra no CSS).
+   - `extra`: bloco opcional ABAIXO das 3 linhas, para informação que não caiba na linha 3 sem perder
+     sentido — nenhum consumidor atual precisa dele (Saldo/Saldo projetado passaram a integrar a própria
+     linha3 via .reg-card-linha3-saldo, ver "Ajustes de interface — modo mobile" item 5), mas o slot
+     continua suportado no helper para uma futura tela que realmente precise de uma linha extra.
    `semAcao`/`tituloGrupo`/`prefixo`/`selecionados` mantêm o mesmo papel de antes (item técnico sem menu de
    ações, agrupamento por cabeçalho, seleção em lote). */
 function renderCardsLancamentosModal(itens, opts){
@@ -14825,16 +14832,18 @@ function renderLinhaNaoListados(l){
       </td>
     </tr>`;
 }
-/* "Padronização dos cards de lançamentos no modo mobile": versão .reg-card (mesma estrutura de 3 linhas do
-   resto do app) das 3 variantes de linha da tabela mensal do Extrato Consolidado — renderTabelaMesExtrato
+/* "Padronização dos cards de lançamentos no modo mobile" + "Ajustes de interface — modo mobile" (item 4):
+   versão .reg-card das 3 variantes de linha da tabela mensal do Extrato Consolidado — renderTabelaMesExtrato
    chama uma destas para CADA linha ao montar o .reg-lista-mobile que substitui a tabela no mobile (a
    tabela em si, com renderLinha*, continua existindo e é a única visível no desktop — ver
-   .reg-tabela-principal). Nenhuma delas tem checkbox (esta tabela não tem seleção em lote); a coluna 1 da
-   grade (mesma do checkbox nos outros .reg-card) fica reservada só para as ações (.reg-card-menu), quando a
-   linha tem alguma — os 3 ícones já existentes (🔓/✏️/🗑️) continuam soltos, sem virar um menu ⋮, para não
-   mudar nenhum data-attribute/handler já ligado em bindEvents. */
+   .reg-tabela-principal). Nenhuma delas tem checkbox (esta tabela não tem seleção em lote).
+   renderCardFluxoProjecao (item 4.2) e renderCardFluxoNaoListados (item 4.1) usam um layout próprio, mais
+   rico que o padrão universal: cada ícone de ação (🔓/✏️/🗑️ ou 🔍) ocupa a coluna 1 da grade JUNTO da linha
+   correspondente (.reg-card-acao-linha1/.reg-card-acao-linha2/.reg-card-menu, já na linha3), em vez de todos
+   juntos numa única célula — sempre soltos, nunca um menu ⋮, para não mudar nenhum data-attribute/handler já
+   ligado em bindEvents. Saldo passa a integrar a própria linha3 (.reg-card-linha3-saldo), não mais um bloco
+   .reg-card-extra separado. */
 function renderCardFluxoProjecao(l){
-  const tagTipo = l.tipo==='Receita' ? 'Receita' : 'Despesa';
   const statusComValorReal = ['conciliado','antecipado','postecipado','contracheque-importado'].includes(l.statusConciliacao);
   const tituloValorReal = l.statusConciliacao==='contracheque-importado'
     ? `Valor Líquido do contracheque importado (previsto: ${fmtBRL(l.valorPrevisto)})`
@@ -14848,24 +14857,24 @@ function renderCardFluxoProjecao(l){
     : fmtBRL(l.valorCalculado);
   return `
     <div class="reg-card" data-proj-id="${l.id}">
+      ${temVinculo ? `<div class="reg-card-acao-linha1"><button class="icon-btn" data-proj-desvincular="${l.id}" data-proj-desvincular-mes="${l.competencia}" title="Desfazer a conciliação com o Extrato (remove ${l.qtdVinculos>1?`os ${l.qtdVinculos} vínculos`:'o vínculo'} desta competência — volta a ser projeção)">🔓</button></div>` : ''}
       <div class="reg-card-linha1">
         <span class="reg-card-data">${pad2(l.dia)}</span>
-        <span class="reg-card-conta">${contaOuCartaoDaLinha(l)}</span>
         <span class="reg-card-valor ${l.tipo==='Despesa'?'neg':'pos'}">${valorHtml}</span>
+      </div>
+      <div class="reg-card-acao-linha2">
+        <button class="icon-btn" data-proj-edit="${l.id}" data-proj-mes="${l.competencia}" title="Editar dia, descrição, tipo, valor, classificação ou cartão vinculado">✏️</button>
       </div>
       <div class="reg-card-linha2">
         <span class="reg-card-descricao">${escapeHtml(l.descricao)}${seloConciliacaoProjecao(l)}</span>
       </div>
       <div class="reg-card-menu">
-        ${temVinculo ? `<button class="icon-btn" data-proj-desvincular="${l.id}" data-proj-desvincular-mes="${l.competencia}" title="Desfazer a conciliação com o Extrato (remove ${l.qtdVinculos>1?`os ${l.qtdVinculos} vínculos`:'o vínculo'} desta competência — volta a ser projeção)">🔓</button>` : ''}
-        <button class="icon-btn" data-proj-edit="${l.id}" data-proj-mes="${l.competencia}" title="Editar dia, descrição, tipo, valor, classificação ou cartão vinculado">✏️</button>
         <button class="icon-btn" data-proj-del="${l.id}" data-proj-del-mes="${l.competencia}" title="Remover lançamento">🗑️</button>
       </div>
       <div class="reg-card-linha3">
         <span class="reg-card-secundario">${badgeStatusExtratoConsolidado(l)}</span>
-        <span class="tag ${tagTipo}">${tagTipo}</span>
+        <span class="reg-card-linha3-saldo">Saldo: <b class="val-cell saldo-destaque">${fmtBRL(l.saldo)}</b></span>
       </div>
-      <div class="reg-card-extra">Saldo: <b class="val-cell saldo-destaque">${fmtBRL(l.saldo)}</b></div>
     </div>`;
 }
 function renderCardFluxoSaldoAtual(l){
@@ -14885,6 +14894,9 @@ function renderCardFluxoNaoListados(l){
   const titulo = `Soma de ${l.qtd} lançamento${l.qtd===1?'':'s'} ${l.qtd===1?'real':'reais'} das contas do Extrato Consolidado (${intervalo}) sem linha própria nesta tabela`;
   return `
     <div class="reg-card" title="${escapeHtml(titulo)}" data-nao-listados-dia-ini="${diaIniExibicao}" data-nao-listados-dia-fim="${diaFimExibicao}" data-nao-listados-ano="${l.ano}" data-nao-listados-mes="${l.mes}">
+      <div class="reg-card-acao-linha1">
+        <button type="button" class="icon-btn" data-nao-listados-abrir title="Ver os lançamentos que compõem este total">🔍</button>
+      </div>
       <div class="reg-card-linha1">
         <span class="reg-card-data">${intervaloCompacto}</span>
         <span class="reg-card-valor ${l.valor<0?'neg':(l.valor>0?'pos':'')}">${fmtBRL(l.valor)}</span>
@@ -14892,13 +14904,10 @@ function renderCardFluxoNaoListados(l){
       <div class="reg-card-linha2">
         <span class="reg-card-descricao">Lançamentos não listados</span>
       </div>
-      <div class="reg-card-menu">
-        <button type="button" class="icon-btn" data-nao-listados-abrir title="Ver os lançamentos que compõem este total">🔍</button>
-      </div>
       <div class="reg-card-linha3">
         <span class="reg-card-secundario">${badgeStatusExtratoConsolidado(l)}</span>
+        <span class="reg-card-linha3-saldo">Saldo: <b class="val-cell saldo-destaque">${fmtBRL(l.saldo)}</b></span>
       </div>
-      <div class="reg-card-extra">Saldo: <b class="val-cell saldo-destaque">${fmtBRL(l.saldo)}</b></div>
     </div>`;
 }
 /* Modal de auditoria/rastreabilidade de UMA linha "Lançamentos não listados" (requisito "Ajustes no
@@ -14963,8 +14972,8 @@ function renderNaoListadosModal(){
           data: t=>fmtData(t.data),
           contaLinha1: t=>escapeHtml(t.conta),
           valorTexto: t=>fmtBRL(t.valor), valorClasse: t=> t.tipo==='Despesa'?'neg':'pos',
-          secundario: t=>escapeHtml(t.categoria||'—'),
-          tags: t=>`<span class="tag ${t.tipo}">${t.tipo}</span>`,
+          secundario: t=> t.grupo||'Sem Grupo',
+          tags: t=>`<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`,
           semAcao: ()=>true,
         })}
         <div class="registros-rodape">${rodapePaginacao}</div>
