@@ -12330,10 +12330,11 @@ function renderMapaCalorDiaModal(){
           </tr>`).join('')}</tbody>
         </table></div>
         ${renderCardsLancamentosModal(itensPagina, {
+          data: t=>fmtData(t.data),
           contaLinha1: t=> t.conta ? escapeHtml(t.conta) : '<span class="hint">—</span>',
           valorTexto: t=>fmtBRL(t.valor), valorClasse: ()=>'neg',
-          secundario: t=>`${t.categoria||'Sem categoria'} · ${t.grupo||'Sem Grupo'}`,
-          tags: t=> Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : '',
+          secundario: t=>`${t.grupo||'Sem Grupo'} · ${t.categoria||'Sem categoria'}`,
+          tags: t=>`<span class="tag Despesa">Despesa</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`,
           prefixo: 'MapaCalor', selecionados: UI.mapaCalorDiaModal.selecionados,
         })}
         <div class="registros-rodape no-print">${rodapePaginacaoMapaCalor}</div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">🧾</div>Nenhuma despesa encontrada com esses filtros.</div>`}`}
