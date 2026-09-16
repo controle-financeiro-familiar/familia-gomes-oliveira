@@ -151,21 +151,33 @@ input,select{font-family:var(--sans);}
 .ti-cta .btn-iniciar-app:disabled{opacity:.45;}
 .ti-cta-hint{font-size:11px;color:#8393ac;text-align:center;}
 @media (max-width:720px){
-  .tela-inicial-card{padding:28px 20px;}
-  .ti-cabecalho{flex-direction:column;text-align:center;gap:14px;}
-  .ti-cabecalho .mark{height:110px;}
+  /* "Ajustar dimensionamento da .tela-inicial — modo mobile": tela mais compacta e proporcional à largura
+     disponível — reduz padding/gap/margens e a tipografia do cabeçalho/opções/rodapé só neste breakpoint,
+     sem tocar nos valores de desktop/tablet definidos acima (fora desta media query). O padding-top com
+     área segura (calc(12px + var(--safe-top))) continua definido só em .tela-inicial (elemento externo,
+     ver regra fora desta media query) — .tela-inicial-card é o cartão interno, com seu próprio padding
+     independente, então reduzi-lo aqui não afeta a área segura do topo. */
+  .tela-inicial-card{padding:20px;}
+  .ti-cabecalho{flex-direction:column;text-align:center;gap:10px;margin-bottom:14px;}
+  .ti-cabecalho .mark{height:90px;}
   .ti-cabecalho-textos{flex-direction:column;text-align:center;gap:10px;}
   /* .ti-titulo-bloco continua "encolhe-para-conteúdo" (ver desktop) — só centralizado dentro da coluna
      .ti-cabecalho-titulos, já que align-items:stretch (padrão) o alinharia à esquerda por não esticar. */
-  .ti-cabecalho .subtitulo{font-size:25px;}
+  .ti-cabecalho h1{font-size:20px;}
+  .ti-cabecalho .subtitulo{font-size:18px;}
+  .ti-status-indicador{font-size:12px;}
   .ti-cabecalho-titulos{align-items:center;}
-  .ti-cabecalho .hint{width:100%;}
+  .ti-cabecalho .hint{width:100%;font-size:10px;}
   /* Mobile: cabeçalho inteiro fica centralizado (ver .ti-cabecalho acima) — a linha do subtítulo empilha em
      vez de ficar lado a lado, senão o indicador de status ficaria espremido ao lado de um subtítulo já
      centralizado numa coluna estreita. */
   .ti-subtitulo-linha{flex-direction:column;align-items:center;justify-content:center;gap:4px;}
-  .ti-opcao{flex-basis:100%;max-width:100%;}
-  .ti-rodape{flex-direction:column;align-items:stretch;}
+  .ti-opcoes{gap:10px;margin-bottom:14px;}
+  .ti-opcao{flex-basis:100%;max-width:100%;padding:0 12px 12px;}
+  .ti-opcao-icone{margin-bottom:0px;}
+  .ti-opcao-desc{font-size:11.5px;}
+  .ti-rodape{flex-direction:column;align-items:stretch;gap:12px;padding-top:12px;}
+  .ti-check-item{font-size:10px;}
   .ti-cta{width:100%;}
   .ti-cta .btn-iniciar-app{width:100%;}
 }
@@ -1419,6 +1431,13 @@ html.forcar-nav-mobile .back-to-top{
 /* Área de ações de backup (tela inicial): hierarquia visual entre a ação primária (Restaurar backup)
    e a ação secundária (Ver histórico de backups) — ver .ti-backup-acoes. */
 .ti-backup-acoes{display:flex;flex-direction:column;align-items:center;width:100%;gap:10px;margin-top:10px;}
+/* "Ajustar dimensionamento da .tela-inicial — modo mobile": reopens the same mobile breakpoint used pela
+   tela inicial (ver @media(max-width:720px) no topo do CSS) — precisa ser reaberto aqui, DEPOIS da regra
+   .ti-backup-acoes acima, porque cascata CSS decide por ordem de declaração entre regras de mesma
+   especificidade, e essa regra incondicional vem depois da media query original no arquivo. */
+@media(max-width:720px){
+  .ti-backup-acoes{margin-top:0px;}
+}
 .btn-backup-restaurar{
   width:100%;
   background:var(--receita);color:#fff;
