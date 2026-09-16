@@ -82,7 +82,7 @@ input,select{font-family:var(--sans);}
 /* padding-top:calc(12px + var(--safe-top)) — mesma lógica de área segura já usada pelo .app-header (ver o
    ajuste equivalente feito lá), em vez de um valor fixo (74px) chutado para caber o notch/Dynamic Island de
    um aparelho específico: --safe-top cresce sozinho conforme a área segura de cada dispositivo. */
-.tela-inicial{min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:var(--safe-top) 24px 24px;background:linear-gradient(180deg,var(--navy-50,#f4f7fc),#fff);}
+.tela-inicial{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:calc(1px + var(--safe-top)) 24px 24px;background:linear-gradient(180deg,var(--navy-50,#f4f7fc),#fff);}
 .tela-inicial-card{max-width:1000px;width:100%;background:#fff;border:1px solid var(--line);border-radius:20px;padding:36px 40px;box-shadow:0 20px 60px rgba(16,64,141,.14);}
 .tela-inicial-card button:disabled{opacity:.5;cursor:not-allowed;}
 .ti-cabecalho{display:flex;align-items:center;gap:24px;margin-bottom:28px;}
