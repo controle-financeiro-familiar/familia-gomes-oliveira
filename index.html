@@ -157,8 +157,8 @@ input,select{font-family:var(--sans);}
      área segura (calc(12px + var(--safe-top))) continua definido só em .tela-inicial (elemento externo,
      ver regra fora desta media query) — .tela-inicial-card é o cartão interno, com seu próprio padding
      independente, então reduzi-lo aqui não afeta a área segura do topo. */
-  .tela-inicial-card{padding:20px;}
-  .ti-cabecalho{flex-direction:column;text-align:center;gap:10px;margin-bottom:14px;}
+  .tela-inicial-card{padding:10px;}
+  .ti-cabecalho{flex-direction:column;text-align:center;gap:6px;margin-bottom:10px;}
   .ti-cabecalho .mark{height:90px;}
   .ti-cabecalho-textos{flex-direction:column;text-align:center;gap:10px;}
   /* .ti-titulo-bloco continua "encolhe-para-conteúdo" (ver desktop) — só centralizado dentro da coluna
@@ -167,19 +167,21 @@ input,select{font-family:var(--sans);}
   .ti-cabecalho .subtitulo{font-size:18px;}
   .ti-status-indicador{font-size:12px;}
   .ti-cabecalho-titulos{align-items:center;}
-  .ti-cabecalho .hint{width:100%;font-size:10px;}
+  .ti-cabecalho .hint{width:100%;font-size:10px;margin: 8px 0 0;}
   /* Mobile: cabeçalho inteiro fica centralizado (ver .ti-cabecalho acima) — a linha do subtítulo empilha em
      vez de ficar lado a lado, senão o indicador de status ficaria espremido ao lado de um subtítulo já
      centralizado numa coluna estreita. */
   .ti-subtitulo-linha{flex-direction:column;align-items:center;justify-content:center;gap:4px;}
-  .ti-opcoes{gap:10px;margin-bottom:14px;}
-  .ti-opcao{flex-basis:100%;max-width:100%;padding:0 12px 12px;}
+  .ti-opcoes{gap:8px;margin-bottom:10px;}
+  .ti-opcao{flex-basis:100%;max-width:100%;padding:0 10px 10px;}
   .ti-opcao-icone{margin-bottom:0px;}
-  .ti-opcao-desc{font-size:11.5px;}
-  .ti-rodape{flex-direction:column;align-items:stretch;gap:12px;padding-top:12px;}
+  .ti-opcao-titulo {font-size: 12px;}
+  .ti-opcao-desc{font-size:11px;}
+  .ti-rodape{flex-direction:column;align-items:stretch;gap:8px;padding-top:8px;}
   .ti-check-item{font-size:10px;}
   .ti-cta{width:100%;}
   .ti-cta .btn-iniciar-app{width:100%;}
+  .ti-cta-hint {font-size: 10px;}
 }
 .menu-arquivo{position:relative;}
 /* O botão que abre este menu fica sobre o fundo escuro do cabeçalho, com texto branco (definido inline) —
