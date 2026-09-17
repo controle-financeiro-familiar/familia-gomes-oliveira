@@ -1649,6 +1649,15 @@ html.forcar-nav-mobile .back-to-top{
   .toolbar-modal-padrao-busca input[type="search"]{ flex:1; min-width:50px; }
   .toolbar-modal-padrao-busca button{ flex-shrink:0; white-space:nowrap; }
 }
+/* Aba Histórico do Backup e Restauração: "Criar backup agora" vira um FAB próprio no mobile (ver
+   #fabCriarBackup/renderFabBackup — mesmo princípio do "+ Novo Lançamento" nos modais de lançamento acima),
+   então o botão textual original some. Diferente daqueles 4 modais, aqui sobram só "Atualizar lista" e
+   "Filtros" — cabem os dois na mesma linha, então a regra genérica .filtros-mobile-toggle{flex:1 1 100%}
+   (que reservaria uma linha inteira só para o Filtros) é desfeita apenas neste toolbar. */
+@media(max-width:700px){
+  .btn-criar-backup-agora{ display:none; }
+  .backup-historico-toolbar .filtros-mobile-toggle{ flex:0 1 auto; }
+}
 /* ---- Modais "Ver Fatura" e "Ver Próximas Faturas" (painel Cartões, aba Contas e Cartões) ----
    Largura responsiva (aproveita mais tela em monitores grandes, encolhe em telas menores, sempre dentro
    do teto global .modal{max-width:96vw}) e a MESMA tabela paginada sem rolagem própria já usada nos
@@ -2204,6 +2213,12 @@ select.mini{padding:5px 6px;font-size:12px;border-radius:5px;border:1px solid va
   max-height:75vh;overflow-y:auto;
 }
 .filtros-barra.agrupado.aberto-mobile{display:flex;}
+/* No mobile, a folha de filtros agrupados fica ACIMA da bottom-nav (mesmo princípio de .overlay/.mais-sheet
+   no mobile — nunca sobrepondo a barra de navegação inferior); no desktop/telas largas (sem bottom-nav) o
+   .agrupado continua ancorado em bottom:0, já que aqui não há nenhuma barra fixa a desviar. */
+@media(max-width:700px){
+  .filtros-barra.agrupado.aberto-mobile{ bottom:calc(var(--bottom-nav-h) + var(--safe-bottom)); }
+}
 .filtros-barra.agrupado .filtro-data,.filtros-barra.agrupado .filtro-multisel{width:100%;}
 .filtros-barra.agrupado .filtro-data-btn-abrir{width:100%;text-align:left;}
 .filtros-barra-titulo-mobile{display:none;}
@@ -11489,6 +11504,11 @@ function render(){
         // Item 12 do requisito: com um dos 4 modais de lançamentos aberto por cima, cada um já tem seu
         // próprio FAB (ver renderBotoesAcoesLancamentoModal) — evita dois FABs sobrepostos na tela.
         if(UI.extratoContaModal || UI.futurosContaModal || UI.faturaAtualModal || UI.projecaoFaturaModal) return '';
+        // Backup e Restauração sobrepõe QUALQUER aba sem trocar UI.tab (ver comentário de renderTab()) — sem
+        // este corte, o FAB da aba de baixo (Registros/Extrato Consolidado/Metas/Categorias) continuava
+        // aparecendo por cima da página de Backup. O FAB precisa existir só enquanto a tela correspondente
+        // estiver realmente em primeiro plano; o próprio Histórico do Backup ganha seu FAB dedicado abaixo.
+        if(UI.backupModal!==null) return renderFabBackup();
         if(UI.tab==='registros') return `<button type="button" class="fab-novo-lancamento" id="fabNovoLancamento" aria-label="Novo lançamento" title="Novo lançamento">＋</button>`;
         if(UI.tab==='resumo') return `<button type="button" class="fab-novo-lancamento" id="fabNovaProjecao" aria-label="Novo lançamento previsto" title="Novo lançamento previsto">＋</button>`;
         if(UI.tab==='metas') return `<button type="button" class="fab-novo-lancamento" id="fabNovaMeta" aria-label="Nova meta" title="Nova meta">＋</button>`;
@@ -17287,6 +17307,16 @@ function backupsFiltradosAtuais(m){
     passaFiltroMultiSel(f.tipo||new Set(), b.tipo) && passaFiltroMultiSel(f.integridade||new Set(), chaveIntegridadeBackup(b))
   ) : [];
 }
+/* FAB ("+") do botão "Criar backup agora" (aba Histórico) no mobile — mesmo princípio contextual do FAB
+   genérico do app (ver comentário em render(): "só existe onde o desktop já tem um botão equivalente"):
+   só aparece com a aba Histórico em primeiro plano e quando há permissão de escrita (mesma condição do
+   próprio botão textual, que o CSS oculta no mobile — ver .btn-criar-backup-agora). Fora da aba Histórico
+   (ex.: aba Configuração) não existe nenhum botão equivalente no desktop, então nenhum FAB é exibido. */
+function renderFabBackup(){
+  const m = UI.backupModal;
+  if(!m || m.aba!=='historico' || nivelAcessoPasta==='leitura') return '';
+  return `<button type="button" class="fab-novo-lancamento" id="fabCriarBackup" aria-label="Criar backup agora" title="Criar backup agora">＋</button>`;
+}
 /* "Novos ajustes de interface — FinUs" (2ª rodada), item 4: conteúdo de Backup e Restauração extraído do
    antigo renderBackupModal() para uma função própria, sem NENHUM wrapper de modal/overlay — reaproveitada
    tanto pela nova página em main (renderBackupPagina, usada sempre que o app já foi iniciado, em qualquer
@@ -17338,8 +17368,8 @@ function renderBackupConteudo(){
             integridade:{tipo:'texto', valor:b=> BACKUP_INTEGRIDADE_INFO[chaveIntegridadeBackup(b)].label},
           });
           return `
-        <div class="toolbar toolbar-modal-padrao no-print" style="margin:10px 0;">
-          ${nivelAcessoPasta!=='leitura' ? `<button type="button" class="btn btn-primary btn-sm" id="btnCriarBackupAgoraModal" ${bloqueado?'disabled':''}>🗄️ Criar backup agora</button>` : ''}
+        <div class="toolbar toolbar-modal-padrao backup-historico-toolbar no-print" style="margin:10px 0;">
+          ${nivelAcessoPasta!=='leitura' ? `<button type="button" class="btn btn-primary btn-sm btn-criar-backup-agora" id="btnCriarBackupAgoraModal" ${bloqueado?'disabled':''}>🗄️ Criar backup agora</button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm" id="btnAtualizarListaBackup" ${bloqueado?'disabled':''}>↻ Atualizar lista</button>
           ${temBackups ? `
           <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Backup')?'agrupado':''}" id="btnFiltrosMobileBackup" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosBackup>0?` <span class="filtros-mobile-badge">${qtdAtivosBackup}</span>`:''}</button>
@@ -21609,6 +21639,10 @@ function bindEvents(){
       document.getElementById('btnLimparFiltrosBackup')?.addEventListener('click', ()=>{ bm.filtros = { tipo:new Set(), integridade:new Set(), aberto:null }; bm.pagina = 1; render(); });
     }
     document.getElementById('btnCriarBackupAgoraModal')?.addEventListener('click', async ()=>{
+      await criarBackupManual();
+      await atualizarListaBackupModal();
+    });
+    document.getElementById('fabCriarBackup')?.addEventListener('click', async ()=>{
       await criarBackupManual();
       await atualizarListaBackupModal();
     });
