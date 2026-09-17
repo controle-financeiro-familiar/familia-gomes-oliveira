@@ -1834,13 +1834,10 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .conta-grid-linha-1{grid-template-columns:0.25fr 1.5fr 1.25fr;}
 .conta-grid-linha-2{grid-template-columns:1fr 2fr;}
 .conta-grid-linha-pix1{grid-template-columns:0.5fr 1fr 1.5fr;}
-/* Bloco de configuração do cartão: Fechamento/Vencimento (cartao1) e Bandeira/Limite total (cartao2) em
-   duas linhas de 2 colunas cada, em vez de uma única linha de 4 colunas — mesmo padrão visual/gap/margem
-   de qualquer outra .conta-grid-linha, só reorganizado em pares para não espremer 4 campos lado a lado. */
-.conta-grid-linha-cartao1,.conta-grid-linha-cartao2{grid-template-columns:1fr 1fr;}
+.conta-grid-linha-cartao1{grid-template-columns:0.5fr 0.5fr 1fr 1fr;}
 .conta-grid-linha-pix2,.conta-grid-linha-vinculo{grid-template-columns:1fr;}
 @media(max-width:640px){
-  .conta-grid-linha-1,.conta-grid-linha-2,.conta-grid-linha-pix1,.conta-grid-linha-cartao1,.conta-grid-linha-cartao2{grid-template-columns:1fr;}
+  .conta-grid-linha-1,.conta-grid-linha-2,.conta-grid-linha-pix1,.conta-grid-linha-cartao1{grid-template-columns:1fr;}
 }
 /* Seletor visual de Ícone da Conta (seção 3.1 do requisito): botão customizado (nunca um <select> nativo,
    que não consegue exibir imagens) — mostra só a imagem do ícone atual, nunca o nome/sigla como texto no
@@ -17212,8 +17209,6 @@ function renderTextModal(){
               <div class="field"><label>Vencimento</label>
                 <input type="number" min="1" max="31" id="fTextModalVencimento" placeholder="Ex.: 10" value="${escapeHtml(String(vencimentoAtual))}">
               </div>
-            </div>
-            <div class="conta-grid-linha conta-grid-linha-cartao2">
               <div class="field"><label>Bandeira do cartão *</label>
                 <select id="fTextModalBandeira">
                   <option value="" ${!bandeiraSelectValor?'selected':''} disabled>Selecione...</option>
