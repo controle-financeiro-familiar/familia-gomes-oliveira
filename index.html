@@ -1922,6 +1922,7 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
        espaço reservado é só a altura da própria barra, igual em qualquer altura de tela. */
     bottom:calc(var(--bottom-nav-h) + var(--safe-bottom));
   }
+  #ovMapaCalorDia.overlay{bottom:calc(var(--safe-bottom));}
   .modal{
     /* !important necessário: muitos modais definem width inline (ex.: style="width:480px") — sem isso,
        o estilo inline vence a regra da media query e o modal fica estreito no mobile em vez de tela cheia.
