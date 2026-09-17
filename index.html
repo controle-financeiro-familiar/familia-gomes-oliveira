@@ -1335,6 +1335,7 @@ tbody tr:hover{background:var(--navy-50);}
 .reg-card-acao-linha1{grid-column:1;grid-row:1;align-self:center;flex-shrink:0;font-size:11px;}
 .reg-card-acao-linha2{grid-column:1;grid-row:2;align-self:center;flex-shrink:0;font-size:11px;}
 .reg-card-menu-btn{min-width:22px;min-height:22px;font-size:13px;padding:1px 3px;}
+button[type="button"].icon-btn.reg-card-menu-btn{color:#000000;}
 /* "Corrigir posicionamento do menu de ações do .reg-card — modo mobile": o botão ⋮ mora na coluna 1 da
    grade (mesma do checkbox — ver comentário acima da definição de .reg-card), então um right:0/top:100%
    fixo (assumindo sempre "botão no canto direito") não serve — a lista é position:fixed (nunca fica presa
@@ -1922,6 +1923,7 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
        espaço reservado é só a altura da própria barra, igual em qualquer altura de tela. */
     bottom:calc(var(--bottom-nav-h) + var(--safe-bottom));
   }
+  #ovMapaCalorDia.overlay{bottom:calc(var(--safe-bottom));}
   .modal{
     /* !important necessário: muitos modais definem width inline (ex.: style="width:480px") — sem isso,
        o estilo inline vence a regra da media query e o modal fica estreito no mobile em vez de tela cheia.
@@ -2403,7 +2405,7 @@ summary::marker{content:'';}
     padding:8px 12px;margin-bottom:8px;
   }
   .tabela-cards-mobile td{
-    display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;font-size:13px;
+    display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0;font-size:11px;
     border-bottom:1px solid var(--navy-50);text-align:left!important;white-space:normal!important;
     /* !important necessário: algumas tabelas (ex.: "Vínculos já confirmados" do modal Conciliar com o
        Extrato, ver linhaRegistro) reaproveitam os mesmos <td> com um style="width:X%" inline — usado para
@@ -2668,8 +2670,10 @@ summary::marker{content:'';}
 .leitura-financeira-topicos{display:flex;flex-direction:column;gap:10px;}
 .leitura-financeira-item{display:flex;gap:10px;align-items:center;font-size:12.5px;line-height:1.55;}
 .leitura-financeira-item:last-child{margin-bottom:0;}
+.intel-alertas-lista{font-size:12.5px;}
 @media(max-width:700px){
   .leitura-financeira-item{display:flex;gap:10px;align-items:flex-start;font-size:12px;line-height:1.55;text-align:justify;}
+  .intel-alertas-lista{font-size:11px;}
 }
 .leitura-financeira-icone{font-size:16px;line-height:1.5;flex:none;}
 /* Ajuste de interface (Inteligência Financeira, modo mobile): o painel "Comportamento Sazonal" já herda
@@ -15343,8 +15347,8 @@ function renderInteligencia(){
     <div class="panel" style="margin-bottom:0;">
       <h2>Alertas Analíticos</h2>
       ${ctx.alertas.length ? `
-      <ul style="margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:8px;">
-        ${ctx.alertas.map(a=>`<li style="display:flex;gap:8px;align-items:center;"><span>${a.icone}</span><span style="font-size:12.5px;">${a.texto}</span></li>`).join('')}
+      <ul class="intel-alertas-lista" style="margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:8px;">
+        ${ctx.alertas.map(a=>`<li style="display:flex;gap:8px;align-items:center;"><span>${a.icone}</span><span>${a.texto}</span></li>`).join('')}
       </ul>` : `<p class="hint">Nenhum alerta relevante identificado no período analisado.</p>`}
     </div>
   </div>
