@@ -1312,6 +1312,22 @@ tbody tr:hover{background:var(--navy-50);}
   .panel.backup-config-mobile .tx-row > .field.tx-narrow{ flex:1 1 140px!important; }
   .panel.backup-config-mobile .hint{ margin-top:4px; }
   .panel.backup-config-mobile .backup-config-acoes{ margin-top:10px;padding-top:10px; }
+  /* Aba Histórico: o rodapé de paginação (.registros-rodape) estava com barra de rolagem horizontal própria
+     no mobile — a compactação padrão (ver comentário do .registros-rodape no CSS) não bastava aqui, porque
+     com muitos backups (ex.: automáticos acumulados por meses) a paginação chega a mostrar até 7 botões de
+     página + reticências + ‹/› ao mesmo tempo. Aperta ainda mais gap/padding/tamanho só nesta aba, e o rótulo
+     "Exibir:" passa a ficar só acessível (leitor de tela), nunca visível, para sobrar espaço para os números
+     de página — o <select> continua 100% funcional e visível, só perde o texto do rótulo ao lado. */
+  .panel.backup-config-mobile .registros-rodape{ gap:3px;padding:5px 4px; }
+  .panel.backup-config-mobile .registros-rodape-exibir{ gap:0; }
+  .panel.backup-config-mobile .registros-rodape-exibir label{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+    clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+  .panel.backup-config-mobile .registros-rodape-intervalo{ font-size:10px; }
+  .panel.backup-config-mobile .registros-paginacao{ gap:1px; }
+  .panel.backup-config-mobile .registros-pagina-btn{ min-width:17px;height:17px;padding:0;font-size:9.5px; }
+  .panel.backup-config-mobile .registros-pagina-reticencias{ padding:0 1px;font-size:9.5px; }
 }
 .reg-card-linha1{grid-column:2;grid-row:1;align-self:center;display:flex;align-items:center;gap:6px;min-width:0;}
 .reg-card-data{font-size:11px;font-weight:700;color:var(--ink);flex-shrink:0;white-space:nowrap;}
@@ -1370,6 +1386,10 @@ button[type="button"].icon-btn.reg-card-menu-btn{color:#000000;}
    de Status/Grupo/Tag), em vez do bloco .reg-card-extra abaixo das 3 linhas — empurrado para a extremidade
    direita da linha (mesmo princípio de .reg-card-valor na linha1), sempre totalmente visível. */
 .reg-card-linha3-saldo{margin-left:auto;white-space:nowrap;flex-shrink:0;font-size:11px;}
+/* Aba Histórico do Backup: o botão Restaurar fica alinhado à direita da linha3 (mesmo princípio de
+   .reg-card-linha3-saldo acima) — o botão Excluir sai daqui e vai para a coluna 1/linha3 (ver .reg-card-menu
+   reaproveitado no reg-card do backup, mesmo padrão já usado em renderCardFluxoProjecao). */
+.backup-card-restaurar{margin-left:auto;}
 /* .reg-card-sem-acao remove o menu ⋮ de um item técnico não editável (ex.: "Saldo Anterior" do extrato). */
 /* Item 13 do requisito: modal de detalhe completo do .reg-card — lista de campos "rótulo: valor", com
    quebra de linha livre (nunca corta/trunca), diferente do card compacto que o originou. */
@@ -1629,6 +1649,15 @@ html.forcar-nav-mobile .back-to-top{
   .toolbar-modal-padrao-busca input[type="search"]{ flex:1; min-width:50px; }
   .toolbar-modal-padrao-busca button{ flex-shrink:0; white-space:nowrap; }
 }
+/* Aba Histórico do Backup e Restauração: "Criar backup agora" vira um FAB próprio no mobile (ver
+   #fabCriarBackup/renderFabBackup — mesmo princípio do "+ Novo Lançamento" nos modais de lançamento acima),
+   então o botão textual original some. Diferente daqueles 4 modais, aqui sobram só "Atualizar lista" e
+   "Filtros" — cabem os dois na mesma linha, então a regra genérica .filtros-mobile-toggle{flex:1 1 100%}
+   (que reservaria uma linha inteira só para o Filtros) é desfeita apenas neste toolbar. */
+@media(max-width:700px){
+  .btn-criar-backup-agora{ display:none; }
+  .backup-historico-toolbar .filtros-mobile-toggle{ flex:0 1 auto; }
+}
 /* ---- Modais "Ver Fatura" e "Ver Próximas Faturas" (painel Cartões, aba Contas e Cartões) ----
    Largura responsiva (aproveita mais tela em monitores grandes, encolhe em telas menores, sempre dentro
    do teto global .modal{max-width:96vw}) e a MESMA tabela paginada sem rolagem própria já usada nos
@@ -1805,10 +1834,13 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .conta-grid-linha-1{grid-template-columns:0.25fr 1.5fr 1.25fr;}
 .conta-grid-linha-2{grid-template-columns:1fr 2fr;}
 .conta-grid-linha-pix1{grid-template-columns:0.5fr 1fr 1.5fr;}
-.conta-grid-linha-cartao1{grid-template-columns:0.5fr 0.5fr 1fr 1fr;}
+/* Bloco de configuração do cartão: Fechamento/Vencimento (cartao1) e Bandeira/Limite total (cartao2) em
+   duas linhas de 2 colunas cada, em vez de uma única linha de 4 colunas — mesmo padrão visual/gap/margem
+   de qualquer outra .conta-grid-linha, só reorganizado em pares para não espremer 4 campos lado a lado. */
+.conta-grid-linha-cartao1,.conta-grid-linha-cartao2{grid-template-columns:1fr 1fr;}
 .conta-grid-linha-pix2,.conta-grid-linha-vinculo{grid-template-columns:1fr;}
 @media(max-width:640px){
-  .conta-grid-linha-1,.conta-grid-linha-2,.conta-grid-linha-pix1,.conta-grid-linha-cartao1{grid-template-columns:1fr;}
+  .conta-grid-linha-1,.conta-grid-linha-2,.conta-grid-linha-pix1,.conta-grid-linha-cartao1,.conta-grid-linha-cartao2{grid-template-columns:1fr;}
 }
 /* Seletor visual de Ícone da Conta (seção 3.1 do requisito): botão customizado (nunca um <select> nativo,
    que não consegue exibir imagens) — mostra só a imagem do ícone atual, nunca o nome/sigla como texto no
@@ -2184,6 +2216,12 @@ select.mini{padding:5px 6px;font-size:12px;border-radius:5px;border:1px solid va
   max-height:75vh;overflow-y:auto;
 }
 .filtros-barra.agrupado.aberto-mobile{display:flex;}
+/* No mobile, a folha de filtros agrupados fica ACIMA da bottom-nav (mesmo princípio de .overlay/.mais-sheet
+   no mobile — nunca sobrepondo a barra de navegação inferior); no desktop/telas largas (sem bottom-nav) o
+   .agrupado continua ancorado em bottom:0, já que aqui não há nenhuma barra fixa a desviar. */
+@media(max-width:700px){
+  .filtros-barra.agrupado.aberto-mobile{ bottom:calc(var(--bottom-nav-h) + var(--safe-bottom)); }
+}
 .filtros-barra.agrupado .filtro-data,.filtros-barra.agrupado .filtro-multisel{width:100%;}
 .filtros-barra.agrupado .filtro-data-btn-abrir{width:100%;text-align:left;}
 .filtros-barra-titulo-mobile{display:none;}
@@ -11469,6 +11507,11 @@ function render(){
         // Item 12 do requisito: com um dos 4 modais de lançamentos aberto por cima, cada um já tem seu
         // próprio FAB (ver renderBotoesAcoesLancamentoModal) — evita dois FABs sobrepostos na tela.
         if(UI.extratoContaModal || UI.futurosContaModal || UI.faturaAtualModal || UI.projecaoFaturaModal) return '';
+        // Backup e Restauração sobrepõe QUALQUER aba sem trocar UI.tab (ver comentário de renderTab()) — sem
+        // este corte, o FAB da aba de baixo (Registros/Extrato Consolidado/Metas/Categorias) continuava
+        // aparecendo por cima da página de Backup. O FAB precisa existir só enquanto a tela correspondente
+        // estiver realmente em primeiro plano; o próprio Histórico do Backup ganha seu FAB dedicado abaixo.
+        if(UI.backupModal!==null) return renderFabBackup();
         if(UI.tab==='registros') return `<button type="button" class="fab-novo-lancamento" id="fabNovoLancamento" aria-label="Novo lançamento" title="Novo lançamento">＋</button>`;
         if(UI.tab==='resumo') return `<button type="button" class="fab-novo-lancamento" id="fabNovaProjecao" aria-label="Novo lançamento previsto" title="Novo lançamento previsto">＋</button>`;
         if(UI.tab==='metas') return `<button type="button" class="fab-novo-lancamento" id="fabNovaMeta" aria-label="Nova meta" title="Nova meta">＋</button>`;
@@ -17151,6 +17194,8 @@ function renderTextModal(){
               <div class="field"><label>Vencimento</label>
                 <input type="number" min="1" max="31" id="fTextModalVencimento" placeholder="Ex.: 10" value="${escapeHtml(String(vencimentoAtual))}">
               </div>
+            </div>
+            <div class="conta-grid-linha conta-grid-linha-cartao2">
               <div class="field"><label>Bandeira do cartão *</label>
                 <select id="fTextModalBandeira">
                   <option value="" ${!bandeiraSelectValor?'selected':''} disabled>Selecione...</option>
@@ -17267,6 +17312,16 @@ function backupsFiltradosAtuais(m){
     passaFiltroMultiSel(f.tipo||new Set(), b.tipo) && passaFiltroMultiSel(f.integridade||new Set(), chaveIntegridadeBackup(b))
   ) : [];
 }
+/* FAB ("+") do botão "Criar backup agora" (aba Histórico) no mobile — mesmo princípio contextual do FAB
+   genérico do app (ver comentário em render(): "só existe onde o desktop já tem um botão equivalente"):
+   só aparece com a aba Histórico em primeiro plano e quando há permissão de escrita (mesma condição do
+   próprio botão textual, que o CSS oculta no mobile — ver .btn-criar-backup-agora). Fora da aba Histórico
+   (ex.: aba Configuração) não existe nenhum botão equivalente no desktop, então nenhum FAB é exibido. */
+function renderFabBackup(){
+  const m = UI.backupModal;
+  if(!m || m.aba!=='historico' || nivelAcessoPasta==='leitura') return '';
+  return `<button type="button" class="fab-novo-lancamento" id="fabCriarBackup" aria-label="Criar backup agora" title="Criar backup agora">＋</button>`;
+}
 /* "Novos ajustes de interface — FinUs" (2ª rodada), item 4: conteúdo de Backup e Restauração extraído do
    antigo renderBackupModal() para uma função própria, sem NENHUM wrapper de modal/overlay — reaproveitada
    tanto pela nova página em main (renderBackupPagina, usada sempre que o app já foi iniciado, em qualquer
@@ -17318,8 +17373,8 @@ function renderBackupConteudo(){
             integridade:{tipo:'texto', valor:b=> BACKUP_INTEGRIDADE_INFO[chaveIntegridadeBackup(b)].label},
           });
           return `
-        <div class="toolbar toolbar-modal-padrao no-print" style="margin:10px 0;">
-          ${nivelAcessoPasta!=='leitura' ? `<button type="button" class="btn btn-primary btn-sm" id="btnCriarBackupAgoraModal" ${bloqueado?'disabled':''}>🗄️ Criar backup agora</button>` : ''}
+        <div class="toolbar toolbar-modal-padrao backup-historico-toolbar no-print" style="margin:10px 0;">
+          ${nivelAcessoPasta!=='leitura' ? `<button type="button" class="btn btn-primary btn-sm btn-criar-backup-agora" id="btnCriarBackupAgoraModal" ${bloqueado?'disabled':''}>🗄️ Criar backup agora</button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm" id="btnAtualizarListaBackup" ${bloqueado?'disabled':''}>↻ Atualizar lista</button>
           ${temBackups ? `
           <button type="button" class="btn btn-ghost btn-sm filtros-mobile-toggle ${filtrosEstaoAgrupados('Backup')?'agrupado':''}" id="btnFiltrosMobileBackup" title="Filtros">${ICONE_FILTRO_SVG} Filtros${qtdAtivosBackup>0?` <span class="filtros-mobile-badge">${qtdAtivosBackup}</span>`:''}</button>
@@ -17407,13 +17462,15 @@ function renderBackupConteudo(){
             <div class="reg-card-linha2">
               <span class="reg-card-descricao">${escapeHtml(b.nome)}</span>
             </div>
+            ${nivelAcessoPasta!=='leitura' ? `
+            <div class="reg-card-menu">
+              <button type="button" class="icon-btn" data-excluir-backup="${escapeHtml(b.nome)}" title="Excluir" ${bloqueado?'disabled':''}>🗑️</button>
+            </div>
+            ` : ''}
             <div class="reg-card-linha3">
               <span class="reg-card-secundario">${b.qtdTransacoes ?? '—'} registro${b.qtdTransacoes===1?'':'s'}</span>
               <span class="reg-card-secundario" title="${escapeHtml(b.motivoInvalido||'')}">${integridadeTexto}</span>
-              ${nivelAcessoPasta!=='leitura' ? `
-              <button type="button" class="btn btn-primary btn-sm" data-restaurar-backup="${escapeHtml(b.nome)}" ${(!b.integro||bloqueado)?'disabled':''} ${!b.integro?'title="Backup inválido — restauração bloqueada"':''}>Restaurar</button>
-              <button type="button" class="icon-btn" data-excluir-backup="${escapeHtml(b.nome)}" title="Excluir" ${bloqueado?'disabled':''}>🗑️</button>
-              ` : ''}
+              ${nivelAcessoPasta!=='leitura' ? `<button type="button" class="btn btn-primary btn-sm backup-card-restaurar" data-restaurar-backup="${escapeHtml(b.nome)}" ${(!b.integro||bloqueado)?'disabled':''} ${!b.integro?'title="Backup inválido — restauração bloqueada"':''}>Restaurar</button>` : ''}
             </div>
           </div>`;
         }).join('')}</div>
@@ -21587,6 +21644,10 @@ function bindEvents(){
       document.getElementById('btnLimparFiltrosBackup')?.addEventListener('click', ()=>{ bm.filtros = { tipo:new Set(), integridade:new Set(), aberto:null }; bm.pagina = 1; render(); });
     }
     document.getElementById('btnCriarBackupAgoraModal')?.addEventListener('click', async ()=>{
+      await criarBackupManual();
+      await atualizarListaBackupModal();
+    });
+    document.getElementById('fabCriarBackup')?.addEventListener('click', async ()=>{
       await criarBackupManual();
       await atualizarListaBackupModal();
     });
