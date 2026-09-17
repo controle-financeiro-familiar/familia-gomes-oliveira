@@ -1362,6 +1362,10 @@ button[type="button"].icon-btn.reg-card-menu-btn{color:#000000;}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .reg-card-linha3 .tag{font-size:11px;white-space:nowrap;flex-shrink:0;}
+/* Modal Fatura / Próximas Faturas: tag(s) da linha3 menores e empurradas para a direita, ao lado do
+   ícone+grupo adicionado ao início da linha (ver secundario em renderFaturaAtualModal/renderProjecaoFaturaModal). */
+#ovFaturaAtual .reg-card-linha3 .tag, #ovProjecaoFatura .reg-card-linha3 .tag{font-size:9px;}
+#ovFaturaAtual .reg-card-secundario + .tag, #ovProjecaoFatura .reg-card-secundario + .tag{margin-left:auto;}
 /* "Ajustes de interface — modo mobile", itens 4.1/4.2/5: Saldo passa a integrar a própria linha3 (ao lado
    de Status/Grupo/Tag), em vez do bloco .reg-card-extra abaixo das 3 linhas — empurrado para a extremidade
    direita da linha (mesmo princípio de .reg-card-valor na linha1), sempre totalmente visível. */
@@ -1499,6 +1503,11 @@ html.forcar-nav-mobile .back-to-top{
 .cat-toolbar-busca{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
 .cat-toolbar-acoes{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-left:auto;}
 .cat-busca-input{min-width:0;width:280px;max-width:100%;}
+/* Botão "+ Novo lançamento previsto" do topo do Extrato Consolidado: alinhado à direita no desktop — em
+   classe própria (não mais inline) para que a regra de mobile abaixo (#btnNovaProjecao{display:none}, que
+   evita duplicar a ação já coberta pelo FAB) consiga vencer, já que um style inline sempre venceria
+   qualquer seletor de CSS externo, inclusive um id. */
+.btn-nova-projecao-topo{display:block;margin-left:auto;}
 @media(max-width:700px){
   .cat-toolbar{flex-direction:column;align-items:stretch;}
   .cat-toolbar-busca{width:100%;}
@@ -1749,6 +1758,16 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
    visual do desktop. */
 @media(max-width:700px){
   .field input, .field select{font-size:16px;}
+  /* .modal-editor-lancamento/.modal-editor-conta: campos mais compactos no mobile — sobrescreve
+     deliberadamente a proteção de zoom automático do iOS Safari acima só nestes dois modais (aceito). */
+  .modal-editor-lancamento .modal-body input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]),
+  .modal-editor-conta .modal-body input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]){
+    height:34px;
+  }
+  .modal-editor-lancamento .field input, .modal-editor-lancamento .field select,
+  .modal-editor-conta .field input, .modal-editor-conta .field select{
+    font-size:12px;
+  }
 }
 .hint{font-size:11.5px;color:#8393ac;margin-top:10px;}
 .tipo-toggle{display:flex;gap:8px;grid-column:span 4;}
@@ -2384,6 +2403,23 @@ summary::marker{content:'';}
   .cartoes-resumo-grid-extrato .cartoes-resumo-item:nth-child(2){order:3;}
   .cartoes-resumo-grid-extrato .cartoes-resumo-item:nth-child(3){order:4;}
   .cartoes-resumo-grid-extrato .cartoes-resumo-item:nth-child(4){order:2;}
+  /* Modal Extrato / Movimentações da Reserva de Emergência: no mobile, a ordem dos cards-resumo passa a
+     ser Saldo Inicial, Saldo Final, Entradas, Saídas — mesmo princípio acima (reordena só via CSS order). */
+  .cartoes-resumo-grid-extrato-conta .cartoes-resumo-item:nth-child(1){order:1;}
+  .cartoes-resumo-grid-extrato-conta .cartoes-resumo-item:nth-child(2){order:3;}
+  .cartoes-resumo-grid-extrato-conta .cartoes-resumo-item:nth-child(3){order:4;}
+  .cartoes-resumo-grid-extrato-conta .cartoes-resumo-item:nth-child(4){order:2;}
+  /* Modal Lançamentos Futuros: no mobile, mantém só Saldo Atual (hoje) e Saldo Projetado ao Final — o card
+     de contagem de lançamentos futuros some por já constar no cabeçalho do modal (fatura-digital-head-info). */
+  .cartoes-resumo-grid-futuros .cartoes-resumo-item:nth-child(2){display:none;}
+  .cartoes-resumo-grid-futuros .cartoes-resumo-item:nth-child(3){order:2;}
+  /* Modal Fatura / Próximas Faturas: no mobile, a ordem dos cards-resumo passa a ser Compras à Vista,
+     Compras Parceladas, Créditos e Pagamentos (quando existir), Valor Total da Fatura — mesmo princípio
+     acima (reordena só via CSS order; o card de créditos continua condicional/ausente quando zero). */
+  .cartoes-resumo-grid-fatura .cartoes-resumo-item:nth-child(1){order:4;}
+  .cartoes-resumo-grid-fatura .cartoes-resumo-item:nth-child(2){order:1;}
+  .cartoes-resumo-grid-fatura .cartoes-resumo-item:nth-child(3){order:2;}
+  .cartoes-resumo-grid-fatura .cartoes-resumo-item:nth-child(4){order:3;}
 }
 /* Modal "Ver detalhes" de Economias — agrupamento Categoria → Subcategoria → lançamentos. */
 .aportes-categoria-bloco{margin-bottom:14px;}
@@ -2488,8 +2524,10 @@ summary::marker{content:'';}
   .contracheque-historico-topo{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
   .contracheque-historico-competencia{font-weight:700;font-size:13px;color:var(--navy-900);}
   .contracheque-historico-valor{font-size:15px;font-weight:700;}
-  .contracheque-historico-secundarias{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:6px;font-size:11px;}
+  .contracheque-historico-secundarias{display:grid;grid-template-columns:1.5fr 1.5fr 2fr;gap:6px;font-size:11px;}
   .contracheque-historico-rodape{display:flex;justify-content:space-between;align-items:center;gap:8px;padding-top:6px;border-top:1px solid var(--navy-50);}
+  #ovHistoricoContracheque .reg-lista-mobile{margin:5px 0;}
+  #ovHistoricoContracheque .fatura-digital-head-top-principal{margin-bottom:15px;}
 }
 .aportes-tabela-itens td{padding:4px 10px;border-bottom:1px solid var(--line);}
 /* Colunas fixas (nunca dependentes do conteúdo dos cards — ver .conta-financeira-saldo-bancaria abaixo):
@@ -9291,7 +9329,7 @@ function renderExtratoContaModal(){
           <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(resumo.liquido)}</div><div class="lbl">líquido</div></div></div>
         </div>`;
         })() : `
-        <div class="cartoes-resumo-grid">
+        <div class="cartoes-resumo-grid cartoes-resumo-grid-extrato-conta">
           <div class="cartoes-resumo-item"><span class="ico">🏁</span><div><div class="val">${fmtBRL(det.saldoInicial)}</div><div class="lbl">saldo inicial</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">📈</span><div><div class="val">${fmtBRL(entradasFiltradas)}</div><div class="lbl">entradas</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">📉</span><div><div class="val">${fmtBRL(saidasFiltradas)}</div><div class="lbl">saídas</div></div></div>
@@ -9339,7 +9377,7 @@ function renderExtratoContaModal(){
         ${renderCardsLancamentosModal(itensPagina, {
           data: t=>fmtData(t.data),
           valorTexto: t=>fmtBRL(t.valor), valorClasse: t=> ehSaldoAnterior(t)?'':(t.tipo==='Receita'?'pos':'neg'),
-          secundario: t=> t.grupo||'Sem Grupo',
+          secundario: t=> t.grupo ? `${iconeGrupo(t.grupo)} ${escapeHtml(t.grupo)}` : 'Sem Grupo',
           tags: t=> `${ehSaldoAnterior(t) ? '' : `<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`}<span class="reg-card-linha3-saldo">Saldo: <b class="val-cell ${classeSinalMoeda(t.saldoAcumulado)}">${fmtBRL(t.saldoAcumulado)}</b></span>`,
           prefixo: 'Extrato', selecionados: UI.extratoContaModal.selecionados,
         })}
@@ -9403,7 +9441,7 @@ function renderFuturosContaModal(){
         <div class="fatura-digital-head">
           <div class="fatura-digital-head-top">
             ${cabecalhoContaModalHtml(conta)}
-            <div class="no-print"><button class="btn btn-ghost btn-sm no-print btn-imprimir-fatura" id="printFuturosConta">🖨️ Imprimir</button></div>
+            <div class="no-print extrato-conta-acoes-topo"><button class="btn btn-ghost btn-sm no-print btn-imprimir-fatura" id="printFuturosConta">🖨️ Imprimir</button></div>
           </div>
           <div class="fatura-digital-head-info">
             <span><b>Hoje</b> ${fmtData(hojeISO())}</span>
@@ -9412,7 +9450,7 @@ function renderFuturosContaModal(){
           </div>
         </div>
         <p class="hint" style="margin-top:14px;">Estes lançamentos têm data posterior a hoje (${fmtData(hojeISO())}) e por isso <b>ainda não entram no Saldo Atual</b> da conta — cada um só passa a valer no dia em que efetivamente ocorrer.</p>
-        <div class="cartoes-resumo-grid">
+        <div class="cartoes-resumo-grid cartoes-resumo-grid-futuros">
           <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(saldoAtual)}</div><div class="lbl">saldo atual (hoje)</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">📅</span><div><div class="val">${futurosFiltrados.length}</div><div class="lbl">lançamento${futurosFiltrados.length===1?'':'s'} futuro${futurosFiltrados.length===1?'':'s'}</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">📊</span><div><div class="val ${classeSinalMoeda(saldoProjetadoFiltrado)}">${fmtBRL(saldoProjetadoFiltrado)}</div><div class="lbl">saldo projetado ao final</div></div></div>
@@ -9529,7 +9567,7 @@ function renderHistoricoContrachequeModal(){
               <div><span class="hint">Margem Consignável</span><br><b>${fmtBRL(h.margemConsignavel)}</b></div>
             </div>
             <div class="contracheque-historico-rodape">
-              <span class="hint">${h.dataCredito ? fmtData(h.dataCredito) : '—'}</span>
+              <div><span class="hint">Data do Crédito</span><br>${h.dataCredito ? fmtData(h.dataCredito) : '—'}</div>
               <button type="button" class="btn btn-ghost btn-sm" data-abrir-competencia-contracheque="${escapeHtml(conta)}|${h.competencia}">Ver detalhes</button>
             </div>
           </div>`).join('')}</div>
@@ -14424,7 +14462,7 @@ function renderFaturaAtualModal(){
             ${temOrdemManualFatura ? `<button type="button" class="btn btn-ghost btn-sm no-print btn-restaurar-ordem" id="btnRestaurarOrdemFatura" title="Esta fatura tem uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
           </div>
         </div>
-        <div class="cartoes-resumo-grid">
+        <div class="cartoes-resumo-grid cartoes-resumo-grid-fatura">
           <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(totalFatFiltrado)}</div><div class="lbl">valor total da fatura</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">🛒</span><div><div class="val">${fmtBRL(totalAvistaFiltrado)}</div><div class="lbl">compras à vista</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(totalParceladoFiltrado)}</div><div class="lbl">compras parceladas</div></div></div>
@@ -14455,6 +14493,7 @@ function renderFaturaAtualModal(){
         ${renderCardsLancamentosModal(itensPagina, {
           data: t=>fmtData(t.data),
           valorTexto: t=>`${t.tipo==='Receita'?'− ':''}${fmtBRL(t.valor)}`, valorClasse: t=> t.tipo==='Receita'?'pos':'neg',
+          secundario: t=> t.grupo ? `${iconeGrupo(t.grupo)} ${escapeHtml(t.grupo)}` : 'Sem Grupo',
           tags: t=> `${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}${t.tipo==='Receita' ? `<span class="tag Receita">➕ Crédito</span>` : ''}`,
           prefixo: 'Fatura', selecionados: UI.faturaAtualModal.selecionados,
         })}
@@ -14545,7 +14584,7 @@ function renderProjecaoFaturaModal(){
           </div>` : ''}
         </div>
         ${selecionada ? `
-        <div class="cartoes-resumo-grid resumo-competencia-selecionada-print" style="margin-top:14px;">
+        <div class="cartoes-resumo-grid cartoes-resumo-grid-fatura resumo-competencia-selecionada-print" style="margin-top:14px;">
           <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(totalSelFiltrado)}</div><div class="lbl">valor total da fatura</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">🛒</span><div><div class="val">${fmtBRL(totalAvistaSelFiltrado)}</div><div class="lbl">compras à vista</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(totalParceladoSelFiltrado)}</div><div class="lbl">compras parceladas</div></div></div>
@@ -14620,6 +14659,7 @@ function renderProjecaoFaturaModal(){
           tituloGrupo: selecionada ? null : (t=>competenciaLabel(t.competencia)),
           data: t=>fmtData(t.data),
           valorTexto: t=>`${t.tipo==='Receita'?'− ':''}${fmtBRL(t.valor)}`, valorClasse: t=> t.tipo==='Receita'?'pos':'neg',
+          secundario: t=> t.grupo ? `${iconeGrupo(t.grupo)} ${escapeHtml(t.grupo)}` : 'Sem Grupo',
           tags: t=> `${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}${t.tipo==='Receita' ? `<span class="tag Receita">➕ Crédito</span>` : ''}`,
           prefixo: 'Projecao', selecionados: UI.projecaoFaturaModal.selecionados,
         })}
@@ -15654,7 +15694,7 @@ function renderResumo(){
         </ul>
       </div>
     </details>
-    <button class="btn btn-primary btn-sm" id="btnNovaProjecao" style="display:block;margin-left:auto;">+ Novo lançamento previsto</button>
+    <button class="btn btn-primary btn-sm btn-nova-projecao-topo" id="btnNovaProjecao">+ Novo lançamento previsto</button>
 	${renderAbasMesesExtrato(meses, UI.extratoAbaMes)}
     ${mesAtivoExtrato ? renderTabelaMesExtrato(mesAtivoExtrato) : ''}
   </div>
