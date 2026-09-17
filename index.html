@@ -1126,6 +1126,7 @@ table{width:100%;border-collapse:collapse;font-size:11px;}
    confirmado (borda esquerda verde de acento, mesma cor de "Receita"/positivo já usada no resto do app) e
    um candidato ainda não confirmado (.reg-card comum, sem acento) — ver renderConciliarProjecaoModal. */
 .reg-card-vinculo-confirmado{border-left:3px solid var(--receita);}
+.reg-card-vinculo-confirmado .reg-card-menu{grid-row:1;}
 thead th{
   text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.3px;text-transform:uppercase;
   color:#fff;background:var(--navy-800);padding:9px 10px;position:sticky;top:0;
@@ -1321,7 +1322,7 @@ tbody tr:hover{background:var(--navy-50);}
 .reg-card-valor{font-size:11px;font-weight:700;flex-shrink:0;margin-left:auto;white-space:nowrap;}
 .reg-card-valor.neg{color:var(--despesa);}
 .reg-card-valor.pos{color:var(--receita);}
-.reg-card-linha2{grid-column:2;grid-row:2;display:block;min-width:0;}
+.reg-card-linha2{grid-column:2;grid-row:2;align-self:center;display:block;min-width:0;}
 .reg-card-descricao{
   display:block;font-size:12px;font-weight:600;color:var(--ink);
   white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:break-word;word-break:normal;
@@ -2376,6 +2377,13 @@ summary::marker{content:'';}
      .cartoes-resumo-grid no resto do app. */
   #ovEvolucaoReserva .cartoes-resumo-grid{grid-template-columns:repeat(2,1fr);}
   #ovEvolucaoReserva .cartoes-resumo-grid .cartoes-resumo-item:first-child{grid-column:1 / -1;}
+  /* Extrato Consolidado (aba "resumo"): no mobile, a ordem dos cards-resumo passa a ser Saldo Inicial,
+     Saldo Projetado, Entradas Projetadas, Saídas Projetadas — só reordena visualmente via CSS (order),
+     preservando a ordem original no desktop (fora desta media query) e no DOM/imprensão. */
+  .cartoes-resumo-grid-extrato .cartoes-resumo-item:nth-child(1){order:1;}
+  .cartoes-resumo-grid-extrato .cartoes-resumo-item:nth-child(2){order:3;}
+  .cartoes-resumo-grid-extrato .cartoes-resumo-item:nth-child(3){order:4;}
+  .cartoes-resumo-grid-extrato .cartoes-resumo-item:nth-child(4){order:2;}
 }
 /* Modal "Ver detalhes" de Economias — agrupamento Categoria → Subcategoria → lançamentos. */
 .aportes-categoria-bloco{margin-bottom:14px;}
@@ -15011,7 +15019,7 @@ function renderNaoListadosModal(){
           data: t=>fmtData(t.data),
           contaLinha1: t=>escapeHtml(t.conta),
           valorTexto: t=>fmtBRL(t.valor), valorClasse: t=> t.tipo==='Despesa'?'neg':'pos',
-          secundario: t=> t.grupo||'Sem Grupo',
+          secundario: t=> t.grupo ? `${iconeGrupo(t.grupo)} ${escapeHtml(t.grupo)}` : 'Sem Grupo',
           tags: t=>`<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`,
           semAcao: ()=>true,
         })}
@@ -15625,7 +15633,7 @@ function renderResumo(){
         ` : ''}
       </span>
     </h2>
-    <div class="cartoes-resumo-grid">
+    <div class="cartoes-resumo-grid cartoes-resumo-grid-extrato">
       <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(resumoTopo.saldoAtual)}</div><div class="lbl">Saldo Inicial</div></div></div>
       <div class="cartoes-resumo-item receita"><span class="ico">⬆️</span><div><div class="val">${fmtBRL(resumoTopo.entradas)}</div><div class="lbl">Entradas Projetadas</div></div></div>
       <div class="cartoes-resumo-item despesa"><span class="ico">⬇️</span><div><div class="val">${fmtBRL(resumoTopo.saidas)}</div><div class="lbl">Saídas Projetadas</div></div></div>
@@ -15865,7 +15873,7 @@ function renderConciliarProjecaoModal(){
               <button type="button" class="icon-btn" data-conciliar-remover-vinculo="${t.id}" title="Remover este vínculo (volta a ser um candidato disponível)">🗑️</button>
             </div>
             <div class="reg-card-linha3">
-              <span class="reg-card-secundario">${escapeHtml(t.categoria||'—')}</span>
+              <span class="reg-card-secundario">${t.grupo ? `${iconeGrupo(t.grupo)} ${escapeHtml(t.grupo)}` : 'Sem Grupo'}</span>
               <span class="tag ${t.tipo}">${t.tipo}</span>
             </div>
           </div>`).join('')}</div>` : ''}
@@ -15905,7 +15913,7 @@ function renderConciliarProjecaoModal(){
               <span class="reg-card-descricao">${escapeHtml(c.t.descricao)}</span>
             </div>
             <div class="reg-card-linha3">
-              <span class="reg-card-secundario">${escapeHtml(c.t.categoria||'—')}</span>
+              <span class="reg-card-secundario">${c.t.grupo ? `${iconeGrupo(c.t.grupo)} ${escapeHtml(c.t.grupo)}` : 'Sem Grupo'}</span>
               <span class="tag ${c.t.tipo}">${c.t.tipo}</span>
             </div>
           </div>`).join('')}</div>
