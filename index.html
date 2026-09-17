@@ -792,8 +792,8 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
    cabendo por inteiro, nunca cortados por reticências (medido/confirmado via teste automatizado). */
 .cenario-cabecalho-mobile .cenario-titulo{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px;}
 .cenario-variacao-mobile{display:flex;align-items:center;gap:3px;flex:0 0 auto;margin-left:auto;}
-.cenario-variacao-label{font-size:7.5px;color:#5b6b85;white-space:nowrap;text-transform:uppercase;letter-spacing:.1px;}
-.cenario-input-grupo-mobile{display:flex;align-items:center;gap:1px;font-size:10px;font-weight:700;color:#5b6b85;white-space:nowrap;}
+.cenario-variacao-label{font-size:7.5px;color:#5b6b85;white-space:nowrap;text-transform:uppercase;letter-spacing:.1px;margin-right:10px;}
+.cenario-input-grupo-mobile{display:flex;align-items:center;gap:1px;font-size:10px;font-weight:700;color:#5b6b85;white-space:nowrap;margin-right:10px;}
 .cenario-input-grupo-mobile .cenario-input-3d{width:28px;min-height:20px;font-size:10px;padding:0;text-align:center;}
 .cenario-indicadores-mobile{display:flex;flex-direction:column;gap:10px;margin-top:12px;}
 .cenario-indicador-mobile{display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px;}
@@ -2385,7 +2385,10 @@ summary::marker{content:'';}
    o nome da subcategoria (com reticências) antes de deixar o valor quebrar. */
 .aportes-subcategoria-cabecalho span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;}
 .aportes-subcategoria-cabecalho span:last-child{white-space:nowrap;flex:0 0 auto;}
-@media(max-width:700px){ .aportes-subcategoria-cabecalho{font-size:11.5px;} }
+@media(max-width:700px){
+  .aportes-subcategoria-cabecalho{font-size:11.5px;margin-bottom:5px;border:1px solid var(--line);border-radius:var(--radius-sm);font-weight:600;}
+  .aportes-subcategoria-bloco{margin:6px 10px;}
+}
 .aportes-tabela-itens{width:100%;font-size:12px;border-collapse:collapse;}
 /* Classe genérica reutilizável para transformar qualquer tabela em cards empilhados no mobile (mesma
    técnica já usada em Fluxo de Caixa/Cartões/Economias) — usar quando a tabela não tem nenhum estilo
@@ -2665,6 +2668,9 @@ summary::marker{content:'';}
 .leitura-financeira-topicos{display:flex;flex-direction:column;gap:10px;}
 .leitura-financeira-item{display:flex;gap:10px;align-items:center;font-size:12.5px;line-height:1.55;}
 .leitura-financeira-item:last-child{margin-bottom:0;}
+@media(max-width:700px){
+  .leitura-financeira-item{display:flex;gap:10px;align-items:flex-start;font-size:12px;line-height:1.55;text-align:justify;}
+}
 .leitura-financeira-icone{font-size:16px;line-height:1.5;flex:none;}
 /* Ajuste de interface (Inteligência Financeira, modo mobile): o painel "Comportamento Sazonal" já herda
    font-size:12.5px em todos os viewports via .dash-row-2col-igual > .panel (ver regra correspondente) —
@@ -12364,7 +12370,7 @@ function renderMapaCalorDiaModal(){
           data: t=>fmtData(t.data),
           contaLinha1: t=> t.conta ? escapeHtml(t.conta) : '<span class="hint">—</span>',
           valorTexto: t=>fmtBRL(t.valor), valorClasse: ()=>'neg',
-          secundario: t=>`${t.grupo||'Sem Grupo'} · ${t.categoria||'Sem categoria'}`,
+          secundario: t=> t.grupo ? `${iconeGrupo(t.grupo)} ${escapeHtml(t.grupo)}` : 'Sem Grupo',
           tags: t=>`<span class="tag Despesa">Despesa</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`,
           prefixo: 'MapaCalor', selecionados: UI.mapaCalorDiaModal.selecionados,
         })}
