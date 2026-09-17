@@ -2671,9 +2671,12 @@ summary::marker{content:'';}
 .leitura-financeira-item{display:flex;gap:10px;align-items:center;font-size:12.5px;line-height:1.55;}
 .leitura-financeira-item:last-child{margin-bottom:0;}
 .intel-alertas-lista{font-size:12.5px;}
+.intel-sazonal-lista{font-size:12.5px;padding-left:18px;}
 @media(max-width:700px){
   .leitura-financeira-item{display:flex;gap:10px;align-items:flex-start;font-size:12px;line-height:1.55;text-align:justify;}
   .intel-alertas-lista{font-size:11px;}
+  .intel-panel-sazonal p,.intel-sazonal-lista{font-size:11px;}
+  .intel-sazonal-lista{padding-left:14px;}
 }
 .leitura-financeira-icone{font-size:16px;line-height:1.5;flex:none;}
 /* Ajuste de interface (Inteligência Financeira, modo mobile): o painel "Comportamento Sazonal" já herda
@@ -15339,7 +15342,7 @@ function renderInteligencia(){
       <p style="margin:0 0 10px;">Menor capacidade de poupança costuma ocorrer em <b>${MESES[ctx.sazonalidade.menorPoupanca.mes-1]}</b> (${fmtPercentSmart(ctx.sazonalidade.menorPoupanca.poupanca*100)} de poupança média).</p>
       ${ctx.sazonalidade.categoriasSazonais.length ? `
       <p class="hint" style="margin-bottom:4px;">Categorias com concentração sazonal:</p>
-      <ul style="margin:0;padding-left:18px;font-size:12.5px;line-height:1.5;">
+      <ul class="intel-sazonal-lista" style="margin:0;line-height:1.5;">
         ${ctx.sazonalidade.categoriasSazonais.slice(0,6).map(c=>`<li>${iconeGrupo(c.grupo)} <b>${escapeHtml(c.grupo)}</b> — concentração em ${c.meses.map(m=>MESES[m-1].slice(0,3)).join(', ')}</li>`).join('')}
       </ul>` : `<p class="hint" style="margin:0;">A receita e as despesas apresentam estabilidade ao longo do ano, sem evidência de sazonalidade relevante por categoria.</p>`}
       `}
