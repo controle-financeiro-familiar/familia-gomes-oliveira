@@ -2669,19 +2669,23 @@ summary::marker{content:'';}
    painéis). Contas e Cartões, Registros e Configurações mantêm o texto original das labels (não pedido para
    esses). Só o texto visual muda (text-transform); o dado/label real por trás nunca é alterado. */
 .cartoes-resumo-lbl-minusculo .cartoes-resumo-item .lbl{text-transform:lowercase;}
-/* Painel "Grupos, categorias e subcategorias" (Configurações): os 3 cartões-resumo passam a ter o ícone e
-   o valor lado a lado, centralizados, numa 1ª linha (.cartoes-resumo-item-topo), com o label centralizado
+/* Painel "Grupos, categorias e subcategorias" (Configurações), só no modo mobile: os 3 cartões-resumo
+   passam a ter o ícone e o valor lado a lado, centralizados, numa 1ª linha, com o label centralizado
    ocupando a largura total do cartão numa 2ª linha — em vez do padrão genérico (ícone à esquerda, valor/
-   label empilhados à direita) usado no resto do app. Ícones/valores/labels/cores/tipografia continuam
-   exatamente os mesmos de .cartoes-resumo-item; só a disposição interna muda, e só nesta grade (classe
-   própria, nunca o .cartoes-resumo-item genérico usado em outras telas). Sempre 3 colunas no desktop
-   (nunca quebra linha); no mobile volta ao mesmo auto-fit/minmax responsivo já usado pelo resto do app. */
-.cartoes-resumo-grid-categorias{grid-template-columns:repeat(3,1fr);}
-.cartoes-resumo-grid-categorias .cartoes-resumo-item{flex-direction:column;gap:4px;}
-.cartoes-resumo-grid-categorias .cartoes-resumo-item-topo{display:flex;align-items:center;gap:8px;}
-.cartoes-resumo-grid-categorias .cartoes-resumo-item .lbl{align-self:stretch;text-align:center;}
+   label empilhados à direita) usado no resto do app e mantido aqui no desktop (fora desta media query, sem
+   nenhuma regra nova). O HTML não muda (mesmo ícone/wrapper/val/lbl de qualquer .cartoes-resumo-item do
+   resto do app): o wrapper vira display:contents (some da árvore de layout sem sumir do DOM) para que .val/
+   .lbl participem diretamente do grid do próprio .cartoes-resumo-item, ao lado do ícone. Os 3 cartões
+   continuam sempre na mesma linha também no mobile — nunca quebram para 2+1 ou empilham. */
 @media(max-width:700px){
-  .cartoes-resumo-grid-categorias{grid-template-columns:repeat(auto-fit,minmax(110px,1fr));}
+  .cartoes-resumo-grid-categorias{grid-template-columns:repeat(3,1fr);}
+  .cartoes-resumo-grid-categorias .cartoes-resumo-item{
+    display:grid;grid-template-columns:auto auto;justify-content:center;column-gap:6px;row-gap:2px;
+  }
+  .cartoes-resumo-grid-categorias .cartoes-resumo-item > div{display:contents;}
+  .cartoes-resumo-grid-categorias .cartoes-resumo-item .ico{grid-column:1;grid-row:1;align-self:center;}
+  .cartoes-resumo-grid-categorias .cartoes-resumo-item .val{grid-column:2;grid-row:1;align-self:center;}
+  .cartoes-resumo-grid-categorias .cartoes-resumo-item .lbl{grid-column:1/3;grid-row:2;text-align:center;}
 }
 .tabela-cartoes{min-width:760px;}
 /* Reorganização "Ordem das Colunas, Limite e Ações": Ações concentra Importar + o ícone único de editar
@@ -16535,9 +16539,9 @@ function renderCategorias(){
   <div class="panel">
     <h2><span>Grupos, categorias e subcategorias</span></h2>
     <div class="cartoes-resumo-grid cartoes-resumo-grid-categorias">
-      <div class="cartoes-resumo-item"><div class="cartoes-resumo-item-topo"><span class="ico">🗂️</span><div class="val">${totalGruposVisiveis}</div></div><div class="lbl">grupo${totalGruposVisiveis===1?'':'s'}</div></div>
-      <div class="cartoes-resumo-item"><div class="cartoes-resumo-item-topo"><span class="ico">📁</span><div class="val">${totalCategoriasVisiveis}</div></div><div class="lbl">categoria${totalCategoriasVisiveis===1?'':'s'}</div></div>
-      <div class="cartoes-resumo-item"><div class="cartoes-resumo-item-topo"><span class="ico">🏷️</span><div class="val">${totalResultados}</div></div><div class="lbl">subcategoria${totalResultados===1?'':'s'}</div></div>
+      <div class="cartoes-resumo-item"><span class="ico">🗂️</span><div><div class="val">${totalGruposVisiveis}</div><div class="lbl">grupo${totalGruposVisiveis===1?'':'s'}</div></div></div>
+      <div class="cartoes-resumo-item"><span class="ico">📁</span><div><div class="val">${totalCategoriasVisiveis}</div><div class="lbl">categoria${totalCategoriasVisiveis===1?'':'s'}</div></div></div>
+      <div class="cartoes-resumo-item"><span class="ico">🏷️</span><div><div class="val">${totalResultados}</div><div class="lbl">subcategoria${totalResultados===1?'':'s'}</div></div></div>
     </div>
     <div class="toolbar cat-toolbar" style="margin-bottom:16px;">
       <div class="cat-toolbar-busca">
