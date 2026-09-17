@@ -1929,7 +1929,7 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
        bottom-nav — a área útil do modal (inclusive o conteúdo rolável de .modal-body, ver abaixo) nunca
        ultrapassa essa margem; max-height continua como rede de segurança (nunca maior que a viewport). */
     width:100%!important;max-width:100vw!important;height:100%!important;max-height:100dvh!important;border-radius:0;
-    display:flex;flex-direction:column;resize:none;padding-top:calc(11px + var(--safe-top));
+    display:flex;flex-direction:column;resize:none;padding-top:calc(var(--safe-top));
   }
   .modal-head{border-radius:0;flex-shrink:0;}
   .modal-body{flex:1;overflow-y:auto;}
@@ -2380,13 +2380,13 @@ summary::marker{content:'';}
 .aportes-categoria-bloco:last-child{margin-bottom:0;}
 .aportes-categoria-cabecalho{display:flex;justify-content:space-between;background:var(--navy-900);color:#fff;padding:6px 10px;border-radius:6px;font-size:12.5px;}
 .aportes-subcategoria-bloco{margin:6px 0 0 10px;}
-.aportes-subcategoria-cabecalho{display:flex;justify-content:space-between;align-items:baseline;gap:8px;background:var(--navy-50,#eef2f9);padding:4px 10px;font-size:12px;font-weight:600;color:#4a5468;border-radius:4px;}
+.aportes-subcategoria-cabecalho{display:flex;justify-content:space-between;align-items:baseline;gap:8px;background:var(--transf,#eef2f9);padding:4px 10px;font-size:12px;font-weight:600;color:#ffffff;border-radius:4px;}
 /* Item 6 do requisito: o valor total do cabeçalho de subcategoria nunca quebra linha no mobile — encolhe
    o nome da subcategoria (com reticências) antes de deixar o valor quebrar. */
-.aportes-subcategoria-cabecalho span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;}
+.aportes-subcategoria-cabecalho span:first-child{min-width:0;overflow:hidden;text-overflow:clip;white-space:normal;flex:1 1 auto;}
 .aportes-subcategoria-cabecalho span:last-child{white-space:nowrap;flex:0 0 auto;}
 @media(max-width:700px){
-  .aportes-subcategoria-cabecalho{font-size:11.5px;margin-bottom:5px;border:1px solid var(--line);border-radius:var(--radius-sm);font-weight:600;}
+  .aportes-subcategoria-cabecalho{font-size:11.5px;margin-bottom:5px;border-radius:var(--radius-sm);font-weight:600;}
   .aportes-subcategoria-bloco{margin:6px 10px;}
 }
 .aportes-tabela-itens{width:100%;font-size:12px;border-collapse:collapse;}
