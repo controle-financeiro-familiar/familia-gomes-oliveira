@@ -1887,22 +1887,24 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .conta-grid-linha-cartao1{grid-template-columns:0.5fr 0.5fr 1fr 1fr;}
 .conta-grid-linha-pix2,.conta-grid-linha-vinculo{grid-template-columns:1fr;}
 /* Modo mobile do modal Editar Conta, por tipo de conta (requisito "reajustar posicionamento dos fields...
-   de acordo com o tipo de conta"): mantém Ícone|Nome|Responsável (linha 1) e Tipo de conta|Banco-ou-Conta-
-   associada (linha 2) lado a lado em vez de empilhados — minmax no ícone evita que o botão fique
-   comprimido demais. Fechamento/Vencimento/Bandeira/Limite total (cartão de crédito, já um único grid com
-   os 4 campos nessa ordem) vira 2 colunas, que o próprio grid encaixa automaticamente em 2 linhas de 2
-   campos, sem mexer no markup. Agência/Nº conta/Tipo de chave Pix (pix1) e Chave Pix (pix2) — dois
-   containers .conta-grid-linha distintos — usam o mesmo truque de display:contents já usado no modal de
-   Lançamento (.tx-secao-principal) para juntar os 4 campos num único fluxo flex de 2 por linha, mantendo a
-   ordem do DOM (Agência+Nº conta, depois Tipo de chave Pix+Chave Pix), sem duplicar markup nem IDs. Nada
-   disto altera o desktop (regra inteira dentro deste breakpoint, que só se aplica no mobile). */
+   de acordo com o tipo de conta", 3ª rodada): linha 1 = Ícone|Nome (2 colunas — proporção 1fr:4fr, ícone só
+   com o necessário para o seletor de ícone/caret (piso de 48px via minmax) e Nome usando o resto da
+   largura; 3º campo do mesmo grid — Responsável — cai sozinho numa linha cheia via nth-child(3) span-2);
+   Tipo de conta e o 2º campo do grid
+   seguinte (Nome do banco/Conta associada/Conta de crédito) empilham cada um em sua própria linha (1
+   coluna, cada campo já é 100% da largura); Agência/Nº conta ficam juntos (2 colunas) e Tipo de chave Pix
+   cai para sua própria linha cheia (mesmo truque nth-child(3)) — Chave Pix já era sozinha em 100% da
+   largura (conta-grid-linha-pix2, regra acima, fora do media query); Fechamento/Vencimento/Bandeira/Limite
+   total (cartão, já um único grid com os 4 campos nessa ordem) vira 2 colunas, que o grid encaixa
+   automaticamente em 2 linhas de 2 campos. Nada disto altera o desktop (regra inteira dentro deste
+   breakpoint). */
 @media(max-width:640px){
-  .conta-grid-linha-1{grid-template-columns:minmax(50px,0.7fr) 1.6fr 1.3fr;}
-  .conta-grid-linha-2{grid-template-columns:1fr 1fr;}
+  .conta-grid-linha-1{grid-template-columns:minmax(48px,1fr) 4fr;}
+  .conta-grid-linha-1 > .field:nth-child(3){grid-column:1/-1;}
+  .conta-grid-linha-2{grid-template-columns:1fr;}
+  .conta-grid-linha-pix1{grid-template-columns:1fr 1fr;}
+  .conta-grid-linha-pix1 > .field:nth-child(3){grid-column:1/-1;}
   .conta-grid-linha-cartao1{grid-template-columns:1fr 1fr;}
-  .conta-grid-pix-wrap{display:flex;flex-wrap:wrap;column-gap:12px;row-gap:10px;}
-  .conta-grid-pix-wrap > [data-conta-flat]{display:contents;}
-  .conta-grid-pix-wrap .field{flex:1 1 45%;min-width:120px;margin-bottom:0;}
 }
 /* Seletor visual de Ícone da Conta (seção 3.1 do requisito): botão customizado (nunca um <select> nativo,
    que não consegue exibir imagens) — mostra só a imagem do ícone atual, nunca o nome/sigla como texto no
@@ -17279,25 +17281,23 @@ function renderTextModal(){
             </div>`}
           </div>` : ''}
           ${mostrarDadosBancarios ? `
-          <div class="conta-grid-pix-wrap">
-            <div class="conta-grid-linha conta-grid-linha-pix1" data-conta-flat>
-              <div class="field"><label>Agência</label>
-                <input type="text" id="fTextModalExtra_agencia" placeholder="Ex.: 1234-5" value="${escapeHtml(valorExtraTextModal(t,'agencia'))}">
-              </div>
-              <div class="field"><label>Nº conta</label>
-                <input type="text" id="fTextModalExtra_numeroConta" placeholder="Ex.: 12345-6" value="${escapeHtml(valorExtraTextModal(t,'numeroConta'))}">
-              </div>
-              <div class="field"><label>Tipo de chave Pix</label>
-                <select id="fTextModalExtra_tipoChavePix">
-                  <option value="" ${!tipoChavePixAtualValor?'selected':''}>Selecione...</option>
-                  ${PIX_TIPOS.map(op=>`<option value="${op}" ${tipoChavePixAtualValor===op?'selected':''}>${op}</option>`).join('')}
-                </select>
-              </div>
+          <div class="conta-grid-linha conta-grid-linha-pix1">
+            <div class="field"><label>Agência</label>
+              <input type="text" id="fTextModalExtra_agencia" placeholder="Ex.: 1234-5" value="${escapeHtml(valorExtraTextModal(t,'agencia'))}">
             </div>
-            <div class="conta-grid-linha conta-grid-linha-pix2" data-conta-flat>
-              <div class="field"><label>Chave Pix</label>
-                <input type="text" id="fTextModalExtra_chavePix" placeholder="${placeholderChavePix(tipoChavePixAtualValor)}" value="${escapeHtml(chavePixDisplay)}">
-              </div>
+            <div class="field"><label>Nº conta</label>
+              <input type="text" id="fTextModalExtra_numeroConta" placeholder="Ex.: 12345-6" value="${escapeHtml(valorExtraTextModal(t,'numeroConta'))}">
+            </div>
+            <div class="field"><label>Tipo de chave Pix</label>
+              <select id="fTextModalExtra_tipoChavePix">
+                <option value="" ${!tipoChavePixAtualValor?'selected':''}>Selecione...</option>
+                ${PIX_TIPOS.map(op=>`<option value="${op}" ${tipoChavePixAtualValor===op?'selected':''}>${op}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="conta-grid-linha conta-grid-linha-pix2">
+            <div class="field"><label>Chave Pix</label>
+              <input type="text" id="fTextModalExtra_chavePix" placeholder="${placeholderChavePix(tipoChavePixAtualValor)}" value="${escapeHtml(chavePixDisplay)}">
             </div>
           </div>` : ''}
           ${mostrarConfigCartao ? `
