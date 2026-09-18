@@ -1771,6 +1771,19 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .modal-editor-conta .modal-body button{
   height:36px;
 }
+/* Saldo inicial (modal Editar Conta) — botão "Remover valor definido manualmente" ao lado do campo, só com
+   o ícone 🗑️ (sem texto), alinhado à direita na mesma linha, com uma legenda de texto associada logo abaixo
+   (ver renderTextModal/podeRemoverSaldoInicial). Mesma solução em qualquer largura — só a altura do botão
+   muda (herdada do seletor .modal-editor-conta .modal-body button acima/na media query mobile abaixo),
+   nunca a estrutura. */
+.saldo-inicial-linha{display:flex;align-items:center;gap:6px;}
+.saldo-inicial-linha input{flex:1;min-width:0;}
+.btn-icone-remover-saldo{
+  flex-shrink:0;width:36px;border:1px solid var(--line);border-radius:7px;background:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:15px;padding:0;cursor:pointer;
+}
+.btn-icone-remover-saldo:hover{background:#fbe7e4;border-color:var(--despesa);}
+.saldo-inicial-legenda{margin-top:4px;}
 /* Mesmo tratamento acima, agora para os modais de lançamento (renderTxModal, renderNovaProjecaoModal,
    renderDuplicarMesesEditarItemModal — ver .modal-editor-lancamento): campos de input/select do
    formulário com altura fixa de 36px, escopado só a esses modais (o rodapé já usa a mesma altura em
@@ -1780,23 +1793,21 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .modal-editor-lancamento .modal-body button{
   height:36px;
 }
-/* Item 6 do requisito: no mobile (especialmente iOS Safari), um input/select focado com font-size menor
-   que 16px dispara zoom automático da página — inclusive em modais que dão foco automático ao abrir (ex.:
-   Saldo Inicial da Conta), o que deixava o modal "aberto com zoom" de forma inconsistente. 16px é o piso
-   documentado do WebKit para nunca disparar esse zoom; aplicado só no mobile para não alterar a densidade
-   visual do desktop. */
+/* Ajuste de interface (campos mobile), item 1: todo campo .field passa a usar font-size:12px no mobile —
+   mais compacto, igual ao que já era feito só nos modais de Conta/Lançamento, agora geral. Isso reintroduz
+   o risco original do iOS Safari (WebKit dá zoom automático da página ao focar um input/select com
+   font-size computado menor que 16px), então a proteção passa a ser feita em JS em vez de CSS: ver
+   aoFocarCampoMobile/aoDesfocarCampoMobile, que suprimem esse zoom só quando o campo focado já tem 12px ou
+   mais (lendo o font-size EFETIVO do elemento, não fixo por seletor), preservando de propósito o zoom em
+   campos ainda menores que isso (ex.: .cenario-input-3d, ~10-11px — ver neutralizarZoomMobileAoSairDoCampo,
+   inalterado). Nada disto altera o desktop (regra de font-size seguinte só vale no mobile). */
 @media(max-width:700px){
-  .field input, .field select{font-size:16px;}
-  /* .modal-editor-lancamento/.modal-editor-conta: campos mais compactos no mobile — sobrescreve
-     deliberadamente a proteção de zoom automático do iOS Safari acima só nestes dois modais (aceito). */
+  .field input, .field select{font-size:12px;}
   .modal-editor-lancamento .modal-body input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]),
   .modal-editor-conta .modal-body input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]){
     height:34px;
   }
-  .modal-editor-lancamento .field input, .modal-editor-lancamento .field select,
-  .modal-editor-conta .field input, .modal-editor-conta .field select{
-    font-size:12px;
-  }
+  .btn-icone-remover-saldo{width:34px;}
 }
 .hint{font-size:11.5px;color:#8393ac;margin-top:10px;}
 .tipo-toggle{display:flex;gap:8px;grid-column:span 4;}
@@ -1823,6 +1834,13 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .tx-row > .field.tx-narrow{flex:0 0 150px;}
 .tx-row > .field.tx-wide{flex:3;min-width:200px;}
 @media(max-width:520px){ .tx-row > .field{flex:1 1 100%;} }
+/* Modal "Editar datas e limite do cartão" (Fechamento|Vencimento, ver renderFaturaEditModal): sobrescreve
+   o empilhamento genérico de .tx-row > .field acima de propósito — os 2 campos devem ficar sempre lado a
+   lado, inclusive no mobile, desde que caibam. flex-basis com min-width (em vez do 100% fixo da regra
+   genérica) faz exatamente isso: distribui a largura disponível proporcionalmente entre os dois e só
+   deixa cada um quebrar para sua própria linha se o espaço realmente não for suficiente para os ~130px
+   mínimos de um <input type="date"> sem cortar o valor. */
+.fatura-edit-datas-row > .field{flex:1 1 130px;min-width:130px;}
 /* ---- Modal de lançamento (somente desktop): reorganiza os campos nas 7 linhas pedidas, sem tocar no
    mobile (regra inteira dentro de min-width:701px). Usa display:contents nos wrappers .tx-row originais
    (marcados com [data-tx-flat]) para que os campos "subam" e virem filhos diretos do container de seção
@@ -11402,11 +11420,11 @@ function nomeNavegadorIOS(){
   return 'Safari';
 }
 /* Alguns campos (ex.: variação % da Simulação de Cenários — ver .cenario-input-3d) usam de propósito uma
-   fonte menor que 16px, para caber num espaço bem estreito: no mobile isso faz o navegador (principalmente
+   fonte menor que 12px, para caber num espaço bem estreito: no mobile isso faz o navegador (principalmente
    Safari/iOS, mas também outros baseados em WebKit) aumentar o zoom da página ao focar o campo — comporta-
    mento mantido de propósito aqui (ajuda a enxergar/editar um campo tão pequeno), ao contrário do que se
-   faz em campos maiores (ver .field input, onde o próprio font-size:16px evita o zoom). O problema é só
-   garantir que esse zoom SEMPRE volte ao normal sozinho ao sair do campo (clique fora, perda de foco ou
+   faz em campos com 12px ou mais (ver aoFocarCampoMobile, que suprime esse zoom nesse caso). O problema é
+   só garantir que esse zoom SEMPRE volte ao normal sozinho ao sair do campo (clique fora, perda de foco ou
    fim da edição — todos os três disparam 'blur'). Alternar rapidamente uma restrição de escala no próprio
    <meta name=viewport> força o navegador a recalcular e voltar ao zoom padrão — truque necessário porque
    não existe nenhuma API direta para "desfazer" esse zoom automático do sistema. */
@@ -11417,6 +11435,34 @@ function neutralizarZoomMobileAoSairDoCampo(){
   viewport.setAttribute('content', original + ', maximum-scale=1.0');
   setTimeout(()=>{ viewport.setAttribute('content', original); }, 60);
 }
+/* Ajuste de interface (campos mobile), item 1: com .field input/.field select agora em 12px no mobile
+   (abaixo do piso de 16px que o WebKit exige para nunca dar zoom ao focar), a supressão do zoom passa a ser
+   feita aqui, no próprio foco — ANTES do zoom automático acontecer — em vez de só corrigi-lo depois no blur
+   (truque acima, mantido intacto e ainda usado de propósito só para campos menores que 12px, como
+   .cenario-input-3d). Lê o font-size EFETIVO do elemento (getComputedStyle), nunca uma lista fixa de
+   seletores: qualquer campo que esteja com 12px ou mais nunca dispara zoom; qualquer campo deliberadamente
+   menor que isso continua dando zoom normalmente, do jeito que já era. Delegado uma única vez no document
+   (fase de captura — focus/blur não borbulham), por isso fica fora de bindEvents/render: nunca precisa ser
+   re-registrado a cada nova renderização. Só atua no mobile (mesmo breakpoint de max-width:700px usado pelo
+   CSS acima) — no desktop os campos continuam com a fonte maior de sempre e o navegador nunca dá zoom. */
+function aoFocarCampoMobile(e){
+  if(window.innerWidth>700) return;
+  const el = e.target;
+  if(!el.matches || !el.matches('input,select,textarea')) return;
+  const fontSize = parseFloat(getComputedStyle(el).fontSize);
+  if(!(fontSize>=12)) return; // campo deliberadamente menor que 12px: preserva o zoom de propósito
+  const viewport = document.querySelector('meta[name="viewport"]');
+  if(!viewport) return;
+  if(viewport.dataset.contentOriginal===undefined) viewport.dataset.contentOriginal = viewport.getAttribute('content');
+  viewport.setAttribute('content', viewport.dataset.contentOriginal + ', maximum-scale=1.0');
+}
+function aoDesfocarCampoMobile(){
+  const viewport = document.querySelector('meta[name="viewport"]');
+  if(!viewport || viewport.dataset.contentOriginal===undefined) return;
+  viewport.setAttribute('content', viewport.dataset.contentOriginal);
+}
+document.addEventListener('focus', aoFocarCampoMobile, true);
+document.addEventListener('blur', aoDesfocarCampoMobile, true);
 /* Faixa fina de avisos do PWA (item 11/12) — nova versão pronta para atualizar, e/ou opção de instalar
    como aplicativo. Fica no topo em qualquer tela (inicial ou app), sem depender de UI.appIniciado.
    A opção de instalar tem dois caminhos, mutuamente exclusivos, para cobrir todos os navegadores: o
@@ -14823,7 +14869,7 @@ function renderFaturaEditModal(){
             <span><b>Competência</b> ${competenciaLabel(m.competencia)}</span>
           </div>
         </div>
-        <div class="tx-row" style="margin-top:14px;">
+        <div class="tx-row fatura-edit-datas-row" style="margin-top:14px;">
           <div class="field"><label>Data de fechamento</label><input type="date" id="fFaturaFechamento" value="${m.fechamento||''}"></div>
           <div class="field"><label>Data de vencimento</label><input type="date" id="fFaturaVencimento" value="${m.vencimento||''}"></div>
         </div>
@@ -17163,6 +17209,11 @@ function renderTextModal(){
       saldoInicialDisplay = fmtMoedaInput(explicito!==null ? explicito : s.saldoInicial);
     }
   }
+  // Botão de remover o Saldo Inicial definido manualmente (ícone só, ao lado do campo — ver
+  // .saldo-inicial-linha/.btn-icone-remover-saldo): mesma condição/funcionalidade de sempre, só reorganizada
+  // visualmente (ícone + legenda abaixo em vez de um botão com texto ao lado do ícone).
+  const podeRemoverSaldoInicial = mostrarSaldoInicial && saldoAnteriorExplicito(t.original, t.saldoAno, t.saldoMes)!==null && saldoInicialDisplay!=='';
+  const LEGENDA_REMOVER_SALDO_INICIAL = 'Remover valor definido manualmente (voltar ao cálculo automático)';
   return `
   <div class="overlay" id="ovTextModal" ${attrZIndexModal('textModal')}>
     <div class="modal${info.temTipoConta ? ' modal-editor-conta' : ''}" style="width:${info.temTipoConta ? '640px' : '420px'};">
@@ -17282,9 +17333,12 @@ function renderTextModal(){
             <p class="hint" style="margin-top:0;">Saldo da conta no início de <b>${MESES[t.saldoMes-1]}/${t.saldoAno}</b> (dia 1º). Isso cria ou atualiza automaticamente um lançamento <b>"Saldo Anterior"</b> na aba Registros — nunca conta como receita ou despesa do período.</p>
             <div class="field">
               <label>Saldo Inicial (R$)</label>
-              <input type="text" inputmode="decimal" id="fTextModalSaldoInicial" value="${escapeHtml(saldoInicialDisplay)}">
+              <div class="saldo-inicial-linha">
+                <input type="text" inputmode="decimal" id="fTextModalSaldoInicial" value="${escapeHtml(saldoInicialDisplay)}">
+                ${podeRemoverSaldoInicial ? `<button type="button" class="btn-icone-remover-saldo" id="btnRemoverSaldoInicialConta" title="${LEGENDA_REMOVER_SALDO_INICIAL}" aria-label="${LEGENDA_REMOVER_SALDO_INICIAL}">🗑️</button>` : ''}
+              </div>
             </div>
-            ${saldoAnteriorExplicito(t.original, t.saldoAno, t.saldoMes)!==null && saldoInicialDisplay!=='' ? `<button type="button" class="btn btn-ghost btn-sm" id="btnRemoverSaldoInicialConta" style="margin-top:8px;">🗑️ Remover valor definido manualmente (voltar ao cálculo automático)</button>` : ''}
+            ${podeRemoverSaldoInicial ? `<p class="hint saldo-inicial-legenda">${LEGENDA_REMOVER_SALDO_INICIAL}</p>` : ''}
           </div>` : ''}
           ${info.nota ? `<div class="info-card" style="margin-top:0;"><span class="info-card-icon">ℹ️</span><span>${info.nota}</span></div>` : ''}
           ${info.temIconeGenero ? `
