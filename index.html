@@ -1886,33 +1886,20 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .conta-grid-linha-pix1{grid-template-columns:0.5fr 1fr 1.5fr;}
 .conta-grid-linha-cartao1{grid-template-columns:0.5fr 0.5fr 1fr 1fr;}
 .conta-grid-linha-pix2,.conta-grid-linha-vinculo{grid-template-columns:1fr;}
-/* .conta-grid-linha-1/-2 agora vivem dentro de .conta-grid-topo (ver markup), cujo único papel é servir de
-   contexto comum para o truque de display:contents no mobile (abaixo) — no desktop ela não tem nenhum CSS
-   próprio, então os dois continuam exatamente como grids independentes, com o mesmo espaçamento de sempre
-   entre si (a regra abaixo substitui o margin-bottom:10px que o :last-child zeraria indevidamente agora que
-   conta-grid-linha-2 passou a ser o último filho de um wrapper, em vez do último filho direto de .tx-form). */
-.conta-grid-topo > .conta-grid-linha{margin-bottom:10px;}
 /* Modo mobile do modal Editar Conta, por tipo de conta (requisito "reajustar posicionamento dos fields...
-   de acordo com o tipo de conta"): linha 1 = Ícone|Nome; linha 2 = Responsável|Tipo de conta; linha 3 =
-   Nome do banco/Conta associada/Conta de crédito (sozinho, 100% da largura) — como Responsável (do
-   container conta-grid-linha-1) precisa se juntar ao Tipo de conta (do container conta-grid-linha-2, um
-   container DIFERENTE), os dois containers usam display:contents dentro do wrapper comum .conta-grid-topo
-   (mesmo truque já usado no modal de Lançamento — ver .tx-secao-principal), e cada campo usa "order" pelo
-   atributo data-conta-field para cair na linha certa, não mais a ordem do DOM sozinha. Fechamento/
-   Vencimento/Bandeira/Limite total (cartão, já um único grid com os 4 campos nessa ordem) vira 2 colunas,
-   que o grid encaixa automaticamente em 2 linhas de 2 campos. Agência/Nº conta ficam juntos (2 colunas) e
-   Tipo de chave Pix cai para sua própria linha cheia (nth-child(3) span-2 no mesmo grid) — Chave Pix já era
-   sozinha em 100% da largura (conta-grid-linha-pix2, regra acima, fora do media query) e não precisa de
-   nada especial. Nada disto altera o desktop (regra inteira dentro deste breakpoint). */
+   de acordo com o tipo de conta", 3ª rodada): linha 1 = Ícone|Nome (2 colunas, 3º campo do mesmo grid —
+   Responsável — cai sozinho numa linha cheia via nth-child(3) span-2); Tipo de conta e o 2º campo do grid
+   seguinte (Nome do banco/Conta associada/Conta de crédito) empilham cada um em sua própria linha (1
+   coluna, cada campo já é 100% da largura); Agência/Nº conta ficam juntos (2 colunas) e Tipo de chave Pix
+   cai para sua própria linha cheia (mesmo truque nth-child(3)) — Chave Pix já era sozinha em 100% da
+   largura (conta-grid-linha-pix2, regra acima, fora do media query); Fechamento/Vencimento/Bandeira/Limite
+   total (cartão, já um único grid com os 4 campos nessa ordem) vira 2 colunas, que o grid encaixa
+   automaticamente em 2 linhas de 2 campos. Nada disto altera o desktop (regra inteira dentro deste
+   breakpoint). */
 @media(max-width:640px){
-  .conta-grid-topo{display:flex;flex-wrap:wrap;column-gap:12px;row-gap:10px;}
-  .conta-grid-topo > [data-conta-flat]{display:contents;}
-  .conta-grid-topo [data-conta-field="icone"]{order:1;flex:0 0 72px;}
-  .conta-grid-topo [data-conta-field="nome"]{order:2;flex:1 1 auto;min-width:130px;}
-  .conta-grid-topo [data-conta-field="upload"]{order:3;flex:1 1 100%;}
-  .conta-grid-topo [data-conta-field="responsavel"]{order:4;flex:1 1 45%;min-width:120px;}
-  .conta-grid-topo [data-conta-field="tipo-conta"]{order:5;flex:1 1 45%;min-width:120px;}
-  .conta-grid-topo [data-conta-field="segundo-campo"]{order:6;flex:1 1 100%;min-width:0;}
+  .conta-grid-linha-1{grid-template-columns:minmax(50px,0.6fr) 1fr;}
+  .conta-grid-linha-1 > .field:nth-child(3){grid-column:1/-1;}
+  .conta-grid-linha-2{grid-template-columns:1fr;}
   .conta-grid-linha-pix1{grid-template-columns:1fr 1fr;}
   .conta-grid-linha-pix1 > .field:nth-child(3){grid-column:1/-1;}
   .conta-grid-linha-cartao1{grid-template-columns:1fr 1fr;}
@@ -17235,9 +17222,8 @@ function renderTextModal(){
         <div class="tx-form">
           ${!info.temTipoConta ? `<div class="field"><label>${info.label}</label><input type="text" id="fTextModalNome" placeholder="${info.placeholder}" value="${escapeHtml(t.nome)}"></div>` : ''}
           ${info.temTipoConta ? `
-          <div class="conta-grid-topo">
-          <div class="conta-grid-linha conta-grid-linha-1" data-conta-flat>
-            <div class="field" data-conta-field="icone"><label>Ícone</label>
+          <div class="conta-grid-linha conta-grid-linha-1">
+            <div class="field"><label>Ícone</label>
               <div class="icone-conta-picker" id="fTextModalIconePicker">
                 <button type="button" class="icone-conta-picker-btn" id="fTextModalIconeContaBtn" aria-haspopup="listbox" aria-expanded="${iconePickerAberto?'true':'false'}" title="Escolher ícone da conta">
                   ${iconeAtualPreviewHtml}<span class="icone-conta-picker-caret">▾</span>
@@ -17258,8 +17244,8 @@ function renderTextModal(){
                 </div>` : ''}
               </div>
             </div>
-            <div class="field" data-conta-field="nome"><label>${info.label}</label><input type="text" id="fTextModalNome" placeholder="${info.placeholder}" value="${escapeHtml(t.nome)}"></div>
-            <div class="field" data-conta-field="responsavel"><label>Responsável pela conta</label>
+            <div class="field"><label>${info.label}</label><input type="text" id="fTextModalNome" placeholder="${info.placeholder}" value="${escapeHtml(t.nome)}"></div>
+            <div class="field"><label>Responsável pela conta</label>
               <select id="fTextModalResponsavel">
                 <option value="" ${!responsavelAtual?'selected':''}>Mais de um / não informar</option>
                 ${[...STATE.responsaveis].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(p=>`<option value="${escapeHtml(p)}" ${responsavelAtual===p?'selected':''}>${escapeHtml(p)}</option>`).join('')}
@@ -17267,31 +17253,30 @@ function renderTextModal(){
             </div>
           </div>
           ${iconeContaAtual==='upload' ? `
-          <div class="field" data-conta-field="upload" style="display:flex;align-items:center;gap:10px;">
+          <div class="field" style="display:flex;align-items:center;gap:10px;">
             ${iconeContaUploadAtual ? `<img src="${iconeContaUploadAtual}" alt="Ícone da conta" style="width:32px;height:32px;border-radius:6px;object-fit:cover;border:1px solid var(--line);">` : ''}
             <div style="flex:1;min-width:0;">
               <input type="file" id="fTextModalIconeContaUpload" accept="image/*">
               <p class="hint" style="margin:4px 0 0;">A imagem precisa ter exatamente 64 × 64 pixels.</p>
             </div>
           </div>` : ''}
-          <div class="conta-grid-linha conta-grid-linha-2" data-conta-flat>
-            <div class="field" data-conta-field="tipo-conta"><label>Tipo de conta</label>
+          <div class="conta-grid-linha conta-grid-linha-2">
+            <div class="field"><label>Tipo de conta</label>
               <select id="fTextModalTipoConta" ${info.tipoContaFixo?'disabled':''}>
                 ${TIPOS_CONTA.map(tp=>`<option value="${tp}" ${tipoContaAtual===tp?'selected':''}>${escapeHtml(rotuloTipoConta(tp))}</option>`).join('')}
               </select>
               ${info.tipoContaFixo ? `<input type="hidden" id="fTextModalTipoContaFixo" value="${info.tipoContaFixo}">` : ''}
             </div>
             ${mostrarDadosBancarios ? `
-            <div class="field" data-conta-field="segundo-campo"><label>Nome do banco</label>
+            <div class="field"><label>Nome do banco</label>
               <input type="text" id="fTextModalExtra_banco" placeholder="Ex.: Banco do Brasil" value="${escapeHtml(valorExtraTextModal(t,'banco'))}">
             </div>` : `
-            <div class="field" data-conta-field="segundo-campo"><label>${contaVinculadaLabel}</label>
+            <div class="field"><label>${contaVinculadaLabel}</label>
               <select id="fTextModalContaVinculada">
                 <option value="" ${!contaVinculadaAtual?'selected':''}>Selecione...</option>
                 ${opcoesContaVinculada.map(c=>`<option value="${escapeHtml(c)}" ${contaVinculadaAtual===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
               </select>
             </div>`}
-          </div>
           </div>` : ''}
           ${mostrarDadosBancarios ? `
           <div class="conta-grid-linha conta-grid-linha-pix1">
