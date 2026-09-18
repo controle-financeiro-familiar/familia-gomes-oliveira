@@ -1823,6 +1823,38 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
 .tx-row > .field.tx-narrow{flex:0 0 150px;}
 .tx-row > .field.tx-wide{flex:3;min-width:200px;}
 @media(max-width:520px){ .tx-row > .field{flex:1 1 100%;} }
+/* ---- Modal de lançamento (somente desktop): reorganiza os campos nas 7 linhas pedidas, sem tocar no
+   mobile (regra inteira dentro de min-width:701px). Usa display:contents nos wrappers .tx-row originais
+   (marcados com [data-tx-flat]) para que os campos "subam" e virem filhos diretos do container de seção
+   (.tx-secao-principal / .tx-secao-financeira), permitindo reordenar com "order" livremente entre campos
+   que antes estavam em linhas .tx-row diferentes, preservando IDs/estrutura/bindings inalterados. ---- */
+@media(min-width:701px){
+  .tx-secao-principal{display:flex;flex-wrap:wrap;column-gap:12px;row-gap:10px;}
+  .tx-secao-principal > [data-tx-flat]{display:contents;}
+  .tx-secao-principal [data-tx-field="data"]{order:1;}
+  .tx-secao-principal [data-tx-field="valor"]{order:2;}
+  .tx-secao-principal [data-tx-field="cartao-fatura"]{order:3;}
+  .tx-secao-principal [data-tx-field="parcelas-select"]{order:4;}
+  .tx-secao-principal [data-tx-field="parcela-atual"]{order:4;}
+  .tx-secao-principal [data-tx-field="total-parcelas"]{order:5;}
+  .tx-secao-principal [data-tx-field="descricao"]{order:10;flex:0 0 100%!important;min-width:0!important;}
+
+  .tx-secao-financeira{display:flex;flex-wrap:wrap;column-gap:12px;row-gap:10px;}
+  .tx-secao-financeira > [data-tx-flat]{display:contents;}
+  .tx-secao-financeira > .field-section-label{order:0;flex:0 0 100%;}
+  .tx-secao-financeira [data-tx-field="conta"]{order:1;}
+  .tx-secao-financeira [data-tx-field="pgto"]{order:2;}
+  .tx-secao-financeira [data-tx-field="responsavel"]{order:3;}
+  .tx-secao-financeira [data-tx-field="competencia"]{order:4;flex:1;min-width:150px;max-width:none!important;margin-top:0!important;}
+  .tx-secao-financeira > [data-tx-field="info-financeira"]{order:10;flex:0 0 100%;}
+
+  .tx-secao-opcoes{display:flex;flex-wrap:wrap;column-gap:12px;row-gap:10px;}
+  .tx-secao-opcoes > .field-section-label{order:0;flex:0 0 100%;}
+  .tx-secao-opcoes > .opcoes-block{order:1;flex:0 0 100%;}
+  .tx-secao-opcoes > .reveal{order:2;flex:1;min-width:200px;}
+  .tx-secao-opcoes > .reveal:not(.open){flex:0 0 0;min-width:0;}
+  .tx-secao-opcoes > .reveal .field{max-width:none!important;}
+}
 /* Modal de conta / modal "Editar datas e limite do cartão" (seções 3-10 do requisito "Contas, Cartões,
    Contracheque, Pix e Lançamentos"): grid com proporções fixas por linha (ícone menor, chave Pix maior
    etc.) em vez do tx-row flexível genérico acima — sempre com min-width:0 nos campos para nunca deixar um
@@ -17711,15 +17743,15 @@ function renderTxModal(){
             <button type="button" id="btnTipoReceita" class="${tipoAtual==='Receita'?'sel-Receita':''}">💰 Receita</button>
           </div>
 
-          <div>
-            <div class="tx-row">
-              <div class="field tx-narrow"><label>Data</label><input type="date" id="fData" value="${t.data||''}"></div>
-              <div class="field tx-wide"><label>Descrição</label><input type="text" id="fDesc" value="${escapeHtml(t.descricao||'')}" placeholder="Ex.: Supermercado"></div>
+          <div class="tx-secao-principal">
+            <div class="tx-row" data-tx-flat>
+              <div class="field tx-narrow" data-tx-field="data"><label>Data</label><input type="date" id="fData" value="${t.data||''}"></div>
+              <div class="field tx-wide" data-tx-field="descricao"><label>Descrição</label><input type="text" id="fDesc" value="${escapeHtml(t.descricao||'')}" placeholder="Ex.: Supermercado"></div>
             </div>
-            <div class="tx-row">
-              <div class="field"><label>Valor ${(podeParcelar && !t.id && Number(t.parcelas||1)>1) ? 'total ' : ''}(R$)</label><input type="number" step="0.01" id="fValor" value="${t.valor||''}"></div>
+            <div class="tx-row" data-tx-flat>
+              <div class="field" data-tx-field="valor"><label>Valor ${(podeParcelar && !t.id && Number(t.parcelas||1)>1) ? 'total ' : ''}(R$)</label><input type="number" step="0.01" id="fValor" value="${t.valor||''}"></div>
               ${ehPagamentoFaturaCartao ? `
-              <div class="field"><label>Cartão</label>
+              <div class="field" data-tx-field="cartao-fatura"><label>Cartão</label>
                 <select id="fCartaoFatura">
                   <option value="" ${!t.cartaoFatura?'selected':''}>— selecionar —</option>
                   ${[...STATE.cartoes].sort(compararContasComContrachequePorUltimo).map(c=>`<option value="${escapeHtml(c)}" ${t.cartaoFatura===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}
@@ -17727,12 +17759,12 @@ function renderTxModal(){
                 </select>
               </div>` : ''}
               ${(podeParcelar && !t.id) ? `
-              <div class="field"><label>Parcelas</label>
+              <div class="field" data-tx-field="parcelas-select"><label>Parcelas</label>
                 <select id="fParcelas">${Array.from({length:24},(_,i)=>i+1).map(n=>`<option value="${n}" ${Number(t.parcelas||1)===n?'selected':''}>${n}x${n===1?' (à vista)':''}</option>`).join('')}</select>
               </div>` : ''}
               ${(podeParcelar && t.id) ? `
-              <div class="field"><label>Parcela atual</label><input type="number" min="1" max="99" id="fParcelaAtual" value="${t.parcelaAtual||''}" placeholder="Ex.: 2"></div>
-              <div class="field"><label>Total de parcelas</label><input type="number" min="1" max="99" id="fTotalParcelas" value="${t.totalParcelas||''}" placeholder="Ex.: 10"></div>` : ''}
+              <div class="field" data-tx-field="parcela-atual"><label>Parcela atual</label><input type="number" min="1" max="99" id="fParcelaAtual" value="${t.parcelaAtual||''}" placeholder="Ex.: 2"></div>
+              <div class="field" data-tx-field="total-parcelas"><label>Total de parcelas</label><input type="number" min="1" max="99" id="fTotalParcelas" value="${t.totalParcelas||''}" placeholder="Ex.: 10"></div>` : ''}
             </div>
           </div>
 
@@ -17758,17 +17790,17 @@ function renderTxModal(){
             <p class="hint" style="margin:8px 0 0;">Escolha Grupo → Categoria → Subcategoria.</p>
           </div>
 
-          <div>
+          <div class="tx-secao-financeira">
             <div class="field-section-label">Informações financeiras</div>
-            <div class="tx-row">
-              <div class="field"><label>Conta</label>
+            <div class="tx-row" data-tx-flat>
+              <div class="field" data-tx-field="conta"><label>Conta</label>
                 <select id="fConta">${contasOrdenadas().map(c=>`<option value="${escapeHtml(c)}" ${t.conta===c?'selected':''}>${escapeHtml(c)}</option>`).join('')}</select>
               </div>
-              <div class="field"><label>Pgto / Rcbto</label>
+              <div class="field" data-tx-field="pgto"><label>Pgto / Rcbto</label>
                 <select id="fPgto">${meiosOrdenados().map(c=>`<option value="${c}" ${t.pgto===c?'selected':''}>${c}</option>`).join('')}</select>
               </div>
               ${grupoAtual==='Renda Familiar' ? `
-              <div class="field"><label>Responsável</label>
+              <div class="field" data-tx-field="responsavel"><label>Responsável</label>
                 <select id="fResponsavel">
                   <option value="">— não informado —</option>
                   ${[...STATE.responsaveis].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(p=>`<option value="${escapeHtml(p)}" ${t.responsavel===p?'selected':''}>${escapeHtml(p)}</option>`).join('')}
@@ -17776,19 +17808,19 @@ function renderTxModal(){
               </div>` : ''}
             </div>
             ${t.id ? `
-            <div class="field" style="margin-top:10px;max-width:260px;">
+            <div class="field" data-tx-field="competencia" style="margin-top:10px;max-width:260px;">
               <label>Fatura/Competência</label>
               <select id="fCompetenciaFatura">${listaCompetenciasFatura.map(c=>`<option value="${c}" ${c===comp?'selected':''}>${competenciaLabel(c)}</option>`).join('')}</select>
             </div>
-            <p class="hint" style="margin:6px 0 0;">${isCartao
+            <p class="hint" data-tx-field="info-financeira" style="margin:6px 0 0;">${isCartao
               ? `Move o lançamento para a fatura escolhida, sem alterar a data da compra (${fmtData(t.data)||'—'}), o valor ou os demais dados.`
               : `Associa o lançamento à competência escolhida, sem alterar a data (${fmtData(t.data)||'—'}), o valor ou os demais dados.`}</p>
             ` : (isCartao ? `
-            <div class="info-card"><span class="info-card-icon">💳</span><span>${Number(t.parcelas||1)>1 ? `Esta compra será dividida em <b>${Number(t.parcelas)}x</b>, a primeira entrando na fatura de <b>${competenciaLabel(comp)}</b>` : `Esta compra entrará na fatura de <b>${competenciaLabel(comp)}</b>`}${vencimentoLabel(comp,t.conta)?` (${Number(t.parcelas||1)>1 ? '1ª parcela vence' : 'vence'} em ${vencimentoLabel(comp,t.conta)})`:' — defina o dia de fechamento do cartão na aba Contas e Cartões para calcular automaticamente'}.</span></div>
+            <div class="info-card" data-tx-field="info-financeira"><span class="info-card-icon">💳</span><span>${Number(t.parcelas||1)>1 ? `Esta compra será dividida em <b>${Number(t.parcelas)}x</b>, a primeira entrando na fatura de <b>${competenciaLabel(comp)}</b>` : `Esta compra entrará na fatura de <b>${competenciaLabel(comp)}</b>`}${vencimentoLabel(comp,t.conta)?` (${Number(t.parcelas||1)>1 ? '1ª parcela vence' : 'vence'} em ${vencimentoLabel(comp,t.conta)})`:' — defina o dia de fechamento do cartão na aba Contas e Cartões para calcular automaticamente'}.</span></div>
             ` : '')}
           </div>
 
-          <div>
+          <div class="tx-secao-opcoes">
             <div class="field-section-label">Opções adicionais</div>
             <div class="opcoes-block">
               ${isCartao ? `
