@@ -407,6 +407,12 @@ input,select{font-family:var(--sans);}
    com as MESMAS regras já usadas pelo breakpoint fixo abaixo — só a navegação muda, não o layout todo. */
 html.forcar-nav-mobile .tabbar{display:none;}
 html.forcar-nav-mobile .bottom-nav{display:flex;}
+/* O ☰ Menu (menu-arquivo) do cabeçalho só faz sentido quando a bottom-nav NÃO está em uso — com ela ativa,
+   o mesmo painel (.menu-arquivo-painel) já é acessível via "Mais → 📁 Arquivo" (ver @media(max-width:700px)
+   abaixo, mesma lógica/comentário). Aqui é o caso "bottom-nav forçada mesmo acima de 700px" (tabbar não
+   coube numa única linha) — mesma classe html.forcar-nav-mobile que já ativa a própria bottom-nav duas
+   linhas acima, nunca uma segunda condição independente que pudesse divergir dela. */
+html.forcar-nav-mobile #btnMenuArquivo{display:none;}
 html.forcar-nav-mobile .fab-novo-lancamento,html.forcar-nav-mobile .fab-novo-lancamento-modal{display:flex;align-items:center;justify-content:center;}
 html.forcar-nav-mobile main.app-main,html.forcar-nav-mobile .app>main{padding-bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 16px);}
 html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none;}
