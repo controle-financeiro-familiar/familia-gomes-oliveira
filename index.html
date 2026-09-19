@@ -292,7 +292,7 @@ input,select{font-family:var(--sans);}
   color:#fff;padding:16px 26px 14px;display:flex;align-items:flex-end;justify-content:space-between;
   flex-wrap:nowrap;gap:10px;border-bottom:3px solid var(--gold);
 }
-.app-title{display:flex;align-items:center;gap:18px;font-family:var(--mono);min-width:0;flex:1 1 auto;}
+.app-title{display:flex;align-items:center;gap:18px;font-family:var(--mono);min-width:0;flex:0 1 auto;}
 .app-title-wrap{min-width:0;padding-left:18px;border-left:1px solid rgba(255,255,255,.18);}
 .app-title .mark{
   height:120px;width:auto;object-fit:contain;display:block;flex-shrink:0;
@@ -313,6 +313,23 @@ input,select{font-family:var(--sans);}
 .app-title-linha2 p{margin:2px 0 0;min-width:0;}
 .app-title-linha2 p:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;}
 .app-title-tab-atual{display:block;color:var(--gold)!important;font-weight:700;font-size:12.5px!important;flex:0 0 auto;white-space:nowrap;}
+/* Card "Saldo Atual (Hoje)" no app-header (só desktop, ver renderHeaderSaldoAtualHtml): fica entre
+   .app-title e .header-right, que continuam com a mesma largura/posição de sempre (.app-title passou a
+   flex:0 1 auto, sem crescer mais — nunca movia o conteúdo visível mesmo quando crescia, então a troca não
+   altera nada visível). .app-header-saldo é quem agora recebe todo o espaço livre da linha (flex:1 1 auto)
+   e centraliza o card MENOR (.dash-hero-saldo, reaproveitado tal qual, só compactado) dentro dessa área via
+   justify-content:center — o card em si nunca estica, ocupa só a largura do próprio conteúdo. Some
+   completamente abaixo de 600px (@media abaixo), onde o cabeçalho vira o layout mobile dedicado — nesse
+   modo o card de saldo já existe, mas na Página Inicial (renderInicioMobile), nunca duplicado aqui. */
+.app-header-saldo{display:flex;justify-content:center;align-items:center;flex:1 1 auto;min-width:0;padding:0 10px;overflow:hidden;}
+.app-header-saldo .dash-hero-saldo{
+  display:block;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:10px;
+  padding:8px 18px;flex:0 0 auto;min-width:0;max-width:100%;margin-bottom:0;
+}
+.app-header-saldo .dash-hero-saldo-topo{gap:10px;}
+.app-header-saldo .dash-hero-saldo-lbl{font-size:11px;white-space:nowrap;}
+.app-header-saldo .dash-hero-saldo-data{font-size:11px;}
+.app-header-saldo .dash-hero-saldo-val{font-size:20px;margin-top:2px;white-space:nowrap;}
 .header-right{display:flex;flex-direction:column;align-items:flex-end;gap:16px;flex-wrap:wrap;flex:0 1 auto;min-width:0;max-width:100%;}
 .period-select{display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:15px;margin:13px 2px 0;flex-wrap:wrap;max-width:100%;}
 .period-select select{
@@ -556,6 +573,10 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
   .app-title h1{font-size:clamp(16px, calc(2vw + 4px), 22px);}
   .app-title p{font-size:13px;}
   .app-title-wrap{padding-left:clamp(8px, 1.5vw, 18px);}
+  .app-header-saldo{padding:0 clamp(4px, 1vw, 10px);}
+  .app-header-saldo .dash-hero-saldo{padding:clamp(4px, 0.8vw, 8px) clamp(10px, 1.6vw, 18px);}
+  .app-header-saldo .dash-hero-saldo-lbl,.app-header-saldo .dash-hero-saldo-data{font-size:clamp(9px, 1vw, 11px);}
+  .app-header-saldo .dash-hero-saldo-val{font-size:clamp(15px, 1.8vw, 20px);}
   .header-right{align-items:flex-end;gap:clamp(6px, 1.2vw, 16px);flex-shrink:1;}
   .sync-indicador{padding:clamp(4px, 0.8vw, 7px) clamp(7px, 1.4vw, 12px);font-size:clamp(10.5px, 1.1vw, 12.5px);gap:clamp(3px, 0.6vw, 6px);}
   .sync-indicador .sync-icone{font-size:clamp(11px, 1.1vw, 13px);}
@@ -585,6 +606,7 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
   .app-title{display:contents;}
   .app-title-wrap{display:contents;}
   .header-right{display:contents;}
+  .app-header-saldo{display:none;}
 
   .app-title .mark{height:34px;order:1;}
   .app-title-info{order:2;flex:1 1 auto;min-width:0;}
@@ -12066,6 +12088,22 @@ function renderItemMenuArquivo(id, icone, nome, desc){
     <span class="ma-item-textos"><span class="ma-item-nome">${nome}</span><span class="ma-item-desc">${escapeHtml(desc)}</span></span>
   </button>`;
 }
+/* Card "Saldo Atual (Hoje)" no app-header (só desktop — ver .app-header-saldo no CSS, que some abaixo de
+   600px): reaproveita o MESMO componente/estrutura (.dash-hero-saldo) e a MESMA calcSaldoAtualFluxoCaixa()
+   já usados no Painel Financeiro (renderDashboard) e na Página Inicial mobile (renderInicioMobile) — nunca
+   uma segunda função de cálculo. Só o tamanho é compactado via CSS escopado a .app-header-saldo, para caber
+   na barra do cabeçalho junto com app-title/header-right. */
+function renderHeaderSaldoAtualHtml(){
+  const saldoAtual = calcSaldoAtualFluxoCaixa();
+  return `
+  <div class="dash-hero-saldo">
+    <div class="dash-hero-saldo-topo">
+      <div class="dash-hero-saldo-lbl">💼 Saldo Atual (Hoje)</div>
+      <div class="dash-hero-saldo-data">${fmtData(hojeISO())}</div>
+    </div>
+    <div class="dash-hero-saldo-val ${arredondarMoeda(saldoAtual)<0?'neg':''}">${fmtBRL(saldoAtual)}</div>
+  </div>`;
+}
 function renderHeader(){
   return `
   <header class="app-header">
@@ -12091,6 +12129,7 @@ function renderHeader(){
 			</div>
 		</div>
     </div>
+    <div class="app-header-saldo">${renderHeaderSaldoAtualHtml()}</div>
     <div class="header-right">
       <div class="sync-indicador-wrap">
         <button type="button" class="sync-indicador ${syncIndicadorInfo().classe}" id="btnSyncIndicador" title="☁ OneDrive — clique para ver detalhes">
