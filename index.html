@@ -1873,6 +1873,37 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
   .tx-secao-opcoes > .reveal:not(.open){flex:0 0 0;min-width:0;}
   .tx-secao-opcoes > .reveal .field{max-width:none!important;}
 }
+/* ---- Modal de lançamento (somente mobile): reorganiza os campos na ordem pedida — Data|Valor,
+   Parcela Atual|Total de Parcelas, Descrição, Grupo, Categoria, Subcategoria, Natureza, Conta|Pgto,
+   Competência, Compra Internacional, Transação Interna, Taxa Efetiva|Conta de Destino — com
+   redimensionamento dinâmico: campo condicional ausente não deixa espaço reservado e os campos
+   restantes da mesma linha se redistribuem automaticamente. Não usa "order" em nenhum ponto (a ordem
+   visual segue a ordem real do DOM, que já foi ajustada em renderTxModal para bater com esta ordem),
+   preservando a ordem de tabulação coerente com a disposição visual. Regra inteira dentro de
+   max-width:700px (mesma faixa mobile já usada acima para o modal) — não altera o desktop, cuja regra
+   de reorganização (min-width:701px, acima) continua intacta e já compatível com o DOM ajustado. ---- */
+@media(max-width:700px){
+  .tx-secao-principal [data-tx-field="data"]{flex:1 1 45%!important;min-width:100px!important;}
+  .tx-secao-principal [data-tx-field="valor"]{flex:1 1 45%!important;min-width:100px!important;}
+  .tx-secao-principal [data-tx-field="cartao-fatura"]{flex:0 0 100%!important;min-width:0!important;}
+  .tx-secao-principal [data-tx-field="parcelas-select"]{flex:0 0 100%!important;min-width:0!important;}
+  .tx-secao-principal [data-tx-field="parcela-atual"]{flex:1 1 45%!important;min-width:100px!important;}
+  .tx-secao-principal [data-tx-field="total-parcelas"]{flex:1 1 45%!important;min-width:100px!important;}
+
+  .tx-secao-classificacao .tx-row > .field{flex:0 0 100%!important;min-width:0!important;}
+
+  .tx-secao-financeira [data-tx-field="conta"]{flex:1 1 45%!important;min-width:100px!important;}
+  .tx-secao-financeira [data-tx-field="pgto"]{flex:1 1 45%!important;min-width:100px!important;}
+  .tx-secao-financeira [data-tx-field="responsavel"]{flex:0 0 100%!important;min-width:0!important;}
+  .tx-secao-financeira [data-tx-field="competencia"]{max-width:none!important;}
+
+  .tx-secao-opcoes{display:flex;flex-wrap:wrap;column-gap:12px;row-gap:10px;}
+  .tx-secao-opcoes > .field-section-label{flex:0 0 100%;}
+  .tx-secao-opcoes > .opcoes-block{flex:0 0 100%;flex-direction:column;align-items:stretch;flex-wrap:nowrap;}
+  .tx-secao-opcoes > .reveal{flex:1 1 45%;min-width:110px;}
+  .tx-secao-opcoes > .reveal:not(.open){flex:0 0 0;min-width:0;}
+  .tx-secao-opcoes > .reveal .field{max-width:none!important;}
+}
 /* Modal de conta / modal "Editar datas e limite do cartão" (seções 3-10 do requisito "Contas, Cartões,
    Contracheque, Pix e Lançamentos"): grid com proporções fixas por linha (ícone menor, chave Pix maior
    etc.) em vez do tx-row flexível genérico acima — sempre com min-width:0 nos campos para nunca deixar um
@@ -17825,9 +17856,6 @@ function renderTxModal(){
           <div class="tx-secao-principal">
             <div class="tx-row" data-tx-flat>
               <div class="field tx-narrow" data-tx-field="data"><label>Data</label><input type="date" id="fData" value="${t.data||''}"></div>
-              <div class="field tx-wide" data-tx-field="descricao"><label>Descrição</label><input type="text" id="fDesc" value="${escapeHtml(t.descricao||'')}" placeholder="Ex.: Supermercado"></div>
-            </div>
-            <div class="tx-row" data-tx-flat>
               <div class="field" data-tx-field="valor"><label>Valor ${(podeParcelar && !t.id && Number(t.parcelas||1)>1) ? 'total ' : ''}(R$)</label><input type="number" step="0.01" id="fValor" value="${t.valor||''}"></div>
               ${ehPagamentoFaturaCartao ? `
               <div class="field" data-tx-field="cartao-fatura"><label>Cartão</label>
@@ -17845,9 +17873,10 @@ function renderTxModal(){
               <div class="field" data-tx-field="parcela-atual"><label>Parcela atual</label><input type="number" min="1" max="99" id="fParcelaAtual" value="${t.parcelaAtual||''}" placeholder="Ex.: 2"></div>
               <div class="field" data-tx-field="total-parcelas"><label>Total de parcelas</label><input type="number" min="1" max="99" id="fTotalParcelas" value="${t.totalParcelas||''}" placeholder="Ex.: 10"></div>` : ''}
             </div>
+            <div class="field tx-wide" data-tx-field="descricao"><label>Descrição</label><input type="text" id="fDesc" value="${escapeHtml(t.descricao||'')}" placeholder="Ex.: Supermercado"></div>
           </div>
 
-          <div>
+          <div class="tx-secao-classificacao">
             <div class="field-section-label">Classificação</div>
             <div class="tx-row">
               <div class="field"><label>Grupo</label>
