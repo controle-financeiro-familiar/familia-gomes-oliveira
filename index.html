@@ -1050,6 +1050,19 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
   #painelFaturaCartao .renda-top-row, #painelRendaFamiliar .renda-top-row{grid-template-columns:1fr;}
   #painelRendaFamiliar .legenda-item{white-space:normal;}
 }
+/* "Modo Laptop" (901–1366px): só no painel Renda Familiar, legenda em cima e gráfico de pizza embaixo,
+   igual ao empilhamento já usado no mobile acima (mesmo grid-template-columns:1fr — a ordem visual já sai
+   correta, pois a legenda já vem antes do gráfico no HTML). Não toca em Mobile (≤700px, já empilhado pela
+   regra acima), Tablet (701–900px, continua lado a lado como sempre — só .dash-row-2col/.renda-row/
+   .charts-row colapsam nessa faixa, nunca este .renda-top-row específico) nem Desktop (>1366px, mantém lado
+   a lado). max-width+margin:auto no chart-box só centraliza a caixa do gráfico (mesmo canvas/dados/cores/
+   tooltip de sempre, só ganha uma moldura menor e centralizada em vez de esticar por toda a largura do
+   painel). */
+@media(min-width:901px) and (max-width:1366px){
+  #painelRendaFamiliar .renda-top-row{grid-template-columns:1fr;}
+  #painelRendaFamiliar .legenda-item{white-space:normal;}
+  #painelRendaFamiliar .renda-top-row .chart-box{max-width:320px;margin:0 auto;}
+}
 .legenda-item .dot{width:13px;height:13px;border-radius:50%;flex-shrink:0;}
 .legenda-pct{color:#8393ac;font-weight:400;}
 .chart-box{position:relative;height:280px;max-width:100%;}
