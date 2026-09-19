@@ -9105,6 +9105,20 @@ function calcSaldoConta(conta, ano, mes){
    "lançamentos futuros" no Saldo Atual dos cards de Contas — sempre a data real do dispositivo, nunca a
    competência (mês/ano) selecionada no topo da aplicação. */
 function hojeISO(){ return new Date().toISOString().slice(0,10); }
+/* "Modo Laptop" (901–1366px — mesma faixa usada no painel Renda Familiar, entre o breakpoint de
+   tablet/900px e o de desktop grande) — todas as tabelas paginadas dentro de modais (Ver Extrato,
+   Lançamentos futuros, Ver Fatura, Mapa de Calor do dia, Duplicar por vários meses, Histórico Contracheque,
+   Lançamentos não listados) passam a abrir com 5 registros por página em vez do padrão maior de sempre,
+   reduzindo a altura inicial da tabela (a altura já é só a soma das linhas renderizadas — table-wrap-
+   registros não tem max-height fixo, ver CSS — então menos linhas por página já é o suficiente para evitar
+   rolagem interna do modal, sem precisar de nenhum ajuste de CSS à parte). Único ponto de decisão: qualquer
+   modal cujo padrão precise respeitar essa regra chama porPaginaLaptop(padraoDesktop) na hora de criar seu
+   próprio estado, em vez de escrever o número fixo direto — Desktop/Tablet/Mobile continuam recebendo
+   padraoDesktop inalterado. Não mexe no valor que o próprio usuário escolhe no seletor "Exibir:" (5/10/25/
+   .../Todos, ver renderRodapePaginacaoGenerica) — só no valor inicial ao abrir o modal. */
+function porPaginaLaptop(padraoDesktop){
+  return (window.innerWidth>=901 && window.innerWidth<=1366) ? 5 : padraoDesktop;
+}
 /* Mantém a linha "Saldo Atual (Hoje)" (aba Fluxo de Caixa) em dia sozinha, sem exigir nenhuma ação manual:
    verifica periodicamente se a data mudou desde o último render e, se sim, força um novo render — o que
    recalcula a posição (dia) e o valor da linha automaticamente (ver aplicarLinhasSaldoDiario). Mesmo padrão
@@ -9721,7 +9735,7 @@ function renderHistoricoContrachequeModal(){
   // já que o volume típico de competências de um contracheque é bem menor que o de uma tabela de
   // lançamentos. Reaproveita o mesmo componente visual genérico (renderRodapePaginacaoGenerica), só com
   // outra lista de opções.
-  if(UI.historicoContrachequeModal.porPagina===undefined) UI.historicoContrachequeModal.porPagina = 12;
+  if(UI.historicoContrachequeModal.porPagina===undefined) UI.historicoContrachequeModal.porPagina = porPaginaLaptop(12);
   if(UI.historicoContrachequeModal.pagina===undefined) UI.historicoContrachequeModal.pagina = 1;
   const htcPorPagina = UI.historicoContrachequeModal.porPagina;
   const htcTotalPaginas = htcPorPagina==='TODOS' ? 1 : Math.max(1, Math.ceil(historico.length/htcPorPagina));
@@ -20226,7 +20240,7 @@ function bindEvents(){
     if(!original) return;
     // Duplicação por vários meses consecutivos, a partir do mesmo dia do mês seguinte ao lançamento
     // original — ver renderDuplicarMesesModal() para a prévia e a criação dos lançamentos.
-    UI.duplicarMesesModal = { originalId: original.id, qtdMeses: 3, pagina: 1, porPagina: 10, edicoes: {} };
+    UI.duplicarMesesModal = { originalId: original.id, qtdMeses: 3, pagina: 1, porPagina: porPaginaLaptop(10), edicoes: {} };
     render();
   }));
   document.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=>{
@@ -20366,7 +20380,7 @@ function bindEvents(){
   });
   bindFiltrosMobileToggle('Projecao');
   document.querySelectorAll('[data-ver-fatura]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.faturaAtualModal = { conta: b.dataset.verFatura, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    UI.faturaAtualModal = { conta: b.dataset.verFatura, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:porPaginaLaptop(10), selecionados:new Set() };
     // Sempre volta para a ordenação padrão (data crescente) a cada abertura — ver o mesmo comentário em
     // Próximas Faturas acima.
     UI.ordenacaoTabelas['fatura'] = { campo:null, dir:null };
@@ -20413,7 +20427,7 @@ function bindEvents(){
   });
   bindFiltrosMobileToggle('Fatura');
   document.querySelectorAll('[data-extrato-conta]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.extratoContaModal = { conta: b.dataset.extratoConta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    UI.extratoContaModal = { conta: b.dataset.extratoConta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:porPaginaLaptop(10), selecionados:new Set() };
     // Sempre volta para a ordenação padrão (data crescente) a cada abertura — ver o mesmo comentário em
     // Próximas Faturas acima.
     UI.ordenacaoTabelas['extrato'] = { campo:null, dir:null };
@@ -20460,7 +20474,7 @@ function bindEvents(){
   });
   bindFiltrosMobileToggle('Extrato');
   document.querySelectorAll('[data-futuros-conta]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.futurosContaModal = { conta: b.dataset.futurosConta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    UI.futurosContaModal = { conta: b.dataset.futurosConta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:porPaginaLaptop(10), selecionados:new Set() };
     // Sempre volta para a ordenação padrão (data crescente) a cada abertura — ver o mesmo comentário em
     // Próximas Faturas acima.
     UI.ordenacaoTabelas['futuros'] = { campo:null, dir:null };
@@ -20476,7 +20490,7 @@ function bindEvents(){
   document.getElementById('closeEvolucaoReserva')?.addEventListener('click', ()=>{ UI.evolucaoReservaModal=null; render(); });
   document.getElementById('closeEvolucaoReserva2')?.addEventListener('click', ()=>{ UI.evolucaoReservaModal=null; render(); });
   document.querySelectorAll('[data-historico-contracheque]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.historicoContrachequeModal = { conta: b.dataset.historicoContracheque, pagina:1, porPagina:12 }; render();
+    UI.historicoContrachequeModal = { conta: b.dataset.historicoContracheque, pagina:1, porPagina:porPaginaLaptop(12) }; render();
   }));
   document.getElementById('closeHistoricoContracheque')?.addEventListener('click', ()=>{ UI.historicoContrachequeModal=null; render(); });
   document.getElementById('closeHistoricoContracheque2')?.addEventListener('click', ()=>{ UI.historicoContrachequeModal=null; render(); });
@@ -20501,7 +20515,7 @@ function bindEvents(){
     const [ano, mes] = competencia.split('-').map(Number);
     UI.ano = ano; UI.mes = mes;
     UI.historicoContrachequeModal = null;
-    UI.extratoContaModal = { conta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    UI.extratoContaModal = { conta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:porPaginaLaptop(10), selecionados:new Set() };
     // Sempre volta para a ordenação padrão (data crescente) a cada abertura — ver o mesmo comentário em
     // Próximas Faturas acima.
     UI.ordenacaoTabelas['extrato'] = { campo:null, dir:null };
@@ -20573,7 +20587,7 @@ function bindEvents(){
   document.querySelectorAll('[data-mc-dia]').forEach(cel=>{
     const abrir = ()=>{
       const [ano,mes,dia] = cel.dataset.mcDia.split('-').map(Number);
-      UI.mapaCalorDiaModal = { ano, mes, dia, filtros: criarFiltrosPadrao(), busca:'', selecionados:new Set(), pagina:1, porPagina:10 }; render();
+      UI.mapaCalorDiaModal = { ano, mes, dia, filtros: criarFiltrosPadrao(), busca:'', selecionados:new Set(), pagina:1, porPagina:porPaginaLaptop(10) }; render();
     };
     cel.addEventListener('click', abrir);
     cel.addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); abrir(); } });
@@ -20995,7 +21009,7 @@ function bindEvents(){
     UI.naoListadosModal = {
       ano: Number(tr.dataset.naoListadosAno), mes: Number(tr.dataset.naoListadosMes),
       diaIni: Number(tr.dataset.naoListadosDiaIni), diaFim: Number(tr.dataset.naoListadosDiaFim),
-      pagina: 1, porPagina: 10,
+      pagina: 1, porPagina: porPaginaLaptop(10),
     };
     render();
   }));
