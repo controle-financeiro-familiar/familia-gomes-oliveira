@@ -292,7 +292,7 @@ input,select{font-family:var(--sans);}
   color:#fff;padding:16px 26px 14px;display:flex;align-items:flex-end;justify-content:space-between;
   flex-wrap:nowrap;gap:10px;border-bottom:3px solid var(--gold);
 }
-.app-title{display:flex;align-items:center;gap:18px;font-family:var(--mono);min-width:0;flex:1 1 auto;}
+.app-title{display:flex;align-items:center;gap:18px;font-family:var(--mono);min-width:0;flex:0 1 auto;}
 .app-title-wrap{min-width:0;padding-left:18px;border-left:1px solid rgba(255,255,255,.18);}
 .app-title .mark{
   height:120px;width:auto;object-fit:contain;display:block;flex-shrink:0;
@@ -313,6 +313,23 @@ input,select{font-family:var(--sans);}
 .app-title-linha2 p{margin:2px 0 0;min-width:0;}
 .app-title-linha2 p:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;}
 .app-title-tab-atual{display:block;color:var(--gold)!important;font-weight:700;font-size:12.5px!important;flex:0 0 auto;white-space:nowrap;}
+/* Card "Saldo Atual (Hoje)" no app-header (só desktop, ver renderHeaderSaldoAtualHtml): fica entre
+   .app-title e .header-right, que continuam com a mesma largura/posição de sempre (.app-title passou a
+   flex:0 1 auto, sem crescer mais — nunca movia o conteúdo visível mesmo quando crescia, então a troca não
+   altera nada visível). .app-header-saldo é quem agora recebe todo o espaço livre da linha (flex:1 1 auto)
+   e centraliza o card MENOR (.dash-hero-saldo, reaproveitado tal qual, só compactado) dentro dessa área via
+   justify-content:center — o card em si nunca estica, ocupa só a largura do próprio conteúdo. Some
+   completamente abaixo de 600px (@media abaixo), onde o cabeçalho vira o layout mobile dedicado — nesse
+   modo o card de saldo já existe, mas na Página Inicial (renderInicioMobile), nunca duplicado aqui. */
+.app-header-saldo{display:flex;justify-content:center;align-items:center;flex:1 1 auto;min-width:0;padding:0 10px;overflow:hidden;}
+.app-header-saldo .dash-hero-saldo{
+  display:block;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:10px;
+  padding:8px 18px;flex:0 0 auto;min-width:0;max-width:100%;margin-bottom:0;
+}
+.app-header-saldo .dash-hero-saldo-topo{gap:10px;}
+.app-header-saldo .dash-hero-saldo-lbl{font-size:11px;white-space:nowrap;}
+.app-header-saldo .dash-hero-saldo-data{font-size:11px;}
+.app-header-saldo .dash-hero-saldo-val{font-size:20px;margin-top:2px;white-space:nowrap;}
 .header-right{display:flex;flex-direction:column;align-items:flex-end;gap:16px;flex-wrap:wrap;flex:0 1 auto;min-width:0;max-width:100%;}
 .period-select{display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:15px;margin:13px 2px 0;flex-wrap:wrap;max-width:100%;}
 .period-select select{
@@ -390,6 +407,12 @@ input,select{font-family:var(--sans);}
    com as MESMAS regras já usadas pelo breakpoint fixo abaixo — só a navegação muda, não o layout todo. */
 html.forcar-nav-mobile .tabbar{display:none;}
 html.forcar-nav-mobile .bottom-nav{display:flex;}
+/* O ☰ Menu (menu-arquivo) do cabeçalho só faz sentido quando a bottom-nav NÃO está em uso — com ela ativa,
+   o mesmo painel (.menu-arquivo-painel) já é acessível via "Mais → 📁 Arquivo" (ver @media(max-width:700px)
+   abaixo, mesma lógica/comentário). Aqui é o caso "bottom-nav forçada mesmo acima de 700px" (tabbar não
+   coube numa única linha) — mesma classe html.forcar-nav-mobile que já ativa a própria bottom-nav duas
+   linhas acima, nunca uma segunda condição independente que pudesse divergir dela. */
+html.forcar-nav-mobile #btnMenuArquivo{display:none;}
 html.forcar-nav-mobile .fab-novo-lancamento,html.forcar-nav-mobile .fab-novo-lancamento-modal{display:flex;align-items:center;justify-content:center;}
 html.forcar-nav-mobile main.app-main,html.forcar-nav-mobile .app>main{padding-bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 16px);}
 html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none;}
@@ -556,6 +579,10 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
   .app-title h1{font-size:clamp(16px, calc(2vw + 4px), 22px);}
   .app-title p{font-size:13px;}
   .app-title-wrap{padding-left:clamp(8px, 1.5vw, 18px);}
+  .app-header-saldo{padding:0 clamp(4px, 1vw, 10px);}
+  .app-header-saldo .dash-hero-saldo{padding:clamp(4px, 0.8vw, 8px) clamp(10px, 1.6vw, 18px);}
+  .app-header-saldo .dash-hero-saldo-lbl,.app-header-saldo .dash-hero-saldo-data{font-size:clamp(9px, 1vw, 11px);}
+  .app-header-saldo .dash-hero-saldo-val{font-size:clamp(15px, 1.8vw, 20px);}
   .header-right{align-items:flex-end;gap:clamp(6px, 1.2vw, 16px);flex-shrink:1;}
   .sync-indicador{padding:clamp(4px, 0.8vw, 7px) clamp(7px, 1.4vw, 12px);font-size:clamp(10.5px, 1.1vw, 12.5px);gap:clamp(3px, 0.6vw, 6px);}
   .sync-indicador .sync-icone{font-size:clamp(11px, 1.1vw, 13px);}
@@ -585,6 +612,7 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
   .app-title{display:contents;}
   .app-title-wrap{display:contents;}
   .header-right{display:contents;}
+  .app-header-saldo{display:none;}
 
   .app-title .mark{height:34px;order:1;}
   .app-title-info{order:2;flex:1 1 auto;min-width:0;}
@@ -673,7 +701,7 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 }
 .mini-card .mini-card-actions{
   position:absolute;top:8px;right:8px;display:flex;gap:2px;opacity:0;transform:translateY(-2px);
-  transition:opacity .15s ease,transform .15s ease;background:var(--paper);border-radius:6px;
+  transition:opacity .15s ease,transform .15s ease;background:var(--navy-50);border-radius:6px;
 }
 .mini-card:hover .mini-card-actions, .mini-card:focus-within .mini-card-actions{opacity:1;transform:translateY(0);}
 /* Indicador de importação (📥) nos cards de Contas da aba Configurações: fica ancorado na base inferior
@@ -1021,6 +1049,19 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 @media(max-width:700px){
   #painelFaturaCartao .renda-top-row, #painelRendaFamiliar .renda-top-row{grid-template-columns:1fr;}
   #painelRendaFamiliar .legenda-item{white-space:normal;}
+}
+/* "Modo Laptop" (901–1366px): só no painel Renda Familiar, legenda em cima e gráfico de pizza embaixo,
+   igual ao empilhamento já usado no mobile acima (mesmo grid-template-columns:1fr — a ordem visual já sai
+   correta, pois a legenda já vem antes do gráfico no HTML). Não toca em Mobile (≤700px, já empilhado pela
+   regra acima), Tablet (701–900px, continua lado a lado como sempre — só .dash-row-2col/.renda-row/
+   .charts-row colapsam nessa faixa, nunca este .renda-top-row específico) nem Desktop (>1366px, mantém lado
+   a lado). max-width+margin:auto no chart-box só centraliza a caixa do gráfico (mesmo canvas/dados/cores/
+   tooltip de sempre, só ganha uma moldura menor e centralizada em vez de esticar por toda a largura do
+   painel). */
+@media(min-width:901px) and (max-width:1366px){
+  #painelRendaFamiliar .renda-top-row{grid-template-columns:1fr;}
+  #painelRendaFamiliar .legenda-item{white-space:normal;}
+  #painelRendaFamiliar .renda-top-row .chart-box{max-width:320px;margin:0 auto;}
 }
 .legenda-item .dot{width:13px;height:13px;border-radius:50%;flex-shrink:0;}
 .legenda-pct{color:#8393ac;font-weight:400;}
@@ -1873,6 +1914,37 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
   .tx-secao-opcoes > .reveal:not(.open){flex:0 0 0;min-width:0;}
   .tx-secao-opcoes > .reveal .field{max-width:none!important;}
 }
+/* ---- Modal de lançamento (somente mobile): reorganiza os campos na ordem pedida — Data|Valor,
+   Parcela Atual|Total de Parcelas, Descrição, Grupo, Categoria, Subcategoria, Natureza, Conta|Pgto,
+   Competência, Compra Internacional, Transação Interna, Taxa Efetiva|Conta de Destino — com
+   redimensionamento dinâmico: campo condicional ausente não deixa espaço reservado e os campos
+   restantes da mesma linha se redistribuem automaticamente. Não usa "order" em nenhum ponto (a ordem
+   visual segue a ordem real do DOM, que já foi ajustada em renderTxModal para bater com esta ordem),
+   preservando a ordem de tabulação coerente com a disposição visual. Regra inteira dentro de
+   max-width:700px (mesma faixa mobile já usada acima para o modal) — não altera o desktop, cuja regra
+   de reorganização (min-width:701px, acima) continua intacta e já compatível com o DOM ajustado. ---- */
+@media(max-width:700px){
+  .tx-secao-principal [data-tx-field="data"]{flex:1 1 45%!important;min-width:100px!important;}
+  .tx-secao-principal [data-tx-field="valor"]{flex:1 1 45%!important;min-width:100px!important;}
+  .tx-secao-principal [data-tx-field="cartao-fatura"]{flex:0 0 100%!important;min-width:0!important;}
+  .tx-secao-principal [data-tx-field="parcelas-select"]{flex:0 0 100%!important;min-width:0!important;}
+  .tx-secao-principal [data-tx-field="parcela-atual"]{flex:1 1 45%!important;min-width:100px!important;}
+  .tx-secao-principal [data-tx-field="total-parcelas"]{flex:1 1 45%!important;min-width:100px!important;}
+
+  .tx-secao-classificacao .tx-row > .field{flex:0 0 100%!important;min-width:0!important;}
+
+  .tx-secao-financeira [data-tx-field="conta"]{flex:1 1 45%!important;min-width:100px!important;}
+  .tx-secao-financeira [data-tx-field="pgto"]{flex:1 1 45%!important;min-width:100px!important;}
+  .tx-secao-financeira [data-tx-field="responsavel"]{flex:0 0 100%!important;min-width:0!important;}
+  .tx-secao-financeira [data-tx-field="competencia"]{max-width:none!important;}
+
+  .tx-secao-opcoes{display:flex;flex-wrap:wrap;column-gap:12px;row-gap:10px;}
+  .tx-secao-opcoes > .field-section-label{flex:0 0 100%;}
+  .tx-secao-opcoes > .opcoes-block{flex:0 0 100%;flex-direction:column;align-items:stretch;flex-wrap:nowrap;}
+  .tx-secao-opcoes > .reveal{flex:1 1 45%;min-width:110px;}
+  .tx-secao-opcoes > .reveal:not(.open){flex:0 0 0;min-width:0;}
+  .tx-secao-opcoes > .reveal .field{max-width:none!important;}
+}
 /* Modal de conta / modal "Editar datas e limite do cartão" (seções 3-10 do requisito "Contas, Cartões,
    Contracheque, Pix e Lançamentos"): grid com proporções fixas por linha (ícone menor, chave Pix maior
    etc.) em vez do tx-row flexível genérico acima — sempre com min-width:0 nos campos para nunca deixar um
@@ -2648,6 +2720,11 @@ summary::marker{content:'';}
 .contas-financeiras-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;}
 @media(max-width:900px){.contas-financeiras-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:700px){.contas-financeiras-grid{grid-template-columns:1fr;}}
+/* "Contas e Cartões — Laptop/Tablet": Tablet (≤900px) já cai na regra 2-colunas acima; falta só o Laptop
+   (901–1366px), hoje enquadrado como Desktop (4 colunas). Última conta em quantidade ímpar cai sozinha na
+   2ª coluna da própria linha, sem esticar — comportamento padrão do grid, sem CSS extra. Acima de 1366px
+   (Desktop de verdade) continuam as 4 colunas de sempre. */
+@media(min-width:901px) and (max-width:1366px){.contas-financeiras-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 /* Altura padronizada (seção 4 do requisito "Correções e ajustes — Contracheque, Reserva de Emergência e
    cards de Contas"): sem um valor fixo, cards em linhas diferentes do grid podiam ficar alguns pixels mais
    baixos/altos entre si (cada linha do CSS Grid só estica para acompanhar a própria linha, nunca as
@@ -2870,8 +2947,12 @@ summary::marker{content:'';}
 .data-editavel-valor{display:flex;flex-direction:column;align-items:center;line-height:1.3;}
 /* Cartões no mobile (item 15 do requisito de responsividade): mesma técnica de card já usada no Fluxo de
    Caixa — cada <tr> vira um card, sem depender de hover para revelar o ícone de editar (item 25: ações
-   nunca dependentes de hover em touch) nem duplicar a lógica de cálculo das faturas. */
-@media(max-width:700px){
+   nunca dependentes de hover em touch) nem duplicar a lógica de cálculo das faturas.
+   "Contas e Cartões — Laptop/Tablet": breakpoint alargado de 700px para 1366px (única mudança desta regra)
+   — o MESMO card, sem nenhuma segunda implementação, passa a valer também em Tablet (701–900px) e Laptop
+   (901–1366px), nunca só no mobile; acima de 1366px (Desktop) a tabela tradicional continua exatamente como
+   sempre. Ver também a extensão equivalente de .table-wrap:has(> .tabela-cartoes) logo abaixo. */
+@media(max-width:1366px){
   .tabela-cartoes{min-width:0;width:100%;display:block;}
   .tabela-cartoes thead{display:none;}
   .tabela-cartoes tbody{display:block;}
@@ -2941,7 +3022,16 @@ summary::marker{content:'';}
     content:attr(data-label);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;
     color:#8393ac;flex-shrink:0;
   }
-  .tabela-cartoes .edit-data-icon{min-width:var(--touch-min);}  
+  .tabela-cartoes .edit-data-icon{min-width:var(--touch-min);}
+}
+/* Complemento da extensão acima: a moldura do .table-wrap ao redor de .tabela-cartoes (border/background/
+   sombra da própria tabela) precisa sumir na mesma faixa 701–1366px, senão os cards ficam visualmente presos
+   dentro de uma caixa externa única — mesma regra já aplicada ao mobile (≤700px, ver .table-wrap:has(>
+   .tabela-cartoes) dentro do bloco de mobile acima), só que extraída numa regra própria porque aquele bloco
+   mobile reúne também outras tabelas (Previsão Financeira, Aportes, Intel) fora do escopo deste pedido —
+   nunca alterá-las. */
+@media(min-width:701px) and (max-width:1366px){
+  .table-wrap:has(> .tabela-cartoes){border:none;border-radius:0;background:transparent;box-shadow:none;overflow:visible;max-height:none;}
 }
 .status-col{display:flex;flex-direction:column;gap:5px;align-items:center;}
 .status-pill-novo{
@@ -9033,6 +9123,20 @@ function calcSaldoConta(conta, ano, mes){
    "lançamentos futuros" no Saldo Atual dos cards de Contas — sempre a data real do dispositivo, nunca a
    competência (mês/ano) selecionada no topo da aplicação. */
 function hojeISO(){ return new Date().toISOString().slice(0,10); }
+/* "Modo Laptop" (901–1366px — mesma faixa usada no painel Renda Familiar, entre o breakpoint de
+   tablet/900px e o de desktop grande) — todas as tabelas paginadas dentro de modais (Ver Extrato,
+   Lançamentos futuros, Ver Fatura, Mapa de Calor do dia, Duplicar por vários meses, Histórico Contracheque,
+   Lançamentos não listados) passam a abrir com 5 registros por página em vez do padrão maior de sempre,
+   reduzindo a altura inicial da tabela (a altura já é só a soma das linhas renderizadas — table-wrap-
+   registros não tem max-height fixo, ver CSS — então menos linhas por página já é o suficiente para evitar
+   rolagem interna do modal, sem precisar de nenhum ajuste de CSS à parte). Único ponto de decisão: qualquer
+   modal cujo padrão precise respeitar essa regra chama porPaginaLaptop(padraoDesktop) na hora de criar seu
+   próprio estado, em vez de escrever o número fixo direto — Desktop/Tablet/Mobile continuam recebendo
+   padraoDesktop inalterado. Não mexe no valor que o próprio usuário escolhe no seletor "Exibir:" (5/10/25/
+   .../Todos, ver renderRodapePaginacaoGenerica) — só no valor inicial ao abrir o modal. */
+function porPaginaLaptop(padraoDesktop){
+  return (window.innerWidth>=901 && window.innerWidth<=1366) ? 5 : padraoDesktop;
+}
 /* Mantém a linha "Saldo Atual (Hoje)" (aba Fluxo de Caixa) em dia sozinha, sem exigir nenhuma ação manual:
    verifica periodicamente se a data mudou desde o último render e, se sim, força um novo render — o que
    recalcula a posição (dia) e o valor da linha automaticamente (ver aplicarLinhasSaldoDiario). Mesmo padrão
@@ -9649,7 +9753,7 @@ function renderHistoricoContrachequeModal(){
   // já que o volume típico de competências de um contracheque é bem menor que o de uma tabela de
   // lançamentos. Reaproveita o mesmo componente visual genérico (renderRodapePaginacaoGenerica), só com
   // outra lista de opções.
-  if(UI.historicoContrachequeModal.porPagina===undefined) UI.historicoContrachequeModal.porPagina = 12;
+  if(UI.historicoContrachequeModal.porPagina===undefined) UI.historicoContrachequeModal.porPagina = porPaginaLaptop(12);
   if(UI.historicoContrachequeModal.pagina===undefined) UI.historicoContrachequeModal.pagina = 1;
   const htcPorPagina = UI.historicoContrachequeModal.porPagina;
   const htcTotalPaginas = htcPorPagina==='TODOS' ? 1 : Math.max(1, Math.ceil(historico.length/htcPorPagina));
@@ -12035,6 +12139,22 @@ function renderItemMenuArquivo(id, icone, nome, desc){
     <span class="ma-item-textos"><span class="ma-item-nome">${nome}</span><span class="ma-item-desc">${escapeHtml(desc)}</span></span>
   </button>`;
 }
+/* Card "Saldo Atual (Hoje)" no app-header (só desktop — ver .app-header-saldo no CSS, que some abaixo de
+   600px): reaproveita o MESMO componente/estrutura (.dash-hero-saldo) e a MESMA calcSaldoAtualFluxoCaixa()
+   já usados no Painel Financeiro (renderDashboard) e na Página Inicial mobile (renderInicioMobile) — nunca
+   uma segunda função de cálculo. Só o tamanho é compactado via CSS escopado a .app-header-saldo, para caber
+   na barra do cabeçalho junto com app-title/header-right. */
+function renderHeaderSaldoAtualHtml(){
+  const saldoAtual = calcSaldoAtualFluxoCaixa();
+  return `
+  <div class="dash-hero-saldo">
+    <div class="dash-hero-saldo-topo">
+      <div class="dash-hero-saldo-lbl">💼 Saldo Atual (Hoje)</div>
+      <div class="dash-hero-saldo-data">${fmtData(hojeISO())}</div>
+    </div>
+    <div class="dash-hero-saldo-val ${arredondarMoeda(saldoAtual)<0?'neg':''}">${fmtBRL(saldoAtual)}</div>
+  </div>`;
+}
 function renderHeader(){
   return `
   <header class="app-header">
@@ -12060,6 +12180,7 @@ function renderHeader(){
 			</div>
 		</div>
     </div>
+    <div class="app-header-saldo">${renderHeaderSaldoAtualHtml()}</div>
     <div class="header-right">
       <div class="sync-indicador-wrap">
         <button type="button" class="sync-indicador ${syncIndicadorInfo().classe}" id="btnSyncIndicador" title="☁ OneDrive — clique para ver detalhes">
@@ -17825,9 +17946,6 @@ function renderTxModal(){
           <div class="tx-secao-principal">
             <div class="tx-row" data-tx-flat>
               <div class="field tx-narrow" data-tx-field="data"><label>Data</label><input type="date" id="fData" value="${t.data||''}"></div>
-              <div class="field tx-wide" data-tx-field="descricao"><label>Descrição</label><input type="text" id="fDesc" value="${escapeHtml(t.descricao||'')}" placeholder="Ex.: Supermercado"></div>
-            </div>
-            <div class="tx-row" data-tx-flat>
               <div class="field" data-tx-field="valor"><label>Valor ${(podeParcelar && !t.id && Number(t.parcelas||1)>1) ? 'total ' : ''}(R$)</label><input type="number" step="0.01" id="fValor" value="${t.valor||''}"></div>
               ${ehPagamentoFaturaCartao ? `
               <div class="field" data-tx-field="cartao-fatura"><label>Cartão</label>
@@ -17845,9 +17963,10 @@ function renderTxModal(){
               <div class="field" data-tx-field="parcela-atual"><label>Parcela atual</label><input type="number" min="1" max="99" id="fParcelaAtual" value="${t.parcelaAtual||''}" placeholder="Ex.: 2"></div>
               <div class="field" data-tx-field="total-parcelas"><label>Total de parcelas</label><input type="number" min="1" max="99" id="fTotalParcelas" value="${t.totalParcelas||''}" placeholder="Ex.: 10"></div>` : ''}
             </div>
+            <div class="field tx-wide" data-tx-field="descricao"><label>Descrição</label><input type="text" id="fDesc" value="${escapeHtml(t.descricao||'')}" placeholder="Ex.: Supermercado"></div>
           </div>
 
-          <div>
+          <div class="tx-secao-classificacao">
             <div class="field-section-label">Classificação</div>
             <div class="tx-row">
               <div class="field"><label>Grupo</label>
@@ -20139,7 +20258,7 @@ function bindEvents(){
     if(!original) return;
     // Duplicação por vários meses consecutivos, a partir do mesmo dia do mês seguinte ao lançamento
     // original — ver renderDuplicarMesesModal() para a prévia e a criação dos lançamentos.
-    UI.duplicarMesesModal = { originalId: original.id, qtdMeses: 3, pagina: 1, porPagina: 10, edicoes: {} };
+    UI.duplicarMesesModal = { originalId: original.id, qtdMeses: 3, pagina: 1, porPagina: porPaginaLaptop(10), edicoes: {} };
     render();
   }));
   document.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=>{
@@ -20279,7 +20398,7 @@ function bindEvents(){
   });
   bindFiltrosMobileToggle('Projecao');
   document.querySelectorAll('[data-ver-fatura]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.faturaAtualModal = { conta: b.dataset.verFatura, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    UI.faturaAtualModal = { conta: b.dataset.verFatura, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:porPaginaLaptop(10), selecionados:new Set() };
     // Sempre volta para a ordenação padrão (data crescente) a cada abertura — ver o mesmo comentário em
     // Próximas Faturas acima.
     UI.ordenacaoTabelas['fatura'] = { campo:null, dir:null };
@@ -20326,7 +20445,7 @@ function bindEvents(){
   });
   bindFiltrosMobileToggle('Fatura');
   document.querySelectorAll('[data-extrato-conta]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.extratoContaModal = { conta: b.dataset.extratoConta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    UI.extratoContaModal = { conta: b.dataset.extratoConta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:porPaginaLaptop(10), selecionados:new Set() };
     // Sempre volta para a ordenação padrão (data crescente) a cada abertura — ver o mesmo comentário em
     // Próximas Faturas acima.
     UI.ordenacaoTabelas['extrato'] = { campo:null, dir:null };
@@ -20373,7 +20492,7 @@ function bindEvents(){
   });
   bindFiltrosMobileToggle('Extrato');
   document.querySelectorAll('[data-futuros-conta]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.futurosContaModal = { conta: b.dataset.futurosConta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    UI.futurosContaModal = { conta: b.dataset.futurosConta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:porPaginaLaptop(10), selecionados:new Set() };
     // Sempre volta para a ordenação padrão (data crescente) a cada abertura — ver o mesmo comentário em
     // Próximas Faturas acima.
     UI.ordenacaoTabelas['futuros'] = { campo:null, dir:null };
@@ -20389,7 +20508,7 @@ function bindEvents(){
   document.getElementById('closeEvolucaoReserva')?.addEventListener('click', ()=>{ UI.evolucaoReservaModal=null; render(); });
   document.getElementById('closeEvolucaoReserva2')?.addEventListener('click', ()=>{ UI.evolucaoReservaModal=null; render(); });
   document.querySelectorAll('[data-historico-contracheque]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.historicoContrachequeModal = { conta: b.dataset.historicoContracheque, pagina:1, porPagina:12 }; render();
+    UI.historicoContrachequeModal = { conta: b.dataset.historicoContracheque, pagina:1, porPagina:porPaginaLaptop(12) }; render();
   }));
   document.getElementById('closeHistoricoContracheque')?.addEventListener('click', ()=>{ UI.historicoContrachequeModal=null; render(); });
   document.getElementById('closeHistoricoContracheque2')?.addEventListener('click', ()=>{ UI.historicoContrachequeModal=null; render(); });
@@ -20414,7 +20533,7 @@ function bindEvents(){
     const [ano, mes] = competencia.split('-').map(Number);
     UI.ano = ano; UI.mes = mes;
     UI.historicoContrachequeModal = null;
-    UI.extratoContaModal = { conta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:10, selecionados:new Set() };
+    UI.extratoContaModal = { conta, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:porPaginaLaptop(10), selecionados:new Set() };
     // Sempre volta para a ordenação padrão (data crescente) a cada abertura — ver o mesmo comentário em
     // Próximas Faturas acima.
     UI.ordenacaoTabelas['extrato'] = { campo:null, dir:null };
@@ -20486,7 +20605,7 @@ function bindEvents(){
   document.querySelectorAll('[data-mc-dia]').forEach(cel=>{
     const abrir = ()=>{
       const [ano,mes,dia] = cel.dataset.mcDia.split('-').map(Number);
-      UI.mapaCalorDiaModal = { ano, mes, dia, filtros: criarFiltrosPadrao(), busca:'', selecionados:new Set(), pagina:1, porPagina:10 }; render();
+      UI.mapaCalorDiaModal = { ano, mes, dia, filtros: criarFiltrosPadrao(), busca:'', selecionados:new Set(), pagina:1, porPagina:porPaginaLaptop(10) }; render();
     };
     cel.addEventListener('click', abrir);
     cel.addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); abrir(); } });
@@ -20908,7 +21027,7 @@ function bindEvents(){
     UI.naoListadosModal = {
       ano: Number(tr.dataset.naoListadosAno), mes: Number(tr.dataset.naoListadosMes),
       diaIni: Number(tr.dataset.naoListadosDiaIni), diaFim: Number(tr.dataset.naoListadosDiaFim),
-      pagina: 1, porPagina: 10,
+      pagina: 1, porPagina: porPaginaLaptop(10),
     };
     render();
   }));
