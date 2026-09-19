@@ -2040,6 +2040,13 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
     bottom:calc(var(--bottom-nav-h) + var(--safe-bottom));
   }
   #ovMapaCalorDia.overlay{bottom:calc(var(--safe-bottom));}
+  /* Editar lançamento aberto a partir da lista de despesas do dia do Mapa de Calor (ovMapaCalorDia, regra
+     acima): fica empilhado por cima dela (UI.mapaCalorDiaModal continua setado, ver renderTxModal), então
+     recebe a mesma exceção — sem reservar a faixa da bottom-nav no bottom do overlay. Classe condicional
+     (só quando UI.mapaCalorDiaModal está aberto) em vez de mexer em #ovTx.overlay direto, para não afetar
+     o modal quando aberto de qualquer outro lugar (Registros, Extrato, Futuros, Fatura etc.), que continua
+     reservando a faixa normalmente. */
+  .overlay.overlay-sem-bottom-nav{bottom:calc(var(--safe-bottom));}
   .modal{
     /* !important necessário: muitos modais definem width inline (ex.: style="width:480px") — sem isso,
        o estilo inline vence a regra da media query e o modal fica estreito no mobile em vez de tela cheia.
@@ -17804,7 +17811,7 @@ function renderTxModal(){
   })() : [];
   const podeParcelar = (isCartao && tipoAtual==='Despesa') || tipoAtual==='Receita' || (grupoAtual==='Dívidas e Empréstimos' && tipoAtual==='Despesa');
   return `
-  <div class="overlay" id="ovTx" ${attrZIndexModal('editingTx')}>
+  <div class="overlay${UI.mapaCalorDiaModal ? ' overlay-sem-bottom-nav' : ''}" id="ovTx" ${attrZIndexModal('editingTx')}>
     <div class="modal modal-editor-lancamento" style="width:640px;">
       <div class="modal-head"><h3>${t.id ? '✏️ Editar lançamento' : '➕ Novo lançamento'}</h3><button class="close-x" id="closeTx">✕</button></div>
       <div class="modal-body">
