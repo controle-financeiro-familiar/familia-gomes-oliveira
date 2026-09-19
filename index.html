@@ -217,6 +217,14 @@ input,select{font-family:var(--sans);}
      O painel (.menu-arquivo-painel) continua no DOM porque é filho de .menu-arquivo — só o botão que abria
      esse painel pelo cabeçalho é que não faz mais sentido no mobile. */
   #btnMenuArquivo{display:none;}
+  /* Mesmo raciocínio: com a bottom-nav ativa (breakpoint fixo ≤700px, mesma faixa desta regra), o card
+     "Saldo Atual (Hoje)" some do app-header — a Página Inicial (renderInicioMobile) já mostra o mesmo card,
+     mesmo componente/cálculo, nunca os dois ao mesmo tempo (ver também o caso "bottom-nav forçada acima de
+     700px" em html.forcar-nav-mobile .app-header-saldo, mesma condição de fundo). !important necessário:
+     a regra base .app-header-saldo{display:flex} (mesma especificidade, 1 classe) vem DEPOIS desta no
+     arquivo, então venceria por ordem de declaração mesmo dentro deste media query — mesma armadilha já
+     corrigida antes nesta sessão (.mini-card-actions/.tabela-cartoes). */
+  .app-header-saldo{display:none!important;}
   /* "Novos ajustes de interface — FinUs", item 5: o painel para ACIMA do bottom-nav (nunca sobrepondo-o) —
      mesma técnica de "área livre" já usada por outros elementos flutuantes do app (FABs, Voltar ao Topo):
      bottom-nav-h + área segura do aparelho, em vez de bottom:0. Item 6: como o menu-arquivo-painel agora
@@ -413,6 +421,11 @@ html.forcar-nav-mobile .bottom-nav{display:flex;}
    coube numa única linha) — mesma classe html.forcar-nav-mobile que já ativa a própria bottom-nav duas
    linhas acima, nunca uma segunda condição independente que pudesse divergir dela. */
 html.forcar-nav-mobile #btnMenuArquivo{display:none;}
+/* Mesmo raciocínio do ☰ Menu acima, agora para o card "Saldo Atual (Hoje)" do app-header (ver
+   .app-header-saldo): com a bottom-nav ativa, o card não fica mais no cabeçalho — a Página Inicial
+   (renderInicioMobile) já mostra o mesmo card (mesmo componente/cálculo), e nunca os dois ao mesmo tempo.
+   Mesma classe html.forcar-nav-mobile, nunca uma segunda condição independente. */
+html.forcar-nav-mobile .app-header-saldo{display:none;}
 html.forcar-nav-mobile .fab-novo-lancamento,html.forcar-nav-mobile .fab-novo-lancamento-modal{display:flex;align-items:center;justify-content:center;}
 html.forcar-nav-mobile main.app-main,html.forcar-nav-mobile .app>main{padding-bottom:calc(var(--bottom-nav-h) + var(--safe-bottom) + 16px);}
 html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none;}
@@ -612,7 +625,8 @@ html.forcar-nav-mobile .acoes-lancamento-modal .btn-novo-lanc-modal{display:none
   .app-title{display:contents;}
   .app-title-wrap{display:contents;}
   .header-right{display:contents;}
-  .app-header-saldo{display:none;}
+  /* .app-header-saldo já está oculto pela regra de bottom-nav (≤700px, ver acima) — esta faixa (≤600px) é
+     um subconjunto dela, então nada extra é necessário aqui. */
 
   .app-title .mark{height:34px;order:1;}
   .app-title-info{order:2;flex:1 1 auto;min-width:0;}
@@ -861,11 +875,19 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 .dash-hero-saldo-val.neg{color:#ff8a7a;}
 @media(max-width:700px){ .dash-hero-saldo{display:block;} }
 /* Página inicial mobile (ver renderInicioMobile — "Ajustes de interface — modo mobile", item 1): reaproveita
-   .dash-hero-saldo tal qual (mesmo card/cálculo que antes vivia no Painel Financeiro), só acrescentando a
-   saudação acima, sem duplicar o gradiente/padding dele. "Novos ajustes de interface — modo mobile", item 3:
-   os botões de ação rápida ("+ Novo lançamento"/"Ver Extrato") que existiam dentro do card foram removidos
-   (ver histórico para .inicio-acoes-rapidas/.inicio-acao-pill) — saldo, título, layout e cálculo do card
-   ficam intactos. */
+   .dash-hero-saldo tal qual (mesmo card/cálculo que antes vivia no Painel Financeiro, hoje via a mesma
+   renderHeaderSaldoAtualHtml() também usada no app-header — nunca uma segunda implementação), só
+   acrescentando a saudação acima, sem duplicar o gradiente/padding dele. "Novos ajustes de interface — modo
+   mobile", item 3: os botões de ação rápida ("+ Novo lançamento"/"Ver Extrato") que existiam dentro do card
+   foram removidos (ver histórico para .inicio-acoes-rapidas/.inicio-acao-pill) — saldo, título, layout e
+   cálculo do card ficam intactos.
+   .inicio-saldo-wrap força display:block incondicionalmente (nenhum media query/largura envolvido): a
+   própria existência da Página Inicial no DOM já é o único gate necessário — UI.tab==='inicio' só persiste
+   quando a bottom-nav está habilitada (ver render(), mesmo critério innerWidth<=700 OU forcarNavMobile já
+   usado por ajustarNavResponsiva), então sempre que este wrapper é renderizado, o card deve aparecer, seja
+   qual for a largura real da tela (cobre inclusive o caso "bottom-nav forçada acima de 700px", onde a regra
+   genérica @media(max-width:700px) acima sozinha não seria suficiente). */
+.inicio-saldo-wrap .dash-hero-saldo{display:block;}
 .inicio-saudacao{font-size:14.5px;font-weight:600;color:var(--navy-900);margin:2px 2px 12px;}
 .inicio-atalhos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
 /* "Novos ajustes de interface — modo mobile", item 5: todos os cards do painel "Painéis" da Início têm
@@ -12460,16 +12482,9 @@ function renderTab(){
      usado por ele no Painel Financeiro. No Painel Financeiro (mobile) o alerta deixa de aparecer, nunca
      duplicado nos dois lugares ao mesmo tempo. */
 function renderInicioMobile(){
-  const saldoAtual = calcSaldoAtualFluxoCaixa();
   return `
   <div class="inicio-saudacao">Olá, ${escapeHtml(nomeUsuarioConectado())} 👋</div>
-  <div class="dash-hero-saldo">
-    <div class="dash-hero-saldo-topo">
-      <div class="dash-hero-saldo-lbl">💼 Saldo Atual (Hoje)</div>
-      <div class="dash-hero-saldo-data">${fmtData(hojeISO())}</div>
-    </div>
-    <div class="dash-hero-saldo-val ${arredondarMoeda(saldoAtual)<0?'neg':''}">${fmtBRL(saldoAtual)}</div>
-  </div>
+  <div class="inicio-saldo-wrap">${renderHeaderSaldoAtualHtml()}</div>
   ${renderAlertaVencimentoHtml('margin-top:18px;')}
   <div class="panel" style="margin-bottom:0;">
     <h2>Painéis</h2>
