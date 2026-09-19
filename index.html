@@ -2720,6 +2720,11 @@ summary::marker{content:'';}
 .contas-financeiras-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;}
 @media(max-width:900px){.contas-financeiras-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:700px){.contas-financeiras-grid{grid-template-columns:1fr;}}
+/* "Contas e Cartões — Laptop/Tablet": Tablet (≤900px) já cai na regra 2-colunas acima; falta só o Laptop
+   (901–1366px), hoje enquadrado como Desktop (4 colunas). Última conta em quantidade ímpar cai sozinha na
+   2ª coluna da própria linha, sem esticar — comportamento padrão do grid, sem CSS extra. Acima de 1366px
+   (Desktop de verdade) continuam as 4 colunas de sempre. */
+@media(min-width:901px) and (max-width:1366px){.contas-financeiras-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 /* Altura padronizada (seção 4 do requisito "Correções e ajustes — Contracheque, Reserva de Emergência e
    cards de Contas"): sem um valor fixo, cards em linhas diferentes do grid podiam ficar alguns pixels mais
    baixos/altos entre si (cada linha do CSS Grid só estica para acompanhar a própria linha, nunca as
@@ -2942,8 +2947,12 @@ summary::marker{content:'';}
 .data-editavel-valor{display:flex;flex-direction:column;align-items:center;line-height:1.3;}
 /* Cartões no mobile (item 15 do requisito de responsividade): mesma técnica de card já usada no Fluxo de
    Caixa — cada <tr> vira um card, sem depender de hover para revelar o ícone de editar (item 25: ações
-   nunca dependentes de hover em touch) nem duplicar a lógica de cálculo das faturas. */
-@media(max-width:700px){
+   nunca dependentes de hover em touch) nem duplicar a lógica de cálculo das faturas.
+   "Contas e Cartões — Laptop/Tablet": breakpoint alargado de 700px para 1366px (única mudança desta regra)
+   — o MESMO card, sem nenhuma segunda implementação, passa a valer também em Tablet (701–900px) e Laptop
+   (901–1366px), nunca só no mobile; acima de 1366px (Desktop) a tabela tradicional continua exatamente como
+   sempre. Ver também a extensão equivalente de .table-wrap:has(> .tabela-cartoes) logo abaixo. */
+@media(max-width:1366px){
   .tabela-cartoes{min-width:0;width:100%;display:block;}
   .tabela-cartoes thead{display:none;}
   .tabela-cartoes tbody{display:block;}
@@ -3013,7 +3022,16 @@ summary::marker{content:'';}
     content:attr(data-label);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;
     color:#8393ac;flex-shrink:0;
   }
-  .tabela-cartoes .edit-data-icon{min-width:var(--touch-min);}  
+  .tabela-cartoes .edit-data-icon{min-width:var(--touch-min);}
+}
+/* Complemento da extensão acima: a moldura do .table-wrap ao redor de .tabela-cartoes (border/background/
+   sombra da própria tabela) precisa sumir na mesma faixa 701–1366px, senão os cards ficam visualmente presos
+   dentro de uma caixa externa única — mesma regra já aplicada ao mobile (≤700px, ver .table-wrap:has(>
+   .tabela-cartoes) dentro do bloco de mobile acima), só que extraída numa regra própria porque aquele bloco
+   mobile reúne também outras tabelas (Previsão Financeira, Aportes, Intel) fora do escopo deste pedido —
+   nunca alterá-las. */
+@media(min-width:701px) and (max-width:1366px){
+  .table-wrap:has(> .tabela-cartoes){border:none;border-radius:0;background:transparent;box-shadow:none;overflow:visible;max-height:none;}
 }
 .status-col{display:flex;flex-direction:column;gap:5px;align-items:center;}
 .status-pill-novo{
