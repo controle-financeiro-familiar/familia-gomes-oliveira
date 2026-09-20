@@ -2580,12 +2580,31 @@ summary::marker{content:'';}
    qualquer largura (desktop ou mobile), já que é o mesmo flex-wrap em ambos. */
 .cartoes-resumo-grid-flex-fill{display:flex;flex-wrap:wrap;}
 .cartoes-resumo-grid-flex-fill .cartoes-resumo-item{flex:1 1 140px;}
+/* "Contas e Cartões — Tablet", item 3: só nesta faixa (701–900px), o card "cartão(ões)" (1º) some do resumo
+   do painel Cartões — os 4 restantes (total das faturas/pagas/pendentes/parcelado em aberto) já usam
+   flex-wrap + flex:1 1 140px acima, que redistribui sozinho a largura entre os itens VISÍVEIS: sem o 1º,
+   os 4 crescem até preencher a linha toda, sem sobrar espaço vazio no lugar do card removido. Mesmo
+   princípio do item 2 acima (.cartoes-resumo-grid-contas); Desktop/Laptop (>900px) e Mobile (≤700px)
+   continuam mostrando os 5 cards, sem alteração. */
+@media(min-width:701px) and (max-width:900px){
+  .cartoes-resumo-grid-flex-fill .cartoes-resumo-item:first-child{display:none;}
+}
 /* Painel de Contas (aba Contas e Cartões): 5 cards-resumo (conta(s)/saldo inicial/saldo líquido/entradas/
    saídas) — no desktop, sempre numa única linha (nunca quebrando para uma segunda, mesmo com o card novo
    "saldo inicial no período"); abaixo de 900px, volta ao mesmo grid responsivo (auto-fit/minmax) já usado
    por todo o restante do app, preservando o empilhamento/adaptação existente no mobile. */
 .cartoes-resumo-grid-contas{grid-template-columns:repeat(5,1fr);}
 @media(max-width:900px){ .cartoes-resumo-grid-contas{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));} }
+/* "Contas e Cartões — Tablet", item 2: só nesta faixa (701–900px), o card "conta(s)" (1º) some do resumo do
+   painel Contas — os 4 restantes (saldo inicial/saldo líquido/entradas/saídas) já usam o mesmo grid
+   auto-fit/minmax(140px,1fr) logo acima, que recalcula sozinho a quantidade de colunas a partir dos itens
+   VISÍVEIS: sem o 1º, os 4 crescem (1fr) até preencher a largura toda numa única linha, sem sobrar coluna
+   vazia no lugar do card removido. display:none (não visibility/opacity) tira o item do fluxo do grid, que
+   é exatamente o que evita o espaço reservado. Mesmo princípio do item 3 acima (.cartoes-resumo-grid-
+   flex-fill), Desktop/Laptop (>900px) e Mobile (≤700px) continuam mostrando os 5 cards, sem alteração. */
+@media(min-width:701px) and (max-width:900px){
+  .cartoes-resumo-grid-contas .cartoes-resumo-item:first-child{display:none;}
+}
 /* "Ajustes de interface — modo mobile", item 6 (Contas e Cartões): no mobile, o 1º card ("conta(s)") ocupa
    100% da largura do painel sozinho numa linha, e os 4 cards seguintes (saldo inicial/saldo líquido/
    entradas/saídas) formam uma grade 2x2 — em vez do auto-fit genérico usado entre 700px e 900px, que
@@ -3054,6 +3073,16 @@ summary::marker{content:'';}
    nunca alterá-las. */
 @media(min-width:701px) and (max-width:1366px){
   .table-wrap:has(> .tabela-cartoes){border:none;border-radius:0;background:transparent;box-shadow:none;overflow:visible;max-height:none;}
+  /* "Contas e Cartões — Laptop/Tablet", item 1: os mesmos cards (ver .tabela-cartoes tbody{display:block}
+     dentro do @media(max-width:1366px) acima) passam a se distribuir em 2 colunas nesta faixa — mesma
+     especificidade (.tabela-cartoes tbody), então esta regra (posicionada DEPOIS no arquivo) vence e
+     sobrescreve o display:block só para 701–1366px; acima de 1366px continua tabela tradicional, e abaixo
+     de 700px (mobile de verdade) o bloco acima permanece em coluna única, sem nenhuma mudança. Cada <tr> já
+     é um card independente (mesmo padrão visual, ver bloco acima) — só o container (tbody) virou grid; com
+     quantidade ímpar de cartões, o último cai sozinho na coluna 1 da última linha (comportamento padrão do
+     grid), nunca esticando para as duas colunas. */
+  .tabela-cartoes tbody{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+  .tabela-cartoes tr{margin-bottom:0;}
 }
 .status-col{display:flex;flex-direction:column;gap:5px;align-items:center;}
 .status-pill-novo{
@@ -3920,11 +3949,11 @@ let CATEGORIAS = [
   ['Aplicativos de Entrega','Alimentação','Delivery e Praticidade','Despesa','Variável'],
   ['Marmitas e Refeições Prontas','Alimentação','Delivery e Praticidade','Despesa','Variável'],
   ['Outras Despesas de Alimentação','Alimentação','Outros','Despesa','Variável'],
-  ['Assinatura Mensal do Veículo','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Fixo'],
-  ['Aluguel Diário ou Semanal','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
-  ['Taxa de Adesão Inicial ou Caução','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
-  ['Quilometragem Excedente','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
-  ['Taxas e Coparticipações','Transporte','Carro por Assinatura / Locação de Veículos','Despesa','Variável'],
+  ['Assinatura Mensal do Veículo','Transporte','Assinatura / Locação de Veículos','Despesa','Fixo'],
+  ['Aluguel Diário ou Semanal','Transporte','Assinatura / Locação de Veículos','Despesa','Variável'],
+  ['Taxa de Adesão Inicial ou Caução','Transporte','Assinatura / Locação de Veículos','Despesa','Variável'],
+  ['Quilometragem Excedente','Transporte','Assinatura / Locação de Veículos','Despesa','Variável'],
+  ['Taxas e Coparticipações','Transporte','Assinatura / Locação de Veículos','Despesa','Variável'],
   ['Financiamento ou Consórcio do Veículo','Transporte','Veículo Próprio (Custos Fixos)','Despesa','Fixo'],
   ['Seguro Automotivo','Transporte','Veículo Próprio (Custos Fixos)','Despesa','Fixo'],
   ['IPVA e Licenciamento Anual','Transporte','Veículo Próprio (Custos Fixos)','Despesa','Fixo'],
