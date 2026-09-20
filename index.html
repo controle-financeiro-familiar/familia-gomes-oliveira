@@ -297,7 +297,7 @@ input,select{font-family:var(--sans);}
    linhas próprio daquela faixa. */
 .app-header{
   background:linear-gradient(135deg,var(--navy-900) 0%, var(--navy-950) 100%);
-  color:#fff;padding:16px 26px 14px;display:flex;align-items:flex-end;justify-content:space-between;
+  color:#fff;padding:16px 26px 14px;display:flex;align-items:center;justify-content:space-between;
   flex-wrap:nowrap;gap:10px;border-bottom:3px solid var(--gold);
 }
 .app-title{display:flex;align-items:center;gap:18px;font-family:var(--mono);min-width:0;flex:0 1 auto;}
@@ -335,9 +335,9 @@ input,select{font-family:var(--sans);}
   padding:8px 18px;flex:0 0 auto;min-width:0;max-width:100%;margin-bottom:0;
 }
 .app-header-saldo .dash-hero-saldo-topo{gap:10px;}
-.app-header-saldo .dash-hero-saldo-lbl{font-size:11px;white-space:nowrap;}
-.app-header-saldo .dash-hero-saldo-data{font-size:11px;}
-.app-header-saldo .dash-hero-saldo-val{font-size:20px;margin-top:2px;white-space:nowrap;}
+.app-header-saldo .dash-hero-saldo-lbl{font-size:15px;white-space:nowrap;}
+.app-header-saldo .dash-hero-saldo-data{font-size:15px;}
+.app-header-saldo .dash-hero-saldo-val{font-size:30px;margin-top:2px;white-space:nowrap;}
 .header-right{display:flex;flex-direction:column;align-items:flex-end;gap:16px;flex-wrap:wrap;flex:0 1 auto;min-width:0;max-width:100%;}
 .period-select{display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:15px;margin:13px 2px 0;flex-wrap:wrap;max-width:100%;}
 .period-select select{
@@ -868,7 +868,7 @@ main{flex:1;padding:22px;max-width:1280px;margin:0 auto;width:100%;box-sizing:bo
 }
 /* Item 7 do requisito: rótulo à esquerda e data (dinâmica, sempre "hoje") à direita, na mesma linha,
    alinhados verticalmente — mesmo quando o texto encolhe, os dois nunca quebram para linhas separadas. */
-.dash-hero-saldo-topo{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.dash-hero-saldo-topo{display:flex;justify-content:space-between;align-items:flex-end;gap:8px;}
 .dash-hero-saldo-lbl{font-size:12.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:#b9c9ea;white-space:nowrap;}
 .dash-hero-saldo-data{font-size:12.5px;font-weight:600;color:#b9c9ea;white-space:nowrap;flex:0 0 auto;}
 .dash-hero-saldo-val{font-family:var(--mono);font-size:32px;font-weight:700;margin-top:6px;color:var(--gold);}
