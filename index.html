@@ -3208,6 +3208,9 @@ const ONEDRIVE_CONFIG = {
   nomeArquivoCfg: 'configuracoes.cfg',
   nomeArquivoReg: 'registros.log',
   nomeArquivoAuditoria: 'auditoria.log',
+  // Arquivo de presença de sessões (controle de instâncias/sessões simultâneas) — ver seção "Controle de
+  // instâncias e sessões simultâneas". Nunca é lido/gravado pela lógica de dados financeiros em si.
+  nomeArquivoSessoes: 'sessoes.json',
 };
 
 /* ---------- Autenticação (MSAL.js / Microsoft Identity Platform, OAuth2 + PKCE) ---------- */
@@ -6268,6 +6271,234 @@ async function verificarAlteracoesExternas(){
   }catch(e){ /* falha silenciosa — não interrompe o uso; a próxima gravação continua protegida pelo If-Match de qualquer forma */ }
 }
 setInterval(verificarAlteracoesExternas, 3*60000);
+
+/* ===================== Controle de instâncias e sessões simultâneas =====================
+   Duas camadas independentes — nunca confundir uma com a outra:
+   1) MESMO DISPOSITIVO: nunca permitir duas abas/janelas/instâncias do PWA abertas ao mesmo tempo neste
+      aparelho. Resolvido 100% localmente (localStorage como lock com heartbeat/TTL, complementado por
+      BroadcastChannel para avisos instantâneos entre abas) — nenhuma chamada de rede envolvida, então pode
+      ser barato e frequente.
+   2) DISPOSITIVOS DIFERENTES: sessões em aparelhos diferentes SEMPRE podem coexistir — nunca bloqueadas.
+      Aqui o objetivo é só INFORMAR (banner não bloqueante) que existe outra sessão ativa e de quem, via um
+      pequeno arquivo de presença (sessoes.json) na MESMA pasta compartilhada do OneDrive já usada por
+      configuracoes.cfg/registros.log — heartbeat de baixa frequência, de propósito (mesmo espírito de
+      verificarAlteracoesExternas: nunca gerar tráfego desnecessário ao Graph). Isto NUNCA substitui o
+      mecanismo de conflito de DADOS já existente (ETag/If-Match em escreverTexto + modalConflitoGravacao) —
+      sessoes.json não é dado financeiro, é só um sinal de presença, tratado como best-effort (mesmo nível
+      de tolerância já aceito para auditoria.log). */
+const CONTROLE_SESSAO = {
+  LOCAL_HEARTBEAT_MS: 4000,     // frequência com que esta aba atualiza seu próprio lock local (só localStorage, sem rede)
+  LOCAL_TTL_MS: 12000,          // tempo sem heartbeat local para considerar a instância abandonada/travada (crash)
+  REMOTO_HEARTBEAT_MS: 120000,  // frequência do heartbeat em sessoes.json — 2min, baixo tráfego (como verificarAlteracoesExternas)
+  REMOTO_TTL_MS: 360000,        // 6min (3x o heartbeat) — margem contra falha temporária de rede/offline (seção 7)
+};
+/* Identificador estável deste APARELHO (persiste entre recarregamentos/novas abas no mesmo dispositivo —
+   nunca muda sozinho). Identificador da SESSÃO atual (muda a cada novo boot da instância vencedora do lock
+   local) fica só em memória — não precisa sobreviver a um reload, já que um reload é sempre uma nova
+   disputa pelo lock. */
+function obterOuCriarDeviceId(){
+  try{
+    let id = localStorage.getItem('finus.deviceId');
+    if(!id){ id = (crypto.randomUUID ? crypto.randomUUID() : `dev-${Date.now()}-${Math.random().toString(36).slice(2)}`); localStorage.setItem('finus.deviceId', id); }
+    return id;
+  }catch(e){ return `dev-${Date.now()}-${Math.random().toString(36).slice(2)}`; } // localStorage indisponível (raro) — ainda funciona dentro desta única aba
+}
+const DEVICE_ID = obterOuCriarDeviceId();
+/* sessionStorage (não localStorage): sobrevive a um reload/navegação DESTA MESMA aba (ex.: o próprio fluxo
+   de atualização do Service Worker, que recarrega a página sozinho — ver initPWA/controllerchange), mas
+   NUNCA é compartilhado com uma aba/janela genuinamente nova (mesmo mesma origem) — é exatamente essa a
+   identidade que o lock de instância precisa: um reload não pode fazer a própria aba vencedora se enxergar
+   como "uma segunda instância" e se autobloquear (o que aconteceria se SESSION_ID fosse gerado do zero a
+   cada carregamento, já que o lock em localStorage — esse sim entre abas — continuaria com o sessionId
+   ANTERIOR ao reload). */
+function obterOuCriarSessionId(){
+  try{
+    let id = sessionStorage.getItem('finus.sessionId');
+    if(!id){ id = (crypto.randomUUID ? crypto.randomUUID() : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`); sessionStorage.setItem('finus.sessionId', id); }
+    return id;
+  }catch(e){ return (crypto.randomUUID ? crypto.randomUUID() : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`); }
+}
+const SESSION_ID = obterOuCriarSessionId();
+
+/* ---------- 1) Mesmo dispositivo: lock local (localStorage) + avisos instantâneos (BroadcastChannel) ---------- */
+const LOCK_KEY_INSTANCIA = 'finus.instanciaAtiva';
+let canalInstancia = null;
+try{ canalInstancia = ('BroadcastChannel' in window) ? new BroadcastChannel('finus-instancia') : null; }catch(e){ canalInstancia = null; }
+let heartbeatLocalTimer = null;
+let instanciaAtivaNesteDispositivo = false; // true só na aba/janela que "ganhou" o lock deste dispositivo
+function lerLockInstancia(){
+  try{ const raw = localStorage.getItem(LOCK_KEY_INSTANCIA); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+}
+function lockInstanciaValido(lock){ return !!lock && (Date.now()-lock.lastHeartbeat) < CONTROLE_SESSAO.LOCAL_TTL_MS; }
+function gravarLockInstancia(){
+  try{ localStorage.setItem(LOCK_KEY_INSTANCIA, JSON.stringify({ sessionId:SESSION_ID, deviceId:DEVICE_ID, lastHeartbeat:Date.now() })); }catch(e){}
+}
+/* Só remove o lock se ele ainda for O NOSSO — nunca apaga por engano o lock de uma instância mais nova que
+   já tenha assumido (ex.: um timer de heartbeat atrasado disparando depois de já termos perdido o lock). */
+function liberarLockInstancia(){
+  try{ const atual = lerLockInstancia(); if(atual && atual.sessionId===SESSION_ID) localStorage.removeItem(LOCK_KEY_INSTANCIA); }catch(e){}
+}
+function tentarAssumirInstanciaAtiva(){
+  const lockAtual = lerLockInstancia();
+  if(lockInstanciaValido(lockAtual) && lockAtual.sessionId!==SESSION_ID) return false; // outra aba já ativa e "viva" neste dispositivo
+  gravarLockInstancia();
+  instanciaAtivaNesteDispositivo = true;
+  heartbeatLocalTimer = setInterval(gravarLockInstancia, CONTROLE_SESSAO.LOCAL_HEARTBEAT_MS);
+  return true;
+}
+/* Pisca o título da aba por alguns segundos — melhor esforço para "direcionar o usuário para a instância já
+   aberta" (item 1 do requisito) quando uma segunda aba/janela tenta abrir: não existe API padrão para focar
+   uma aba arbitrária a partir de outra, então window.focus() (só funciona de verdade em alguns navegadores/
+   contextos) + este aviso visual são o máximo tecnicamente possível aqui. */
+let flashTituloTimer = null;
+function sinalizarPedidoFocoRecebido(){
+  try{ window.focus(); }catch(e){}
+  if(flashTituloTimer) return;
+  const tituloOriginal = document.title;
+  let piscando = false, vezes = 0;
+  flashTituloTimer = setInterval(()=>{
+    document.title = piscando ? tituloOriginal : '⚠️ Outra aba tentou abrir';
+    piscando = !piscando; vezes++;
+    if(vezes>=6){ clearInterval(flashTituloTimer); flashTituloTimer=null; document.title = tituloOriginal; }
+  }, 700);
+}
+/* Tela de bloqueio (item 9 do requisito) — pintada DIRETO em #root, propositalmente ANTES de
+   initPersistence() ser chamada (ver rodapé do arquivo): a instância bloqueada nunca chega a autenticar nem
+   carregar arquivos do OneDrive, então nunca dispara nenhuma leitura/gravação concorrente por engano.
+   Reaproveita as mesmas classes .overlay/.modal/.modal-head/.modal-body/.modal-foot/.btn já usadas por
+   todos os outros diálogos do app (nunca um estilo paralelo). */
+function mostrarTelaInstanciaJaAberta(){
+  const root = document.getElementById('root');
+  if(!root) return;
+  root.innerHTML = `
+    <div class="overlay">
+      <div class="modal" style="width:420px;">
+        <div class="modal-head"><h3>⚠️ Aplicação já aberta</h3></div>
+        <div class="modal-body">
+          <p style="margin-top:0;">Esta aplicação já está aberta neste dispositivo.</p>
+          <p>Utilize a instância que já está em execução para evitar duas instâncias simultâneas.</p>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-primary" id="btnInstanciaRecarregar">🔄 Recarregar</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('btnInstanciaRecarregar')?.addEventListener('click', ()=> location.reload());
+}
+/* Ponto único de entrada do controle de instância — chamado uma única vez, no boot (ver rodapé do arquivo).
+   Retorna true (esta aba pode inicializar o app normalmente) ou false (esta aba fica bloqueada, mostrando
+   só a tela de aviso). Nunca substitui/encerra a instância existente silenciosamente (item 1 do requisito):
+   a instância vencedora nunca é interrompida por esta função, só avisada (sinalizarPedidoFocoRecebido). */
+function iniciarControleInstanciaMesmoDispositivo(){
+  const consegui = tentarAssumirInstanciaAtiva();
+  if(consegui){
+    if(canalInstancia) canalInstancia.onmessage = (ev)=>{ if(ev?.data?.tipo==='pedido-foco') sinalizarPedidoFocoRecebido(); };
+    return true;
+  }
+  mostrarTelaInstanciaJaAberta();
+  canalInstancia?.postMessage({ tipo:'pedido-foco' });
+  // Assim que a instância ativa deste dispositivo for encerrada normalmente (fechar aba, "Fechar App") ou o
+  // lock simplesmente expirar (TTL — cobre crash/encerramento abrupto), esta tela tenta se recuperar sozinha
+  // sem exigir um F5 manual. BroadcastChannel cobre o caso normal (mensagem instantânea); o listener de
+  // 'storage' e o polling de baixa frequência cobrem os casos em que nenhuma mensagem chega (aba em segundo
+  // plano, encerramento abrupto sem beforeunload).
+  if(canalInstancia) canalInstancia.onmessage = (ev)=>{ if(ev?.data?.tipo==='sessao-encerrada') location.reload(); };
+  window.addEventListener('storage', e=>{ if(e.key===LOCK_KEY_INSTANCIA && !lockInstanciaValido(lerLockInstancia())) location.reload(); });
+  setInterval(()=>{ if(!lockInstanciaValido(lerLockInstancia())) location.reload(); }, CONTROLE_SESSAO.LOCAL_HEARTBEAT_MS);
+  return false;
+}
+
+/* ---------- 2) Dispositivos diferentes: presença via sessoes.json (nunca bloqueia, só informa) ---------- */
+let sessaoRemotaAtiva = null; // { nomeUsuario, deviceId, lastHeartbeat } — outra sessão detectada em outro dispositivo (ver renderBannerSessaoRemota)
+let sessoesRemotasEtag = null; // ETag da última leitura/gravação de sessoes.json (concorrência otimista, mesmo padrão de escreverTexto)
+let timerSessaoRemota = null;
+let ultimoMapaSessoesConhecido = {}; // última versão mesclada de sessoes.json — usada só pelo melhor-esforço no beforeunload (sem tempo para uma nova leitura)
+function meuUserIdSessao(){ return msalConta?.idTokenClaims?.oid || msalConta?.idTokenClaims?.sub || msalConta?.localAccountId || null; }
+function minhaChaveSessao(){ return `${DEVICE_ID}|${SESSION_ID}`; }
+async function lerSessoesRemotas(){
+  try{
+    const meta = await oneDriveClient.metadados(ONEDRIVE_CONFIG.nomeArquivoSessoes);
+    sessoesRemotasEtag = meta.eTag || null;
+    const texto = await oneDriveClient.lerTexto(ONEDRIVE_CONFIG.nomeArquivoSessoes);
+    const dados = JSON.parse(texto || '{}');
+    return (dados && typeof dados==='object' && dados.sessoes) ? dados.sessoes : {};
+  }catch(e){
+    if(e instanceof ErroOneDrive && e.tipo==='nao-encontrado'){ sessoesRemotasEtag = null; return {}; }
+    throw e; // rede/autenticação — quem chama decide (nunca zera sessaoRemotaAtiva por uma falha, ver seção 7)
+  }
+}
+async function gravarSessoesRemotas(sessoes){
+  try{
+    const item = await oneDriveClient.escreverTexto(ONEDRIVE_CONFIG.nomeArquivoSessoes, JSON.stringify({ sessoes }), sessoesRemotasEtag);
+    sessoesRemotasEtag = item.eTag || null;
+  }catch(e){
+    if(e instanceof ErroOneDrive && e.tipo==='conflito-versao'){
+      // Outra sessão gravou sessoes.json entre nossa leitura e gravação — não é o conflito de DADOS
+      // financeiros (que continua tratado só por confirmarConflitoGravacao/modalConflitoGravacao); aqui é só
+      // um arquivo de presença, então o próximo ciclo de heartbeat já resolve sozinho, sem modal nenhum.
+      sessoesRemotasEtag = null;
+      return;
+    }
+    throw e;
+  }
+}
+/* Ponto único do ciclo de presença entre dispositivos (heartbeat + leitura) — chamado periodicamente (ver
+   iniciarControleSessaoRemota) e uma vez extra ao reconectar (seção 7 do requisito: "ao recuperar a conexão,
+   sincronizar novamente o estado da sessão"). Quem só tem permissão de leitura nunca grava sua própria
+   presença (evitaria um 403 previsível) mas continua enxergando a de quem edita. */
+async function cicloSessaoRemota(){
+  if(!msalConta || !oneDriveClient._raiz || !onlineStatus) return;
+  try{
+    const sessoes = await lerSessoesRemotas();
+    const agora = Date.now();
+    // TTL (seção 5): só remove quem realmente ultrapassou o prazo — nunca por causa de uma falha de leitura
+    // (que nem chega aqui, ver catch abaixo).
+    Object.keys(sessoes).forEach(chave=>{ if((agora-(sessoes[chave].lastHeartbeat||0)) > CONTROLE_SESSAO.REMOTO_TTL_MS) delete sessoes[chave]; });
+    if(nivelAcessoPasta!=='leitura'){
+      sessoes[minhaChaveSessao()] = { sessionId:SESSION_ID, deviceId:DEVICE_ID, userId:meuUserIdSessao(), nomeUsuario:nomeUsuarioConectado(), lastHeartbeat:agora, status:'ativa' };
+    }
+    const outras = Object.values(sessoes).filter(s=> s.deviceId!==DEVICE_ID && s.status==='ativa' && (agora-(s.lastHeartbeat||0))<=CONTROLE_SESSAO.REMOTO_TTL_MS);
+    const maisRecente = outras.sort((a,b)=>b.lastHeartbeat-a.lastHeartbeat)[0] || null;
+    const novoValor = maisRecente ? { nomeUsuario:maisRecente.nomeUsuario, deviceId:maisRecente.deviceId, lastHeartbeat:maisRecente.lastHeartbeat } : null;
+    const mudou = JSON.stringify(sessaoRemotaAtiva)!==JSON.stringify(novoValor);
+    sessaoRemotaAtiva = novoValor;
+    ultimoMapaSessoesConhecido = sessoes;
+    if(nivelAcessoPasta!=='leitura') await gravarSessoesRemotas(sessoes);
+    if(mudou) render();
+  }catch(e){
+    // Item 7 do requisito: falha temporária (offline, erro de rede) NUNCA libera/zera sessaoRemotaAtiva —
+    // mantém o último estado conhecido até um ciclo bem-sucedido dizer o contrário ("sessão remota
+    // confirmadamente ativa" != "não foi possível verificar agora").
+    console.warn('Controle de sessão remota: falha ao verificar (ignorada, mantendo último estado conhecido)', e);
+  }
+}
+function iniciarControleSessaoRemota(){
+  if(timerSessaoRemota) return; // já em andamento (chamado de novo por um reconectar/retry) — nunca duplica o timer
+  cicloSessaoRemota();
+  timerSessaoRemota = setInterval(cicloSessaoRemota, CONTROLE_SESSAO.REMOTO_HEARTBEAT_MS);
+}
+function pararControleSessaoRemota(){
+  clearInterval(timerSessaoRemota); timerSessaoRemota = null;
+  sessaoRemotaAtiva = null; sessoesRemotasEtag = null; ultimoMapaSessoesConhecido = {};
+}
+/* Melhor esforço ao fechar normalmente (item 8 do requisito): marca esta entrada como encerrada a partir do
+   ÚLTIMO conteúdo já lido (sem tempo para uma nova leitura durante beforeunload) e envia com keepalive:true,
+   que mantém a requisição viva mesmo com a página começando a descarregar. Sem garantia de entrega —
+   encerramentos que não passam por aqui (fechar abruptamente, sem conexão) continuam cobertos só pelo TTL,
+   exatamente como prevê o item 8. */
+function encerrarSessaoRemotaMelhorEsforco(){
+  if(!msalConta || !oneDriveClient._raiz || nivelAcessoPasta==='leitura' || !tokenGraphCacheValido()) return;
+  clearInterval(timerSessaoRemota); timerSessaoRemota = null;
+  const sessoes = { ...ultimoMapaSessoesConhecido };
+  sessoes[minhaChaveSessao()] = { sessionId:SESSION_ID, deviceId:DEVICE_ID, userId:meuUserIdSessao(), nomeUsuario:nomeUsuarioConectado(), lastHeartbeat:Date.now(), status:'encerrada' };
+  try{
+    fetch(`${GRAPH_BASE}${oneDriveClient._itemUrl(ONEDRIVE_CONFIG.nomeArquivoSessoes)}:/content`, {
+      method:'PUT', keepalive:true,
+      headers:{ 'Content-Type':'text/plain;charset=utf-8', Authorization:`Bearer ${graphTokenCache.token}` },
+      body: JSON.stringify({ sessoes }),
+    });
+  }catch(e){ /* melhor esforço — TTL cobre o resto (item 8 do requisito) */ }
+}
 function idbOpen(){
   return new Promise((resolve,reject)=>{
     const req = indexedDB.open('financas-db', 1);
@@ -6916,7 +7147,12 @@ function formatarUltimaSincronizacao(){
   if(!ultimaSincronizacaoSucesso) return 'Nenhuma sincronização concluída ainda.';
   return `Última atualização dos dados em ${formatarDataHoraCompleta(ultimaSincronizacaoSucesso)}`;
 }
-window.addEventListener('online', ()=>{ onlineStatus = true; atualizarSyncEstado(); tentarSincronizarPendentes(); });
+window.addEventListener('online', ()=>{
+  onlineStatus = true; atualizarSyncEstado(); tentarSincronizarPendentes();
+  // Item 7 do requisito: ao recuperar a conexão, sincroniza de novo o estado da sessão remota (não só os
+  // dados) — sem esperar até 2 minutos pelo próximo heartbeat periódico.
+  cicloSessaoRemota();
+});
 window.addEventListener('offline', ()=>{ onlineStatus = false; syncEmAndamento = false; atualizarSyncEstado(); });
 /* Atualiza só o indicador no cabeçalho (mesma técnica de atualizarFilebarInfoDOM) — não precisa de um
    render() completo (que perderia scroll/foco) só para o ícone de sincronização mudar. */
@@ -7034,6 +7270,11 @@ async function carregarArquivosDoOneDrive(){
     const [existeCfg, existeReg] = await Promise.all([oneDriveClient.existe(caminhoCfg), oneDriveClient.existe(caminhoReg)]);
     fileStatusCfg = existeCfg ? await carregarUmArquivoDoOneDrive('cfg') : 'nao-existe';
     fileStatusReg = existeReg ? await carregarUmArquivoDoOneDrive('reg') : 'nao-existe';
+    // Único ponto de entrada do controle de sessões entre dispositivos (ver "Controle de instâncias e
+    // sessões simultâneas") — cobre tanto o boot silencioso (sessão Microsoft já em cache) quanto o clique
+    // explícito em "Conectar"/"Tentar novamente", já que os dois passam por esta mesma função. Idempotente:
+    // chamar de novo num reconectar/retry não duplica o timer (ver iniciarControleSessaoRemota).
+    if(nivelAcessoPasta && oneDriveClient._raiz) iniciarControleSessaoRemota();
   }catch(e){
     registrarErroOneDrive(e);
     fileStatusCfg = 'erro'; fileStatusReg = 'erro';
@@ -7208,6 +7449,7 @@ function resetarEstadoParaSessaoZerada(){
   CATEGORIAS = CATEGORIAS_PADRAO_SNAPSHOT.map(c=>[...c]);
   STATE.dirty = false;
   UI.tab = "dashboard"; UI.editingTx = null; UI.appIniciado = false;
+  pararControleSessaoRemota(); // desconectar/trocar de conta encerra também a presença desta sessão em sessoes.json
   // Sem arquivos conectados/dados carregados, o filebar-info não deve mostrar uma data/hora antiga como se
   // ainda fosse válida (ver seção 8) — volta para o estado "sem dados" até um novo carregamento.
   ultimaAtualizacaoDados = null; ultimaModificacaoArquivoCfg = null; ultimaModificacaoArquivoReg = null;
@@ -11774,6 +12016,7 @@ function render(){
         ${renderBannerPWA()}
         ${renderHeader()}
         ${renderFileBanner()}
+        ${renderBannerSessaoRemota()}
         ${renderTabbar()}
       </div>
       <main>${renderTab()}</main>
@@ -12368,6 +12611,16 @@ function renderFileBanner(){
   if(STATE.dirty) partes.push(`Existem <b>alterações não salvas</b> — use <b>☰ Menu → 💾 Salvar</b> quando quiser gravá-las no OneDrive.`);
   if(partes.length===0) return "";
   return `<div class="banner">${partes.join(' ')} Use o menu <b>☰ Menu</b> no topo para salvar, fazer backup ou trocar de conta.</div>`;
+}
+/* Item 2/9 do requisito de controle de sessões: aviso NÃO bloqueante de que existe outra sessão ativa em
+   OUTRO dispositivo — nunca impede o uso desta sessão, só informa quem está editando (nome dinâmico, ver
+   sessaoRemotaAtiva/cicloSessaoRemota) e lembra que a sincronização/tratamento de conflitos já existente
+   continua cobrindo o caso de os dois editarem ao mesmo tempo. Sempre visível (sticky-top), independente da
+   aba atual — mesmo espírito de renderFileBanner, mas como bloco próprio (formato do requisito é diferente
+   de uma frase corrida). */
+function renderBannerSessaoRemota(){
+  if(!sessaoRemotaAtiva) return '';
+  return `<div class="banner banner-sessao-remota" style="text-align:left;">⚠️ <b>Sessão ativa em outro dispositivo</b><br>O usuário <b>${escapeHtml(sessaoRemotaAtiva.nomeUsuario)}</b> está editando os dados em outro dispositivo.<br>As alterações serão sincronizadas e conflitos serão tratados automaticamente.</div>`;
 }
 
 /* Descrições curtas usadas só no painel mobile "Painéis" (ver TABS_PAINEIS_MOBILE) — os próprios dados de
@@ -22771,11 +23024,27 @@ window.addEventListener('beforeunload', e=>{
     e.returnValue = ''; // navegadores exibem seu próprio aviso padrão (não é possível customizar o texto)
     return '';
   }
+  // Item 8 do requisito ("Fechamento da aplicação"): encerramento NORMAL libera o lock deste dispositivo,
+  // interrompe o heartbeat local e avisa qualquer aba bloqueada esperando para assumir; e, melhor esforço,
+  // marca esta sessão como encerrada em sessoes.json (ver encerrarSessaoRemotaMelhorEsforco). Encerramentos
+  // abruptos (crash, encerrar o processo) nunca passam por aqui — ficam por conta do heartbeat + TTL de cada
+  // camada, exatamente como o requisito prevê.
+  if(instanciaAtivaNesteDispositivo){
+    liberarLockInstancia();
+    clearInterval(heartbeatLocalTimer);
+    canalInstancia?.postMessage({ tipo:'sessao-encerrada' });
+    encerrarSessaoRemotaMelhorEsforco();
+  }
 });
-initPersistence();
-initBackToTop();
-initPWA();
 initToasts();
+// Controle de instâncias (item 1 do requisito): só a instância que vence a disputa pelo lock local
+// inicializa o resto do app (OneDrive, sincronização, PWA) — a instância bloqueada nunca chega a autenticar
+// nem carregar/gravar nada, então nunca disputa com a instância ativa por engano.
+if(iniciarControleInstanciaMesmoDispositivo()){
+  initPersistence();
+  initBackToTop();
+  initPWA();
+}
 /* ===================== PWA: registro do Service Worker e atualização controlada (itens 11 e 12) ===================== */
 let swRegistroAtual = null;
 let swEmEspera = null; // novo Service Worker instalado, aguardando confirmação do usuário para assumir
