@@ -2341,6 +2341,11 @@ select.mini{padding:5px 6px;font-size:12px;border-radius:5px;border:1px solid va
 .filtro-multisel-busca{width:100%;margin-bottom:8px;box-sizing:border-box;}
 .filtro-multisel-lista{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;}
 .filtro-multisel-item{padding:3px 2px;}
+/* Rodapé Cancelar/OK do painel de seleção de filtro — mesmo padrão visual de .modal-foot (border-top,
+   alinhado à direita, botões btn-ghost/btn-primary), só que compacto (btn-sm) para caber no popover
+   estreito do filtro. Fechamento do painel passa a ser exclusivo destes dois botões (ver
+   bindFiltroMultiSelect). */
+.filtro-multisel-rodape{display:flex;justify-content:flex-end;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);}
 .filtros-barra{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
 /* Item 2 do requisito: chips dos filtros ativos, entre a toolbar de filtros e a tabela. */
 .chips-filtros-ativos{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px;}
@@ -13609,14 +13614,20 @@ function renderFiltroDataRange(f, prefixo, limites){
    do mesmo filtro são combinadas com OR; filtros diferentes são combinados com AND (ver passaFiltroMultiSel
    e a montagem da lista filtrada de cada tela). */
 function renderFiltroMultiSelect(f, prefixo, campo, label, options){
-  const selected = f[campo];
+  const selected = f[campo]; // estado CONFIRMADO — sempre refletido no botão/pill, mesmo com edição em andamento no painel
   const abertoAqui = f.aberto===campo;
+  // Item 4 do requisito (painéis de filtro com Cancelar/OK): enquanto o painel está aberto, os checkboxes
+  // exibidos e marcados vêm do RASCUNHO (f._draftSet, iniciado como cópia do estado confirmado no momento
+  // da abertura — ver bindFiltroMultiSelect), nunca do estado confirmado diretamente; só um OK copia o
+  // rascunho de volta para f[campo]. Isso mantém o botão/pill acima sempre com a última seleção CONFIRMADA,
+  // mesmo com alterações temporárias ainda não confirmadas dentro do painel.
+  const emEdicao = abertoAqui ? (f._draftSet || selected) : selected;
   let labelBtn;
   if(selected.size===0) labelBtn = `${label}: Todos`;
   else if(selected.size===1) labelBtn = `${label}: ${options.find(o=>o.value===[...selected][0])?.label ?? [...selected][0]}`;
   else labelBtn = `${label}: ${selected.size} selecionados`;
   const mostrarBusca = options.length>6;
-  const tudoChecked = options.length>0 && selected.size===options.length;
+  const tudoChecked = options.length>0 && emEdicao.size===options.length;
   return `
   <div class="filtro-data filtro-multisel ${abertoAqui?'aberto':''}">
     <button type="button" class="mini filtro-data-btn-abrir" id="btnAbrirMultisel${prefixo}${campo}">${ICONE_FILTRO_SVG} ${labelBtn}${selected.size>0?` <span class="filtros-mobile-badge" title="${selected.size} selecionado${selected.size===1?'':'s'}">${selected.size}</span>`:''}</button>
@@ -13627,17 +13638,19 @@ function renderFiltroMultiSelect(f, prefixo, campo, label, options){
           <input type="checkbox" id="chkMultiselTudo${prefixo}${campo}" ${tudoChecked?'checked':''}>
           <b>Selecionar todos</b>
         </label>
-        <button type="button" class="close-x-claro" id="btnFecharMultisel${prefixo}${campo}" title="Fechar">✕</button>
       </div>
       ${mostrarBusca ? `<input type="search" class="mini filtro-multisel-busca" id="buscaMultisel${prefixo}${campo}" placeholder="Pesquisar...">` : ''}
       <div class="filtro-multisel-lista" id="listaMultisel${prefixo}${campo}">
         ${options.length===0 ? `<span class="filtro-data-vazio">Nenhuma opção</span>` : options.map(o=>`
         <label class="filtro-data-chip filtro-multisel-item" data-texto-busca="${escapeHtml(o.label.toLowerCase())}">
-          <input type="checkbox" class="chkMultisel${prefixo}${campo}" value="${escapeHtml(o.value)}" ${selected.has(o.value)?'checked':''}>
+          <input type="checkbox" class="chkMultisel${prefixo}${campo}" value="${escapeHtml(o.value)}" ${emEdicao.has(o.value)?'checked':''}>
           ${escapeHtml(o.label)}
         </label>`).join('')}
       </div>
-      ${selected.size>0 ? `<button type="button" class="btn btn-ghost btn-sm filtro-padrao-limpar" id="btnLimparMultisel${prefixo}${campo}">↺ Restaurar filtros padrão</button>` : ''}
+      <div class="filtro-multisel-rodape">
+        <button type="button" class="btn btn-ghost btn-sm" id="btnCancelarMultisel${prefixo}${campo}">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btnOkMultisel${prefixo}${campo}">OK</button>
+      </div>
     </div>` : ''}
   </div>`;
 }
@@ -13679,28 +13692,48 @@ function bindFiltroDataRange(f, prefixo, onChange, limites){
 /* Liga os eventos de um filtro de seleção múltipla genérico para o campo indicado. A busca interna filtra
    a lista diretamente no DOM (sem re-render), para não perder o foco do campo a cada tecla digitada. */
 function bindFiltroMultiSelect(f, prefixo, campo, options, onChange){
+  // Item 4/8 do requisito: abrir o painel tira uma "foto" do estado confirmado em f._draftSet — todas as
+  // marcações/desmarcações feitas enquanto o painel está aberto mexem só nesse rascunho (nunca em f[campo]
+  // diretamente); f[campo] só é atualizado quando o usuário clica em OK (ver botão abaixo). Reabrir o botão
+  // com o painel já aberto não faz nada: o fechamento passou a ser exclusivo dos botões Cancelar/OK (item 3
+  // do requisito — sem X no painel). Abrir outro filtro enquanto este está com edições não confirmadas
+  // descarta implicitamente esse rascunho (equivalente a um Cancelar), já que f.aberto guarda no máximo um
+  // campo por vez e f._draftSet é sobrescrito para o novo campo sem nunca ter sido copiado para f[campo].
   document.getElementById('btnAbrirMultisel'+prefixo+campo)?.addEventListener('click', ()=>{
-    f.aberto = f.aberto===campo ? null : campo; onChange(false);
+    if(f.aberto===campo) return;
+    f.aberto = campo;
+    f._draftSet = new Set(f[campo]);
+    onChange(false);
   });
-  document.getElementById('btnFecharMultisel'+prefixo+campo)?.addEventListener('click', ()=>{ f.aberto=null; onChange(false); });
   document.getElementById('chkMultiselTudo'+prefixo+campo)?.addEventListener('change', e=>{
-    if(e.target.checked) options.forEach(o=>f[campo].add(o.value)); else f[campo].clear();
-    f.aberto=campo; onChange(true);
+    const rascunho = f._draftSet || (f._draftSet = new Set(f[campo]));
+    if(e.target.checked) options.forEach(o=>rascunho.add(o.value)); else rascunho.clear();
+    onChange(false);
   });
   document.querySelectorAll('.chkMultisel'+prefixo+campo).forEach(chk=>{
     chk.addEventListener('change', e=>{
-      if(e.target.checked) f[campo].add(e.target.value); else f[campo].delete(e.target.value);
-      f.aberto=campo; onChange(true);
+      const rascunho = f._draftSet || (f._draftSet = new Set(f[campo]));
+      if(e.target.checked) rascunho.add(e.target.value); else rascunho.delete(e.target.value);
+      onChange(false);
     });
-  });
-  document.getElementById('btnLimparMultisel'+prefixo+campo)?.addEventListener('click', ()=>{
-    f[campo].clear(); f.aberto=campo; onChange(true);
   });
   document.getElementById('buscaMultisel'+prefixo+campo)?.addEventListener('input', e=>{
     const termo = e.target.value.toLowerCase();
     document.querySelectorAll(`#listaMultisel${prefixo}${campo} .filtro-multisel-item`).forEach(item=>{
       item.style.display = item.dataset.textoBusca.includes(termo) ? '' : 'none';
     });
+  });
+  // Cancelar: descarta o rascunho sem nunca tocar em f[campo] — o estado confirmado antes da abertura
+  // permanece intocado, exatamente como estava (itens 4/5/7 do requisito).
+  document.getElementById('btnCancelarMultisel'+prefixo+campo)?.addEventListener('click', ()=>{
+    f._draftSet = null; f.aberto = null; onChange(false);
+  });
+  // OK: promove o rascunho a estado confirmado (item 6 do requisito) e só então reaplica a filtragem/
+  // paginação (onChange(true)) — a lógica de filtragem em si não muda, só o momento em que ela passa a
+  // enxergar a nova seleção.
+  document.getElementById('btnOkMultisel'+prefixo+campo)?.addEventListener('click', ()=>{
+    if(f._draftSet) f[campo] = f._draftSet;
+    f._draftSet = null; f.aberto = null; onChange(true);
   });
 }
 /* Liga um conjunto padrão de filtros (Data + multi-selects) de uma só vez — usado pelos três pontos da
