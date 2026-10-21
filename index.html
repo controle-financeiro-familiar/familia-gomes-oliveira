@@ -9402,7 +9402,15 @@ function calcSaldoConta(conta, ano, mes){
     if(ehSaldoAnterior(t)) return; // já tratado via "referencia" — nunca é entrada/saída do próprio período
     const v = Number(t.valor)||0;
     const efeito = t.tipo==='Receita' ? v : (t.tipo==='Despesa' ? -v : 0);
-    const depoisDaReferencia = !dataCorte || t.data>dataCorte;
+    // Bug corrigido: o valor do "Saldo Anterior" representa o saldo ANTES dos lançamentos do próprio dia
+    // 1 em que ele está datado (ver aplicarSaldoAnteriorConta — sempre dia 1 de algum mês), nunca depois.
+    // Com ">" estrito, um lançamento real datado no MESMO dia da referência (comum: salário, aluguel e
+    // outras recorrências costumam cair no dia 1) ficava fora das duas ramificações abaixo — não entrava
+    // no encadeamento até o início do período (exigia t.data<inicioPeriodoISO, que falhava já na condição
+    // "depoisDaReferencia") nem no período em si (sua data, de um mês anterior, nunca cai dentro do período
+    // exibido) — e era descartado silenciosamente, fazendo o Saldo Inicial (e todo o resto encadeado a
+    // partir dele) sair errado. "t.data>=dataCorte" inclui corretamente esse lançamento.
+    const depoisDaReferencia = !dataCorte || t.data>=dataCorte;
     if(depoisDaReferencia && t.data<inicioPeriodoISO){
       saldoInicial += efeito; // completa o encadeamento natural entre a referência e o início do período
     } else if(t.data>=inicioPeriodoISO && t.data<=fimPeriodoISO){
@@ -9467,7 +9475,9 @@ function saldoContaAteData(conta, dataLimiteISO){
   }
   txsConta.forEach(t=>{
     if(ehSaldoAnterior(t)) return;
-    const depoisDaReferencia = !dataCorte || t.data>dataCorte;
+    // Mesma correção de calcSaldoConta: inclui lançamentos datados no MESMO dia da referência de Saldo
+    // Anterior (ela representa o saldo ANTES dos lançamentos daquele dia, nunca depois).
+    const depoisDaReferencia = !dataCorte || t.data>=dataCorte;
     if(depoisDaReferencia && t.data<=dataLimiteISO){
       const v = Number(t.valor)||0;
       saldo += (t.tipo==='Receita' ? v : (t.tipo==='Despesa' ? -v : 0));
@@ -10830,7 +10840,9 @@ function saldoContaAteDataSemRendeFacilBB(conta, dataLimiteISO){
   }
   txsConta.forEach(t=>{
     if(ehSaldoAnterior(t)) return;
-    const depoisDaReferencia = !dataCorte || t.data>dataCorte;
+    // Mesma correção de calcSaldoConta: inclui lançamentos datados no MESMO dia da referência de Saldo
+    // Anterior (ela representa o saldo ANTES dos lançamentos daquele dia, nunca depois).
+    const depoisDaReferencia = !dataCorte || t.data>=dataCorte;
     if(depoisDaReferencia && t.data<=dataLimiteISO){
       const v = Number(t.valor)||0;
       saldo += (t.tipo==='Receita' ? v : (t.tipo==='Despesa' ? -v : 0));
