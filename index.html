@@ -4345,6 +4345,42 @@ const GRUPOS = todosGrupos();
 const CATEGORIAS_FATURA = ['Pagamento de Fatura de Cartão de Crédito','Recebimento por Pagamento de Fatura'];
 // Ver detectarRendeFacilBB (importação) e ehMovimentoRendeFacilBB (exclusão de economiasTotal/economiasAno).
 const CATEGORIAS_RENDE_FACIL_BB = ['Aplicação Automática do Saldo','Resgate Automático do Saldo'];
+/* Tabela de remuneração por prazo de permanência do Termo de Adesão e Ciência ao BB Rende Fácil (item 3):
+   percentual do DI aplicado sobre o capital de CADA depósito, conforme os dias corridos decorridos entre a
+   aplicação e o resgate — ver percentualRendeFacilPorPrazo/calcularLedgerRendeFacil. */
+const RENDE_FACIL_TABELA_REMUNERACAO = [
+  { ateDias:90,  percentualDI:0.02 },
+  { ateDias:180, percentualDI:0.05 },
+  { ateDias:270, percentualDI:0.10 },
+  { ateDias:360, percentualDI:0.60 },
+  { ateDias:721, percentualDI:1.00 },
+];
+/* Tabela regressiva de IOF sobre o rendimento de aplicações de renda fixa resgatadas em até 30 dias
+   corridos (Anexo à IN RFB 907/2009) — índice 0 = 1º dia (96%), índice 29 = 30º dia (0%, isento a partir
+   daqui). Usada em percentualIOFRegressivo. */
+const RENDE_FACIL_TABELA_IOF = [96,93,90,86,83,80,76,73,70,66,63,60,56,53,50,46,43,40,36,33,30,26,23,20,16,13,10,6,3,0];
+/* Percentual de remuneração do Termo de Adesão (item 3) correspondente ao prazo de permanência (dias
+   corridos) de um depósito — a tabela é cumulativa por faixas de prazo, nunca pelo prazo total do
+   vencimento (721 dias): acima da última faixa, mantém o percentual máximo (100% do DI). */
+function percentualRendeFacilPorPrazo(diasPermanencia){
+  for(const faixa of RENDE_FACIL_TABELA_REMUNERACAO) if(diasPermanencia<=faixa.ateDias) return faixa.percentualDI;
+  return RENDE_FACIL_TABELA_REMUNERACAO[RENDE_FACIL_TABELA_REMUNERACAO.length-1].percentualDI;
+}
+/* Percentual de IOF regressivo sobre o RENDIMENTO (nunca sobre o capital) de um resgate, conforme os dias
+   corridos decorridos desde a aplicação até o resgate — isento (0%) a partir do 30º dia. */
+function percentualIOFRegressivo(diasCorridos){
+  if(diasCorridos>=30) return 0;
+  const idx = Math.max(0, diasCorridos-1);
+  return (RENDE_FACIL_TABELA_IOF[idx]!==undefined ? RENDE_FACIL_TABELA_IOF[idx] : 0)/100;
+}
+/* Percentual de IR regressivo sobre o RENDIMENTO (nunca sobre o capital) de aplicações de renda fixa
+   (Lei nº 11.033/2004, art. 1º), conforme os dias corridos decorridos desde a aplicação até o resgate. */
+function percentualIRRegressivo(diasCorridos){
+  if(diasCorridos<=180) return 0.225;
+  if(diasCorridos<=360) return 0.20;
+  if(diasCorridos<=720) return 0.175;
+  return 0.15;
+}
 const GRUPO_COLORS = {
   "Moradia/Habitação":"#10408D","Transporte":"#2E6F95","Alimentação":"#c98f00","Saúde":"#1e8e5a",
   "Educação":"#3F7D20","Lazer e Entretenimento":"#a5690a","Cuidados Pessoais":"#b0558f",
@@ -6039,6 +6075,7 @@ function criarUIPadrao(){
   extratoContaModal: null, // { conta, filtros, busca, pagina, porPagina } — modal "Ver Extrato" (extrato digital de uma conta bancária), com filtros próprios do modal (mesmo motor genérico de Data por período + seleção múltipla da aba Registros — ver criarFiltrosPadrao)
   aportesModal: false, // true quando o modal "Ver detalhes" de Investimentos/Reserva de Emergência está aberto
   futurosContaModal: null, // { conta, filtros, busca, pagina, porPagina } — modal "Ver lançamentos futuros" do card de Contas (lançamentos com data > hoje), com filtros próprios do modal (mesmo motor genérico de Data por período + seleção múltipla da aba Registros — ver criarFiltrosPadrao)
+  rendeFacilContaModal: null, // { conta, ano, mes, carregando, resultado, erro } — modal "BB Rende Fácil" do card de uma conta bancária com aplicações/resgates automáticos (ver renderRendeFacilContaModal/calcularLedgerRendeFacil). `resultado` só é preenchido depois do cálculo assíncrono (busca a taxa DI histórica no Banco Central — ver abrirRendeFacilContaModal); enquanto isso, `carregando` fica true.
   evolucaoReservaModal: null, // { conta } — modal "Evolução" do card de uma conta Reserva de Emergência (ver renderEvolucaoReservaModal), substitui "Ver lançamentos futuros" para esse tipo de conta
   historicoContrachequeModal: null, // { conta, pagina, porPagina } — modal "Histórico" do card de uma conta Contracheque (ver renderHistoricoContrachequeModal), substitui "Ver lançamentos futuros" para esse tipo de conta; paginação com o mesmo componente genérico usado nos demais modais (ver renderRodapePaginacaoGenerica)
   editarSaldoInicialFluxoCaixaModal: null, // true — editar os saldos iniciais das contas que compõem o Fluxo de Caixa
@@ -6086,6 +6123,7 @@ const CAMADAS_MODAL = [
   'faturaAtualModal',                  // painel Cartões — Ver Fatura
   'projecaoFaturaModal',               // painel Cartões — Ver Próximas Faturas
   'evolucaoReservaModal',              // painel Contas — Evolução (card Reserva de Emergência)
+  'rendeFacilContaModal',              // painel Contas — BB Rende Fácil (cálculo automático de rendimentos)
   'historicoContrachequeModal',        // painel Contas — Histórico (card Contracheque)
   'aportesModal',                      // Painel Financeiro — detalhe de aportes em Economias
   'mapaCalorDiaModal',                 // Painel Financeiro — transações do dia, aberto de uma célula do Mapa de Calor de Despesas
@@ -10214,6 +10252,109 @@ function renderEvolucaoReservaModal(){
     </div>
   </div>`;
 }
+/* ---------- Modal: BB Rende Fácil (cálculo automático de rendimentos — seções 1-5 do requisito) ----------
+   Abertura assíncrona (ver abrirRendeFacilContaModal): o cálculo depende da taxa DI histórica, que pode
+   precisar ser buscada na API do Banco Central (ver obterTaxasDIPeriodo) antes de poder renderizar
+   qualquer número — por isso UI.rendeFacilContaModal.resultado só é preenchido depois, e esta função
+   mostra um estado de carregamento enquanto isso. */
+function renderRendeFacilContaModal(){
+  const { conta, ano, mes, carregando, resultado } = UI.rendeFacilContaModal;
+  const competenciaLbl = `${MESES[mes-1]}/${ano}`;
+  return `
+  <div class="overlay" id="ovRendeFacilConta" ${attrZIndexModal('rendeFacilContaModal')}>
+    <div class="modal" style="width:860px;">
+      <div class="modal-head"><h3>💹 BB Rende Fácil</h3><button class="close-x" id="closeRendeFacilConta">✕</button></div>
+      <div class="modal-body">
+        ${cabecalhoContaModalHtml(conta)}
+        ${carregando ? `<div class="empty-state"><div class="big">⏳</div>Calculando rendimentos — buscando a taxa DI histórica no Banco Central…</div>` : !resultado ? `
+        <div class="empty-state"><div class="big">💹</div>Esta conta ainda não teve nenhuma aplicação/resgate automático do BB Rende Fácil lançado.</div>` : `
+        <h4 style="margin:14px 0 6px;">Fechamento de ${competenciaLbl}</h4>
+        <div class="cartoes-resumo-grid">
+          <div class="cartoes-resumo-item"><span class="ico">🏁</span><div><div class="val">${fmtBRL(resultado.saldoInicialBruto)}</div><div class="lbl">saldo bruto no início do período</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">📥</span><div><div class="val">${fmtBRL(resultado.totalAplicacoesPeriodo)}</div><div class="lbl">total de aplicações</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">📤</span><div><div class="val">${fmtBRL(resultado.totalResgatesLiquidoPeriodo)}</div><div class="lbl">total de resgates (líquido)</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">🌱</span><div><div class="val">${fmtBRL(resultado.rendimentoRealizadoPeriodo)}</div><div class="lbl">rendimentos realizados nos resgates</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">📈</span><div><div class="val">${fmtBRL(resultado.rendimentoNaoRealizado)}</div><div class="lbl">rendimento acumulado não realizado</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">🏛️</span><div><div class="val">${fmtBRL(resultado.irRealizadoPeriodo)} / ${fmtBRL(resultado.irProjetado)}</div><div class="lbl">IR efetivo / projetado</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">🏛️</span><div><div class="val">${fmtBRL(resultado.iofRealizadoPeriodo)} / ${fmtBRL(resultado.iofProjetado)}</div><div class="lbl">IOF efetivo / projetado</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(resultado.saldoBrutoFinal)}</div><div class="lbl">saldo bruto em ${fmtData(resultado.dataCorteISO)}</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">✅</span><div><div class="val">${fmtBRL(resultado.saldoLiquidoDisponivel)}</div><div class="lbl">saldo líquido disponível para resgate</div></div></div>
+        </div>
+        ${(()=>{
+          // divergencias mistura dois tipos de lacuna — ver calcularLedgerRendeFacil: datas ISO soltas
+          // (falta taxa DI publicada naquele dia) e entradas "capital-insuficiente:<data>" (um resgate
+          // daquele dia é maior que o capital conhecido nos lotes — falta alguma aplicação anterior no
+          // histórico lançado). Cada uma vira um aviso com uma explicação e um pedido de dado diferente.
+          const datasFaltantesDI = resultado.divergencias.filter(d=>!d.startsWith('capital-insuficiente:'));
+          const resgatesSemCapital = resultado.divergencias.filter(d=>d.startsWith('capital-insuficiente:')).map(d=>d.split(':')[1]);
+          const avisos = [];
+          if(datasFaltantesDI.length) avisos.push(`⚠️ <b>Cálculo parcial</b> — falta(m) ${datasFaltantesDI.length} taxa(s) DI diária(s) ainda não sincronizada(s)/publicada(s) pelo Banco Central para ${datasFaltantesDI.slice(0,8).map(fmtData).join(', ')}${datasFaltantesDI.length>8?'…':''}. Os valores acima são um cálculo <b>parcial</b> (sem presumir rendimento nesses dias) — sincronize novamente mais tarde (quando o Banco Central já tiver publicado) para reconciliar com exatidão.`);
+          if(resgatesSemCapital.length) avisos.push(`⚠️ <b>Histórico incompleto</b> — o(s) resgate(s) de ${resgatesSemCapital.map(fmtData).join(', ')} é/são maior(es) que o capital conhecido aplicado até aquela data. Provavelmente falta lançar no app alguma aplicação automática anterior do BB Rende Fácil desta conta (ex.: de um extrato bancário mais antigo ainda não importado) — sem ela, o capital remanescente e o rendimento mostrados acima ficam subestimados.`);
+          return avisos.length ? `<div class="aviso-divergencia-di" style="margin-top:14px;padding:10px 14px;border-radius:8px;background:var(--amber-50,#fff8e1);border:1px solid var(--amber-200,#ffe082);">${avisos.join('<br><br>')}</div>` : '';
+        })()}
+        ${resultado.composicaoAtual.length ? `
+        <h4 style="margin:18px 0 6px;">Composição atual (aplicações ainda não totalmente resgatadas)</h4>
+        <div class="table-wrap table-wrap-registros"><table>
+          <thead><tr><th>Data da aplicação</th><th style="text-align:right;">Capital remanescente</th><th style="text-align:right;">Dias de permanência</th><th style="text-align:right;">Rendimento acumulado</th><th style="text-align:right;">IOF projetado</th><th style="text-align:right;">IR projetado</th></tr></thead>
+          <tbody>
+            ${resultado.composicaoAtual.map(l=>`<tr>
+              <td data-label="Data da aplicação">${fmtData(l.data)}</td>
+              <td data-label="Capital remanescente" style="text-align:right;">${fmtBRL(l.capitalCent/100)}</td>
+              <td data-label="Dias de permanência" style="text-align:right;">${l.diasPermanencia}</td>
+              <td data-label="Rendimento acumulado" style="text-align:right;" class="val-cell pos">${fmtBRL(l.rendimentoCent/100)}</td>
+              <td data-label="IOF projetado" style="text-align:right;">${fmtBRL(l.iofCent/100)}</td>
+              <td data-label="IR projetado" style="text-align:right;">${fmtBRL(l.irCent/100)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">📭</div>Nenhum capital aplicado restante — todas as aplicações já foram resgatadas.</div>`}
+        ${resultado.resgatesDetalhados.length ? `
+        <h4 style="margin:18px 0 6px;">Resgates em ${competenciaLbl}</h4>
+        <div class="table-wrap table-wrap-registros"><table>
+          <thead><tr><th>Data</th><th style="text-align:right;">Valor líquido</th><th style="text-align:right;">Rendimento bruto</th><th style="text-align:right;">IOF</th><th style="text-align:right;">IR</th></tr></thead>
+          <tbody>
+            ${resultado.resgatesDetalhados.map(r=>{
+              const rendCent = r.consumos.reduce((s,c)=>s+c.rendimentoBrutoCent,0);
+              const iofCent = r.consumos.reduce((s,c)=>s+c.iofCent,0);
+              const irCent = r.consumos.reduce((s,c)=>s+c.irCent,0);
+              return `<tr>
+              <td data-label="Data">${fmtData(r.data)}</td>
+              <td data-label="Valor líquido" style="text-align:right;">${fmtBRL(r.valorLiquidoCent/100)}</td>
+              <td data-label="Rendimento bruto" style="text-align:right;" class="val-cell pos">${fmtBRL(rendCent/100)}</td>
+              <td data-label="IOF" style="text-align:right;">${fmtBRL(iofCent/100)}</td>
+              <td data-label="IR" style="text-align:right;">${fmtBRL(irCent/100)}</td>
+            </tr>`;}).join('')}
+          </tbody>
+        </table></div>` : ''}
+        `}
+      </div>
+      <div class="modal-foot no-print">
+        <button class="btn btn-ghost" id="printRendeFacilConta">🖨 Imprimir</button>
+        <button class="btn btn-primary" id="closeRendeFacilConta2">Fechar</button>
+      </div>
+    </div>
+  </div>`;
+}
+/* Abre o modal BB Rende Fácil de uma conta (ver renderRendeFacilContaModal) e dispara o cálculo
+   assíncrono (depende da taxa DI histórica — ver calcularLedgerRendeFacil/obterTaxasDIPeriodo). A data de
+   corte do cálculo é hoje (ou o último dia da competência exibida, o que vier primeiro — mesmo critério de
+   corte já usado no Saldo Atual dos cards de Contas, ver calcSaldoConta), nunca lançamentos com data
+   futura. */
+async function abrirRendeFacilContaModal(conta){
+  const ano = UI.ano, mes = UI.mes;
+  UI.rendeFacilContaModal = { conta, ano, mes, carregando:true, resultado:null };
+  render();
+  const inicioISO = `${ano}-${pad2(mes)}-01`;
+  const fimMesISO = `${ano}-${pad2(mes)}-31`;
+  const dataCorteISO = fimMesISO < hojeISO() ? fimMesISO : hojeISO();
+  let resultado = null;
+  try{ resultado = await calcularLedgerRendeFacil(conta, dataCorteISO, inicioISO); }
+  catch(e){ console.error('Falha ao calcular rendimentos do BB Rende Fácil', e); }
+  // Se o usuário já fechou o modal ou trocou de conta/competência enquanto o cálculo assíncrono rodava,
+  // descarta o resultado — nunca aplica um cálculo desatualizado por cima do estado atual da tela.
+  if(!UI.rendeFacilContaModal || UI.rendeFacilContaModal.conta!==conta || UI.rendeFacilContaModal.ano!==ano || UI.rendeFacilContaModal.mes!==mes) return;
+  UI.rendeFacilContaModal = { conta, ano, mes, carregando:false, resultado };
+  render();
+}
 /* ---------- Modal: Ver detalhes dos aportes em Economias (Painel Financeiro) ----------
    Agrupado por Categoria (t.subgrupo) → Subcategoria (t.categoria) → lançamentos, seguindo a mesma
    estrutura cadastrada em Configurações → Categorias dentro do grupo Economias — só muda a organização
@@ -10592,6 +10733,233 @@ function ehUsoReservaEmergencia(t){
    lançamentos normalmente, só não entram nesse total específico. */
 function ehMovimentoRendeFacilBB(t){
   return t.grupo==='Economias' && CATEGORIAS_RENDE_FACIL_BB.includes(t.categoria);
+}
+/* ===================== BB Rende Fácil: cálculo automático de rendimentos ===================== */
+/* Cache local (por navegador, NUNCA sincronizado via OneDrive/CSV — é dado de referência pública do
+   mercado, não um dado da família) das taxas DI diárias já obtidas do Banco Central (SGS, série 12 —
+   "Taxa de juros - CDI", já expressa como percentual do próprio dia), para não precisar buscar de novo a
+   cada abertura do painel nem depender de conexão depois da primeira vez. Ver obterTaxasDIPeriodo. */
+const RENDE_FACIL_CACHE_DI_KEY = 'controleFinanceiroFamiliar.taxasDI.v1';
+function lerCacheTaxasDI(){
+  try{ const bruto = localStorage.getItem(RENDE_FACIL_CACHE_DI_KEY); return bruto ? JSON.parse(bruto) : {}; }
+  catch(e){ return {}; }
+}
+function salvarCacheTaxasDI(cache){
+  try{ localStorage.setItem(RENDE_FACIL_CACHE_DI_KEY, JSON.stringify(cache)); }
+  catch(e){ /* quota cheia ou bloqueado — segue só em memória nesta sessão */ }
+}
+function dataISOParaBR(iso){ const [a,m,d] = iso.split('-'); return `${d}/${m}/${a}`; }
+function dataBRParaISO(br){ const [d,m,a] = br.split('/'); return `${a}-${m}-${d}`; }
+/* "Dia útil aproximado" (segunda a sexta) — não conhece feriados nacionais, então um feriado em dia de
+   semana pode aparecer aqui como "faltante" mesmo sem nenhuma taxa DI esperada para ele; é só uma
+   aproximação para sinalizar possíveis lacunas de sincronização (ver divergências do ledger), nunca usada
+   para decidir se um dia rende — isso é decidido só pela presença ou ausência da taxa em si no cache (ver
+   fatorAcumuladoDI). */
+function ehDiaUtilAproximado(iso){
+  const dow = new Date(iso+'T00:00:00').getDay();
+  return dow!==0 && dow!==6;
+}
+/* Busca na API pública do Banco Central (SGS, sem autenticação — https://api.bcb.gov.br) as taxas DI
+   diárias que ainda faltam no cache local para o intervalo [inicioISO, fimISO], mescla no cache e devolve
+   o cache completo (incluindo datas fora do intervalo pedido, já conhecidas de antes). Nunca lança erro:
+   se a rede estiver indisponível ou a API bloquear a chamada, devolve o cache como já estava — quem chama
+   (calcularLedgerRendeFacil) é responsável por sinalizar as datas que continuarem faltando como
+   divergência, nunca presumir um rendimento para elas (requisito explícito de não presumir rendimentos
+   inexistentes). */
+async function obterTaxasDIPeriodo(inicioISO, fimISO){
+  const cache = lerCacheTaxasDI();
+  let faltaAlguma = false;
+  for(let d=new Date(inicioISO+'T00:00:00'), fim=new Date(fimISO+'T00:00:00'); d<=fim; d.setDate(d.getDate()+1)){
+    const iso = d.toISOString().slice(0,10);
+    if(ehDiaUtilAproximado(iso) && cache[iso]===undefined){ faltaAlguma = true; break; }
+  }
+  if(faltaAlguma){
+    try{
+      const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados?formato=json&dataInicial=${dataISOParaBR(inicioISO)}&dataFinal=${dataISOParaBR(fimISO)}`;
+      const resp = await fetch(url);
+      if(resp.ok){
+        const dados = await resp.json();
+        if(Array.isArray(dados)){
+          dados.forEach(item=>{
+            if(item && item.data && item.valor!==undefined) cache[dataBRParaISO(item.data)] = Number(String(item.valor).replace(',','.'));
+          });
+          salvarCacheTaxasDI(cache);
+        }
+      }
+    }catch(e){ /* offline ou API indisponível — segue só com o que já havia em cache, sem travar o cálculo */ }
+  }
+  return cache;
+}
+/* Percentual de remuneração do Termo de Adesão (item 3) correspondente ao prazo de permanência (dias
+   corridos) de um depósito — a tabela é por faixas cumulativas de prazo, nunca pelo prazo total do
+   vencimento (721 dias): acima da última faixa, mantém o percentual máximo (100% do DI). */
+function percentualRendeFacilPorPrazo(diasPermanencia){
+  for(const faixa of RENDE_FACIL_TABELA_REMUNERACAO) if(diasPermanencia<=faixa.ateDias) return faixa.percentualDI;
+  return RENDE_FACIL_TABELA_REMUNERACAO[RENDE_FACIL_TABELA_REMUNERACAO.length-1].percentualDI;
+}
+/* Fator de crescimento bruto (ex.: 1,000487) do capital de um depósito entre dataInicioISO (aplicação,
+   exclusive) e dataFimISO (resgate ou data de corte, inclusive), já aplicando o percentual do DI da faixa
+   de prazo vigente (item 4 do Termo: "regra de remuneração retroativa" — o percentual usado é sempre o da
+   faixa correspondente ao prazo TOTAL decorrido até dataFimISO, incidindo sobre a série toda, nunca
+   misturando percentuais de faixas diferentes dentro do mesmo depósito). Dias sem taxa DI publicada no
+   cache (fins de semana/feriados — não rendem mesmo, ver ehDiaUtilAproximado) simplesmente não entram no
+   produtório; dias ÚTEIS sem taxa publicada ainda são registrados em `divergenciasOut` (um Set passado
+   pelo chamador) como uma lacuna real de dados, nunca tratados como 0% silenciosamente. */
+function fatorAcumuladoDI(dataInicioISO, dataFimISO, taxas, divergenciasOut){
+  const diasPermanencia = Math.round((new Date(dataFimISO+'T00:00:00') - new Date(dataInicioISO+'T00:00:00')) / 86400000);
+  const percentualFaixa = percentualRendeFacilPorPrazo(diasPermanencia);
+  let fator = 1;
+  const inicio = new Date(dataInicioISO+'T00:00:00'), fim = new Date(dataFimISO+'T00:00:00');
+  for(let d=new Date(inicio.getTime()+86400000); d<=fim; d.setDate(d.getDate()+1)){
+    const iso = d.toISOString().slice(0,10);
+    const taxaDia = taxas[iso];
+    if(taxaDia!==undefined) fator *= (1 + (taxaDia/100)*percentualFaixa);
+    else if(ehDiaUtilAproximado(iso) && divergenciasOut) divergenciasOut.add(iso);
+  }
+  return { fator, diasPermanencia };
+}
+/* Motor único do cálculo automático de rendimentos do BB Rende Fácil (seções 1-3 do requisito) — processa
+   TODA a história de aplicações/resgates automáticos já lançados nesta conta (ehMovimentoRendeFacilBB),
+   do mais antigo ao mais recente, até dataCorteISO (inclusive), controlando cada aplicação como um "lote"
+   individual rastreável (data, capital original, capital remanescente) e consumindo os lotes mais antigos
+   primeiro em cada resgate (FIFO — item 13 do Termo de Adesão: "a ordem de resgate dos depósitos será do
+   mais antigo para o mais recente"). O valor de cada lançamento de resgate no extrato da conta corrente já
+   é o valor LÍQUIDO creditado (bruto − IR − IOF); como IR e IOF são sempre um percentual fixo do
+   RENDIMENTO (nunca do capital) determinado pelos dias de permanência do lote, o líquido de resgatar uma
+   fração x do capital remanescente de um lote é linear em x — líquido(x) = x · [fator − (fator−1) ·
+   (%IOF+%IR)] — o que permite achar algebricamente, sem tentativa e erro, exatamente quanto capital de
+   cada lote precisa ser consumido para fechar o valor líquido do resgate lançado.
+   dataInicioCompetencia (opcional): quando informada, os totais "do período" (totalAplicacoes/
+   totalResgates/rendimentoRealizado/irRealizado/iofRealizado) somam só os movimentos com data >= essa
+   data; os de antes entram apenas no "saldo inicial" (saldoInicialBruto/capitalInicio), preservando a
+   continuidade entre competências (seção 3 do requisito). Sem essa data, os totais "do período" cobrem
+   tudo. Retorna null quando a conta nunca teve nenhum movimento de BB Rende Fácil. */
+async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenciaISO){
+  const movs = STATE.transactions
+    .filter(t=>t.conta===conta && ehMovimentoRendeFacilBB(t) && t.data<=dataCorteISO)
+    .sort((a,b)=> compararDataCronologica(a.data,b.data) || (a.categoria===CATEGORIAS_RENDE_FACIL_BB[0] ? -1 : (b.categoria===CATEGORIAS_RENDE_FACIL_BB[0] ? 1 : 0)));
+  if(!movs.length) return null;
+
+  const taxas = await obterTaxasDIPeriodo(movs[0].data, dataCorteISO);
+  const divergencias = new Set();
+  let lotes = []; // {id, data, capitalCent}
+  let snapshotLotesAntesPeriodo = null; // capturado uma única vez, logo antes do 1º movimento "do período"
+  let totalAplicacoesCent = 0, totalResgatesLiquidoCent = 0, totalResgatesBrutoCent = 0;
+  let rendimentoRealizadoCent = 0, irRealizadoCent = 0, iofRealizadoCent = 0;
+  const resgatesDetalhados = [];
+
+  for(const t of movs){
+    const noPeriodo = !dataInicioCompetenciaISO || t.data>=dataInicioCompetenciaISO;
+    // Saldo/capital "no início do período" (seção 3 do requisito): fotografia dos lotes tal como estavam
+    // IMEDIATAMENTE ANTES do 1º movimento já pertencente à competência exibida — preserva a continuidade
+    // entre competências (capital e rendimento acumulados de aplicações de meses anteriores não se perdem).
+    if(noPeriodo && snapshotLotesAntesPeriodo===null){
+      snapshotLotesAntesPeriodo = lotes.filter(l=>l.capitalCent>0).map(l=>({ data:l.data, capitalCent:l.capitalCent }));
+    }
+    const valorCent = Math.round((Number(t.valor)||0)*100);
+    const ehAplicacao = t.categoria===CATEGORIAS_RENDE_FACIL_BB[0];
+    if(ehAplicacao){
+      const v = Math.abs(valorCent);
+      lotes.push({ id:t.id, data:t.data, capitalCent:v });
+      if(noPeriodo) totalAplicacoesCent += v;
+    } else {
+      let restanteLiquidoCent = Math.abs(valorCent);
+      const consumos = [];
+      while(restanteLiquidoCent>0 && lotes.some(l=>l.capitalCent>0)){
+        const lote = lotes.find(l=>l.capitalCent>0);
+        const { fator, diasPermanencia } = fatorAcumuladoDI(lote.data, t.data, taxas, divergencias);
+        const percIOF = percentualIOFRegressivo(diasPermanencia);
+        const percIR = percentualIRRegressivo(diasPermanencia);
+        const divisor = fator - (fator-1)*(percIOF+percIR);
+        // Líquido se o lote INTEIRO fosse resgatado agora, com os tributos desta faixa de prazo.
+        const liquidoLoteInteiroCent = Math.round(lote.capitalCent*divisor);
+        let capitalConsumidoCent;
+        if(liquidoLoteInteiroCent<=restanteLiquidoCent){
+          capitalConsumidoCent = lote.capitalCent; // consome o lote inteiro
+        } else {
+          capitalConsumidoCent = Math.round((restanteLiquidoCent/divisor));
+          capitalConsumidoCent = Math.min(capitalConsumidoCent, lote.capitalCent);
+        }
+        const brutoCent = Math.round(capitalConsumidoCent*fator);
+        const rendimentoBrutoCent = brutoCent - capitalConsumidoCent;
+        const iofCent = Math.round(rendimentoBrutoCent*percIOF);
+        const irCent = Math.round(rendimentoBrutoCent*percIR);
+        const liquidoCent = brutoCent - iofCent - irCent;
+        lote.capitalCent -= capitalConsumidoCent;
+        restanteLiquidoCent -= liquidoCent;
+        consumos.push({ loteData:lote.data, capitalConsumidoCent, rendimentoBrutoCent, iofCent, irCent, diasPermanencia });
+        if(noPeriodo){
+          totalResgatesBrutoCent += brutoCent;
+          rendimentoRealizadoCent += rendimentoBrutoCent;
+          iofRealizadoCent += iofCent;
+          irRealizadoCent += irCent;
+        }
+      }
+      // Resgate maior que o capital disponível nos lotes conhecidos (dados incompletos — falta alguma
+      // aplicação anterior no histórico lançado, ex.: um extrato bancário mais antigo nunca importado):
+      // NUNCA inventa capital para fechar a conta — fica registrado como divergência explícita (requisito
+      // "indicar os dados necessários para conciliação, sem presumir rendimentos inexistentes").
+      if(restanteLiquidoCent>0) divergencias.add(`capital-insuficiente:${t.data}`);
+      if(noPeriodo){
+        totalResgatesLiquidoCent += Math.abs(valorCent);
+        resgatesDetalhados.push({ data:t.data, valorLiquidoCent:Math.abs(valorCent), consumos, naoCobertoCent:restanteLiquidoCent });
+      }
+    }
+  }
+  if(snapshotLotesAntesPeriodo===null) snapshotLotesAntesPeriodo = []; // nenhum movimento antes da competência exibida
+
+  // Saldo bruto/capital "no início do período" — mesma lógica de projeção usada abaixo para a data de
+  // corte, só que aplicada à fotografia ANTERIOR ao período (um dia antes do 1º dia da competência).
+  let capitalInicioCent = 0, rendimentoInicioNaoRealizadoCent = 0;
+  if(dataInicioCompetenciaISO && snapshotLotesAntesPeriodo.length){
+    const diaAnteriorPeriodoISO = new Date(new Date(dataInicioCompetenciaISO+'T00:00:00').getTime()-86400000).toISOString().slice(0,10);
+    snapshotLotesAntesPeriodo.forEach(lote=>{
+      capitalInicioCent += lote.capitalCent;
+      const { fator } = fatorAcumuladoDI(lote.data, diaAnteriorPeriodoISO, taxas, divergencias);
+      rendimentoInicioNaoRealizadoCent += Math.round(lote.capitalCent*(fator-1));
+    });
+  }
+
+  // Rendimento NÃO realizado (projeção "a mercado" na data de corte) + tributos projetados, lote a lote —
+  // cada lote pode ter um prazo de permanência diferente, logo uma faixa de remuneração/IOF/IR diferente.
+  let capitalRemanescenteCent = 0, rendimentoNaoRealizadoCent = 0, iofProjetadoCent = 0, irProjetadoCent = 0;
+  const composicaoAtual = [];
+  lotes.filter(l=>l.capitalCent>0).forEach(lote=>{
+    const { fator, diasPermanencia } = fatorAcumuladoDI(lote.data, dataCorteISO, taxas, divergencias);
+    const rendimentoCent = Math.round(lote.capitalCent*(fator-1));
+    const iofCent = Math.round(rendimentoCent*percentualIOFRegressivo(diasPermanencia));
+    const irCent = Math.round(rendimentoCent*percentualIRRegressivo(diasPermanencia));
+    capitalRemanescenteCent += lote.capitalCent;
+    rendimentoNaoRealizadoCent += rendimentoCent;
+    iofProjetadoCent += iofCent;
+    irProjetadoCent += irCent;
+    composicaoAtual.push({ data:lote.data, capitalCent:lote.capitalCent, rendimentoCent, iofCent, irCent, diasPermanencia });
+  });
+
+  const saldoBrutoFinalCent = capitalRemanescenteCent + rendimentoNaoRealizadoCent;
+  const saldoLiquidoDisponivelCent = saldoBrutoFinalCent - iofProjetadoCent - irProjetadoCent;
+  const saldoInicialBrutoCent = capitalInicioCent + rendimentoInicioNaoRealizadoCent;
+
+  return {
+    conta, dataCorteISO,
+    saldoInicialBruto: saldoInicialBrutoCent/100,
+    capitalInicio: capitalInicioCent/100,
+    totalAplicacoesPeriodo: totalAplicacoesCent/100,
+    totalResgatesLiquidoPeriodo: totalResgatesLiquidoCent/100,
+    totalResgatesBrutoPeriodo: totalResgatesBrutoCent/100,
+    rendimentoRealizadoPeriodo: rendimentoRealizadoCent/100,
+    irRealizadoPeriodo: irRealizadoCent/100,
+    iofRealizadoPeriodo: iofRealizadoCent/100,
+    capitalRemanescente: capitalRemanescenteCent/100,
+    rendimentoNaoRealizado: rendimentoNaoRealizadoCent/100,
+    iofProjetado: iofProjetadoCent/100,
+    irProjetado: irProjetadoCent/100,
+    saldoBrutoFinal: saldoBrutoFinalCent/100,
+    saldoLiquidoDisponivel: saldoLiquidoDisponivelCent/100,
+    composicaoAtual,
+    resgatesDetalhados,
+    divergencias: Array.from(divergencias).sort(),
+  };
 }
 function sincronizarParcelasFuturas(ref){
   if(!ref || !ref.parcelamentoId || !(Number(ref.totalParcelas)>1)) return;
@@ -12117,6 +12485,7 @@ function render(){
     ${UI.modalDuplicidade!==null ? renderModalDuplicidade() : ""}
     ${UI.regCardDetalheId!==null ? renderRegCardDetalheModal() : ""}
     ${UI.evolucaoReservaModal!==null ? renderEvolucaoReservaModal() : ""}
+    ${UI.rendeFacilContaModal!==null ? renderRendeFacilContaModal() : ""}
     ${UI.historicoContrachequeModal!==null ? renderHistoricoContrachequeModal() : ""}
     ${UI.aportesModal ? renderModalAportes() : ""}
     ${UI.mapaCalorDiaModal ? renderMapaCalorDiaModal() : ""}
@@ -14944,6 +15313,11 @@ function renderPainelContasBancarias(ano, mes){
         // Reserva de Emergência: o badge do responsável fica ao lado do NOME da conta (não abaixo, junto
         // do badge de tipo, como nas demais contas) — pedido específico para este tipo de card.
         const ehReserva = tipo==='Reserva de Emergência';
+        // Botão "Rende Fácil" (cálculo automático de rendimentos — ver calcularLedgerRendeFacil): só
+        // aparece em contas que já tiveram ao menos uma aplicação/resgate automático do BB Rende Fácil
+        // lançado (ehMovimentoRendeFacilBB) — não faz sentido oferecer o painel numa conta sem nenhum
+        // movimento desse tipo.
+        const temRendeFacil = !ehContracheque && !ehReserva && STATE.transactions.some(t=>t.conta===c && ehMovimentoRendeFacilBB(t));
         return `<div class="conta-financeira-card">
           <div class="conta-financeira-card-topo-acoes no-print">
             <button type="button" class="icon-btn" data-importar-conta="${escapeHtml(c)}" title="Importar arquivo do banco" aria-label="Importar arquivo do banco">📥</button>
@@ -14993,6 +15367,7 @@ function renderPainelContasBancarias(ano, mes){
             ` : `
             <button type="button" class="btn btn-ghost btn-sm" data-extrato-conta="${escapeHtml(c)}" title="Ver Extrato" aria-label="Ver Extrato">👁</button>
             <button type="button" class="btn btn-ghost btn-sm" data-futuros-conta="${escapeHtml(c)}" title="Ver lançamentos futuros" aria-label="Ver lançamentos futuros">⏳${qtdFuturos>0?` <span class="contagem-futuros-btn">(${qtdFuturos})</span>`:''}</button>
+            ${temRendeFacil ? `<button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-rendefacil-conta="${escapeHtml(c)}" title="BB Rende Fácil" aria-label="BB Rende Fácil"><span class="btn-acao-especial-icone">💹</span><span class="btn-acao-especial-texto">Rende Fácil</span></button>` : ''}
             `}
           </div>
         </div>`;
@@ -20895,6 +21270,14 @@ function bindEvents(){
   }));
   document.getElementById('closeEvolucaoReserva')?.addEventListener('click', ()=>{ UI.evolucaoReservaModal=null; render(); });
   document.getElementById('closeEvolucaoReserva2')?.addEventListener('click', ()=>{ UI.evolucaoReservaModal=null; render(); });
+  // "Rende Fácil" (card de conta bancária com aplicações/resgates automáticos do BB Rende Fácil) — ver
+  // renderPainelContasBancarias/abrirRendeFacilContaModal.
+  document.querySelectorAll('[data-rendefacil-conta]').forEach(b=> b.addEventListener('click', ()=>{
+    abrirRendeFacilContaModal(b.dataset.rendefacilConta);
+  }));
+  document.getElementById('closeRendeFacilConta')?.addEventListener('click', ()=>{ UI.rendeFacilContaModal=null; render(); });
+  document.getElementById('closeRendeFacilConta2')?.addEventListener('click', ()=>{ UI.rendeFacilContaModal=null; render(); });
+  document.getElementById('printRendeFacilConta')?.addEventListener('click', ()=>imprimirModal('ovRendeFacilConta'));
   document.querySelectorAll('[data-historico-contracheque]').forEach(b=> b.addEventListener('click', ()=>{
     UI.historicoContrachequeModal = { conta: b.dataset.historicoContracheque, pagina:1, porPagina:porPaginaLaptop(12) }; render();
   }));
