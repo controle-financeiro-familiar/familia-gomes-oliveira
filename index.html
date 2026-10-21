@@ -9026,6 +9026,21 @@ function aplicarOrdemManual(itens){
     return oa - ob;
   });
 }
+/* Uma ordem de exibição (cronológica padrão, OU resultado de aplicarOrdemManual) é "cronologicamente
+   válida" quando a data nunca REGRIDE de uma linha para a próxima — dias iguais podem se repetir em
+   qualquer sub-ordem (não há uma única "ordem correta" dentro do mesmo dia), então só uma data
+   estritamente MENOR que a da linha anterior invalida a sequência. Usada para decidir se vale recalcular o
+   Saldo acumulado contra uma ordem manual (drag-and-drop): se o usuário arrastou de um jeito que embaralha
+   a cronologia de verdade (ex.: um lançamento de um dia depois antes de um de dias atrás), um saldo "linha
+   a linha" calculado nessa ordem não corresponderia a nenhuma sequência bancária real — ver itensExtratoConta/
+   lancamentosFuturosConta, seção 2 do requisito de saldo acumulado: "recalcular... desde que essa ordenação
+   represente uma sequência cronológica válida". */
+function ordemEhCronologicamenteValida(itens){
+  for(let i=1;i<itens.length;i++){
+    if(compararDataCronologica(itens[i-1].data, itens[i].data) > 0) return false;
+  }
+  return true;
+}
 /* Grava a nova ordem manual definida por drag-and-drop — `idsNaOrdem` já é a ordem final exibida (após o
    drop), do primeiro ao último. Só toca os lançamentos deste contexto (os únicos ids passados), nunca uma
    sequência global entre contextos diferentes (seção 10 do requisito). Grava direto no objeto já presente
@@ -9101,15 +9116,21 @@ function compararDataCronologica(dataA, dataB){
    já usada em itensExtratoConta/lancamentosFuturosConta antes desta funcionalidade existir (Receita soma,
    Despesa subtrai; Saldo Anterior não soma de novo, seu efeito já está embutido no saldoInicial
    recebido); usada pelos dois modais com saldo por linha (Extrato/Futuros) — Fatura/Próximas Faturas só
-   têm totais agregados, já independentes de ordem, então não precisam deste recálculo. */
+   têm totais agregados, já independentes de ordem, então não precisam deste recálculo.
+   Acumula em CENTAVOS INTEIROS (Math.round de cada valor antes de somar), não em reais fracionários —
+   soma de ponto flutuante em reais (ex.: 0.1+0.2) acumula erro de arredondamento ao longo de uma sequência
+   longa de lançamentos (seção "Implementação" do requisito de saldo acumulado: "cálculo monetário com
+   precisão decimal, preferencialmente em centavos inteiros, evitando erros de ponto flutuante"); só
+   converte de volta para reais (/100) no valor final de cada linha. */
 function recalcularSaldosSequenciais(itens, saldoInicial, campoSaldo){
-  let acumulado = saldoInicial;
+  let acumuladoCentavos = Math.round((Number(saldoInicial)||0)*100);
   return itens.map(t=>{
     if(!ehSaldoAnterior(t)){
-      const efeito = t.tipo==='Receita' ? (Number(t.valor)||0) : (t.tipo==='Despesa' ? -(Number(t.valor)||0) : 0);
-      acumulado += efeito;
+      const valorCentavos = Math.round((Number(t.valor)||0)*100);
+      const efeitoCentavos = t.tipo==='Receita' ? valorCentavos : (t.tipo==='Despesa' ? -valorCentavos : 0);
+      acumuladoCentavos += efeitoCentavos;
     }
-    return { ...t, [campoSaldo]: acumulado };
+    return { ...t, [campoSaldo]: acumuladoCentavos/100 };
   });
 }
 /* Fatura atual de todos os cartões (> R$ 0,00) numa competência, usada no donut do Dashboard */
@@ -9143,10 +9164,12 @@ function ehCompraParceladaDeFatura(t){
   return Number(t.totalParcelas)>1 && t.categoria!=='Anuidade de Cartão de Crédito';
 }
 function itensFatura(conta, competencia){
+  // Sem desempate por id: Array.prototype.sort é estável, então dois lançamentos do mesmo dia preservam a
+  // ordem original de STATE.transactions (ver comentário completo em itensExtratoConta).
   const itens = aplicarOrdemManual(STATE.transactions
     .filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia===competencia)
     .slice()
-    .sort((a,b)=> compararDataCronologica(a.data, b.data) || (a.id||'').localeCompare(b.id||'')));
+    .sort((a,b)=> compararDataCronologica(a.data, b.data)));
   const itensQueCompoemFatura = itens.filter(t=>!CATEGORIAS_FATURA.includes(t.categoria));
   const totalParcelado = itensQueCompoemFatura.filter(t=>t.tipo==='Despesa' && ehCompraParceladaDeFatura(t)).reduce((s,t)=>s+(Number(t.valor)||0),0);
   const totalAvista = itensQueCompoemFatura.filter(t=>t.tipo==='Despesa' && !ehCompraParceladaDeFatura(t)).reduce((s,t)=>s+(Number(t.valor)||0),0);
@@ -9214,11 +9237,13 @@ function detalheSaldoParceladoEmAberto(conta, competenciaSelecionada){
    cronologicamente do mais antigo para o mais recente: por competência e, dentro dela, por Data. */
 function itensFaturasFuturas(conta){
   const competenciaAtual = chaveMes(UI.ano, UI.mes);
+  // Sem desempate por id: mesma razão de itensFatura/itensExtratoConta (sort estável preserva a ordem
+  // original dos registros).
   const itens = STATE.transactions
     .filter(t=> t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia && t.competencia>competenciaAtual
       && !CATEGORIAS_FATURA.includes(t.categoria))
     .slice()
-    .sort((a,b)=> a.competencia.localeCompare(b.competencia) || compararDataCronologica(a.data, b.data) || (a.id||'').localeCompare(b.id||''));
+    .sort((a,b)=> a.competencia.localeCompare(b.competencia) || compararDataCronologica(a.data, b.data));
   // A ordem manual (seção 10 do requisito) é aplicada por competência: reordenar dentro de uma competência
   // nunca deve misturar a posição de itens de outra (ver renderProjecaoFaturaModal, que já agrupa por
   // competência) — agrupa antes de aplicar, preservando a ordem das próprias competências entre si.
@@ -9380,9 +9405,13 @@ function calcSaldoConta(conta, ano, mes){
     .filter(t=> ehSaldoAnterior(t) && t.data<=inicioPeriodoISO)
     .sort((a,b)=> a.data<b.data ? 1 : (a.data>b.data ? -1 : 0))[0] || null;
 
-  let saldoInicial = 0, dataCorte = null;
+  // Acumula em CENTAVOS INTEIROS (nunca em reais fracionários) — mesma proteção contra erro de ponto
+  // flutuante de recalcularSaldosSequenciais, aqui aplicada aos agregados (saldo inicial/entradas/saídas)
+  // do painel e do cabeçalho do Extrato, que precisam bater exatamente com a soma linha a linha.
+  let saldoInicialCent = 0, dataCorte = null;
   if(referencia){
-    saldoInicial = referencia.tipo==='Despesa' ? -(Number(referencia.valor)||0) : (Number(referencia.valor)||0);
+    const valorCent = Math.round((Number(referencia.valor)||0)*100);
+    saldoInicialCent = referencia.tipo==='Despesa' ? -valorCent : valorCent;
     dataCorte = referencia.data;
   }
   // entradas/saidas/liquido: TODOS os lançamentos do período (inclusive datas futuras dentro do mês
@@ -9396,12 +9425,12 @@ function calcSaldoConta(conta, ano, mes){
   // saldo inicial) — nunca usar isto sozinho como "Saldo Líquido da competência": essa métrica é sempre
   // saldoInicial + liquidoRealizado (ver renderPainelContasBancarias/itensExtratoConta), a mesma fórmula
   // em todo componente que a exibe (card, extrato etc.), nunca um cálculo paralelo.
-  let entradas = 0, saidas = 0, qtdPeriodo = 0;
-  let entradasRealizadas = 0, saidasRealizadas = 0;
+  let entradasCent = 0, saidasCent = 0, qtdPeriodo = 0;
+  let entradasRealizadasCent = 0, saidasRealizadasCent = 0;
   txsConta.forEach(t=>{
     if(ehSaldoAnterior(t)) return; // já tratado via "referencia" — nunca é entrada/saída do próprio período
-    const v = Number(t.valor)||0;
-    const efeito = t.tipo==='Receita' ? v : (t.tipo==='Despesa' ? -v : 0);
+    const vCent = Math.round((Number(t.valor)||0)*100);
+    const efeitoCent = t.tipo==='Receita' ? vCent : (t.tipo==='Despesa' ? -vCent : 0);
     // Bug corrigido: o valor do "Saldo Anterior" representa o saldo ANTES dos lançamentos do próprio dia
     // 1 em que ele está datado (ver aplicarSaldoAnteriorConta — sempre dia 1 de algum mês), nunca depois.
     // Com ">" estrito, um lançamento real datado no MESMO dia da referência (comum: salário, aluguel e
@@ -9412,18 +9441,20 @@ function calcSaldoConta(conta, ano, mes){
     // partir dele) sair errado. "t.data>=dataCorte" inclui corretamente esse lançamento.
     const depoisDaReferencia = !dataCorte || t.data>=dataCorte;
     if(depoisDaReferencia && t.data<inicioPeriodoISO){
-      saldoInicial += efeito; // completa o encadeamento natural entre a referência e o início do período
+      saldoInicialCent += efeitoCent; // completa o encadeamento natural entre a referência e o início do período
     } else if(t.data>=inicioPeriodoISO && t.data<=fimPeriodoISO){
       qtdPeriodo++;
-      if(t.tipo==='Receita') entradas += v; else if(t.tipo==='Despesa') saidas += v;
+      if(t.tipo==='Receita') entradasCent += vCent; else if(t.tipo==='Despesa') saidasCent += vCent;
       if(t.data<=hoje){
-        if(t.tipo==='Receita') entradasRealizadas += v; else if(t.tipo==='Despesa') saidasRealizadas += v;
+        if(t.tipo==='Receita') entradasRealizadasCent += vCent; else if(t.tipo==='Despesa') saidasRealizadasCent += vCent;
       }
     }
   });
-  const liquido = entradas - saidas;
-  const liquidoRealizado = entradasRealizadas - saidasRealizadas;
-  return { saldoFinal: saldoInicial + liquido, saldoInicial, entradas, saidas, liquido, qtdPeriodo, entradasRealizadas, saidasRealizadas, liquidoRealizado };
+  const saldoInicial = saldoInicialCent/100, entradas = entradasCent/100, saidas = saidasCent/100;
+  const entradasRealizadas = entradasRealizadasCent/100, saidasRealizadas = saidasRealizadasCent/100;
+  const liquido = (entradasCent - saidasCent)/100;
+  const liquidoRealizado = (entradasRealizadasCent - saidasRealizadasCent)/100;
+  return { saldoFinal: (saldoInicialCent + entradasCent - saidasCent)/100, saldoInicial, entradas, saidas, liquido, qtdPeriodo, entradasRealizadas, saidasRealizadas, liquidoRealizado };
 }
 /* Data de hoje em formato ISO (AAAA-MM-DD), usada como corte entre "lançamentos já efetivados" e
    "lançamentos futuros" no Saldo Atual dos cards de Contas — sempre a data real do dispositivo, nunca a
@@ -9468,9 +9499,11 @@ function saldoContaAteData(conta, dataLimiteISO){
   const referencia = txsConta
     .filter(t=> ehSaldoAnterior(t) && t.data<=dataLimiteISO)
     .sort((a,b)=> a.data<b.data ? 1 : (a.data>b.data ? -1 : 0))[0] || null;
-  let saldo = 0, dataCorte = null;
+  // Acumula em centavos inteiros — mesma proteção contra erro de ponto flutuante de calcSaldoConta.
+  let saldoCent = 0, dataCorte = null;
   if(referencia){
-    saldo = referencia.tipo==='Despesa' ? -(Number(referencia.valor)||0) : (Number(referencia.valor)||0);
+    const valorCent = Math.round((Number(referencia.valor)||0)*100);
+    saldoCent = referencia.tipo==='Despesa' ? -valorCent : valorCent;
     dataCorte = referencia.data;
   }
   txsConta.forEach(t=>{
@@ -9479,11 +9512,11 @@ function saldoContaAteData(conta, dataLimiteISO){
     // Anterior (ela representa o saldo ANTES dos lançamentos daquele dia, nunca depois).
     const depoisDaReferencia = !dataCorte || t.data>=dataCorte;
     if(depoisDaReferencia && t.data<=dataLimiteISO){
-      const v = Number(t.valor)||0;
-      saldo += (t.tipo==='Receita' ? v : (t.tipo==='Despesa' ? -v : 0));
+      const vCent = Math.round((Number(t.valor)||0)*100);
+      saldoCent += (t.tipo==='Receita' ? vCent : (t.tipo==='Despesa' ? -vCent : 0));
     }
   });
-  return saldo;
+  return saldoCent/100;
 }
 /* Lançamentos com data posterior a hoje para uma conta — usados no modal "Ver lançamentos futuros" do
    card de Contas. Vem ordenados cronologicamente, cada um já com o saldo projetado da conta IMEDIATAMENTE
@@ -9491,14 +9524,24 @@ function saldoContaAteData(conta, dataLimiteISO){
    valores são uma projeção e não alteram o Saldo Atual até a própria Data chegar. */
 function lancamentosFuturosConta(conta){
   const hoje = hojeISO();
+  // Sem desempate por id: sort estável preserva a ordem original dos registros do mesmo dia (ver
+  // comentário completo em itensExtratoConta).
   const futuros = STATE.transactions
     .filter(t=> t.conta===conta && !ehSaldoAnterior(t) && t.data>hoje)
-    .sort((a,b)=> compararDataCronologica(a.data, b.data) || (a.id||'').localeCompare(b.id||''));
-  // Ordem manual (drag-and-drop, seção 8.2 do requisito): quando o usuário já reordenou este contexto,
-  // ela prevalece sobre a ordem cronológica padrão acima — recalcularSaldosSequenciais soma na ordem
-  // recebida, nunca reaproveitando o saldoProjetado de uma passada anterior.
+    .sort((a,b)=> compararDataCronologica(a.data, b.data));
+  // Ordem manual (drag-and-drop, seção 8.2 do requisito): quando o usuário já reordenou este contexto E a
+  // ordem resultante ainda é cronologicamente válida (ver ordemEhCronologicamenteValida), ela prevalece
+  // sobre a ordem cronológica padrão acima — recalcularSaldosSequenciais soma na ordem recebida, nunca
+  // reaproveitando o saldoProjetado de uma passada anterior. Se o arrasto embaralhou a cronologia de
+  // verdade, a ordem manual continua valendo na EXIBIÇÃO, mas o saldo projetado é calculado sobre a ordem
+  // cronológica padrão (mesmo critério de itensExtratoConta).
   const ordenados = aplicarOrdemManual(futuros);
-  return recalcularSaldosSequenciais(ordenados, saldoContaAteData(conta, hoje), 'saldoProjetado');
+  const baseParaSaldo = ordemEhCronologicamenteValida(ordenados) ? ordenados : futuros;
+  const comSaldo = recalcularSaldosSequenciais(baseParaSaldo, saldoContaAteData(conta, hoje), 'saldoProjetado');
+  if(baseParaSaldo===ordenados) return comSaldo;
+  // baseParaSaldo foi `futuros` (cronológico) — precisa reaplicar a ordem manual só para a EXIBIÇÃO, levando
+  // o saldoProjetado já calculado junto com cada objeto (aplicarOrdemManual só reordena o array).
+  return aplicarOrdemManual(comSaldo);
 }
 function resumoContasBancarias(ano, mes){
   const contas = contasBancarias();
@@ -9522,15 +9565,14 @@ function resumoContasBancarias(ano, mes){
   });
   return { qtdContas: contas.length, saldoTotal, entradasTotal, saidasTotal, saldoInicialTotal };
 }
-/* Lançamentos do período com saldo acumulado — calculado e exibido em ordem cronológica (a partir do
-   saldo inicial do período), do mais antigo para o mais recente. Esse saldoAcumulado é só o ponto de
-   partida "sem filtro/ordenação nenhuma" — quem chama
-   (renderExtratoContaModal) sempre recalcula de novo a partir do Saldo Inicial na sequência final
-   efetivamente filtrada/ordenada (ver recalcularSaldosSequenciais lá), então filtros e ordenação por
-   clique nunca herdam um saldo desatualizado calculado aqui. Tanto a lista quanto o saldo
-   inicial/entradas/saídas/saldo final exibidos consideram somente lançamentos com data <= hoje (data real
-   do dispositivo) — lançamentos futuros do período (mesmo dentro do mês/ano selecionado) não aparecem nem
-   entram nesses totais, na mesma lógica de corte já usada no Saldo Atual dos cards de Contas (ver
+/* Lançamentos do período com saldo acumulado — calculado sobre a ordem FINAL de exibição (cronológica
+   padrão, ou ordem manual quando válida — ver itensExtratoConta), do mais antigo para o mais recente. O
+   filtro e a ordenação por clique no cabeçalho (ver renderExtratoContaModal) reordenam/filtram só a
+   APRESENTAÇÃO a partir daqui, sem recalcular este saldo — ordenar por Valor/Descrição/etc. não representa
+   uma sequência bancária válida para uma coluna "Saldo" ter algum significado. Tanto a lista quanto o
+   saldo inicial/entradas/saídas/saldo final exibidos consideram somente lançamentos com data <= hoje (data
+   real do dispositivo) — lançamentos futuros do período (mesmo dentro do mês/ano selecionado) não aparecem
+   nem entram nesses totais, na mesma lógica de corte já usada no Saldo Atual dos cards de Contas (ver
    saldoContaAteData/entradasRealizadas/saidasRealizadas). */
 /* Prioriza o(s) lançamento(s) de Saldo Anterior do dia 1 da competência exibida (ver ehSaldoAnterior) na
    primeira posição da lista — só chamada na ordenação padrão (ver itensExtratoConta), nunca quando há
@@ -9579,51 +9621,54 @@ function itensExtratoConta(conta, ano, mes){
   const inicioISO = `${ano}-${pad2(mes)}-01`, fimISO = `${ano}-${pad2(mes)}-31`;
   const hoje = hojeISO();
   const s = calcSaldoConta(conta, ano, mes);
-  // Ordem cronológica (data crescente) para o cálculo do saldo acumulado — em empate de data, Receita
-  // entra antes de Despesa, o mesmo critério usado na ordem de exibição, para o saldo bater linha a linha.
+  // Ordem cronológica (data crescente) — em empate de data, Receita entra antes de Despesa e, dentro
+  // disso, SEM nenhum terceiro critério de desempate (nunca um id aleatório, nunca a data isoladamente):
+  // Array.prototype.sort é estável, então dois lançamentos do mesmo dia e mesmo tipo preservam exatamente
+  // a posição relativa que já tinham em STATE.transactions — a "sequência original dos registros" exigida
+  // (ex.: a ordem em que vieram do arquivo importado do banco). Usar um id aleatório aqui (como antes)
+  // embaralhava essa sequência sem nenhum critério real, fazendo a coluna Saldo de cada linha não bater
+  // com "saldo da linha anterior ± valor desta linha" sempre que duas linhas do mesmo dia e tipo existiam —
+  // bug corrigido nesta rodada.
   const ordemTipo = (a,b)=> a.tipo==='Receita' && b.tipo==='Despesa' ? -1 : (a.tipo==='Despesa' && b.tipo==='Receita' ? 1 : 0);
   const itensPeriodo = STATE.transactions.filter(t=>t.conta===conta && t.data>=inicioISO && t.data<=fimISO && t.data<=hoje)
-    .sort((a,b)=> compararDataCronologica(a.data, b.data) || ordemTipo(a,b) || (a.id||'').localeCompare(b.id||''));
-  // O Saldo de cada linha é SEMPRE calculado pela sequência cronológica real (por data), nunca pela ordem
-  // de EXIBIÇÃO — drag-and-drop e ordenação por clique só mudam como a lista aparece na tela, nunca o
-  // valor do saldo de cada lançamento. Dentro de cada dia, o(s) lançamento(s) de BB Rende Fácil (aplicação/
-  // resgate automático — ver priorizarRendeFacilUltimaLinhaDoDia) entram nessa sequência sempre por ÚLTIMO,
-  // já para o próprio CÁLCULO (não só para a exibição): é um requisito sobre a ordem em que o banco
-  // efetivamente processa o dia (o próprio movimento automático, depois de tudo o mais), não uma preferência
-  // cosmética — bug corrigido nesta rodada em que reordenar só a exibição, sem recalcular o saldo na mesma
-  // ordem, fazia a coluna Saldo parecer errada (o valor da última linha exibida deixava de bater com "saldo
-  // da linha de cima ± valor desta linha", já que o Rende Fácil nem sempre é o último da sequência
-  // cronológica real quando calculado separadamente). O saldo final do dia nunca muda com isso (soma é
-  // comutativa) — só os valores INTERMEDIÁRIOS de cada linha daquele dia. Calculado uma única vez aqui,
-  // sobre itensPeriodo já nessa ordem, e o resultado (saldoAcumulado já atribuído a cada item) é
-  // reaproveitado tal e qual por qualquer ordem de exibição escolhida abaixo — nenhuma outra função deste
-  // app deve recalculá-lo a partir da posição visual das linhas (ver também renderExtratoContaModal, que
-  // não recalcula mais nada).
+    .sort((a,b)=> compararDataCronologica(a.data, b.data) || ordemTipo(a,b));
+  // Dentro de cada dia, o(s) lançamento(s) de BB Rende Fácil (aplicação/resgate automático — ver
+  // priorizarRendeFacilUltimaLinhaDoDia) entram sempre por ÚLTIMO, já nesta ordem-base usada tanto para o
+  // cálculo quanto para a exibição — é a ordem em que o próprio banco processa o dia, não uma preferência
+  // cosmética.
   const itensPeriodoParaSaldo = priorizarRendeFacilUltimaLinhaDoDia(itensPeriodo);
-  const comSaldoCronologico = recalcularSaldosSequenciais(itensPeriodoParaSaldo, s.saldoInicial, 'saldoAcumulado');
-  // Ordem de EXIBIÇÃO (de cima para baixo) — já é a mesma ordem usada acima para o saldo (Rende Fácil por
-  // último no dia incluído), então a coluna Saldo sempre lê como uma sequência conectada de cima para
-  // baixo. Ordem manual (drag-and-drop, seção 8.1 do requisito): quando o usuário já reordenou este
-  // período, a ordem escolhida por ele passa a ser a própria ordem de exibição, sem tocar no saldo de
-  // nenhuma linha (aplicarOrdemManual só reordena o array) — aí sim a coluna Saldo pode legitimamente não
-  // ler como sequência conectada, já que é uma reordenação deliberada e explícita do usuário. Sem ordem
-  // manual, a exibição é a ordem de comSaldoCronologico, com uma exceção: o Saldo Anterior do dia 1 (ver
-  // priorizarSaldoAnteriorPrimeiraLinha) sobe para a primeira linha de toda a lista. Isso só vale enquanto
-  // a ordenação por clique do cabeçalho ('extrato') também estiver no estado original — assim que o
-  // usuário ordenar por qualquer coluna (inclusive Data), essa prioridade é desativada e a ordenação
-  // escolhida é respeitada integralmente (ver aplicarOrdenacaoClique/renderExtratoContaModal, chamado
-  // depois deste ponto). Saldo Anterior e Rende Fácil participam normalmente de ambas — ordem manual e
-  // ordenação por clique — como qualquer outro lançamento (ver checkbox/drag habilitados em
-  // renderExtratoContaModal).
+  // Ordem FINAL de exibição — decidida ANTES de calcular o saldo, nunca depois: o Saldo de cada linha
+  // depende exclusivamente do saldo da linha IMEDIATAMENTE ANTERIOR na ordem efetivamente mostrada na tela
+  // (seção 2 do requisito de saldo acumulado). Ordem manual (drag-and-drop, seção 8.1) prevalece quando
+  // definida E ainda representa uma sequência cronológica válida (ver ordemEhCronologicamenteValida — datas
+  // nunca regridem de uma linha para a próxima; dias iguais podem repetir em qualquer sub-ordem). Se o
+  // usuário arrastou de um jeito que embaralha a cronologia de verdade, um saldo "linha a linha" calculado
+  // nessa ordem não corresponderia a nenhuma sequência bancária real — nesse caso (raro), a ordem manual
+  // continua valendo só na EXIBIÇÃO, e o saldo de cada linha é o da ordem cronológica padrão (ver uso de
+  // itensPeriodoParaSaldo mais abaixo).
   const temOrdemManual = itensPeriodo.some(t=>t.ordemExibicao!==undefined && t.ordemExibicao!==null);
-  const itensOrdemExibicao = temOrdemManual
-    ? aplicarOrdemManual(comSaldoCronologico)
+  const ordemManualAplicada = temOrdemManual ? aplicarOrdemManual(itensPeriodoParaSaldo) : null;
+  const ordemManualValida = !!ordemManualAplicada && ordemEhCronologicamenteValida(ordemManualAplicada);
+  // Saldo Anterior do dia 1 sempre na primeira posição — só quando a exibição ainda é a ordem padrão (sem
+  // ordem manual válida, e sem ordenação por clique ativa, que prevalece integralmente — ver
+  // aplicarOrdenacaoClique/renderExtratoContaModal, chamado depois deste ponto; naquele caso o saldo
+  // exibido continua sendo o da ordem cronológica padrão calculada aqui, já que ordenar por Valor/
+  // Descrição/etc. não representa uma sequência bancária válida para recalcular contra).
+  const itensOrdemExibicao = ordemManualValida
+    ? ordemManualAplicada
     : (estadoOrdenacaoTabela('extrato').campo
-        ? comSaldoCronologico // ordenação por clique ativa: aplicarOrdenacaoClique reordena por conta própria
-        : priorizarSaldoAnteriorPrimeiraLinha(comSaldoCronologico, inicioISO));
+        ? itensPeriodoParaSaldo // ordenação por clique ativa: aplicarOrdenacaoClique reordena por conta própria
+        : priorizarSaldoAnteriorPrimeiraLinha(itensPeriodoParaSaldo, inicioISO));
+  // Único ponto de cálculo do Saldo acumulado — sempre sobre a ordem FINAL de exibição definida acima
+  // (ordem manual válida incluída). Quando a ordem manual existe mas não é cronologicamente válida, usa a
+  // ordem cronológica padrão para o CÁLCULO, mas preserva a ordem manual na exibição final (reaplicada
+  // depois, carregando consigo o saldoAcumulado já calculado — aplicarOrdemManual só reordena o array).
+  const baseParaSaldo = (temOrdemManual && !ordemManualValida) ? itensPeriodoParaSaldo : itensOrdemExibicao;
+  const comSaldo = recalcularSaldosSequenciais(baseParaSaldo, s.saldoInicial, 'saldoAcumulado');
+  const itensComSaldoNaOrdemFinal = (temOrdemManual && !ordemManualValida) ? aplicarOrdemManual(comSaldo) : comSaldo;
   const qtdPeriodo = itensPeriodo.filter(t=>!ehSaldoAnterior(t)).length;
   return {
-    itens: itensOrdemExibicao,
+    itens: itensComSaldoNaOrdemFinal,
     saldoInicial: s.saldoInicial,
     entradas: s.entradasRealizadas,
     saidas: s.saidasRealizadas,
@@ -10833,9 +10878,10 @@ function saldoContaAteDataSemRendeFacilBB(conta, dataLimiteISO){
   const referencia = txsConta
     .filter(t=> ehSaldoAnterior(t) && t.data<=dataLimiteISO)
     .sort((a,b)=> a.data<b.data ? 1 : (a.data>b.data ? -1 : 0))[0] || null;
-  let saldo = 0, dataCorte = null;
+  let saldoCent = 0, dataCorte = null;
   if(referencia){
-    saldo = referencia.tipo==='Despesa' ? -(Number(referencia.valor)||0) : (Number(referencia.valor)||0);
+    const valorCent = Math.round((Number(referencia.valor)||0)*100);
+    saldoCent = referencia.tipo==='Despesa' ? -valorCent : valorCent;
     dataCorte = referencia.data;
   }
   txsConta.forEach(t=>{
@@ -10844,11 +10890,11 @@ function saldoContaAteDataSemRendeFacilBB(conta, dataLimiteISO){
     // Anterior (ela representa o saldo ANTES dos lançamentos daquele dia, nunca depois).
     const depoisDaReferencia = !dataCorte || t.data>=dataCorte;
     if(depoisDaReferencia && t.data<=dataLimiteISO){
-      const v = Number(t.valor)||0;
-      saldo += (t.tipo==='Receita' ? v : (t.tipo==='Despesa' ? -v : 0));
+      const vCent = Math.round((Number(t.valor)||0)*100);
+      saldoCent += (t.tipo==='Receita' ? vCent : (t.tipo==='Despesa' ? -vCent : 0));
     }
   });
-  return saldo;
+  return saldoCent/100;
 }
 /* Saldo REAL consolidado das contas elegíveis do Fluxo de Caixa (PJ/Corrente/Poupança) até uma data. Não
    é mais usada por calcProjecoesMes/aplicarLinhasSaldoDiario (o saldo sequencial linha a linha, incluindo
