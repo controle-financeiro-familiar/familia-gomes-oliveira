@@ -5966,6 +5966,9 @@ let STATE = {
   subcategoriaResponsavel: {...SUBCATEGORIA_RESPONSAVEL_DEFAULT}, // { [subcategoria]: responsável } — pré-definido no cadastro da subcategoria (grupo Renda Familiar), usado automaticamente nos lançamentos
   projecoes: PROJECOES_DEFAULT.map(p=>({...p, id:uid()})), // aba Projeções: lançamentos previstos do fluxo de caixa mensal (editável)
   metas: [], // aba Metas de Gastos: { id, nome, nivel, grupo, categoria, subcategoria, valor, competenciaInicio, recorrencia, observacoes }
+  faturaTotalBanco: {}, // { "conta|AAAA-MM": valorAbsoluto } — total da fatura informado pelo próprio banco (ex.: <LEDGERBAL><BALAMT> do OFX), capturado na importação de um cartão de crédito — ver extrairSaldoFaturaBancoOFX/reconciliacaoFatura. Nunca calculado pelo app; só o que o arquivo do banco realmente informou.
+  faturaSaldoAnteriorManual: {}, // { "conta|AAAA-MM": valorAbsoluto } — saldo da fatura anterior informado manualmente pelo usuário (ver reconciliacaoFatura), usado só quando a competência anterior não tem faturaTotalBanco cadastrado (conciliação ficaria "Pendente" sem isso)
+
   ready: false,
   dirty: false, // true quando há alterações ainda não salvas nos arquivos .cfg/.log conectados
   contrachequeResumos: {}, // { [conta]: { [competencia AAAA-MM]: {bruto,descontos,liquido,margemConsignavel,remuneracaoConsignacao} } } — valores oficiais extraídos do PDF do contracheque na importação (ver renderExtratoContaModal/resumoContrachequeCompetencia), nunca recalculados a partir dos lançamentos quando existem
@@ -6642,7 +6645,7 @@ async function aplicarSnapshotLocalPendente(){
 async function registrarUltimaContagemReg(n){ try{ await idbSetHandle('ultimaContagemReg', n); }catch(e){} }
 async function obterUltimaContagemReg(){ try{ return await idbGetHandle('ultimaContagemReg'); }catch(e){ return null; } }
 
-const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao'];
+const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao','ofx_fitid'];
 
 /* ---------- Arquivo de REGISTROS (só lançamentos) ---------- */
 function buildCSVRegistros(){
@@ -6652,7 +6655,7 @@ function buildCSVRegistros(){
     // Futuros/Fatura/Próximas Faturas (ver aplicarOrdemManual/persistirOrdemManual) — vazio para um
     // lançamento que nunca foi reordenado manualmente, sincronizado pela mesma estratégia de persistência
     // do arquivo de registros já usada por todos os demais campos, nunca um mecanismo à parte.
-    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '']);
+    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '', t.ofxFitid||'']);
   });
   return Papa.unparse(rows);
 }
@@ -6671,6 +6674,7 @@ function loadCSVRegistros(text){
         parcelaFutura: r.dia_vencimento==='1',
         transferenciaInterna: r.status==='1', transferenciaVinculoId: r.tipo_conta||'', origemImportacao: r.origem_importacao==='1',
         ordemExibicao: (r.ordem_exibicao!==undefined && r.ordem_exibicao!=='') ? Number(r.ordem_exibicao) : undefined,
+        ofxFitid: r.ofx_fitid||'',
       });
     }
   });
@@ -6802,6 +6806,12 @@ function buildCSVConfig(){
   Object.keys(STATE.saldosIniciais).forEach(key=>{
     rows.push(['SALDOINICIAL', key, '', '', STATE.saldosIniciais[key], '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
   });
+  Object.keys(STATE.faturaTotalBanco||{}).forEach(key=>{
+    rows.push(['FATURATOTALBANCO', key, '', '', STATE.faturaTotalBanco[key], '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+  });
+  Object.keys(STATE.faturaSaldoAnteriorManual||{}).forEach(key=>{
+    rows.push(['FATURASALDOANTERIORMANUAL', key, '', '', STATE.faturaSaldoAnteriorManual[key], '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+  });
   STATE.contas.forEach(conta=>{
     rows.push(['CONTA', conta, '', '', '', '', '', '', '', '', conta, '', '', '', '', STATE.contaBandeira[conta]||'', STATE.cartoes.includes(conta) ? '1' : '', '', '', '', STATE.contaTipos[conta]||'', STATE.contaResponsavel[conta]||'', '', '']);
     const extra = STATE.contaExtra[conta];
@@ -6865,7 +6875,7 @@ function buildCSVConfig(){
 }
 function loadCSVConfig(text){
   const parsed = Papa.parse(text.trim(), { header:true, skipEmptyLines:true });
-  const cardConfig = {}, cardOverrides = {}, cardStatus = {}, saldosIniciais = {}, contas = [], cartoes = [], categoriasCSV = [], meiosPagamento = [], contaTipos = {}, contaResponsavel = {}, contaBandeira = {}, contaExtra = {}, contaVinculada = {}, cardLimite = {}, gruposLimiteCartao = {}, responsaveis = [], responsavelIcone = {}, subcategoriaResponsavel = {}, projecoes = [], metas = [], contrachequeResumos = {}, projecaoExclusoes = {};
+  const cardConfig = {}, cardOverrides = {}, cardStatus = {}, saldosIniciais = {}, faturaTotalBanco = {}, faturaSaldoAnteriorManual = {}, contas = [], cartoes = [], categoriasCSV = [], meiosPagamento = [], contaTipos = {}, contaResponsavel = {}, contaBandeira = {}, contaExtra = {}, contaVinculada = {}, cardLimite = {}, gruposLimiteCartao = {}, responsaveis = [], responsavelIcone = {}, subcategoriaResponsavel = {}, projecoes = [], metas = [], contrachequeResumos = {}, projecaoExclusoes = {};
   parsed.data.forEach(r=>{
     if(r.tipo_registro==='CARDCFG'){
       cardConfig[r.id] = { fechamento: r.dia_fechamento?Number(r.dia_fechamento):null, vencimento: r.dia_vencimento?Number(r.dia_vencimento):null };
@@ -6875,6 +6885,10 @@ function loadCSVConfig(text){
       cardStatus[r.id] = r.status;
     } else if(r.tipo_registro==='SALDOINICIAL'){
       saldosIniciais[r.id] = parseFloat(r.valor)||0;
+    } else if(r.tipo_registro==='FATURATOTALBANCO'){
+      faturaTotalBanco[r.id] = parseFloat(r.valor)||0;
+    } else if(r.tipo_registro==='FATURASALDOANTERIORMANUAL'){
+      faturaSaldoAnteriorManual[r.id] = parseFloat(r.valor)||0;
     } else if(r.tipo_registro==='CONTA'){
       contas.push(r.id);
       if(r.eh_cartao==='1') cartoes.push(r.id);
@@ -6920,6 +6934,7 @@ function loadCSVConfig(text){
     }
   });
   STATE.cardConfig = {...CARDCFG_DEFAULT, ...cardConfig}; STATE.cardOverrides = cardOverrides; STATE.cardStatus = cardStatus; STATE.saldosIniciais = saldosIniciais;
+  STATE.faturaTotalBanco = faturaTotalBanco; STATE.faturaSaldoAnteriorManual = faturaSaldoAnteriorManual;
   STATE.contrachequeResumos = contrachequeResumos;
   STATE.projecaoExclusoesPorCompetencia = projecaoExclusoes;
   STATE.contaResponsavel = { ...CONTA_RESPONSAVEL_DEFAULT, ...contaResponsavel };
@@ -7496,6 +7511,7 @@ function resetarEstadoParaSessaoZerada(){
   STATE.transactions = [];
   STATE.cardConfig = {...CARDCFG_DEFAULT};
   STATE.cardOverrides = {}; STATE.melhorCartaoManual = null; STATE.cardStatus = {}; STATE.saldosIniciais = {};
+  STATE.faturaTotalBanco = {}; STATE.faturaSaldoAnteriorManual = {};
   STATE.contas = [...CONTAS_DEFAULT]; STATE.cartoes = [...CARTOES_DEFAULT]; STATE.meiosPagamento = [...MEIOS_PAGAMENTO_DEFAULT];
   STATE.contaTipos = {...CONTA_TIPOS_DEFAULT}; STATE.contaResponsavel = {...CONTA_RESPONSAVEL_DEFAULT}; STATE.contaBandeira = {...CONTA_BANDEIRA_DEFAULT}; STATE.contaExtra = {}; STATE.contaVinculada = {}; STATE.cardLimite = {}; STATE.gruposLimiteCartao = {};
   STATE.responsaveis = [...RESPONSAVEIS_DEFAULT]; STATE.responsavelIcone = { "Ariana":"feminino", "Bruno":"masculino" };
@@ -9231,6 +9247,44 @@ function itensFatura(conta, competencia){
   // Estornos são tratados como créditos em toda a aba Contas e Cartões — um único total, sem distinção.
   const totalCreditos = itensQueCompoemFatura.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
   return { itens, qtd: itens.length, totalParcelado, totalAvista, totalCreditos, total: faturaPorCompetencia(conta, competencia) };
+}
+/* Conciliação da fatura de um cartão de crédito com o total informado pelo PRÓPRIO banco (requisito
+   "Correção da importação e conciliação de faturas do Banco do Brasil") — uma ferramenta de VALIDAÇÃO do
+   que já foi importado/classificado, nunca uma segunda convenção de cálculo: o "valor total da fatura"
+   usado no resto do app (faturaPorCompetencia, cards da aba Contas e Cartões, Fluxo de Caixa etc.) continua
+   sendo só "quanto você gastou de fato nesta competência" (sem o saldo rotativo não pago de antes) — essa
+   é a convenção financeira global do FinUs e não muda aqui (ver restrição explícita do requisito). Esta
+   função soma separadamente compras, pagamentos e estornos, e só quando tanto o saldo anterior quanto o
+   total informado pelo banco (ambos provenientes de dados reais — ver STATE.faturaTotalBanco/
+   faturaSaldoAnteriorManual, nunca inventados) estiverem disponíveis é que calcula uma diferença e decide
+   se a fatura está conciliada:
+   Total calculado = Saldo anterior + Compras − (Pagamentos + Estornos)
+   Saldo anterior: por padrão, o total informado pelo banco NA COMPETÊNCIA ANTERIOR deste mesmo cartão (já
+   capturado numa importação anterior, ver STATE.faturaTotalBanco) — só cai para um valor digitado
+   manualmente (STATE.faturaSaldoAnteriorManual) quando essa competência anterior não tem total bancário
+   conhecido. Sem nenhum dos dois, a conciliação fica "pendente" (nunca presume saldo anterior = 0). */
+function reconciliacaoFatura(conta, competencia){
+  const det = itensFatura(conta, competencia);
+  const compras = det.totalParcelado + det.totalAvista;
+  const pagamentos = det.itens.filter(t=>t.categoria==='Recebimento por Pagamento de Fatura').reduce((s,t)=>s+(Number(t.valor)||0),0);
+  // det.totalCreditos (ver itensFatura) já exclui as categorias de CATEGORIAS_FATURA — "Recebimento por
+  // Pagamento de Fatura" entre elas — então já é só o total de ESTORNOS, sem o pagamento; nunca subtrair
+  // `pagamentos` de novo aqui (bug corrigido nesta rodada: um cartão com pagamento maior que os estornos
+  // fazia esta conta dar negativo e o Math.max(0,...) zerar os estornos de verdade escondendo-os).
+  const estornos = det.totalCreditos;
+  const chaveAtual = `${conta}|${competencia}`;
+  const chaveAnterior = `${conta}|${incrementarCompetencia(competencia,-1)}`;
+  const saldoAnteriorBanco = STATE.faturaTotalBanco[chaveAnterior];
+  const saldoAnteriorManual = STATE.faturaSaldoAnteriorManual[chaveAtual];
+  const saldoAnterior = saldoAnteriorBanco!=null ? saldoAnteriorBanco : (saldoAnteriorManual!=null ? saldoAnteriorManual : null);
+  const saldoAnteriorOrigem = saldoAnteriorBanco!=null ? 'competencia-anterior' : (saldoAnteriorManual!=null ? 'manual' : null);
+  const totalInformado = STATE.faturaTotalBanco[chaveAtual] ?? null;
+  const temSaldoAnterior = saldoAnterior!=null, temTotalInformado = totalInformado!=null;
+  const totalCalculadoCent = Math.round(((temSaldoAnterior?saldoAnterior:0) + compras - (pagamentos+estornos))*100);
+  const totalCalculado = totalCalculadoCent/100;
+  const diferenca = temTotalInformado ? Math.round((totalCalculado-totalInformado)*100)/100 : null;
+  const estado = (!temSaldoAnterior || !temTotalInformado) ? 'pendente' : (Math.abs(diferenca)<0.005 ? 'conciliada' : 'divergente');
+  return { compras, pagamentos, estornos, saldoAnterior, saldoAnteriorOrigem, totalCalculado, totalInformado, diferenca, estado, temSaldoAnterior, temTotalInformado };
 }
 /* Próximas faturas de um cartão (modal 👁), a partir do mês seguinte ao selecionado no topo
    do app. Usa exatamente a mesma função (faturaPorCompetencia) já usada na aba Contas e Cartões, no
@@ -15460,6 +15514,11 @@ function renderFaturaAtualModal(){
   // Status automático (mesma fonte única usada no card da aba Cartões — ver statusDetalhadoFatura), só
   // para exibição: mantém este modal sempre sincronizado com o Status mostrado na tabela.
   const stFatura = statusDetalhadoFatura(conta, competencia);
+  // Conciliação com o total informado pelo próprio banco (ver reconciliacaoFatura) — demonstrativo
+  // separado do resumo padrão acima, nunca substitui "valor total da fatura" (convenção global do app).
+  const rec = reconciliacaoFatura(conta, competencia);
+  const chaveRecAtual = `${conta}|${competencia}`;
+  const editandoSaldoAnterior = !!UI.faturaAtualModal.editandoSaldoAnterior;
   // Filtros do próprio modal (Data por período, Tipo e Parcela — seleção múltipla) + busca por descrição,
   // mesmo motor genérico usado em Registros/Ver Extrato/Lançamentos futuros (ver criarFiltrosPadrao). Os
   // cards do painel-resumo (valor total, parceladas, à vista, créditos) são recalculados com base SOMENTE
@@ -15529,6 +15588,35 @@ function renderFaturaAtualModal(){
           <div class="cartoes-resumo-item"><span class="ico">🛒</span><div><div class="val">${fmtBRL(totalAvistaFiltrado)}</div><div class="lbl">compras à vista</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(totalParceladoFiltrado)}</div><div class="lbl">compras parceladas</div></div></div>
           ${totalCreditosFiltrado>0 ? `<div class="cartoes-resumo-item"><span class="ico">➕</span><div><div class="val">${fmtBRL(totalCreditosFiltrado)}</div><div class="lbl">créditos e pagamentos</div></div></div>` : ''}
+        </div>
+        <div class="conciliacao-fatura-banco no-print" style="margin-top:14px;padding:12px 16px;border-radius:10px;border:1px solid var(--line);">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+            <b>Conciliação com o banco</b>
+            ${rec.estado==='conciliada' ? `<span class="tag Receita">✅ Conciliada</span>`
+              : rec.estado==='divergente' ? `<span class="tag Despesa">⚠️ Divergente</span>`
+              : `<span class="tag Variavel">⏳ Pendente</span>`}
+          </div>
+          <div class="conciliacao-fatura-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px 16px;font-size:13px;">
+            <div>
+              <span class="hint" style="margin:0;">Saldo anterior</span><br>
+              ${editandoSaldoAnterior ? `
+                <input type="text" inputmode="decimal" id="inpSaldoAnteriorFatura" value="${rec.saldoAnterior!=null?fmtMoedaInput(rec.saldoAnterior):''}" style="width:110px;text-align:right;border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-family:var(--mono);">
+                <button type="button" class="icon-btn" id="btnSalvarSaldoAnteriorFatura" title="Salvar">✅</button>
+                <button type="button" class="icon-btn" id="btnCancelarSaldoAnteriorFatura" title="Cancelar">✕</button>
+              ` : `
+                <b>${rec.saldoAnterior!=null ? fmtBRL(rec.saldoAnterior) : '—'}</b>
+                <button type="button" class="icon-btn" data-editar-saldo-anterior-fatura="${escapeHtml(chaveRecAtual)}" title="${rec.saldoAnteriorOrigem==='competencia-anterior' ? 'Vindo da competência anterior — editar manualmente' : 'Informar manualmente'}" aria-label="Editar saldo anterior">✏️</button>
+                ${rec.saldoAnteriorOrigem==='manual' ? `<span class="hint" style="margin:0;display:block;">(informado manualmente)</span>` : ''}
+              `}
+            </div>
+            <div><span class="hint" style="margin:0;">Compras e despesas</span><br><b>${fmtBRL(rec.compras)}</b></div>
+            <div><span class="hint" style="margin:0;">Pagamentos</span><br><b class="val neg">${rec.pagamentos>0?'-':''}${fmtBRL(rec.pagamentos)}</b></div>
+            <div><span class="hint" style="margin:0;">Estornos</span><br><b class="val neg">${rec.estornos>0?'-':''}${fmtBRL(rec.estornos)}</b></div>
+            <div><span class="hint" style="margin:0;">Total calculado</span><br><b>${fmtBRL(rec.totalCalculado)}</b></div>
+            <div><span class="hint" style="margin:0;">Total informado pelo banco</span><br><b>${rec.temTotalInformado ? fmtBRL(rec.totalInformado) : '— (importe o OFX desta competência)'}</b></div>
+            <div><span class="hint" style="margin:0;">Diferença</span><br><b class="${rec.diferenca!=null && Math.abs(rec.diferenca)>=0.005 ? 'val neg' : ''}">${rec.diferenca!=null ? fmtBRL(rec.diferenca) : '—'}</b></div>
+          </div>
+          ${!rec.temSaldoAnterior ? `<p class="hint" style="margin:8px 0 0;">Falta o saldo da fatura anterior para concluir a conciliação — importe o OFX da competência anterior deste cartão (preenche automaticamente) ou informe manualmente (✏️ acima).</p>` : (!rec.temTotalInformado ? `<p class="hint" style="margin:8px 0 0;">Falta o total informado pelo banco desta competência — importe o OFX desta fatura para preenchê-lo automaticamente.</p>` : '')}
         </div>
         ${det.itens.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
@@ -19378,9 +19466,29 @@ function parseOFXText(text){
       const moeda = getTag('CURSYM');
       if(taxaArquivo && !isNaN(taxaArquivo)) moedaInfo = { valorOriginal: amt, moeda: moeda||'moeda estrangeira', taxaArquivo };
     }
-    rows.push([dataISO, name, moedaInfo ? moedaInfo.valorOriginal*moedaInfo.taxaArquivo : amt, moedaInfo, trntype]);
+    // FITID: identificador único do lançamento atribuído pelo próprio banco (não específico de nenhum
+    // emissor — campo padrão do protocolo OFX). Usado em encontrarDuplicata como critério de duplicidade
+    // mais confiável que data+valor+descrição (dois lançamentos realmente distintos no mesmo dia, mesmo
+    // valor, mesma descrição — ex.: dois lanches na mesma lanchonete — têm FITID diferentes; uma
+    // reimportação do mesmo arquivo traz o mesmo FITID). Guardado no índice 5, só preenchido para OFX (ver
+    // buildParsedFromMap — esse índice nunca foi usado por linhas de .ofx para outra coisa, que sempre
+    // dependeu de detectarParcela em vez de um parcelaExplicita vindo do arquivo).
+    const fitid = getTag('FITID');
+    rows.push([dataISO, name, moedaInfo ? moedaInfo.valorOriginal*moedaInfo.taxaArquivo : amt, moedaInfo, trntype, fitid]);
   });
   return rows;
+}
+/* Total da fatura informado pelo PRÓPRIO banco (tag <BALAMT> dentro de <LEDGERBAL>, padrão do protocolo
+   OFX — fora dos blocos <STMTTRN>, aparece uma única vez no arquivo) — usado como "total informado pelo
+   banco" na conciliação de faturas de cartão de crédito (ver reconciliacaoFatura). Em cartão de crédito,
+   o banco grava esse saldo como um valor NEGATIVO (dívida); devolvido aqui já em valor absoluto (o quanto
+   é devido), ou null quando o arquivo não traz essa tag — nunca presume um total quando a informação não
+   está disponível. */
+function extrairSaldoFaturaBancoOFX(text){
+  const m = text.match(/<BALAMT>([^<\r\n]+)/i);
+  if(!m) return null;
+  const v = parseFloat(m[1].trim().replace(',','.'));
+  return isNaN(v) ? null : Math.abs(v);
 }
 /* Códigos de banco (COMPE) mais comuns entre os bancos brasileiros, para resolver o nome quando o extrato
    traz apenas o código numérico (ex.: <BANKID>001</BANKID>) — seção 17 do requisito. Lista deliberadamente
@@ -20039,7 +20147,7 @@ function handleFile(file){
     // cadastro da conta já selecionada pelo usuário.
     aplicarDadosBancariosExtraidosExtrato(UI.importMap.contaDestino, extrairDadosBancariosOFX(text));
     const temMoedaEstrangeira = rows.some(r=>r[3]);
-    UI.importRaw = { type:'ofx', headers:['Data','Descrição','Valor'], rows };
+    UI.importRaw = { type:'ofx', headers:['Data','Descrição','Valor'], rows, saldoFaturaBancoAbs: extrairSaldoFaturaBancoOFX(text) };
     if(temMoedaEstrangeira){
       UI.modalTaxasConversao = { rows: rows.filter(r=>r[3]) };
       UI.importStep = 3; render();
@@ -20128,6 +20236,17 @@ function chaveIdentidadeParcela(t){
 }
 function encontrarDuplicata(entry){
   const valorAbs = Math.abs(Number(entry.valor)||0);
+  // FITID (identificador único do lançamento atribuído pelo próprio banco — ver parseOFXText): quando o
+  // arquivo importado traz essa informação, é o critério MAIS confiável de todos — mais até que a parcela
+  // reconhecida logo abaixo, já que vem direto do banco, nunca de um texto livre interpretado pelo app.
+  // Dois lançamentos genuinamente distintos no mesmo dia, mesma descrição e mesmo valor (ex.: dois lanches
+  // na mesma lanchonete) têm FITID diferentes — nunca são tratados como duplicata só por coincidência de
+  // data/descrição/valor quando o FITID está disponível e diverge. Checado antes de qualquer outro
+  // critério (seção 7 do requisito de conciliação de faturas do Banco do Brasil).
+  if(entry.fitid){
+    const porFitid = STATE.transactions.find(t=> t.conta===entry.conta && t.ofxFitid && t.ofxFitid===entry.fitid);
+    if(porFitid) return { tipo:'exata', tx:porFitid };
+  }
   // Parcela reconhecida (ex.: "PARC 06/06" já extraído por detectarParcela/parcelaExplicita): a identidade
   // da própria parcela (conta + descrição normalizada + valor + Data da compra + nº da parcela) já é prova
   // suficiente de que é a MESMA parcela sendo reimportada — mesmo que competência, parcelamentoId ou até o
@@ -20434,7 +20553,12 @@ function buildParsedFromMap(){
     // O extrato CSV da NuConta (raw.type==='csv-nuconta') não traz r[4] nenhum — tipoExplicito/trntype ficam
     // null e o tipo é determinado pelo mesmo fallback padrão do sinal do valor (ver árvore abaixo), igual ao
     // .ofx da mesma conta.
-    entries = raw.rows.map(r=>({ data:r[0], descricao:r[1], valor:r[2], tipoExplicito: raw.type==='pdf' ? (r[2]<0 ? 'Despesa' : 'Receita') : (raw.type==='ofx' ? null : (r[4]||null)), trntype: raw.type==='ofx' ? (r[4]||null) : null, parcelaExplicita: r[5]||null, parcelasRestantes: raw.type==='pdf' ? (r[3]||0) : 0, categoriaExplicita: r[6]||null, codigoRubrica: raw.type==='pdf' ? (r[4]||null) : null }));
+    // r[5], para OFX, é o FITID bruto do arquivo (ver parseOFXText/extrairSaldoFaturaBancoOFX) — nunca o
+    // parcelaExplicita usado nesse mesmo índice pelos demais formatos (fatura PDF/XLSX-PB): uma compra
+    // parcelada de cartão do Banco do Brasil não traz o número da parcela em nenhuma tag própria do OFX, só
+    // dentro do texto livre do MEMO (ex.: "PARC 01/05") — por isso o OFX sempre dependeu, e continua
+    // dependendo, de detectarParcela(descrição) para isso, nunca de um parcelaExplicita vindo do arquivo.
+    entries = raw.rows.map(r=>({ data:r[0], descricao:r[1], valor:r[2], tipoExplicito: raw.type==='pdf' ? (r[2]<0 ? 'Despesa' : 'Receita') : (raw.type==='ofx' ? null : (r[4]||null)), trntype: raw.type==='ofx' ? (r[4]||null) : null, parcelaExplicita: raw.type==='ofx' ? null : (r[5]||null), parcelasRestantes: raw.type==='pdf' ? (r[3]||0) : 0, categoriaExplicita: r[6]||null, codigoRubrica: raw.type==='pdf' ? (r[4]||null) : null, fitid: raw.type==='ofx' ? (r[5]||null) : null }));
   } else {
     let rows = raw.rows;
     if(UI.importMap.temCabecalho) rows = rows.slice(1);
@@ -20548,7 +20672,8 @@ function buildParsedFromMap(){
     // detecção padrão (determinarPgto) normalmente virariam meio "Pix" pela própria descrição.
     const item = { data:e.data, descricao:e.descricao, valor:e.valor, categoria:catSugerida, tipo,
       conta, pgto: e.categoriaExplicita ? 'Débito em Conta' : determinarPgto(conta, e.descricao),
-      responsavel: responsavelPreset || ((UI.importIsContracheque && tipo==='Receita') ? 'Bruno' : '') || responsavelDaConta };
+      responsavel: responsavelPreset || ((UI.importIsContracheque && tipo==='Receita') ? 'Bruno' : '') || responsavelDaConta,
+      fitid: e.fitid || '' };
     if(item.pgto==='Cartão de Crédito'){
       const parc = e.parcelaExplicita || detectarParcela(e.descricao);
       if(parc){
@@ -21187,6 +21312,21 @@ function bindEvents(){
   document.getElementById('closeFaturaAtual')?.addEventListener('click', ()=>{ UI.faturaAtualModal=null; render(); });
   document.getElementById('closeFaturaAtual2')?.addEventListener('click', ()=>{ UI.faturaAtualModal=null; render(); });
   document.getElementById('printFaturaAtual')?.addEventListener('click', ()=>imprimirModal('ovFaturaAtual'));
+  // Conciliação com o banco — editar manualmente o saldo da fatura anterior (ver reconciliacaoFatura),
+  // usado só quando a competência anterior não tem total bancário próprio capturado por uma importação.
+  document.querySelectorAll('[data-editar-saldo-anterior-fatura]').forEach(b=> b.addEventListener('click', ()=>{
+    UI.faturaAtualModal.editandoSaldoAnterior = true; render();
+  }));
+  document.getElementById('btnCancelarSaldoAnteriorFatura')?.addEventListener('click', ()=>{
+    UI.faturaAtualModal.editandoSaldoAnterior = false; render();
+  });
+  document.getElementById('btnSalvarSaldoAnteriorFatura')?.addEventListener('click', ()=>{
+    const chave = `${UI.faturaAtualModal.conta}|${chaveMes(UI.ano, UI.mes)}`;
+    const valor = parseMoedaTexto(document.getElementById('inpSaldoAnteriorFatura')?.value);
+    STATE.faturaSaldoAnteriorManual[chave] = valor;
+    UI.faturaAtualModal.editandoSaldoAnterior = false;
+    scheduleSave();
+  });
   // Paginação da Fatura — mesmo padrão da tabela de Registros (ver renderRodapePaginacaoGenerica).
   document.getElementById('faturaPorPagina')?.addEventListener('change', e=>{
     const v = e.target.value;
@@ -23325,7 +23465,8 @@ function bindEvents(){
         parcelaAtual: r.parcelaAtual||null, totalParcelas: r.totalParcelas||null,
         parcelamentoId: r.parcelamentoId || (r.totalParcelas ? uid() : ''),
         responsavel: r.responsavel||'', entreFamilia:false, transferenciaInterna:false, transferenciaVinculoId:'',
-        origemImportacao: true // usado só para o indicador 📥 em Configurações — reflete a existência efetiva do lançamento, não um histórico separado
+        origemImportacao: true, // usado só para o indicador 📥 em Configurações — reflete a existência efetiva do lançamento, não um histórico separado
+        ofxFitid: r.fitid || '' // identificador único do banco (ver parseOFXText/encontrarDuplicata) — vazio para formatos sem FITID
       };
       STATE.transactions.push(novaTx);
       // Regra única de negócio (mesma usada no modal Novo/Editar Lançamento): marca o lançamento e cria
@@ -23348,6 +23489,14 @@ function bindEvents(){
     // oficial do contracheque (cards do Extrato: Margem Consignável/Bruto/Descontos/Líquido — ver
     // renderExtratoContaModal) fica salvo por competência, nunca sobrescrevendo outras já importadas.
     const contaDestinoImport = UI.importMap.contaDestino;
+    // Conciliação de fatura de cartão de crédito (ver reconciliacaoFatura): quando este OFX trouxe o total
+    // da fatura informado pelo PRÓPRIO banco (<LEDGERBAL><BALAMT>, ver extrairSaldoFaturaBancoOFX), guarda
+    // esse valor associado à conta+competência desta importação — é o "total informado pelo banco" contra
+    // o qual a conciliação confere o cálculo do app. Nunca sobrescreve com um valor inventado: só grava
+    // quando o próprio arquivo realmente trouxe essa tag.
+    if(UI.importRaw && UI.importRaw.type==='ofx' && UI.importRaw.saldoFaturaBancoAbs!=null && STATE.cartoes.includes(contaDestinoImport)){
+      STATE.faturaTotalBanco[`${contaDestinoImport}|${UI.importRefAno}-${pad2(UI.importRefMes)}`] = UI.importRaw.saldoFaturaBancoAbs;
+    }
     if(STATE.contaTipos[contaDestinoImport]==='Contracheque'){
       const competenciaImportada = `${UI.importRefAno}-${pad2(UI.importRefMes)}`;
       STATE.transactions = STATE.transactions.filter(t=> !(t.conta===contaDestinoImport && t.contrachequeProjecao && competenciaDeData(t.data)===competenciaImportada));
