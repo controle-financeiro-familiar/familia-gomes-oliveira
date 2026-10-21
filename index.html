@@ -4501,6 +4501,22 @@ function moverCategoriaParaPosicao(grupoNome, categoriaNome, posicao){
   aplicarPosicao(gEntry.categorias, c=>c.categoria, categoriaNome, posicao);
   reconstruirCategoriasDaOrdem(grupos);
 }
+/* Ordem fixa das categorias (subgrupos) do grupo "Lazer e Entretenimento", pedida explicitamente pelo
+   usuário para toda a aplicação (dropdowns de lançamento, Configurações → Categorias, filtros etc. — todos
+   derivam a ordem de CATEGORIAS via categoriasDoGrupo, então corrigir aqui corrige em todo lugar de uma
+   vez só). Reaplicada sempre no carregamento (ver loadCSVConfig), nunca só uma vez, para que um arquivo
+   salvo com uma ordem diferente (de antes desta regra existir) também seja corrigido — idempotente: se a
+   ordem já está correta, reposicionar cada categoria "depois da anterior" não muda nada. Só a ordem ENTRE
+   as categorias deste grupo é forçada; a posição do próprio grupo "Lazer e Entretenimento" entre os
+   demais grupos, e a ordem das subcategorias DENTRO de cada uma delas, continuam livres (reposicionáveis
+   normalmente pelo usuário em Configurações → Categorias). */
+function aplicarOrdemFixaCategoriasLazer(){
+  const ordem = ['Assinaturas de Entretenimento','Hobbies e Passatempos','Eventos e Passeios','Outros'];
+  ordem.forEach((categoria, i)=>{
+    if(i===0) moverCategoriaParaPosicao('Lazer e Entretenimento', categoria, {tipo:'inicio'});
+    else moverCategoriaParaPosicao('Lazer e Entretenimento', categoria, {tipo:'apos', ref:ordem[i-1]});
+  });
+}
 function moverSubcategoriaParaPosicao(grupoNome, categoriaNome, nomeSub, posicao){
   const grupos = ordemAtualCategorias();
   const gEntry = grupos.find(g=>g.grupo===grupoNome);
@@ -6937,6 +6953,7 @@ function loadCSVConfig(text){
     CATEGORIAS = CATEGORIAS.filter(c=>c[0]!==nome);
     doPadrao.forEach(c=>CATEGORIAS.push([...c]));
   });
+  aplicarOrdemFixaCategoriasLazer();
   padronizarReceitasContracheque();
   migrarCompetenciaParaVencimento();
   migrarNomesContasPadrao();
