@@ -19042,13 +19042,15 @@ function renderImportStep1(){
   const ehContaContracheque = STATE.contaTipos[contaDestino]==='Contracheque';
   const ehCartaoNu = ehCartaoNubank(contaDestino);
   const ehContaNu = ehContaCorrenteNubank(contaDestino);
+  const ehContaInt = ehContaInter(contaDestino);
   const hint = ehContaReservaEmergencia ? 'Conta do tipo Reserva de Emergência — aceita somente o extrato .csv exportado do PicPay.'
     : ehContaContracheque ? 'Formato aceito: PDF (.pdf)'
     : ehCartaoNu ? 'NuCartão (Nubank) — aceita somente a fatura .csv exportada do Nubank.'
     : ehContaNu ? 'NuConta (Nubank) — aceita extrato .ofx ou .csv exportado do Nubank.'
+    : ehContaInt ? 'Conta Inter — aceita somente o extrato .pdf exportado do Banco Inter.'
     : 'Aceita extratos em .ofx ou .xlsx exportados do seu banco ou cartão.';
   const accept = ehContaReservaEmergencia ? '.csv' : ehContaContracheque ? '.pdf,application/pdf'
-    : ehCartaoNu ? '.csv' : ehContaNu ? '.ofx,.csv' : '.ofx,.xlsx,.pdf';
+    : ehCartaoNu ? '.csv' : ehContaNu ? '.ofx,.csv' : ehContaInt ? '.pdf,application/pdf' : '.ofx,.xlsx,.pdf';
   return `
   <span class="step-badge">Passo 2 de 4 · Escolher arquivo</span>
   <div class="info-card" style="margin-top:0;"><span class="info-card-icon">📌</span><span>Conta de destino: <b>${escapeHtml(UI.importMap.contaDestino)}</b> · Período: <b>${MESES[UI.importRefMes-1]}/${UI.importRefAno}</b> <button type="button" class="icon-btn" id="btnImportVoltarPre" title="Trocar período/conta" style="padding:1px 4px;">✏️</button></span></div>
@@ -19294,6 +19296,12 @@ function detectFileType(name){
    aplicação, que continuam aceitando .ofx/.xlsx/.pdf normalmente. */
 function ehCartaoNubank(conta){ return STATE.cartoes.includes(conta) && identificarInstituicao(conta)?.sigla==='Nubank'; }
 function ehContaCorrenteNubank(conta){ return !STATE.cartoes.includes(conta) && identificarInstituicao(conta)?.sigla==='Nubank'; }
+/* Conta Inter: importação restrita EXCLUSIVAMENTE a .pdf (extrato bancário exportado em PDF) — nunca
+   .ofx/.xlsx/.csv, que os demais bancos desta aplicação aceitam normalmente (ver handleFile/
+   renderImportStep1, seção 1 do requisito "Ajuste do parser da Conta Inter"). Só se aplica a uma conta
+   bancária comum (nunca um cartão de crédito, que continua aceitando .ofx/.xlsx mesmo sendo do Inter —
+   embora hoje nenhuma conta padrão desta aplicação seja um cartão de crédito do Inter). */
+function ehContaInter(conta){ return !STATE.cartoes.includes(conta) && identificarInstituicao(conta)?.sigla==='Inter'; }
 /* Converte o valor do extrato CSV da Reserva de Emergência (PicPay) para número com sinal — vem como
    texto no formato "−R$ 1.330,00" (saída) ou "+R$ 150,00" (entrada), com ponto como separador de milhar e
    vírgula como decimal. O caractere de "menos" usado pelo PicPay é o sinal matemático "−" (U+2212), não o
@@ -19600,6 +19608,69 @@ async function extractPDFRows(arrayBuffer){
     });
   }
   return rows;
+}
+/* ---- Extrato da Conta Inter (PDF) ---- */
+/* Confirma que o texto extraído é realmente um extrato do Banco Inter antes de tentar interpretar
+   qualquer lançamento — nunca confia só na extensão do arquivo nem no nome da conta de destino (seção 6
+   do requisito: "estrutura não reconhecida" precisa de uma mensagem específica, nunca falhar silenciosa
+   ou genericamente). O cabeçalho do extrato sempre traz "Instituição: Banco Inter" por extenso. */
+function isExtratoInterPDF(fullText){
+  return /institui[çc][ãa]o:\s*banco inter/i.test(fullText);
+}
+/* Converte uma data por extenso ("6 de Outubro de 2026") para ISO ("2026-10-06") — seção 3 do requisito.
+   Reaproveita a lista MESES já usada pelo resto da aplicação (mesmos nomes, mesma ordem), nunca uma
+   segunda lista de meses paralela. Devolve null se o texto não bater com o padrão esperado. */
+function dataExtensoParaISO(texto){
+  const m = texto.match(/(\d{1,2})\s+de\s+([A-Za-zÀ-ÿ]+)\s+de\s+(\d{4})/i);
+  if(!m) return null;
+  const idx = MESES.findIndex(nome=>normalizarTexto(nome)===normalizarTexto(m[2]));
+  if(idx<0) return null;
+  return `${m[3]}-${pad2(idx+1)}-${pad2(Number(m[1]))}`;
+}
+/* Agência e Conta do cabeçalho do extrato do Banco Inter (ex.: "Agência: 0001-9, Conta: 5238011-4") —
+   localizadas dinamicamente pelo rótulo, nunca por posição fixa, preservando zeros à esquerda e dígito
+   verificador (sempre tratados como texto, nunca convertidos para número — seção 2 do requisito). */
+function extrairAgenciaContaInter(fullText){
+  const mAg = fullText.match(/Ag[êe]ncia:\s*([0-9.\-]+)/i);
+  const mConta = fullText.match(/\bConta:\s*([0-9.\-]+)/i);
+  return { agencia: mAg ? mAg[1].trim() : '', numeroConta: mConta ? mConta[1].trim() : '' };
+}
+/* Lê os lançamentos do extrato do Banco Inter (PDF) — agrupados por data por extenso ("6 de Outubro de
+   2026 Saldo do dia: R$ 5.200,00"), cada um com descrição + valor movimentado (positivo = Receita,
+   negativo = Despesa — seção 3) + saldo POR TRANSAÇÃO (nunca confundido com o valor movimentado — seção
+   5) ao final da linha. Só processa linhas de movimentação que já estejam DENTRO de um grupo de data
+   reconhecido (dataGrupoISO!==null): cabeçalho ("CPF/CNPJ...", "Período..."), "Saldo total/disponível/
+   bloqueado" (sempre ANTES do primeiro grupo de data) e o rodapé de contato nunca satisfazem essa
+   condição, então são ignorados automaticamente — nunca por uma lista de exclusões frágil que precisaria
+   reconhecer cada texto informativo possível. Cada linha de lançamento devolvida: [dataISO, descrição,
+   valor, null, null, null, null, saldoPorTransacao] — os três `null` do meio mantêm o mesmo formato de
+   linha usado pelos demais parsers de PDF (ver buildParsedFromMap), que não se aplicam aqui (sem moeda
+   estrangeira, sem parcela, sem rubrica); saldoPorTransacao (índice 7) é usado só para a validação de
+   evolução dos saldos em handleFile, nunca gravado no lançamento em si. */
+function parseExtratoInterPDF(pdfRows){
+  const out = [];
+  let dataGrupoISO = null;
+  for(const r of pdfRows){
+    const line = r.line.trim();
+    if(!line) continue;
+    const mData = line.match(/^(\d{1,2}\s+de\s+[A-Za-zÀ-ÿ]+\s+de\s+\d{4})\s+Saldo do dia:/i);
+    if(mData){
+      dataGrupoISO = dataExtensoParaISO(mData[1]);
+      continue;
+    }
+    if(!dataGrupoISO) continue; // ainda no cabeçalho/saldos informativos, antes do 1º grupo de data
+    // Linha de lançamento: descrição seguida por exatamente dois valores monetários no final da linha
+    // (valor movimentado, depois o saldo por transação) — qualquer outra linha dentro de um grupo de data
+    // que não bata com esse padrão é ignorada, nunca presumida como lançamento.
+    const mLanc = line.match(/^(.*\S)\s+(-?R\$\s*[\d.,]+)\s+(R\$\s*[\d.,]+)\s*$/);
+    if(!mLanc) continue;
+    const descricao = mLanc[1].trim();
+    const valor = parseValorTexto(mLanc[2], 'BR');
+    const saldoPorTransacao = parseValorTexto(mLanc[3], 'BR');
+    if(!descricao) continue;
+    out.push([dataGrupoISO, descricao, valor, null, null, null, null, saldoPorTransacao]);
+  }
+  return out;
 }
 /* ---- Contracheque TRT (Demonstrativo de Pagamento) ---- */
 function isContrachequeTRT(fullText){
@@ -19930,6 +20001,18 @@ function handleFile(file){
     alert('A NuConta (Nubank) aceita somente extrato em .ofx ou .csv.');
     return;
   }
+  // Conta Inter: importação restrita EXCLUSIVAMENTE a .pdf — nunca .ofx/.xlsx/.csv, que os demais bancos
+  // desta aplicação aceitam normalmente (ver ehContaInter, seção 1 do requisito). Mesma dupla validação de
+  // sempre: extensão do nome do arquivo E, quando disponível, MIME type — nunca confia só na extensão.
+  const ehContaInt = ehContaInter(contaDestino);
+  if(ehContaInt){
+    const nomeArquivo = file.name.toLowerCase();
+    const mimeOk = !file.type || file.type==='application/pdf';
+    if(UI.importFileType!=='pdf' || !nomeArquivo.endsWith('.pdf') || !mimeOk){
+      alert('A Conta Inter aceita somente o extrato exportado em PDF (.pdf).');
+      return;
+    }
+  }
   if(ehContaReservaEmergencia && UI.importFileType!=='csv'){
     alert('Para uma conta do tipo Reserva de Emergência, a importação de arquivo do banco aceita somente arquivos .csv.');
     return;
@@ -20016,11 +20099,60 @@ function handleFile(file){
     reader.readAsArrayBuffer(file);
     return;
   }
+  // Conta Inter: extrato bancário em PDF (seções 2-6 do requisito "Ajuste do parser da Conta Inter") —
+  // ramo totalmente separado do PDF de Contracheque logo abaixo, nunca compartilha nenhuma lógica com ele
+  // (o `return` ao final garante que o bloco de Contracheque nem chega a ser avaliado para esta conta).
+  if(UI.importFileType==='pdf' && ehContaInt){
+    const reader = new FileReader();
+    reader.onload = async (e)=>{
+      try{
+        const pdfRows = await extractPDFRows(e.target.result);
+        const fullText = pdfRows.map(r=>r.line).join(' ');
+        if(!isExtratoInterPDF(fullText)){
+          alert('Este PDF não parece ser um extrato do Banco Inter (estrutura não reconhecida). Confira o arquivo e tente novamente.');
+          UI.importStep=2; render(); return;
+        }
+        // Agência/Conta localizadas dinamicamente pelo rótulo no cabeçalho (ver extrairAgenciaContaInter),
+        // nunca por posição fixa — associa automaticamente à conta cadastrada e, se já houver dados
+        // bancários diferentes salvos, pergunta antes de atualizar (mesmo mecanismo já usado pelo OFX — ver
+        // aplicarDadosBancariosExtraidosExtrato — nunca associa silenciosamente a uma conta divergente).
+        const { agencia, numeroConta } = extrairAgenciaContaInter(fullText);
+        if(!agencia || !numeroConta){
+          alert('Não foi possível identificar a Agência e/ou o Número da Conta no cabeçalho deste extrato do Banco Inter. A importação segue, mas confira manualmente os dados bancários desta conta em Configurações → Contas.');
+        } else {
+          aplicarDadosBancariosExtraidosExtrato(UI.importMap.contaDestino, { banco:'Banco Inter', agencia, numeroConta });
+        }
+        const rows = parseExtratoInterPDF(pdfRows);
+        if(!rows.length){
+          alert('Nenhum lançamento foi reconhecido neste extrato do Banco Inter (estrutura não reconhecida). Confira o arquivo e tente novamente.');
+          UI.importStep=2; render(); return;
+        }
+        // Validação da evolução dos saldos (seção 5 do requisito: "utilizar o saldo por transação para
+        // validar a evolução dos saldos, quando possível") — nunca cria lançamento nem ajusta valores por
+        // causa disso, só avisa: cada saldo por transação precisa ser exatamente o da linha anterior ± o
+        // valor movimentado desta linha (mesma regra já usada para o saldo acumulado do extrato bancário
+        // comum — ver recalcularSaldosSequenciais). A primeira linha não tem uma anterior para comparar.
+        for(let i=1; i<rows.length; i++){
+          const esperado = Math.round((rows[i-1][7] + rows[i][2])*100)/100;
+          const real = Math.round(rows[i][7]*100)/100;
+          if(Math.abs(esperado-real)>0.01){
+            alert(`Atenção: o saldo por transação de "${rows[i][1]}" (${fmtBRL(real)}) não bate com o saldo da linha anterior ± o valor movimentado (esperado ${fmtBRL(esperado)}). Confira o PDF antes de importar — pode haver um lançamento não reconhecido pelo leitor entre essas duas linhas.`);
+            break;
+          }
+        }
+        UI.importRaw = { type:'pdf', headers:['Data','Descrição','Valor'], rows: rows.map(r=>[r[0],r[1],r[2],null,null]) };
+        UI.importIsContracheque = false;
+      }catch(err){ alert('Não foi possível ler este arquivo PDF: '+err.message); UI.importStep=2; render(); return; }
+      UI.importStep = 3; render();
+    };
+    reader.readAsArrayBuffer(file);
+    return;
+  }
   if(UI.importFileType==='pdf'){
     // Arquivo PDF só é aceito para conta do tipo Contracheque (ex.: Demonstrativo de Pagamento do TRT).
     // Cartões de crédito usam OFX ou XLSX (ver ramos acima) — não PDF.
     if(STATE.contaTipos[UI.importMap.contaDestino]!=='Contracheque'){
-      alert('Arquivos PDF só são aceitos para uma conta do tipo Contracheque. Para cartão de crédito, importe um arquivo .ofx ou .xlsx.');
+      alert('Arquivos PDF só são aceitos para uma conta do tipo Contracheque ou para a Conta Inter. Para cartão de crédito ou outra conta bancária, importe um arquivo .ofx ou .xlsx.');
       return;
     }
     // Declarada logo no início do reader.onload (antes de qualquer uso) para evitar o erro "Cannot access
