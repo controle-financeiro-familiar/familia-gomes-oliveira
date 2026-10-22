@@ -4089,6 +4089,13 @@ let CATEGORIAS = [
   ['Juros e Encargos Financeiros','Tributos e Despesas Bancárias','Impostos, Taxas e Encargos Financeiros','Despesa','Variável'],
   ['Anuidade de Cartão de Crédito','Tributos e Despesas Bancárias','Impostos, Taxas e Encargos Financeiros','Despesa','Fixo'],
   ['Tarifas e Pacote de Serviços de Conta Corrente','Tributos e Despesas Bancárias','Impostos, Taxas e Encargos Financeiros','Despesa','Variável'],
+  // IR/IOF sobre o rendimento de aplicações automáticas de saldo ocioso (ex.: BB Rende Fácil — ver
+  // sincronizarLancamentosResultadoRendeFacil) — deliberadamente no grupo "Tributos e Despesas Bancárias"
+  // (não "Economias"), para contar normalmente em despesasTotal no Dashboard: uma categoria do grupo
+  // Economias nunca soma ali (ver calcDashboard), o que esconderia esses tributos dos indicadores de
+  // despesa — exatamente o contrário do requisito "IR e IOF são contabilizados como despesas tributárias".
+  ['IR sobre Rendimentos de Investimentos','Tributos e Despesas Bancárias','Impostos, Taxas e Encargos Financeiros','Despesa','Variável'],
+  ['IOF sobre Resgates de Investimentos','Tributos e Despesas Bancárias','Impostos, Taxas e Encargos Financeiros','Despesa','Variável'],
   ['Contribuição Previdenciária (RPPS)','Tributos e Despesas Bancárias','Descontos em Folha de Pagamento','Despesa','Variável'],
   ['Contribuições Associativas/Sindicais','Tributos e Despesas Bancárias','Descontos em Folha de Pagamento','Despesa','Fixo'],
   ['Imposto de Renda Retido na Fonte (IRRF)','Tributos e Despesas Bancárias','Descontos em Folha de Pagamento','Despesa','Variável'],
@@ -6645,7 +6652,7 @@ async function aplicarSnapshotLocalPendente(){
 async function registrarUltimaContagemReg(n){ try{ await idbSetHandle('ultimaContagemReg', n); }catch(e){} }
 async function obterUltimaContagemReg(){ try{ return await idbGetHandle('ultimaContagemReg'); }catch(e){ return null; } }
 
-const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao','ofx_fitid'];
+const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao','ofx_fitid','rende_facil_origem_id','rende_facil_tipo'];
 
 /* ---------- Arquivo de REGISTROS (só lançamentos) ---------- */
 function buildCSVRegistros(){
@@ -6655,7 +6662,7 @@ function buildCSVRegistros(){
     // Futuros/Fatura/Próximas Faturas (ver aplicarOrdemManual/persistirOrdemManual) — vazio para um
     // lançamento que nunca foi reordenado manualmente, sincronizado pela mesma estratégia de persistência
     // do arquivo de registros já usada por todos os demais campos, nunca um mecanismo à parte.
-    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '', t.ofxFitid||'']);
+    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '', t.ofxFitid||'', t.rendeFacilOrigemId||'', t.rendeFacilTipo||'']);
   });
   return Papa.unparse(rows);
 }
@@ -6675,6 +6682,7 @@ function loadCSVRegistros(text){
         transferenciaInterna: r.status==='1', transferenciaVinculoId: r.tipo_conta||'', origemImportacao: r.origem_importacao==='1',
         ordemExibicao: (r.ordem_exibicao!==undefined && r.ordem_exibicao!=='') ? Number(r.ordem_exibicao) : undefined,
         ofxFitid: r.ofx_fitid||'',
+        rendeFacilOrigemId: r.rende_facil_origem_id||'', rendeFacilTipo: r.rende_facil_tipo||'',
       });
     }
   });
@@ -9196,7 +9204,15 @@ function compararDataCronologica(dataA, dataB){
 function recalcularSaldosSequenciais(itens, saldoInicial, campoSaldo){
   let acumuladoCentavos = Math.round((Number(saldoInicial)||0)*100);
   return itens.map(t=>{
-    if(!ehSaldoAnterior(t)){
+    // Aplicação/resgate automático do BB Rende Fácil (ehMovimentoRendeFacilBB): nunca altera o saldo
+    // gerencial do FinUs — o dinheiro continua "seu", só momentaneamente estacionado no Rende Fácil (ver
+    // requisito "Ajuste na contabilização do BB Rende Fácil", seção 3: "diferenciar o saldo financeiro
+    // gerencial do FinUs do saldo contábil apresentado pelo Banco do Brasil"). A linha continua aparecendo
+    // normalmente no Extrato (rastreabilidade — seção 1), só com efeito zero: carrega o mesmo saldo
+    // acumulado da linha anterior adiante, sem somar nem subtrair nada. O rendimento/IR/IOF efetivamente
+    // realizado em cada resgate SÃO lançamentos normais (Receita/Despesa — ver
+    // sincronizarLancamentosResultadoRendeFacil) e passam por aqui como qualquer outro.
+    if(!ehSaldoAnterior(t) && !ehMovimentoRendeFacilBB(t)){
       const valorCentavos = Math.round((Number(t.valor)||0)*100);
       const efeitoCentavos = t.tipo==='Receita' ? valorCentavos : (t.tipo==='Despesa' ? -valorCentavos : 0);
       acumuladoCentavos += efeitoCentavos;
@@ -9538,6 +9554,11 @@ function calcSaldoConta(conta, ano, mes){
   let entradasRealizadasCent = 0, saidasRealizadasCent = 0;
   txsConta.forEach(t=>{
     if(ehSaldoAnterior(t)) return; // já tratado via "referencia" — nunca é entrada/saída do próprio período
+    // Aplicação/resgate automático do BB Rende Fácil: nunca conta como entrada/saída nem altera o saldo
+    // gerencial (ver recalcularSaldosSequenciais/requisito "Ajuste na contabilização do BB Rende Fácil") —
+    // o rendimento/IR/IOF efetivamente realizado em cada resgate são lançamentos normais à parte (ver
+    // sincronizarLancamentosResultadoRendeFacil) e continuam contando normalmente aqui.
+    if(ehMovimentoRendeFacilBB(t)) return;
     const vCent = Math.round((Number(t.valor)||0)*100);
     const efeitoCent = t.tipo==='Receita' ? vCent : (t.tipo==='Despesa' ? -vCent : 0);
     // Bug corrigido: o valor do "Saldo Anterior" representa o saldo ANTES dos lançamentos do próprio dia
@@ -9602,7 +9623,9 @@ setInterval(()=>{
    data-limite), mas sem estar amarrada aos limites de um mês/competência específica. Usada para o "Saldo
    Atual" exibido no card de cada conta, que deve refletir a data real de hoje, independente do
    mês/ano navegado na aplicação — um lançamento com data futura (mesmo dentro do mês selecionado) nunca
-   deve alterar esse valor até o dia em que ele efetivamente ocorrer. */
+   deve alterar esse valor até o dia em que ele efetivamente ocorrer. Aplicação/resgate automático do BB
+   Rende Fácil nunca altera este saldo (ver calcSaldoConta/requisito "Ajuste na contabilização do BB Rende
+   Fácil") — é o saldo GERENCIAL do FinUs, deliberadamente diferente do saldo contábil literal do banco. */
 function saldoContaAteData(conta, dataLimiteISO){
   const txsConta = STATE.transactions.filter(t=>t.conta===conta);
   const referencia = txsConta
@@ -9617,6 +9640,7 @@ function saldoContaAteData(conta, dataLimiteISO){
   }
   txsConta.forEach(t=>{
     if(ehSaldoAnterior(t)) return;
+    if(ehMovimentoRendeFacilBB(t)) return; // ver recalcularSaldosSequenciais
     // Mesma correção de calcSaldoConta: inclui lançamentos datados no MESMO dia da referência de Saldo
     // Anterior (ela representa o saldo ANTES dos lançamentos daquele dia, nunca depois).
     const depoisDaReferencia = !dataCorte || t.data>=dataCorte;
@@ -10410,6 +10434,71 @@ function renderRendeFacilContaModal(){
    corte do cálculo é hoje (ou o último dia da competência exibida, o que vier primeiro — mesmo critério de
    corte já usado no Saldo Atual dos cards de Contas, ver calcSaldoConta), nunca lançamentos com data
    futura. */
+/* Sincroniza, de forma idempotente, os lançamentos de resultado financeiro (Rendimento/IR/IOF) de cada
+   resgate JÁ REALIZADO do BB Rende Fácil — requisito "Ajuste na contabilização do BB Rende Fácil", seção
+   2: aplicação/resgate automático em si nunca viram receita/despesa (ver ehMovimentoRendeFacilBB,
+   excluído de calcSaldoConta/saldoContaAteData/recalcularSaldosSequenciais), mas o RESULTADO de cada
+   resgate passa a ser lançado normalmente no extrato, como Receita/Despesa reais — nunca a projeção de
+   rendimento ainda não resgatado (ver composicaoAtual/rendimentoNaoRealizado em calcularLedgerRendeFacil,
+   que nunca gera lançamento nenhum: só o que já foi efetivamente realizado conta).
+   Processa SEMPRE a história completa da conta até hoje (nunca só a competência exibida no painel — ver
+   abrirRendeFacilContaModal), para que um resgate de qualquer mês seja contabilizado independentemente de
+   o usuário abrir o painel justo naquele mês.
+   Cada resgate gera até 3 lançamentos sintéticos (rendimento bruto como Receita, IR e IOF como Despesa —
+   só os valores > R$ 0,00), todos vinculados ao resgate de origem via `rendeFacilOrigemId` (o id do
+   próprio lançamento de resgate) + `rendeFacilTipo` ('rendimento'|'ir'|'iof') — nunca duplicados numa
+   nova sincronização nem numa reimportação do mesmo extrato (idempotente por natureza: já existe → só
+   ATUALIZA o valor, nunca cria de novo). Se uma aplicação mais antiga for importada depois e mudar a
+   alocação FIFO retroativamente, o valor recalculado de um resgate já processado antes é corrigido no
+   mesmo lançamento (mesmo id, mesma data) — nunca cria um segundo lançamento concorrente; se o valor
+   recalculado zerar, o lançamento sintético correspondente é removido (nunca fica um R$ 0,00 solto no
+   extrato). Ao final, remove qualquer lançamento sintético "órfão" (resgate de origem excluído/editado, ou
+   recalculado para já não ter mais aquele resultado) — nunca deixa um lançamento sintético sem
+   correspondência viva no ledger atual. Devolve true quando algo mudou (para o chamador decidir se precisa
+   salvar). */
+async function sincronizarLancamentosResultadoRendeFacil(conta){
+  const hoje = hojeISO();
+  let ledger = null;
+  try{ ledger = await calcularLedgerRendeFacil(conta, hoje); }
+  catch(e){ console.error('Falha ao sincronizar resultado do BB Rende Fácil', e); return false; }
+  if(!ledger) return false;
+  let mudou = false;
+  const idsValidos = new Set();
+  const ALVOS = [
+    { tipo:'rendimento', chave:'rendimentoBrutoCent', categoria:'Rendimento de Conta Corrente / Liquidez Diária', txTipo:'Receita', descricao:'Rendimento BB Rende Fácil' },
+    { tipo:'ir', chave:'irCent', categoria:'IR sobre Rendimentos de Investimentos', txTipo:'Despesa', descricao:'IR sobre Rendimento BB Rende Fácil' },
+    { tipo:'iof', chave:'iofCent', categoria:'IOF sobre Resgates de Investimentos', txTipo:'Despesa', descricao:'IOF sobre Rendimento BB Rende Fácil' },
+  ];
+  ledger.resgatesDetalhados.forEach(r=>{
+    ALVOS.forEach(alvo=>{
+      const cent = r.consumos.reduce((s,c)=>s+(c[alvo.chave]||0), 0);
+      const existente = STATE.transactions.find(t=>t.rendeFacilOrigemId===r.origemId && t.rendeFacilTipo===alvo.tipo);
+      if(cent<=0){
+        if(existente){ STATE.transactions = STATE.transactions.filter(t=>t!==existente); mudou = true; }
+        return;
+      }
+      idsValidos.add(`${r.origemId}|${alvo.tipo}`);
+      const valor = cent/100;
+      if(existente){
+        if(Math.abs((Number(existente.valor)||0)-valor)>0.001){ existente.valor = valor; mudou = true; }
+      } else {
+        const info = catInfo(alvo.categoria);
+        STATE.transactions.push({
+          id: uid(), data:r.data, descricao:alvo.descricao, valor, categoria:alvo.categoria,
+          grupo:info.grupo, subgrupo:info.subgrupo, tipo:alvo.txTipo, natureza:info.natureza,
+          conta, pgto:'Débito em Conta', competencia:'', parcelaAtual:null, totalParcelas:null, parcelamentoId:'',
+          responsavel:'', entreFamilia:false, transferenciaInterna:false, transferenciaVinculoId:'',
+          origemImportacao:true, rendeFacilOrigemId:r.origemId, rendeFacilTipo:alvo.tipo,
+        });
+        mudou = true;
+      }
+    });
+  });
+  const antes = STATE.transactions.length;
+  STATE.transactions = STATE.transactions.filter(t=> !t.rendeFacilOrigemId || idsValidos.has(`${t.rendeFacilOrigemId}|${t.rendeFacilTipo}`));
+  if(STATE.transactions.length!==antes) mudou = true;
+  return mudou;
+}
 async function abrirRendeFacilContaModal(conta){
   const ano = UI.ano, mes = UI.mes;
   UI.rendeFacilContaModal = { conta, ano, mes, carregando:true, resultado:null };
@@ -10418,7 +10507,11 @@ async function abrirRendeFacilContaModal(conta){
   const fimMesISO = `${ano}-${pad2(mes)}-31`;
   const dataCorteISO = fimMesISO < hojeISO() ? fimMesISO : hojeISO();
   let resultado = null;
-  try{ resultado = await calcularLedgerRendeFacil(conta, dataCorteISO, inicioISO); }
+  try{
+    const mudou = await sincronizarLancamentosResultadoRendeFacil(conta);
+    if(mudou) scheduleSave();
+    resultado = await calcularLedgerRendeFacil(conta, dataCorteISO, inicioISO);
+  }
   catch(e){ console.error('Falha ao calcular rendimentos do BB Rende Fácil', e); }
   // Se o usuário já fechou o modal ou trocou de conta/competência enquanto o cálculo assíncrono rodava,
   // descarta o resultado — nunca aplica um cálculo desatualizado por cima do estado atual da tela.
@@ -10973,7 +11066,10 @@ async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenc
       if(restanteLiquidoCent>0) divergencias.add(`capital-insuficiente:${t.data}`);
       if(noPeriodo){
         totalResgatesLiquidoCent += Math.abs(valorCent);
-        resgatesDetalhados.push({ data:t.data, valorLiquidoCent:Math.abs(valorCent), consumos, naoCobertoCent:restanteLiquidoCent });
+        // origemId: id do próprio lançamento de resgate (STATE.transactions) — usado por
+        // sincronizarLancamentosResultadoRendeFacil para vincular, de forma idempotente, os lançamentos
+        // sintéticos de rendimento/IR/IOF gerados a partir deste resgate específico.
+        resgatesDetalhados.push({ data:t.data, valorLiquidoCent:Math.abs(valorCent), consumos, naoCobertoCent:restanteLiquidoCent, origemId:t.id });
       }
     }
   }
@@ -11297,43 +11393,15 @@ function contasElegiveisFluxoCaixa(){
 function getSaldoInicialBase(ano, mes){
   return contasElegiveisFluxoCaixa().reduce((s,c)=> s + calcSaldoConta(c, ano, mes).saldoInicial, 0);
 }
-/* Variante de saldoContaAteData EXCLUSIVA do Fluxo de Caixa: ignora a Aplicação Automática do Saldo (BB
-   Rende Fácil) feita NO PRÓPRIO dia da data de corte (dataLimiteISO) — nunca as de dias anteriores, nem
-   nenhum Resgate Automático (ver CATEGORIAS_RENDE_FACIL_BB/ehMovimentoRendeFacilBB). O banco aplica
-   automaticamente todo saldo ocioso ao final de cada dia e resgata (com o próprio dinheiro + rendimento)
-   no dia útil seguinte: uma aplicação feita HOJE ainda não teve nenhuma chance de ser resgatada, então
-   contá-la reduziria artificialmente o saldo disponível daquele dia por um dinheiro que a família nem
-   gastou nem perdeu (só está momentaneamente estacionado no Rende Fácil) — requisito explícito: "não
-   considerar para compor o saldo do dia... BB Rende Fácil". Já a aplicação de QUALQUER dia anterior já
-   teve pelo menos um dia útil para ser resgatada e passa a ser só mais um lançamento real da sequência
-   histórica da conta, contado normalmente (excluí-la também faria esta função divergir, sem necessidade,
-   do saldo bancário real de dias já fechados). Nunca reaproveitada fora do Fluxo de Caixa — o Saldo Atual
-   dos cards de Contas e o Extrato continuam usando saldoContaAteData/calcSaldoConta sem nenhuma alteração,
-   refletindo sempre o saldo bancário literal, como já esperado nesses dois lugares. */
+/* Variante (histórica) de saldoContaAteData que ignorava só a Aplicação Automática do Saldo (BB Rende
+   Fácil) feita NO PRÓPRIO dia da data de corte — não mais necessária: desde o requisito "Ajuste na
+   contabilização do BB Rende Fácil", a própria saldoContaAteData já exclui TODA aplicação/resgate
+   automático do saldo gerencial do FinUs, qualquer que seja a data (ver ehMovimentoRendeFacilBB em
+   saldoContaAteData/calcSaldoConta/recalcularSaldosSequenciais) — então esta função e sua única chamadora
+   (saldoRealConsolidadoAteData, ela mesma já sem nenhum uso ativo no app) ficaram redundantes. Mantida
+   apenas por compatibilidade, delegando diretamente para saldoContaAteData (fonte única). */
 function saldoContaAteDataSemRendeFacilBB(conta, dataLimiteISO){
-  const ehAplicacaoDoDiaDeCorte = t=> t.data===dataLimiteISO && ehMovimentoRendeFacilBB(t)
-    && t.categoria===CATEGORIAS_RENDE_FACIL_BB[0]; // 'Aplicação Automática do Saldo'
-  const txsConta = STATE.transactions.filter(t=>t.conta===conta && !ehAplicacaoDoDiaDeCorte(t));
-  const referencia = txsConta
-    .filter(t=> ehSaldoAnterior(t) && t.data<=dataLimiteISO)
-    .sort((a,b)=> a.data<b.data ? 1 : (a.data>b.data ? -1 : 0))[0] || null;
-  let saldoCent = 0, dataCorte = null;
-  if(referencia){
-    const valorCent = Math.round((Number(referencia.valor)||0)*100);
-    saldoCent = referencia.tipo==='Despesa' ? -valorCent : valorCent;
-    dataCorte = referencia.data;
-  }
-  txsConta.forEach(t=>{
-    if(ehSaldoAnterior(t)) return;
-    // Mesma correção de calcSaldoConta: inclui lançamentos datados no MESMO dia da referência de Saldo
-    // Anterior (ela representa o saldo ANTES dos lançamentos daquele dia, nunca depois).
-    const depoisDaReferencia = !dataCorte || t.data>=dataCorte;
-    if(depoisDaReferencia && t.data<=dataLimiteISO){
-      const vCent = Math.round((Number(t.valor)||0)*100);
-      saldoCent += (t.tipo==='Receita' ? vCent : (t.tipo==='Despesa' ? -vCent : 0));
-    }
-  });
-  return saldoCent/100;
+  return saldoContaAteData(conta, dataLimiteISO);
 }
 /* Saldo REAL consolidado das contas elegíveis do Fluxo de Caixa (PJ/Corrente/Poupança) até uma data. Não
    é mais usada por calcProjecoesMes/aplicarLinhasSaldoDiario (o saldo sequencial linha a linha, incluindo
