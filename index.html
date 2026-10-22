@@ -21303,7 +21303,12 @@ function bindEvents(){
   });
   bindFiltrosMobileToggle('Projecao');
   document.querySelectorAll('[data-ver-fatura]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.faturaAtualModal = { conta: b.dataset.verFatura, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:porPaginaLaptop(10), selecionados:new Set() };
+    // Modal Fatura: sempre abre mostrando 5 registros por página, independente do tamanho da tela — ao
+    // contrário dos demais modais de Contas e Cartões (Ver Extrato, Lançamentos futuros etc.), que usam
+    // porPaginaLaptop(10) (5 só em telas de laptop, 10 nas demais). Pedido específico só para este modal;
+    // o usuário continua podendo trocar livremente pelo seletor "Exibir" (ver renderRodapePaginacaoGenerica),
+    // igual a qualquer outra tabela paginada do app.
+    UI.faturaAtualModal = { conta: b.dataset.verFatura, filtros: criarFiltrosPadrao(), busca:'', pagina:1, porPagina:5, selecionados:new Set() };
     // Sempre volta para a ordenação padrão (data crescente) a cada abertura — ver o mesmo comentário em
     // Próximas Faturas acima.
     UI.ordenacaoTabelas['fatura'] = { campo:null, dir:null };
