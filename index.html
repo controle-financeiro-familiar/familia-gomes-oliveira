@@ -2938,6 +2938,14 @@ summary::marker{content:'';}
    um wrapper à parte) — nunca gruda no texto das informações, e quebra para a linha de baixo sozinho em
    telas estreitas graças ao flex-wrap já existente em .fatura-digital-head-info, sem sobrepor nada. */
 .fatura-digital-head-info .btn-restaurar-ordem{margin-left:auto;flex-shrink:0;}
+/* Botão "Rende Fácil" no cabeçalho do modal Ver Extrato (ver renderExtratoContaModal): mesma linha da
+   Competência, sempre empurrado para a extrema direita — agrupado com o botão "Restaurar ordem" (quando
+   os dois existem) num único wrapper com margin-left:auto, em vez de cada um ter sua própria margem
+   automática, para não disputarem o espaço livre entre si e ficarem sempre colados um ao outro na ponta
+   direita. Quebra para a linha de baixo em telas estreitas graças ao flex-wrap já existente em
+   .fatura-digital-head-info, nunca sobrepondo a Competência/qtd. de lançamentos. */
+.extrato-cabecalho-info-direita{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto;}
+.extrato-cabecalho-info-direita .btn-restaurar-ordem{margin-left:0;}
 /* Cabeçalho dos modais Ver Extrato/Lançamentos futuros/Ver Fatura/Ver Próximas Faturas: logo+nome+badges
    à esquerda, e Agência/Nº Conta (conta bancária) ou o bloco de limite (cartão) à direita, colados no
    botão Imprimir — mesma ideia de espaço reaproveitado do requisito de limite na tabela de Cartões. Em
@@ -5395,6 +5403,23 @@ function padronizarReceitasContracheque(){
     }
   });
 }
+/* Regra fixa: todo lançamento de Despesa cuja descrição comece com "KEETABR*" (Keeta) ou "IFD*" (iFood)
+   é sempre categorizado como Aplicativos de Entrega — reaplicada a cada carregamento para corrigir
+   também lançamentos já importados anteriormente com outra categoria. Nunca toca em Receita (estornos
+   com a mesma descrição de origem devem manter sua própria classificação). */
+function aplicarCategoriaFixaAplicativosEntrega(){
+  const info = catInfo('Aplicativos de Entrega');
+  if(!info) return;
+  STATE.transactions.forEach(t=>{
+    if(t.tipo!=='Despesa') return;
+    const d = t.descricao||'';
+    if(d.startsWith('KEETABR*') || d.startsWith('IFD*')){
+      if(t.categoria!=='Aplicativos de Entrega'){
+        t.categoria='Aplicativos de Entrega'; t.grupo=info.grupo; t.subgrupo=info.subgrupo; t.natureza=info.natureza;
+      }
+    }
+  });
+}
 function cartoesOrdenados(){ return [...STATE.cartoes].sort((a,b)=>a.localeCompare(b,'pt-BR')); }
 /* Ordem de exibição da aba Contas e Cartões: por dia de vencimento da fatura (crescente); em caso de
    empate, por nome do responsável e depois pelo nome do cartão. Não é usada para nada além da ordem de
@@ -5422,6 +5447,9 @@ const SUGESTOES = {
   "cafeteria":"Cafeterias, Docerias e Sorveterias","sorveteria":"Cafeterias, Docerias e Sorveterias","starbucks":"Cafeterias, Docerias e Sorveterias",
   "bar ":"Bares e Bebidas","boteco":"Bares e Bebidas",
   "ifood":"Aplicativos de Entrega","rappi":"Aplicativos de Entrega","ubereats":"Aplicativos de Entrega",
+  // "KEETABR*" (Keeta, app de entregas do grupo Meituan) e "IFD*" (identificador de cobrança do iFood em
+  // extratos bancários, ex.: "IFD*66.126.887 ANDRE SA") — pedido explícito do usuário.
+  "keetabr*":"Aplicativos de Entrega","ifd*":"Aplicativos de Entrega",
   "farmacia":"Medicamentos (Contínuos, Manipulados e Gerais)","drogaria":"Medicamentos (Contínuos, Manipulados e Gerais)","drogasil":"Medicamentos (Contínuos, Manipulados e Gerais)",
   "posto":"Combustível (Gasolina, Etanol, Diesel, GNV)","combustivel":"Combustível (Gasolina, Etanol, Diesel, GNV)","ipiranga":"Combustível (Gasolina, Etanol, Diesel, GNV)","shell":"Combustível (Gasolina, Etanol, Diesel, GNV)",
   "uber":"Táxi ou Apps de Transporte","99app":"Táxi ou Apps de Transporte","taxi":"Táxi ou Apps de Transporte",
@@ -6688,6 +6716,7 @@ function loadCSVRegistros(text){
   });
   STATE.transactions = transactions;
   padronizarReceitasContracheque();
+  aplicarCategoriaFixaAplicativosEntrega();
   corrigirCompetenciaParcelasFuturas();
   removerParcelasFuturasEmprestimoContracheque();
   corrigirParcelasEmprestimos();
@@ -6978,6 +7007,7 @@ function loadCSVConfig(text){
   });
   aplicarOrdemFixaCategoriasLazer();
   padronizarReceitasContracheque();
+  aplicarCategoriaFixaAplicativosEntrega();
   migrarCompetenciaParaVencimento();
   migrarNomesContasPadrao();
   aplicarResponsavelPadraoPorTipo();
@@ -9956,6 +9986,12 @@ function renderExtratoContaModal(){
   const conta = UI.extratoContaModal.conta;
   const ano = UI.ano, mes = UI.mes;
   const tipo = STATE.contaTipos[conta]||'';
+  // Botão "Rende Fácil" no cabeçalho do Extrato (seção 2 do requisito "Sincronização dos cards do Extrato
+  // BB e reposicionamento do botão Rende Fácil") — mesmo critério já usado no card da conta
+  // (renderPainelContasBancarias): só aparece em contas não-Contracheque/Reserva que já tiveram ao menos
+  // uma aplicação/resgate automático do BB Rende Fácil lançado.
+  const ehContrachequeRF = tipo==='Contracheque', ehReservaRF = tipo==='Reserva de Emergência';
+  const temRendeFacil = !ehContrachequeRF && !ehReservaRF && STATE.transactions.some(t=>t.conta===conta && ehMovimentoRendeFacilBB(t));
   const det = itensExtratoConta(conta, ano, mes);
   // Filtros do próprio modal (Data, Grupo, Tipo e busca por descrição) — os cards do painel-resumo
   // (entradas/saídas/saldo final) agora são recalculados com base SOMENTE nos itens filtrados/exibidos na
@@ -9975,8 +10011,15 @@ function renderExtratoContaModal(){
   }
   // O lançamento técnico de Saldo Anterior (ver ehSaldoAnterior) nunca entra como entrada/saída — seu
   // efeito já está embutido no Saldo Inicial, na mesma lógica usada em itensExtratoConta/calcSaldoConta.
-  const entradasFiltradas = itensFiltrados.filter(t=>t.tipo==='Receita' && !ehSaldoAnterior(t)).reduce((s,t)=>s+(Number(t.valor)||0),0);
-  const saidasFiltradas = itensFiltrados.filter(t=>t.tipo==='Despesa' && !ehSaldoAnterior(t)).reduce((s,t)=>s+(Number(t.valor)||0),0);
+  // Aplicação/resgate automático do BB Rende Fácil (ehMovimentoRendeFacilBB) também nunca entra como
+  // entrada/saída aqui — mesma exclusão já aplicada em calcSaldoConta (fonte dos cards do card da conta,
+  // em renderPainelContasBancarias) e em recalcularSaldosSequenciais. Sem esta exclusão, os cards deste
+  // modal (que recalculam entradas/saídas de forma independente, para refletir os filtros próprios do
+  // Extrato) divergiam do card da conta sempre que a conta tivesse algum movimento de Rende Fácil no
+  // período, já que o rendimento/IR/IOF efetivamente realizado (lançamentos normais, nunca excluídos por
+  // ehMovimentoRendeFacilBB) continua contando normalmente nos dois lugares.
+  const entradasFiltradas = itensFiltrados.filter(t=>t.tipo==='Receita' && !ehSaldoAnterior(t) && !ehMovimentoRendeFacilBB(t)).reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const saidasFiltradas = itensFiltrados.filter(t=>t.tipo==='Despesa' && !ehSaldoAnterior(t) && !ehMovimentoRendeFacilBB(t)).reduce((s,t)=>s+(Number(t.valor)||0),0);
   const saldoFinalFiltrado = det.saldoInicial + entradasFiltradas - saidasFiltradas;
   const filtrosAtivos = filtrosPadraoAtivos(f, [{campo:'grupo'},{campo:'tipo'}]) || !!fBusca.trim();
   // Filtros do mobile funcionam como em Registros (item do requisito): um único botão "Filtros" abre uma
@@ -10031,7 +10074,10 @@ function renderExtratoContaModal(){
             })() : ''}
             <span><b>Competência</b> ${MESES[mes-1]}/${ano}</span>
             <span><b>${det.qtdPeriodo}</b> lançamento${det.qtdPeriodo===1?'':'s'}</span>
-            ${temOrdemManualExtrato ? `<button type="button" class="btn btn-ghost btn-sm no-print btn-restaurar-ordem" id="btnRestaurarOrdemExtrato" title="Este extrato tem uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
+            <div class="extrato-cabecalho-info-direita no-print">
+              ${temOrdemManualExtrato ? `<button type="button" class="btn btn-ghost btn-sm no-print btn-restaurar-ordem" id="btnRestaurarOrdemExtrato" title="Este extrato tem uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
+              ${temRendeFacil ? `<button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-rendefacil-conta="${escapeHtml(conta)}" title="BB Rende Fácil" aria-label="BB Rende Fácil"><span class="btn-acao-especial-icone">💹</span><span class="btn-acao-especial-texto">Rende Fácil</span></button>` : ''}
+            </div>
           </div>
         </div>
         ${tipo==='Contracheque' ? (()=>{
@@ -15452,11 +15498,6 @@ function renderPainelContasBancarias(ano, mes){
         // Reserva de Emergência: o badge do responsável fica ao lado do NOME da conta (não abaixo, junto
         // do badge de tipo, como nas demais contas) — pedido específico para este tipo de card.
         const ehReserva = tipo==='Reserva de Emergência';
-        // Botão "Rende Fácil" (cálculo automático de rendimentos — ver calcularLedgerRendeFacil): só
-        // aparece em contas que já tiveram ao menos uma aplicação/resgate automático do BB Rende Fácil
-        // lançado (ehMovimentoRendeFacilBB) — não faz sentido oferecer o painel numa conta sem nenhum
-        // movimento desse tipo.
-        const temRendeFacil = !ehContracheque && !ehReserva && STATE.transactions.some(t=>t.conta===c && ehMovimentoRendeFacilBB(t));
         return `<div class="conta-financeira-card">
           <div class="conta-financeira-card-topo-acoes no-print">
             <button type="button" class="icon-btn" data-importar-conta="${escapeHtml(c)}" title="Importar arquivo do banco" aria-label="Importar arquivo do banco">📥</button>
@@ -15506,7 +15547,6 @@ function renderPainelContasBancarias(ano, mes){
             ` : `
             <button type="button" class="btn btn-ghost btn-sm" data-extrato-conta="${escapeHtml(c)}" title="Ver Extrato" aria-label="Ver Extrato">👁</button>
             <button type="button" class="btn btn-ghost btn-sm" data-futuros-conta="${escapeHtml(c)}" title="Ver lançamentos futuros" aria-label="Ver lançamentos futuros">⏳${qtdFuturos>0?` <span class="contagem-futuros-btn">(${qtdFuturos})</span>`:''}</button>
-            ${temRendeFacil ? `<button type="button" class="btn btn-ghost btn-sm btn-acao-especial" data-rendefacil-conta="${escapeHtml(c)}" title="BB Rende Fácil" aria-label="BB Rende Fácil"><span class="btn-acao-especial-icone">💹</span><span class="btn-acao-especial-texto">Rende Fácil</span></button>` : ''}
             `}
           </div>
         </div>`;
