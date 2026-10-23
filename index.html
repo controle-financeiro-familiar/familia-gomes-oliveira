@@ -15848,12 +15848,19 @@ function renderProjecaoFaturaModal(){
   // esse agrupamento — por isso a lista mantém sempre a ordenação padrão (cronológica) ou manual (drag-and-
   // drop), nunca a por clique.
   // Na impressão com uma competência selecionada, o resumo mostrado é o mesmo conjunto de cards do modal
-  // "Ver Fatura" (valor total, parceladas, à vista, créditos), recalculado a partir dos itens já filtrados
-  // acima (não apenas qtd/qtdParcelas).
-  const totalSelFiltrado = selecionada ? itens.reduce((s,t)=> s + (t.tipo==='Receita' ? -(Number(t.valor)||0) : (Number(t.valor)||0)), 0) : 0;
+  // "Ver Fatura" (valor total, parceladas, à vista, pagamentos, estornos — ver requisito "Aplicar a divisão
+  // dos cards em todos os cartões"), recalculado a partir dos itens já filtrados acima (não apenas
+  // qtd/qtdParcelas). Pagamentos (categoria "Recebimento por Pagamento de Fatura") e Estornos como dois
+  // cards independentes, mesmo critério de classificação já usado no modal "Ver Fatura" — `itens` aqui
+  // nunca inclui pagamento da própria fatura (ver itensFaturasFuturas, que já exclui CATEGORIAS_FATURA da
+  // lista inteira, não só dos totais), então totalPagamentosSelFiltrado normalmente fica em zero (card
+  // condicional, oculto) — mantido pela consistência estrutural com o modal "Ver Fatura", caso uma
+  // competência futura algum dia tenha um pagamento pré-lançado.
   const totalParceladoSelFiltrado = selecionada ? itens.filter(t=>t.tipo==='Despesa' && ehCompraParceladaDeFatura(t)).reduce((s,t)=>s+(Number(t.valor)||0),0) : 0;
   const totalAvistaSelFiltrado = selecionada ? itens.filter(t=>t.tipo==='Despesa' && !ehCompraParceladaDeFatura(t)).reduce((s,t)=>s+(Number(t.valor)||0),0) : 0;
-  const totalCreditosSelFiltrado = selecionada ? itens.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0) : 0;
+  const totalEstornosSelFiltrado = selecionada ? itens.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0) : 0;
+  const totalPagamentosSelFiltrado = selecionada ? itens.filter(t=>t.categoria==='Recebimento por Pagamento de Fatura').reduce((s,t)=>s+(Number(t.valor)||0),0) : 0;
+  const totalSelFiltrado = selecionada ? totalAvistaSelFiltrado + totalParceladoSelFiltrado - totalPagamentosSelFiltrado - totalEstornosSelFiltrado : 0;
   // Paginação da tabela — mesmo padrão/componente da tabela de Registros/Ver Extrato/Lançamentos
   // futuros/Ver Fatura (ver renderRodapePaginacaoGenerica).
   const proPorPagina = UI.projecaoFaturaModal.porPagina;
@@ -15891,7 +15898,8 @@ function renderProjecaoFaturaModal(){
           <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(totalSelFiltrado)}</div><div class="lbl">valor total da fatura</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">🛒</span><div><div class="val">${fmtBRL(totalAvistaSelFiltrado)}</div><div class="lbl">compras à vista</div></div></div>
           <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(totalParceladoSelFiltrado)}</div><div class="lbl">compras parceladas</div></div></div>
-          ${totalCreditosSelFiltrado>0 ? `<div class="cartoes-resumo-item"><span class="ico">➕</span><div><div class="val">${fmtBRL(totalCreditosSelFiltrado)}</div><div class="lbl">créditos e pagamentos</div></div></div>` : ''}
+          ${totalPagamentosSelFiltrado>0 ? `<div class="cartoes-resumo-item"><span class="ico">➖</span><div><div class="val neg">-${fmtBRL(totalPagamentosSelFiltrado)}</div><div class="lbl">pagamentos</div></div></div>` : ''}
+          ${totalEstornosSelFiltrado>0 ? `<div class="cartoes-resumo-item"><span class="ico">↩️</span><div><div class="val neg">-${fmtBRL(totalEstornosSelFiltrado)}</div><div class="lbl">estornos</div></div></div>` : ''}
         </div>` : ''}
         <p class="hint no-print" style="margin:12px 0 8px;">Valores calculados em tempo real a partir de todos os lançamentos (à vista, parcelados e créditos — estornos incluídos como crédito) já registrados para cada competência futura. Clique numa competência para ver só os lançamentos daquele mês.</p>
         ${competencias.length ? `
