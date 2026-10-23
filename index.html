@@ -11507,12 +11507,23 @@ const TIPOS_FLUXO_CAIXA = ['Conta Corrente','Conta PJ','Poupança'];
 function contasElegiveisFluxoCaixa(){
   return contasBancarias().filter(c=>TIPOS_FLUXO_CAIXA.includes(STATE.contaTipos[c]||''));
 }
-/* Saldo Inicial do Fluxo de Caixa: não é mais um valor independente digitado à parte — é a SOMA do saldo
-   inicial (já calculado por calcSaldoConta, mesma fonte usada no painel Contas) de cada conta elegível
-   nesta competência. Uma única fonte de verdade: editar o saldo de qualquer uma dessas contas (pelo
-   painel Contas ou pelo modal do Fluxo de Caixa) atualiza este total automaticamente. */
+/* Tipos de conta que compõem especificamente o Saldo Inicial exibido no Extrato Consolidado (requisito
+   "O saldo inicial na aba Extrato consolidado também deve contabilizar a conta reserva de emergência") —
+   composição PRÓPRIA deste card/modal, nunca reaproveitando TIPOS_FLUXO_CAIXA/contasElegiveisFluxoCaixa:
+   aquela continua intacta, exclusiva de todo o resto do motor de projeção (linhas listadas/"não
+   listados", conciliação de fatura via conta elegível etc.), que não deve passar a tratar a Reserva de
+   Emergência como uma "conta de movimento corrente" só porque o Saldo Inicial agora a inclui. */
+const TIPOS_SALDO_INICIAL_EXTRATO_CONSOLIDADO = ['Conta Corrente','Conta PJ','Poupança','Reserva de Emergência'];
+function contasElegiveisSaldoInicialExtratoConsolidado(){
+  return contasBancarias().filter(c=>TIPOS_SALDO_INICIAL_EXTRATO_CONSOLIDADO.includes(STATE.contaTipos[c]||''));
+}
+/* Saldo Inicial do Extrato Consolidado: não é mais um valor independente digitado à parte — é a SOMA do
+   saldo inicial (já calculado por calcSaldoConta, mesma fonte usada no painel Contas) de cada conta
+   elegível (ver contasElegiveisSaldoInicialExtratoConsolidado) nesta competência. Uma única fonte de
+   verdade: editar o saldo de qualquer uma dessas contas (pelo painel Contas ou pelo modal do Extrato
+   Consolidado) atualiza este total automaticamente. */
 function getSaldoInicialBase(ano, mes){
-  return contasElegiveisFluxoCaixa().reduce((s,c)=> s + calcSaldoConta(c, ano, mes).saldoInicial, 0);
+  return contasElegiveisSaldoInicialExtratoConsolidado().reduce((s,c)=> s + calcSaldoConta(c, ano, mes).saldoInicial, 0);
 }
 /* Variante (histórica) de saldoContaAteData que ignorava só a Aplicação Automática do Saldo (BB Rende
    Fácil) feita NO PRÓPRIO dia da data de corte — não mais necessária: desde o requisito "Ajuste na
@@ -16570,12 +16581,13 @@ function ajustarAbasMesesExtrato(){
   }
   aplicarOffsetAbasMesesExtrato(viewport, trilho, offset);
 }
-/* ---------- Modal: editar os saldos iniciais das contas que compõem o Saldo Inicial do Fluxo de Caixa
-   (Conta Corrente + Conta PJ + Poupança). O total é só leitura — só é possível editar cada conta
+/* ---------- Modal: editar os saldos iniciais das contas que compõem o Saldo Inicial do Extrato
+   Consolidado (Conta Corrente + Conta PJ + Poupança + Reserva de Emergência — ver
+   contasElegiveisSaldoInicialExtratoConsolidado). O total é só leitura — só é possível editar cada conta
    individualmente, nunca o total direto, para nunca divergir do painel Contas. Usa exatamente a mesma
    função aplicarSaldoAnteriorConta do painel Contas — fonte única, sem lógica paralela. ---------- */
 function renderEditarSaldoInicialFluxoCaixaModal(){
-  const contas = contasElegiveisFluxoCaixa();
+  const contas = contasElegiveisSaldoInicialExtratoConsolidado();
   const valores = contas.map(c=>{
     const explicito = saldoAnteriorExplicito(c, UI.ano, UI.mes);
     const s = calcSaldoConta(c, UI.ano, UI.mes);
@@ -16587,7 +16599,7 @@ function renderEditarSaldoInicialFluxoCaixaModal(){
     <div class="modal" style="width:460px;">
       <div class="modal-head"><h3>✏️ Saldo Inicial — Extrato Consolidado</h3><button class="close-x" id="closeEditarSaldoInicialFluxoCaixa">✕</button></div>
       <div class="modal-body">
-        <p class="hint" style="margin-top:0;">O Saldo Inicial do Extrato Consolidado é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança em <b>${MESES[UI.mes-1]}/${UI.ano}</b>. Edite cada conta abaixo — o total não pode ser alterado diretamente.</p>
+        <p class="hint" style="margin-top:0;">O Saldo Inicial do Extrato Consolidado é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ, Poupança e Reserva de Emergência em <b>${MESES[UI.mes-1]}/${UI.ano}</b>. Edite cada conta abaixo — o total não pode ser alterado diretamente.</p>
         ${contas.length ? `<table style="width:100%;" data-ordenar-tabela="saldoInicialFC">
           <thead><tr>${thOrdenavel('saldoInicialFC','conta','Conta')}${thOrdenavel('saldoInicialFC','valor','Saldo Inicial',{style:'text-align:right;'})}</tr></thead>
           <tbody>
@@ -16597,7 +16609,7 @@ function renderEditarSaldoInicialFluxoCaixaModal(){
             </tr>`).join('')}
             <tr style="border-top:2px solid var(--line);"><td><b>Total</b></td><td style="text-align:right;"><b id="totalSaldoInicialFC">${fmtBRL(total)}</b></td></tr>
           </tbody>
-        </table>` : `<div class="empty-state"><div class="big">🏦</div>Nenhuma conta do tipo Corrente, PJ ou Poupança cadastrada. Adicione em Configurações → Contas.</div>`}
+        </table>` : `<div class="empty-state"><div class="big">🏦</div>Nenhuma conta do tipo Corrente, PJ, Poupança ou Reserva de Emergência cadastrada. Adicione em Configurações → Contas.</div>`}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" id="cancelEditarSaldoInicialFluxoCaixa">Cancelar</button>
@@ -17061,7 +17073,7 @@ function renderResumo(){
         <p>Utilize o botão <b>+ Novo Lançamento Previsto</b> para incluir novos lançamentos e os ícones <b>✏️ Editar</b> e <b>🗑️ Excluir</b> para alterar ou remover lançamentos existentes. Os <b>lançamentos previstos</b> (Dia, Descrição, Tipo e Valor) são recorrentes e, por padrão, são replicados automaticamente em todos os meses da projeção, exceto quando um <b>mês de início específico</b> for definido no momento do cadastro. Para lançamentos vinculados a <b>cartões de crédito</b>, o campo <b>Valor</b> é calculado automaticamente com base no valor total da fatura correspondente a cada competência, não sendo necessária edição manual. O campo <b>Saldo</b> é sempre calculado automaticamente e não pode ser editado.</p>
         <p style="margin-bottom:6px;">O cálculo segue a seguinte lógica:</p>
         <ul>
-          <li>O <b>Saldo Inicial</b> do primeiro mês do período é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ e Poupança cadastrada (não inclui Contracheque, Reserva de Emergência nem cartões de crédito) — o mesmo valor já calculado no painel Contas;</li>
+          <li>O <b>Saldo Inicial</b> do primeiro mês do período é a soma automática do saldo inicial de cada Conta Corrente, Conta PJ, Poupança e Reserva de Emergência cadastrada (não inclui Contracheque nem cartões de crédito) — o mesmo valor já calculado no painel Contas;</li>
           <li>Acumula o efeito de cada lançamento em ordem cronológica — cada linha mostra o <b>Saldo Consolidado</b> exatamente até aquele ponto, nunca a simples soma de receitas e despesas do período;</li>
           <li>O <b>saldo final</b> de cada mês torna-se automaticamente o <b>saldo inicial</b> do mês seguinte, garantindo a continuidade da projeção financeira;</li>
           <li>A coluna <b>Status</b> indica 🟢 Realizado (movimentação real sem projeção associada), 🔵 Projetado (ainda não identificado no Extrato), 🟡 Conforme (já conciliado com o Extrato — ver o selo 🔗/⏪/⏩ ao lado da descrição — e com valor igual ao previsto) ou 🔴 Divergente (também já conciliado, mas com valor diferente do previsto);</li>
