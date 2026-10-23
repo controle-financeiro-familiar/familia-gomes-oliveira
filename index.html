@@ -10102,6 +10102,7 @@ function renderExtratoContaModal(){
   // Data/Valor) sem nenhuma lógica especial de chave-vs-valor exibido.
   itensFiltrados = aplicarOrdenacaoClique(itensFiltrados, 'extrato', {
     data:{tipo:'data', valor:t=>t.data}, descricao:{tipo:'texto', valor:t=>t.descricao}, grupo:{tipo:'texto', valor:t=>t.grupo},
+    subgrupo:{tipo:'texto', valor:t=>t.subgrupo},
     tipo:{tipo:'texto', valor:t=>t.tipo}, valor:{tipo:'moeda', valor:t=>t.valor}, saldo:{tipo:'moeda', valor:t=>t.saldoAcumulado},
   });
   // Paginação da tabela — mesmo padrão/componente da tabela de Registros (ver
@@ -10178,7 +10179,7 @@ function renderExtratoContaModal(){
         ${itensFiltrados.length ? `
         <div class="barra-acoes-lote-wrap no-print">${renderBarraAcoesLote('Extrato', UI.extratoContaModal.selecionados, itensPagina.map(t=>t.id), itensFiltrados.map(t=>t.id))}</div>
         <div class="table-wrap table-wrap-registros tabela-impressao reg-tabela-principal" style="margin-top:14px;" data-ordenar-tabela="extrato"><table>
-          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Extrato', itensPagina.map(t=>t.id), UI.extratoContaModal.selecionados)}${thOrdenavel('extrato','data','Data')}${thOrdenavel('extrato','descricao','Descrição')}${thOrdenavel('extrato','grupo','Grupo')}${thOrdenavel('extrato','tipo','Tipo',{style:'text-align:center;'})}${thOrdenavel('extrato','valor','Valor',{style:'text-align:right;'})}${thOrdenavel('extrato','saldo','Saldo',{style:'text-align:right;'})}<th class="no-print col-acoes">Ações</th></tr></thead>
+          <thead><tr>${renderColunaArrastarHead()}${renderColunaSelecaoLoteHead('Extrato', itensPagina.map(t=>t.id), UI.extratoContaModal.selecionados)}${thOrdenavel('extrato','data','Data')}${thOrdenavel('extrato','descricao','Descrição')}${tipo==='Contracheque' ? thOrdenavel('extrato','subgrupo','Subcategoria') : thOrdenavel('extrato','grupo','Grupo')}${thOrdenavel('extrato','tipo','Tipo',{style:'text-align:center;'})}${thOrdenavel('extrato','valor','Valor',{style:'text-align:right;'})}${thOrdenavel('extrato','saldo','Saldo',{style:'text-align:right;'})}<th class="no-print col-acoes">Ações</th></tr></thead>
           <tbody>${itensPagina.map(t=>`<tr data-linha-arrastavel="Extrato" data-linha-id="${t.id}">
             ${renderColunaArrastarLinha('Extrato', t.id)}
             ${renderColunaSelecaoLoteLinha('Extrato', t.id, UI.extratoContaModal.selecionados)}
@@ -10187,7 +10188,7 @@ function renderExtratoContaModal(){
               <div class="reg-descricao-texto">${escapeHtml(t.descricao)}</div>
               ${Number(t.totalParcelas)>1 ? `<div class="reg-descricao-tags"><span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span></div>` : ''}
             </td>
-            <td>${escapeHtml(t.grupo||'—')}</td>
+            <td>${escapeHtml((tipo==='Contracheque' ? t.subgrupo : t.grupo)||'—')}</td>
             <td style="text-align:center;"><span class="tag ${t.tipo}">${t.tipo}</span></td>
             <td class="val-cell ${t.tipo==='Receita'?'pos':'neg'}" style="text-align:right;">${fmtBRL(t.valor)}</td>
             <td class="val-cell ${classeSinalMoeda(t.saldoAcumulado)}" style="text-align:right;">${fmtBRL(t.saldoAcumulado)}</td>
@@ -10201,7 +10202,7 @@ function renderExtratoContaModal(){
         ${renderCardsLancamentosModal(itensPagina, {
           data: t=>fmtData(t.data),
           valorTexto: t=>fmtBRL(t.valor), valorClasse: t=> ehSaldoAnterior(t)?'':(t.tipo==='Receita'?'pos':'neg'),
-          secundario: t=> t.grupo ? `${iconeGrupo(t.grupo)} ${escapeHtml(t.grupo)}` : 'Sem Grupo',
+          secundario: t=> tipo==='Contracheque' ? (t.subgrupo ? escapeHtml(t.subgrupo) : 'Sem Subcategoria') : (t.grupo ? `${iconeGrupo(t.grupo)} ${escapeHtml(t.grupo)}` : 'Sem Grupo'),
           tags: t=> `${ehSaldoAnterior(t) ? '' : `<span class="tag ${t.tipo}">${t.tipo}</span>${Number(t.totalParcelas)>1 ? `<span class="tag Fixo">${t.parcelaAtual}/${t.totalParcelas}</span>` : ''}`}<span class="reg-card-linha3-saldo">Saldo: <b class="val-cell ${classeSinalMoeda(t.saldoAcumulado)}">${fmtBRL(t.saldoAcumulado)}</b></span>`,
           prefixo: 'Extrato', selecionados: UI.extratoContaModal.selecionados,
         })}
