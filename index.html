@@ -15692,6 +15692,11 @@ function renderFaturaAtualModal(){
   const rec = reconciliacaoFatura(conta, competencia);
   const chaveRecAtual = `${conta}|${competencia}`;
   const editandoSaldoAnterior = !!UI.faturaAtualModal.editandoSaldoAnterior;
+  // Formato de arquivo do banco mencionado nas dicas da seção Conciliação com o banco abaixo — cartão
+  // Personnalité Black aceita exclusivamente .xlsx (nunca .ofx, que este cartão não emite — ver
+  // ehCartaoPersonnaliteBlack/requisito "Corrigir formato de importação do cartão Personnalité Black");
+  // os demais cartões continuam mencionando OFX normalmente, sem nenhuma mudança de comportamento.
+  const formatoArquivoBanco = ehCartaoPersonnaliteBlack(conta) ? 'XLSX' : 'OFX';
   // Filtros do próprio modal (Data por período, Tipo e Parcela — seleção múltipla) + busca por descrição,
   // mesmo motor genérico usado em Registros/Ver Extrato/Lançamentos futuros (ver criarFiltrosPadrao). Os
   // cards do painel-resumo (parceladas, à vista, pagamentos, estornos) são recalculados com base SOMENTE
@@ -15802,10 +15807,10 @@ function renderFaturaAtualModal(){
             <div><span class="hint" style="margin:0;">Pagamentos</span><br><b class="val neg">${rec.pagamentos>0?'-':''}${fmtBRL(rec.pagamentos)}</b></div>
             <div><span class="hint" style="margin:0;">Estornos</span><br><b class="val neg">${rec.estornos>0?'-':''}${fmtBRL(rec.estornos)}</b></div>
             <div><span class="hint" style="margin:0;">Total calculado</span><br><b>${fmtBRL(rec.totalCalculado)}</b></div>
-            <div><span class="hint" style="margin:0;">Total informado pelo banco</span><br><b>${rec.temTotalInformado ? fmtBRL(rec.totalInformado) : '— (importe o OFX desta competência)'}</b></div>
+            <div><span class="hint" style="margin:0;">Total informado pelo banco</span><br><b>${rec.temTotalInformado ? fmtBRL(rec.totalInformado) : `— (importe o ${formatoArquivoBanco} desta competência)`}</b></div>
             <div><span class="hint" style="margin:0;">Diferença</span><br><b class="${rec.diferenca!=null && Math.abs(rec.diferenca)>=0.005 ? 'val neg' : ''}">${rec.diferenca!=null ? fmtBRL(rec.diferenca) : '—'}</b></div>
           </div>
-          ${!rec.temSaldoAnterior ? `<p class="hint" style="margin:8px 0 0;">Falta o saldo da fatura anterior para concluir a conciliação — importe o OFX da competência anterior deste cartão (preenche automaticamente) ou informe manualmente (✏️ acima).</p>` : (!rec.temTotalInformado ? `<p class="hint" style="margin:8px 0 0;">Falta o total informado pelo banco desta competência — importe o OFX desta fatura para preenchê-lo automaticamente.</p>` : '')}
+          ${!rec.temSaldoAnterior ? `<p class="hint" style="margin:8px 0 0;">Falta o saldo da fatura anterior para concluir a conciliação — importe o ${formatoArquivoBanco} da competência anterior deste cartão (preenche automaticamente) ou informe manualmente (✏️ acima).</p>` : (!rec.temTotalInformado ? `<p class="hint" style="margin:8px 0 0;">Falta o total informado pelo banco desta competência — importe o ${formatoArquivoBanco} desta fatura para preenchê-lo automaticamente.</p>` : '')}
         </div>
         ${det.itens.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
@@ -19232,22 +19237,27 @@ function renderImportStep1(){
   // do tipo Contracheque: restrita EXCLUSIVAMENTE a .pdf (Demonstrativo de Pagamento do TRT); NuCartão
   // (Nubank): restrita a .csv (formato próprio da fatura do Nubank) OU .ofx (formato padrão do protocolo,
   // ver seção "Importação do NuCartão"); NuConta (Nubank): restrita a .ofx OU .csv, nos dois formatos
-  // próprios do extrato do Nubank (ver ehCartaoNubank/ehContaCorrenteNubank) — ver handleFile, que repete
-  // essa mesma checagem para o caso de arrastar-e-soltar um arquivo de outro tipo.
+  // próprios do extrato do Nubank (ver ehCartaoNubank/ehContaCorrenteNubank); cartão Personnalité Black
+  // (Itaú): restrito EXCLUSIVAMENTE a .xlsx (ver ehCartaoPersonnaliteBlack, requisito "Corrigir formato de
+  // importação do cartão Personnalité Black") — ver handleFile, que repete essa mesma checagem para o caso
+  // de arrastar-e-soltar um arquivo de outro tipo.
   const contaDestino = UI.importMap.contaDestino;
   const ehContaReservaEmergencia = STATE.contaTipos[contaDestino]==='Reserva de Emergência';
   const ehContaContracheque = STATE.contaTipos[contaDestino]==='Contracheque';
   const ehCartaoNu = ehCartaoNubank(contaDestino);
   const ehContaNu = ehContaCorrenteNubank(contaDestino);
   const ehContaInt = ehContaInter(contaDestino);
+  const ehCartaoPB = ehCartaoPersonnaliteBlack(contaDestino);
   const hint = ehContaReservaEmergencia ? 'Conta do tipo Reserva de Emergência — aceita somente o extrato .csv exportado do PicPay.'
     : ehContaContracheque ? 'Formato aceito: PDF (.pdf)'
     : ehCartaoNu ? 'NuCartão (Nubank) — aceita a fatura .csv ou .ofx exportada do Nubank.'
     : ehContaNu ? 'NuConta (Nubank) — aceita extrato .ofx ou .csv exportado do Nubank.'
     : ehContaInt ? 'Conta Inter — aceita somente o extrato .pdf exportado do Banco Inter.'
+    : ehCartaoPB ? 'Cartão Personnalité Black (Itaú) — aceita somente a fatura .xlsx exportada do Itaú.'
     : 'Aceita extratos em .ofx ou .xlsx exportados do seu banco ou cartão.';
   const accept = ehContaReservaEmergencia ? '.csv' : ehContaContracheque ? '.pdf,application/pdf'
-    : ehCartaoNu ? '.csv,.ofx' : ehContaNu ? '.ofx,.csv' : ehContaInt ? '.pdf,application/pdf' : '.ofx,.xlsx,.pdf';
+    : ehCartaoNu ? '.csv,.ofx' : ehContaNu ? '.ofx,.csv' : ehContaInt ? '.pdf,application/pdf'
+    : ehCartaoPB ? '.xlsx' : '.ofx,.xlsx,.pdf';
   return `
   <span class="step-badge">Passo 2 de 4 · Escolher arquivo</span>
   <div class="info-card" style="margin-top:0;"><span class="info-card-icon">📌</span><span>Conta de destino: <b>${escapeHtml(UI.importMap.contaDestino)}</b> · Período: <b>${MESES[UI.importRefMes-1]}/${UI.importRefAno}</b> <button type="button" class="icon-btn" id="btnImportVoltarPre" title="Trocar período/conta" style="padding:1px 4px;">✏️</button></span></div>
@@ -19499,6 +19509,15 @@ function ehContaCorrenteNubank(conta){ return !STATE.cartoes.includes(conta) && 
    bancária comum (nunca um cartão de crédito, que continua aceitando .ofx/.xlsx mesmo sendo do Inter —
    embora hoje nenhuma conta padrão desta aplicação seja um cartão de crédito do Inter). */
 function ehContaInter(conta){ return !STATE.cartoes.includes(conta) && identificarInstituicao(conta)?.sigla==='Inter'; }
+/* Cartão Personnalité Black (Itaú): importação e conciliação restritas EXCLUSIVAMENTE a .xlsx (a fatura
+   "Fatura Fechada" exportada pelo Itaú, lida por parsePersonnaliteBlackFaturaXLSX/isPersonnaliteBlackXLSX —
+   ver seção "Fatura do cartão Personnalité Black" mais abaixo) — nunca .ofx, que este cartão não emite
+   nesse formato, ao contrário dos demais cartões desta aplicação (requisito "Corrigir formato de
+   importação do cartão Personnalité Black"). Mesmo critério de nome já usado para identificar a
+   instituição (ver INSTITUICOES_FINANCEIRAS/isPersonnaliteBlackXLSX), nunca dependente de STATE.contaTipos
+   nem de nenhuma outra configuração — só se aplica a um cartão de fato (nunca a uma conta bancária comum
+   que porventura tenha "Personnalité" no nome). */
+function ehCartaoPersonnaliteBlack(conta){ return STATE.cartoes.includes(conta) && /personnalit/i.test(conta); }
 /* Converte o valor do extrato CSV da Reserva de Emergência (PicPay) para número com sinal — vem como
    texto no formato "−R$ 1.330,00" (saída) ou "+R$ 150,00" (entrada), com ponto como separador de milhar e
    vírgula como decimal. O caractere de "menos" usado pelo PicPay é o sinal matemático "−" (U+2212), não o
@@ -20209,6 +20228,19 @@ function handleFile(file){
     const mimeOk = !file.type || file.type==='application/pdf';
     if(UI.importFileType!=='pdf' || !nomeArquivo.endsWith('.pdf') || !mimeOk){
       alert('A Conta Inter aceita somente o extrato exportado em PDF (.pdf).');
+      return;
+    }
+  }
+  // Cartão Personnalité Black (Itaú): importação restrita EXCLUSIVAMENTE a .xlsx — nunca .ofx/.pdf/.csv,
+  // que os demais cartões desta aplicação aceitam normalmente (ver ehCartaoPersonnaliteBlack, requisito
+  // "Corrigir formato de importação do cartão Personnalité Black"). Mesma dupla validação de sempre:
+  // extensão do nome do arquivo E, quando disponível, MIME type — nunca confia só na extensão.
+  const ehCartaoPB = ehCartaoPersonnaliteBlack(contaDestino);
+  if(ehCartaoPB){
+    const nomeArquivo = file.name.toLowerCase();
+    const mimeOk = !file.type || /spreadsheetml|ms-excel/.test(file.type);
+    if(UI.importFileType!=='xlsx' || !nomeArquivo.endsWith('.xlsx') || !mimeOk){
+      alert('O cartão Personnalité Black (Itaú) aceita somente a fatura exportada em Excel (.xlsx).');
       return;
     }
   }
@@ -23832,6 +23864,15 @@ function bindEvents(){
     // quando o próprio arquivo realmente trouxe essa tag.
     if(UI.importRaw && UI.importRaw.type==='ofx' && UI.importRaw.saldoFaturaBancoAbs!=null && STATE.cartoes.includes(contaDestinoImport)){
       STATE.faturaTotalBanco[`${contaDestinoImport}|${UI.importRefAno}-${pad2(UI.importRefMes)}`] = UI.importRaw.saldoFaturaBancoAbs;
+    }
+    // Mesma captura acima, agora para a fatura .xlsx do Personnalité Black (ver extrairResumoPersonnaliteXLSX/
+    // UI.pbValidacao.totalDestaFatura — o total que a própria planilha do Itaú informa na tabela "Cartão/
+    // Valor/Vencimento") — requisito "Corrigir formato de importação do cartão Personnalité Black", seção 2
+    // ("Adaptar o módulo de conciliação para utilizar os dados extraídos do arquivo XLSX... total informado
+    // pelo banco"). Mesma STATE.faturaTotalBanco, fonte única já usada por reconciliacaoFatura para todos os
+    // cartões — nenhum campo nem lógica de conciliação paralela só para este cartão.
+    if(UI.importRaw && UI.importRaw.type==='xlsx-pb' && UI.pbValidacao && UI.pbValidacao.totalDestaFatura!=null && STATE.cartoes.includes(contaDestinoImport)){
+      STATE.faturaTotalBanco[`${contaDestinoImport}|${UI.importRefAno}-${pad2(UI.importRefMes)}`] = UI.pbValidacao.totalDestaFatura;
     }
     if(STATE.contaTipos[contaDestinoImport]==='Contracheque'){
       const competenciaImportada = `${UI.importRefAno}-${pad2(UI.importRefMes)}`;
