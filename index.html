@@ -5910,9 +5910,17 @@ function vencimentoDataCalculada(comp, conta){
   if(!cfg || !cfg.vencimento || !comp) return '';
   return dataDoDiaNaCompetencia(comp, cfg.vencimento);
 }
+/* "(ajustado)" só aparece quando o valor salvo em STATE.cardOverrides REALMENTE difere do valor que o
+   sistema calcularia por padrão para esta competência (requisito "Correções no painel de Cartões e Extrato
+   Consolidado", item 1) — nunca só por existir um override salvo. O modal de edição sempre grava os dois
+   campos juntos (fechamento+vencimento), então um ajuste em só um dos dois campos salva o OUTRO campo com
+   o mesmo valor que o sistema já calcularia sozinho; comparando contra vencimentoDataCalculada/
+   fechamentoDataCalculada aqui, cada campo é avaliado individualmente. Se o usuário restaurar o valor
+   original (editar de volta para o calculado), a indicação some automaticamente, sem nenhuma ação extra. */
 function vencimentoLabel(comp, conta){
   const ov = faturaOverride(conta, comp);
-  if(ov && ov.vencimento) return fmtData(ov.vencimento) + ' <span class="hint" style="margin:0;">(ajustado)</span>';
+  if(ov && ov.vencimento && ov.vencimento!==vencimentoDataCalculada(comp, conta)) return fmtData(ov.vencimento) + ' <span class="hint" style="margin:0;">(ajustado)</span>';
+  if(ov && ov.vencimento) return fmtData(ov.vencimento);
   const cfg = STATE.cardConfig[conta];
   if(!cfg || !cfg.vencimento || !comp) return '';
   const [ano,mes] = comp.split('-').map(Number);
@@ -5966,10 +5974,12 @@ function calcularMelhorCartaoHoje(){
 }
 function fechamentoLabel(comp, conta){
   const ov = faturaOverride(conta, comp);
-  if(ov && ov.fechamento) return fmtData(ov.fechamento) + ' <span class="hint" style="margin:0;">(ajustado)</span>';
   // Delega para fechamentoDataCalculada, que já lida corretamente com o caso em que o dia de fechamento
   // é maior que o de vencimento (ex.: fecha 25/07, vence 01/08) — o fechamento cai no mês ANTERIOR ao da
-  // competência (que é sempre o mês de vencimento), não no mesmo mês.
+  // competência (que é sempre o mês de vencimento), não no mesmo mês. Ver nota de vencimentoLabel acima
+  // sobre "(ajustado)" só aparecer quando o valor salvo difere de fato do calculado.
+  if(ov && ov.fechamento && ov.fechamento!==fechamentoDataCalculada(comp, conta)) return fmtData(ov.fechamento) + ' <span class="hint" style="margin:0;">(ajustado)</span>';
+  if(ov && ov.fechamento) return fmtData(ov.fechamento);
   return fmtData(fechamentoDataCalculada(comp, conta));
 }
 
@@ -9372,25 +9382,37 @@ function reconciliacaoFatura(conta, competencia){
   const totalCalculado = totalCalculadoCent/100;
   const diferenca = temTotalInformado ? Math.round((totalCalculado-totalInformado)*100)/100 : null;
   const estado = (!temSaldoAnterior || !temTotalInformado) ? 'pendente' : (Math.abs(diferenca)<0.005 ? 'conciliada' : 'divergente');
-  return { compras, pagamentos, estornos, saldoAnterior, saldoAnteriorOrigem, totalCalculado, totalInformado, diferenca, estado, temSaldoAnterior, temTotalInformado };
+  return { compras, pagamentos, estornos, saldoAnterior, saldoAnteriorOrigem, totalCalculado, totalInformado, diferenca, estado, temSaldoAnterior, temTotalInformado, qtdLancamentos: det.qtd };
 }
-/* Valor da fatura usado nos cards de RESUMO/EXIBIÇÃO (card do cartão na aba Contas e Cartões e card "valor
-   total da fatura" do modal Ver Fatura) — requisito "Corrigir valores dos cards da fatura": fonte única,
-   reaproveitando diretamente o "Total calculado" da Conciliação com o banco (reconciliacaoFatura) sempre
-   que houver saldo anterior conhecido (de uma competência anterior já importada do banco, ou informado
-   manualmente) — esse total já soma saldo anterior + compras − pagamentos − estornos, o valor real cobrado
-   pelo banco, nunca recalculado de forma paralela aqui. Sem saldo anterior conhecido (cartão sem nenhum
-   dado bancário ainda importado), cai no valor tradicional (faturaPorCompetencia: só compras − estornos da
-   própria competência) — comportamento inalterado para os demais cartões, que nunca tiveram esse dado
-   disponível (seção "Preservar... o funcionamento dos demais cartões" do requisito).
-   Usada SOMENTE nestes dois pontos de exibição. O valor "oficial" usado no resto do app (Dashboard, Fluxo
-   de Caixa, Próximas Faturas, detecção de duplicidade na importação, Status de pagamento etc.) continua
-   sendo faturaPorCompetencia, sem nenhuma mudança — são métricas conceitualmente diferentes ("quanto você
-   gastou nesta competência" vs. "quanto o banco está cobrando agora", que inclui o saldo rotativo não
-   pago de competências anteriores). */
+/* Valor da fatura usado nos cards de RESUMO/EXIBIÇÃO (card do cartão na aba Contas e Cartões, card "valor
+   total da fatura" do modal Ver Fatura e, desde o requisito "Correções no painel de Cartões e Extrato
+   Consolidado", também pelo valor projetado do item de cartão no Extrato Consolidado — ver
+   valorProjecaoItem) — requisito "Corrigir valores dos cards da fatura": fonte única, reaproveitando
+   diretamente o "Total calculado" da Conciliação com o banco (reconciliacaoFatura) sempre que houver saldo
+   anterior conhecido (de uma competência anterior já importada do banco, ou informado manualmente) — esse
+   total já soma saldo anterior + compras − pagamentos − estornos, o valor real cobrado pelo banco, nunca
+   recalculado de forma paralela aqui. Sem saldo anterior conhecido (cartão sem nenhum dado bancário ainda
+   importado), cai no valor tradicional (faturaPorCompetencia: só compras − estornos da própria
+   competência) — comportamento inalterado para os demais cartões, que nunca tiveram esse dado disponível
+   (seção "Preservar... o funcionamento dos demais cartões" do requisito).
+   Correção do requisito "Faturas sem lançamentos devem apresentar R$ 0,00": ter saldo anterior conhecido
+   não basta, por si só, para "herdar" esse saldo como se fosse o valor desta competência — isso inflava
+   indevidamente faturas sem NENHUM lançamento (nem compra, nem pagamento, nem estorno) e sem nenhum total
+   bancário informado para esta própria competência, mostrando o saldo em aberto da competência ANTERIOR
+   como se já fosse uma nova fatura desta. Só usa totalCalculado quando esta própria competência tem
+   evidência real de fatura: 1+ lançamentos nela (qtdLancamentos>0 — compra, pagamento OU estorno já
+   contam) ou um total bancário já informado diretamente para ela (temTotalInformado, mesmo que $0 de
+   compras novas); sem nenhum dos dois, nunca existiu fatura para esta competência e o valor é R$ 0,00.
+   O valor "oficial" usado no resto do app para outras finalidades (Dashboard, Próximas Faturas, detecção
+   de duplicidade na importação, Status de pagamento etc.) continua sendo faturaPorCompetencia, sem nenhuma
+   mudança — são métricas conceitualmente diferentes ("quanto você gastou nesta competência" vs. "quanto o
+   banco está cobrando agora", que inclui o saldo rotativo não pago de competências anteriores). */
 function faturaTotalExibicao(conta, competencia){
   const rec = reconciliacaoFatura(conta, competencia);
-  return rec.temSaldoAnterior ? rec.totalCalculado : faturaPorCompetencia(conta, competencia);
+  if(!rec.temSaldoAnterior) return faturaPorCompetencia(conta, competencia);
+  const semFaturaNestaCompetencia = rec.qtdLancamentos===0 && !rec.temTotalInformado;
+  if(semFaturaNestaCompetencia) return 0;
+  return rec.totalCalculado;
 }
 /* Próximas faturas de um cartão (modal 👁), a partir do mês seguinte ao selecionado no topo
    do app. Usa exatamente a mesma função (faturaPorCompetencia) já usada na aba Contas e Cartões, no
@@ -11564,11 +11586,20 @@ function parseMoedaTexto(v){
 }
 function fmtMoedaInput(v){ return arredondarMoeda(v).toFixed(2).replace('.', ','); }
 /* Valor de um lançamento previsto: se estiver vinculado a um cartão, é sempre o total já lançado na
-   fatura do mês em questão (compras avulsas + parcela do mês de compras parceladas + demais lançamentos
-   da fatura) — nunca um valor digitado. Caso contrário, é o valor informado manualmente (o mesmo valor
-   recorrente se repete em todos os meses projetados, a partir do mês de início escolhido). */
+   fatura do mês em questão — nunca um valor digitado. Caso contrário, é o valor informado manualmente (o
+   mesmo valor recorrente se repete em todos os meses projetados, a partir do mês de início escolhido).
+   Requisito "Correções no painel de Cartões e Extrato Consolidado", item 3 ("Divergência incorreta no
+   Extrato Consolidado"): para cartão, usa faturaTotalExibicao — a MESMA fonte já usada pelo "valor da
+   fatura" do painel de Cartões — em vez de faturaPorCompetencia direto. As duas divergiam sempre que havia
+   saldo anterior em aberto (faturaPorCompetencia só soma as compras da própria competência; o painel de
+   Cartões já mostra o total cobrado pelo banco, incluindo esse saldo), fazendo o valor pago real (que bate
+   com o painel de Cartões) parecer "Divergente" no Extrato Consolidado por comparação com uma base
+   diferente da exibida — nunca uma divergência financeira de verdade. Sem saldo anterior conhecido,
+   faturaTotalExibicao já cai de volta em faturaPorCompetencia (comportamento idêntico ao anterior). As
+   demais finalidades que usam faturaPorCompetencia diretamente (Dashboard, Próximas Faturas, detecção de
+   duplicidade, Status de pagamento) não passam por esta função e continuam inalteradas. */
 function valorProjecaoItem(item, competencia){
-  return item.cartao ? faturaPorCompetencia(item.cartao, competencia) : (Number(item.valor)||0);
+  return item.cartao ? faturaTotalExibicao(item.cartao, competencia) : (Number(item.valor)||0);
 }
 /* Um item só aparece a partir do mês/ano escolhido em "competenciaInicio" (se definido); sem essa
    restrição, aparece em todos os meses, como na planilha de referência. Se "competenciaFim" estiver
@@ -15483,8 +15514,11 @@ function renderCartoes(){
         // .data-editavel-valor), obtém-se aqui o texto puro da data e o flag de ajuste separadamente, em
         // vez de reaproveitar a string HTML já concatenada.
         const ovFatura = faturaOverride(c, competencia);
-        const fechAjustado = !!(ovFatura && ovFatura.fechamento);
-        const vencAjustado = !!(ovFatura && ovFatura.vencimento);
+        // Mesmo critério de vencimentoLabel/fechamentoLabel: só "(ajustado)" quando o valor salvo difere do
+        // calculado por padrão para esta competência — nunca só por existir um override salvo (requisito
+        // "Correções no painel de Cartões e Extrato Consolidado", item 1).
+        const fechAjustado = !!(ovFatura && ovFatura.fechamento && ovFatura.fechamento!==fechamentoDataCalculada(competencia, c));
+        const vencAjustado = !!(ovFatura && ovFatura.vencimento && ovFatura.vencimento!==vencimentoDataCalculada(competencia, c));
         const fechData = fechAjustado ? fmtData(ovFatura.fechamento) : fech;
         const vencData = vencAjustado ? fmtData(ovFatura.vencimento) : venc;
         const resp = STATE.contaResponsavel[c];
