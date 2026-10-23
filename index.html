@@ -3113,6 +3113,7 @@ summary::marker{content:'';}
   white-space:nowrap;display:inline-block;
 }
 .status-pill-novo.paga{background:#d7f0e2;color:#1e6b45;}
+.status-pill-novo.parcial{background:#fde0c2;color:#a3590a;}
 .status-pill-novo.aberta{background:#fdf0c4;color:#8a6d00;}
 .status-pill-novo.atrasada{background:#f8d3ce;color:#a12f22;}
 .status-pill-novo.fecha-amanha{background:#d3e6fb;color:#1c5aa8;}
@@ -6690,17 +6691,22 @@ async function aplicarSnapshotLocalPendente(){
 async function registrarUltimaContagemReg(n){ try{ await idbSetHandle('ultimaContagemReg', n); }catch(e){} }
 async function obterUltimaContagemReg(){ try{ return await idbGetHandle('ultimaContagemReg'); }catch(e){ return null; } }
 
-const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao','ofx_fitid','rende_facil_origem_id','rende_facil_tipo'];
+const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao','ofx_fitid','rende_facil_origem_id','rende_facil_tipo','cartao_fatura'];
 
 /* ---------- Arquivo de REGISTROS (só lançamentos) ---------- */
 function buildCSVRegistros(){
   const rows = [CSV_HEADER];
   STATE.transactions.forEach(t=>{
-    // ordem_exibicao (última coluna): ordem manual definida por drag-and-drop no Extrato/Lançamentos
-    // Futuros/Fatura/Próximas Faturas (ver aplicarOrdemManual/persistirOrdemManual) — vazio para um
-    // lançamento que nunca foi reordenado manualmente, sincronizado pela mesma estratégia de persistência
-    // do arquivo de registros já usada por todos os demais campos, nunca um mecanismo à parte.
-    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '', t.ofxFitid||'', t.rendeFacilOrigemId||'', t.rendeFacilTipo||'']);
+    // ordem_exibicao: ordem manual definida por drag-and-drop no Extrato/Lançamentos Futuros/Fatura/Próximas
+    // Faturas (ver aplicarOrdemManual/persistirOrdemManual) — vazio para um lançamento que nunca foi
+    // reordenado manualmente, sincronizado pela mesma estratégia de persistência do arquivo de registros já
+    // usada por todos os demais campos, nunca um mecanismo à parte.
+    // cartao_fatura (última coluna): o cartão escolhido no campo "Cartão" do modal de edição para um
+    // pagamento de fatura lançado numa conta corrente (ver renderTxModal/pagamentosCandidatosFatura caso
+    // "vinculado por t.cartaoFatura") — faltava nesta lista até esta correção, então o vínculo escolhido
+    // manualmente pelo usuário era perdido a cada recarregamento da aplicação (requisito "Corrigir
+    // reconhecimento e persistência dos pagamentos de faturas", seção 2).
+    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '', t.ofxFitid||'', t.rendeFacilOrigemId||'', t.rendeFacilTipo||'', t.cartaoFatura||'']);
   });
   return Papa.unparse(rows);
 }
@@ -6721,6 +6727,7 @@ function loadCSVRegistros(text){
         ordemExibicao: (r.ordem_exibicao!==undefined && r.ordem_exibicao!=='') ? Number(r.ordem_exibicao) : undefined,
         ofxFitid: r.ofx_fitid||'',
         rendeFacilOrigemId: r.rende_facil_origem_id||'', rendeFacilTipo: r.rende_facil_tipo||'',
+        cartaoFatura: r.cartao_fatura||'',
       });
     }
   });
@@ -8933,15 +8940,23 @@ function janelaPagamentoFatura(conta, competencia){
        espelho e SEM t.cartaoFatura preenchido — só é aceita quando bate EXATAMENTE (nunca "parecido")
        com o saldo ainda devido da fatura (já descontados os casos (a) e (b) acima) e cai dentro da
        janela real de fechamento; nunca quando já existe um espelho real (t.transferenciaVinculoId), para
-       não contar em dobro. */
+       não contar em dobro.
+
+   RECONHECIMENTO DE PAGAMENTOS ANTECIPADOS (requisito "Corrigir reconhecimento e persistência dos
+   pagamentos de faturas", seção 1): a Fatura/Competência vinculada explicitamente ao lançamento (campo
+   dedicado do modal de edição — ver renderTxModal — ou herdada da competência selecionada na importação,
+   ver importConfirm) tem PRIORIDADE sobre a janela de fechamento calculada por data. Um pagamento feito
+   bem ANTES do fechamento (pagamento antecipado) cai fora da janela (fechIni < data <= fechFim), então
+   depender só da data o atribuía à fatura ERRADA (ou a nenhuma) mesmo com o cartão e a competência
+   corretos já informados manualmente — daí o requisito explícito "não utilizar exclusivamente o mês da
+   data do pagamento". Cada lançamento só tem UM valor de competência, então nunca pode contar para duas
+   faturas ao mesmo tempo (sem risco de dupla contagem). Sem competência vinculada (campo vazio — dado
+   antigo ou nunca confirmado), cai na janela de fechamento calculada por data, exatamente como antes. */
 function pagamentosCandidatosFatura(conta, competencia){
   const total = faturaPorCompetencia(conta, competencia);
   const janela = janelaPagamentoFatura(conta, competencia);
   const naJanela = data => janela ? (data && data > janela.fechIni && (!janela.fechFim || data <= janela.fechFim)) : false;
-  // Cartão sem dia de fechamento configurado: não há como calcular a janela real, então cai no único
-  // sinal disponível (o campo t.competencia do próprio lançamento) — mesmo assim, nunca por
-  // proximidade/valor.
-  const dentroDaFatura = t => janela ? naJanela(t.data) : t.competencia===competencia;
+  const dentroDaFatura = t => t.competencia ? (t.competencia===competencia) : naJanela(t.data);
 
   const doCartao = STATE.transactions.filter(t=>{
     const base = t.conta===conta && t.pgto==='Cartão de Crédito' && t.tipo==='Receita' && t.categoria==='Recebimento por Pagamento de Fatura';
@@ -8971,9 +8986,10 @@ function pagamentosCandidatosFatura(conta, competencia){
 }
 /* Quanto já foi efetivamente pago de uma fatura: soma dos lançamentos identificados por
    pagamentosCandidatosFatura (ver ali a regra completa de correspondência, incluindo os dois formatos
-   possíveis de pagamento). Como as janelas de competências consecutivas nunca se sobrepõem, e o lado da
-   conta corrente só é aceito pelo valor EXATO do saldo residual, o mesmo lançamento nunca é contado em
-   mais de uma fatura. */
+   possíveis de pagamento). O mesmo lançamento nunca é contado em mais de uma fatura: quando tem
+   competência vinculada, essa competência é um valor único (só pode bater com UMA chamada desta função);
+   sem competência vinculada, as janelas de competências consecutivas nunca se sobrepõem, e o lado da
+   conta corrente só é aceito pelo valor EXATO do saldo residual. */
 function pagamentoFaturaValor(conta, competencia){
   return pagamentosCandidatosFatura(conta, competencia).reduce((s,t)=> s + (Number(t.valor)||0), 0);
 }
@@ -9041,9 +9057,16 @@ function candidatosCartaoFaturaParaPagamento(despesa){
 function reconciliarPagamentosFatura(){
   if(!STATE.transactions?.length || !STATE.cartoes?.length) return 0;
   let criados = 0;
+  // Nunca roda a correspondência automática (por valor+janela, às cegas quanto ao cartão/competência já
+  // informados) sobre uma despesa que o usuário já vinculou manualmente a um cartão (t.cartaoFatura — ver
+  // caso "vinculado por t.cartaoFatura" em pagamentosCandidatosFatura): esse vínculo já identifica a
+  // fatura sem ambiguidade nenhuma, então criar aqui um espelho automático para OUTRO cartão/competência
+  // que porventura bata por coincidência de valor destruiria a escolha manual do usuário — requisito
+  // "Corrigir reconhecimento e persistência dos pagamentos de faturas", seção 2 ("preservar os vínculos
+  // manuais realizados pelo usuário").
   const despesasNaoEspelhadas = STATE.transactions.filter(t=>
     t.tipo==='Despesa' && t.categoria==='Pagamento de Fatura de Cartão de Crédito'
-    && !STATE.cartoes.includes(t.conta) && !t.transferenciaVinculoId);
+    && !STATE.cartoes.includes(t.conta) && !t.transferenciaVinculoId && !t.cartaoFatura);
   despesasNaoEspelhadas.forEach(despesa=>{
     const candidatos = candidatosCartaoFaturaParaPagamento(despesa);
     if(candidatos.length!==1) return; // sem correspondência, ou ambígua (mais de uma bateria) — não arrisca
@@ -9095,10 +9118,8 @@ function diagnosticoPagamentoFatura(conta, competencia){
   const janela = janelaPagamentoFatura(conta, competencia);
   const candidatos = pagamentosCandidatosFatura(conta, competencia);
   const pago = candidatos.reduce((s,t)=>s+(Number(t.valor)||0),0);
-  const st = statusPagamentoFatura(conta, competencia);
-  const hoje = hojeISO();
-  const statusFinal = st.paga ? (st.parcial ? 'Paga — Parcialmente' : 'Paga — Totalmente')
-    : (vencISO && vencISO < hoje ? 'Atrasada' : 'Aberta');
+  const stDetalhado = statusDetalhadoFatura(conta, competencia);
+  const statusFinal = `${stDetalhado.label}${stDetalhado.pagamento ? ` (${stDetalhado.pagamento==='parcial'?'parcial':'total'})` : ''}`;
   return {
     cartao: conta,
     competencia,
@@ -10695,9 +10716,12 @@ function statusDetalhadoFatura(conta, competencia){
   const diasVenc = vencISO ? Math.round((new Date(vencISO+'T00:00:00') - hoje) / 86400000) : null;
   const diasFech = fechISO ? Math.round((new Date(fechISO+'T00:00:00') - hoje) / 86400000) : null;
   const base = { vencISO, fechISO, diasVenc, pago:pag.pago, totalFatura:pag.total };
-  // Qualquer pagamento identificado (total ou parcial) classifica a fatura como "Paga" — o status de
-  // vencimento abaixo só entra em jogo quando NENHUM pagamento foi encontrado (ver regra de precedência).
-  if(pag.paga) return { ...base, chave:'paga', label:'Paga', emoji:'🟢', pagamento: pag.parcial?'parcial':'total' };
+  // Quitação INTEGRAL classifica a fatura como "Paga" incondicionalmente — qualquer que seja a data de
+  // vencimento (passada ou futura): nunca "Atrasada" só porque o vencimento já passou, uma fatura já
+  // totalmente quitada (requisito "Corrigir reconhecimento e persistência dos pagamentos de faturas",
+  // seção 3, critério "Fatura integralmente quitada antes do vencimento → Paga", que vale igualmente
+  // depois do vencimento: nunca há saldo pendente para justificar Atrasada).
+  if(pag.paga && !pag.parcial) return { ...base, chave:'paga', label:'Paga', emoji:'🟢', pagamento:'total' };
   // Fatura sem nenhum valor devido (nada lançado nela): se o ciclo de compras já fechou (fechamento no
   // passado), não faz sentido chamar de "Aberta" (não aceita mais lançamento novo) nem de "Atrasada" (não
   // há nada a pagar) — mostra "Fechada" com o subtexto "Sem lançamentos". Enquanto o fechamento ainda não
@@ -10706,8 +10730,18 @@ function statusDetalhadoFatura(conta, competencia){
     if(diasFech!==null && diasFech<0) return { ...base, chave:'fechada-sem-lancamentos', label:'Fechada', emoji:'⚫', pagamento:null };
     return { ...base, chave:'aberta', label:'Aberta', emoji:'🟡', pagamento:null };
   }
-  // Prioridade: Atrasada > Vence em breve (1–3 dias) > Fecha amanhã > Aberta (>10 dias ou sem data).
-  if(diasVenc!==null && diasVenc<0) return { ...base, chave:'atrasada', label:'Atrasada', emoji:'🔴', pagamento:null };
+  const vencPassou = diasVenc!==null && diasVenc<0;
+  // Pagamento PARCIAL (saldo residual ainda devido, ver statusPagamentoFatura): "Parcialmente paga"
+  // enquanto o vencimento ainda não passou (antes ou no próprio dia); vira "Atrasada" a partir do dia
+  // seguinte ao vencimento, pois ainda existe saldo vencido em aberto — requisito seção 3, "Caso exista
+  // pagamento parcial após o vencimento, o status deve continuar indicando Atrasada".
+  if(pag.parcial){
+    if(vencPassou) return { ...base, chave:'atrasada', label:'Atrasada', emoji:'🔴', pagamento:'parcial' };
+    return { ...base, chave:'parcial', label:'Parcialmente paga', emoji:'🟠', pagamento:'parcial' };
+  }
+  // Nenhum pagamento identificado — prioridade: Atrasada > Vence em breve (1–3 dias) > Fecha amanhã >
+  // Aberta (>10 dias ou sem data).
+  if(vencPassou) return { ...base, chave:'atrasada', label:'Atrasada', emoji:'🔴', pagamento:null };
   if(diasVenc!==null && diasVenc<=3) return { ...base, chave:'vence-breve', label: diasVenc===0 ? 'Vence hoje' : (diasVenc===1 ? 'Vence amanhã' : 'Vence em breve'), emoji:'🟠', pagamento:null };
   if(diasFech===1) return { ...base, chave:'fecha-amanha', label:'Fecha amanhã', emoji:'🔵', pagamento:null };
   return { ...base, chave:'aberta', label:'Aberta', emoji:'🟡', pagamento:null };
@@ -10715,7 +10749,8 @@ function statusDetalhadoFatura(conta, competencia){
 /* Texto do tooltip da barra de progresso — sempre com a contagem exata de dias, atualizado
    automaticamente conforme a data atual (não depende da categoria/label do status). */
 function tooltipProgressoFatura(st){
-  if(st.chave==='paga') return `${st.pagamento==='parcial' ? 'Paga parcialmente' : 'Paga totalmente'}: ${fmtBRL(st.pago)} de ${fmtBRL(st.totalFatura)}`;
+  if(st.chave==='paga') return `Paga totalmente: ${fmtBRL(st.pago)} de ${fmtBRL(st.totalFatura)}`;
+  if(st.chave==='parcial') return `Paga parcialmente: ${fmtBRL(st.pago)} de ${fmtBRL(st.totalFatura)}`;
   if(st.chave==='proxima') return 'Competência futura — ainda fora do período de acompanhamento';
   if(st.diasVenc===null) return '';
   if(st.diasVenc<0) return `Atrasada há ${Math.abs(st.diasVenc)} dia${Math.abs(st.diasVenc)===1?'':'s'}`;
@@ -10726,7 +10761,8 @@ function tooltipProgressoFatura(st){
 /* Título (tooltip) do selo de Status na aba Cartões — hoje é só informativo (o Status não é mais
    clicável nem editável manualmente: é 100% calculado a partir dos lançamentos e da data de vencimento). */
 function tituloStatusFatura(st){
-  if(st.chave==='paga') return `${st.pagamento==='parcial' ? 'Fatura paga parcialmente' : 'Fatura paga totalmente'} — ${fmtBRL(st.pago)} de ${fmtBRL(st.totalFatura)} (calculado automaticamente)`;
+  if(st.chave==='paga') return `Fatura paga totalmente — ${fmtBRL(st.pago)} de ${fmtBRL(st.totalFatura)} (calculado automaticamente)`;
+  if(st.chave==='parcial') return `Fatura paga parcialmente — ${fmtBRL(st.pago)} de ${fmtBRL(st.totalFatura)} (calculado automaticamente)`;
   return tooltipProgressoFatura(st) || 'Status calculado automaticamente a partir dos lançamentos e da data de vencimento';
 }
 /* Fração (0 a 1) do caminho já percorrido entre o fechamento e o vencimento da fatura, para a barra de
@@ -10739,7 +10775,7 @@ function progressoAteVencimento(st){
   const hoje = new Date(); hoje.setHours(0,0,0,0);
   return Math.max(0, Math.min(1, (hoje-fech)/total));
 }
-const COR_STATUS_FATURA = { 'paga':'#1e8e5a', 'atrasada':'#c0392b', 'fecha-amanha':'#1c5aa8', 'vence-breve':'#a3590a', 'aberta':'#8a6d00', 'proxima':'#8393ac' };
+const COR_STATUS_FATURA = { 'paga':'#1e8e5a', 'parcial':'#a3590a', 'atrasada':'#c0392b', 'fecha-amanha':'#1c5aa8', 'vence-breve':'#a3590a', 'aberta':'#8a6d00', 'proxima':'#8393ac' };
 /* Cor da barra de utilização do limite de crédito (ver renderCartoes): verde enquanto sobra bastante
    margem, âmbar perto do limite, vermelho a partir de 90% ou já excedido — nunca escondendo o estouro. */
 function corLimiteCartao(pctUtilizado){
@@ -12359,7 +12395,7 @@ function exportarRelatorioMensalPDF(){
       <td style="text-align:right;">${fmtBRL(v)}</td>
       <td style="text-align:center;">${fech||'—'}</td>
       <td style="text-align:center;">${venc||'—'}</td>
-      <td style="text-align:center;">${st.emoji} ${st.label}${st.chave==='paga' ? ` · ${st.pagamento==='parcial'?'Parcialmente':'Totalmente'}` : (st.chave==='fechada-sem-lancamentos' ? ' · Sem lançamentos' : '')}</td>
+      <td style="text-align:center;">${st.emoji} ${st.label}${st.chave==='fechada-sem-lancamentos' ? ' · Sem lançamentos' : ''}</td>
       <td style="text-align:right;">${saldoParcTexto}</td>
     </tr>`;
   }).join('');
@@ -15426,7 +15462,7 @@ function renderCartoes(){
         const ehMelhor = melhorCartao.vencedor===c;
         const st = statusDetalhadoFatura(c, competencia);
         const progresso = (st.chave!=='paga' && st.chave!=='proxima' && st.chave!=='fechada-sem-lancamentos') ? progressoAteVencimento(st) : null;
-        const infoPagamento = st.chave==='paga' ? (st.pagamento==='parcial' ? 'Parcialmente' : 'Totalmente') : (st.chave==='fechada-sem-lancamentos' ? 'Sem lançamentos' : null);
+        const infoPagamento = st.chave==='fechada-sem-lancamentos' ? 'Sem lançamentos' : null;
         // Limite de crédito do cartão (independente da competência exibida — reflete o comprometido em
         // TODAS as faturas ainda em aberto) — ver blocoLimiteCartaoHtml, mesma fonte reaproveitada nos
         // cabeçalhos dos modais "Ver Fatura"/"Ver Próximas Faturas"; recalculado a cada render(), então
@@ -15730,7 +15766,7 @@ function renderFaturaAtualModal(){
             <span><b>Competência</b> ${competenciaLabel(competencia)}</span>
             <span><b>Fechamento</b> ${fech||'—'}</span>
             <span><b>Vencimento</b> ${venc||'—'}</span>
-            <span><b>Status</b> <span class="status-pill-novo ${stFatura.chave}" style="padding:2px 9px;font-size:11px;" title="${escapeHtml(tituloStatusFatura(stFatura))}">${stFatura.emoji} ${stFatura.label}${stFatura.chave==='paga' ? ` · ${stFatura.pagamento==='parcial'?'Parcialmente':'Totalmente'}` : (stFatura.chave==='fechada-sem-lancamentos' ? ' · Sem lançamentos' : '')}</span></span>
+            <span><b>Status</b> <span class="status-pill-novo ${stFatura.chave}" style="padding:2px 9px;font-size:11px;" title="${escapeHtml(tituloStatusFatura(stFatura))}">${stFatura.emoji} ${stFatura.label}${stFatura.chave==='fechada-sem-lancamentos' ? ' · Sem lançamentos' : ''}</span></span>
             <span><b>${itensFiltrados.length}</b> lançamento${itensFiltrados.length===1?'':'s'}</span>
             ${temOrdemManualFatura ? `<button type="button" class="btn btn-ghost btn-sm no-print btn-restaurar-ordem" id="btnRestaurarOrdemFatura" title="Esta fatura tem uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
           </div>
@@ -15887,7 +15923,7 @@ function renderProjecaoFaturaModal(){
             <span><b>Competência</b> ${competenciaLabel(selecionada)}</span>
             <span><b>Fechamento</b> ${fechamentoLabel(selecionada, conta)||'—'}</span>
             <span><b>Vencimento</b> ${vencimentoLabel(selecionada, conta)||'—'}</span>
-            <span><b>Status</b> ${(()=>{ const stSel = statusDetalhadoFatura(conta, selecionada); return `<span class="status-pill-novo ${stSel.chave}" style="padding:2px 9px;font-size:11px;" title="${escapeHtml(tituloStatusFatura(stSel))}">${stSel.emoji} ${stSel.label}${stSel.chave==='paga' ? ` · ${stSel.pagamento==='parcial'?'Parcialmente':'Totalmente'}` : (stSel.chave==='fechada-sem-lancamentos' ? ' · Sem lançamentos' : '')}</span>`; })()}</span>
+            <span><b>Status</b> ${(()=>{ const stSel = statusDetalhadoFatura(conta, selecionada); return `<span class="status-pill-novo ${stSel.chave}" style="padding:2px 9px;font-size:11px;" title="${escapeHtml(tituloStatusFatura(stSel))}">${stSel.emoji} ${stSel.label}${stSel.chave==='fechada-sem-lancamentos' ? ' · Sem lançamentos' : ''}</span>`; })()}</span>
             ` : ''}
             <span><b>${itens.length}</b> lançamento${itens.length===1?'':'s'}</span>
             ${temOrdemManualProjecao ? `<button type="button" class="btn btn-ghost btn-sm no-print btn-restaurar-ordem" id="btnRestaurarOrdemProjecao" title="Estas próximas faturas têm uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
