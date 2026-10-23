@@ -5395,6 +5395,23 @@ function padronizarReceitasContracheque(){
     }
   });
 }
+/* Regra fixa: todo lançamento de Despesa cuja descrição comece com "KEETABR*" (Keeta) ou "IFD*" (iFood)
+   é sempre categorizado como Aplicativos de Entrega — reaplicada a cada carregamento para corrigir
+   também lançamentos já importados anteriormente com outra categoria. Nunca toca em Receita (estornos
+   com a mesma descrição de origem devem manter sua própria classificação). */
+function aplicarCategoriaFixaAplicativosEntrega(){
+  const info = catInfo('Aplicativos de Entrega');
+  if(!info) return;
+  STATE.transactions.forEach(t=>{
+    if(t.tipo!=='Despesa') return;
+    const d = t.descricao||'';
+    if(d.startsWith('KEETABR*') || d.startsWith('IFD*')){
+      if(t.categoria!=='Aplicativos de Entrega'){
+        t.categoria='Aplicativos de Entrega'; t.grupo=info.grupo; t.subgrupo=info.subgrupo; t.natureza=info.natureza;
+      }
+    }
+  });
+}
 function cartoesOrdenados(){ return [...STATE.cartoes].sort((a,b)=>a.localeCompare(b,'pt-BR')); }
 /* Ordem de exibição da aba Contas e Cartões: por dia de vencimento da fatura (crescente); em caso de
    empate, por nome do responsável e depois pelo nome do cartão. Não é usada para nada além da ordem de
@@ -5422,6 +5439,9 @@ const SUGESTOES = {
   "cafeteria":"Cafeterias, Docerias e Sorveterias","sorveteria":"Cafeterias, Docerias e Sorveterias","starbucks":"Cafeterias, Docerias e Sorveterias",
   "bar ":"Bares e Bebidas","boteco":"Bares e Bebidas",
   "ifood":"Aplicativos de Entrega","rappi":"Aplicativos de Entrega","ubereats":"Aplicativos de Entrega",
+  // "KEETABR*" (Keeta, app de entregas do grupo Meituan) e "IFD*" (identificador de cobrança do iFood em
+  // extratos bancários, ex.: "IFD*66.126.887 ANDRE SA") — pedido explícito do usuário.
+  "keetabr*":"Aplicativos de Entrega","ifd*":"Aplicativos de Entrega",
   "farmacia":"Medicamentos (Contínuos, Manipulados e Gerais)","drogaria":"Medicamentos (Contínuos, Manipulados e Gerais)","drogasil":"Medicamentos (Contínuos, Manipulados e Gerais)",
   "posto":"Combustível (Gasolina, Etanol, Diesel, GNV)","combustivel":"Combustível (Gasolina, Etanol, Diesel, GNV)","ipiranga":"Combustível (Gasolina, Etanol, Diesel, GNV)","shell":"Combustível (Gasolina, Etanol, Diesel, GNV)",
   "uber":"Táxi ou Apps de Transporte","99app":"Táxi ou Apps de Transporte","taxi":"Táxi ou Apps de Transporte",
@@ -6688,6 +6708,7 @@ function loadCSVRegistros(text){
   });
   STATE.transactions = transactions;
   padronizarReceitasContracheque();
+  aplicarCategoriaFixaAplicativosEntrega();
   corrigirCompetenciaParcelasFuturas();
   removerParcelasFuturasEmprestimoContracheque();
   corrigirParcelasEmprestimos();
@@ -6978,6 +6999,7 @@ function loadCSVConfig(text){
   });
   aplicarOrdemFixaCategoriasLazer();
   padronizarReceitasContracheque();
+  aplicarCategoriaFixaAplicativosEntrega();
   migrarCompetenciaParaVencimento();
   migrarNomesContasPadrao();
   aplicarResponsavelPadraoPorTipo();
