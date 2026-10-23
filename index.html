@@ -9357,7 +9357,18 @@ function reconciliacaoFatura(conta, competencia){
   const saldoAnteriorOrigem = saldoAnteriorBanco!=null ? 'competencia-anterior' : (saldoAnteriorManual!=null ? 'manual' : null);
   const totalInformado = STATE.faturaTotalBanco[chaveAtual] ?? null;
   const temSaldoAnterior = saldoAnterior!=null, temTotalInformado = totalInformado!=null;
-  const totalCalculadoCent = Math.round(((temSaldoAnterior?saldoAnterior:0) + compras - (pagamentos+estornos))*100);
+  // Personnalité Black (Itaú) — requisito "Correção exclusiva das faturas do Personnalité Black": o
+  // próprio banco confirma, no rodapé da fatura exportada, que o saldo de uma fatura já fechada NUNCA é
+  // somado ao total da fatura seguinte ("Após o pagamento da fatura fechada, o valor daquele saldo não
+  // será mais somado ao total da fatura."). Ao contrário de outros cartões (ex.: Ourocard BB, cujo total
+  // informado pelo próprio banco já inclui o saldo rotativo não pago — ver requisito "Corrigir valores dos
+  // cards da fatura"), o "Valor"/total que o Itaú informa para este cartão é sempre só as compras da
+  // própria competência, líquidas de pagamentos/estornos — nunca o saldo anterior. Somar saldoAnterior ao
+  // cálculo para ESTE cartão inflava indevidamente tanto o Total calculado da conciliação quanto o "valor
+  // total da fatura" exibido nos cards (ver faturaTotalExibicao, que reaproveita rec.totalCalculado). Só
+  // para este cartão — os demais continuam somando o saldo anterior exatamente como antes.
+  const incluiSaldoAnteriorNoCalculo = temSaldoAnterior && !ehCartaoPersonnaliteBlack(conta);
+  const totalCalculadoCent = Math.round(((incluiSaldoAnteriorNoCalculo?saldoAnterior:0) + compras - (pagamentos+estornos))*100);
   const totalCalculado = totalCalculadoCent/100;
   const diferenca = temTotalInformado ? Math.round((totalCalculado-totalInformado)*100)/100 : null;
   const estado = (!temSaldoAnterior || !temTotalInformado) ? 'pendente' : (Math.abs(diferenca)<0.005 ? 'conciliada' : 'divergente');
@@ -15734,8 +15745,13 @@ function renderFaturaAtualModal(){
   // nunca recalculado aqui) encadeado com os totais já filtrados acima. Sem nenhum filtro ativo, compras =
   // totalAvistaFiltrado+totalParceladoFiltrado = rec.compras e totalPagamentosFiltrado+totalEstornosFiltrado
   // = rec.pagamentos+rec.estornos (mesma fonte), então o resultado é idêntico a rec.totalCalculado — igual
-  // à seção Conciliação com o banco abaixo, por construção, nunca por coincidência.
-  const totalFatFiltrado = (rec.temSaldoAnterior ? rec.saldoAnterior : 0) + totalAvistaFiltrado + totalParceladoFiltrado - totalPagamentosFiltrado - totalEstornosFiltrado;
+  // à seção Conciliação com o banco abaixo, por construção, nunca por coincidência. Personnalité Black
+  // (Itaú) é a única exceção — mesma condição já aplicada dentro da própria reconciliacaoFatura (ver
+  // requisito "Correção exclusiva das faturas do Personnalité Black"): o saldo anterior nunca entra no
+  // total para este cartão (o Itaú nunca o soma à fatura seguinte), então este card precisa seguir
+  // exatamente a mesma condição para continuar idêntico a rec.totalCalculado, nunca um cálculo paralelo.
+  const incluiSaldoAnteriorNesteCard = rec.temSaldoAnterior && !ehCartaoPersonnaliteBlack(conta);
+  const totalFatFiltrado = (incluiSaldoAnteriorNesteCard ? rec.saldoAnterior : 0) + totalAvistaFiltrado + totalParceladoFiltrado - totalPagamentosFiltrado - totalEstornosFiltrado;
   const filtrosAtivos = filtrosPadraoAtivos(f, [{campo:'tipo'},{campo:'parcela'}]) || !!fBusca.trim();
   const camposFiltroFatura = camposFiltroTipoParcelaCascata(det.itens, f);
   const qtdAtivosFatura = contarFiltrosPadraoAtivos(f, camposFiltroFatura);
@@ -20616,10 +20632,24 @@ function encontrarDuplicata(entry){
   // tipo (Despesa/Receita) tenham sido calculados de forma diferente entre uma importação e outra (ver
   // chaveIdentidadeParcela). Checado ANTES do critério padrão abaixo, que exige o mesmo `tipo` e por isso
   // nunca pegaria uma reimportação em que o tipo saiu errado.
+  // Personnalité Black (Itaú) — requisito "Correção exclusiva das faturas do Personnalité Black", seção 2
+  // ("Parcelas antecipadas"): quando o candidato encontrado é só uma parcela FUTURA ainda especulativa
+  // (t.parcelaFutura — projetada por sincronizarParcelasFuturas, um mês por parcela, nunca confirmada por
+  // nenhum arquivo real do banco), ela nunca bloqueia a importação real da MESMA parcela quando o Itaú a
+  // confirma de fato — mesmo que a "antecipação de parcelas" desse cartão a traga, no arquivo real, numa
+  // competência bem diferente da projetada (a Itaú às vezes cobra de uma vez, numa única fatura, várias
+  // parcelas que só venceriam em faturas futuras, concedendo inclusive um desconto — ver "Desc Antecipa
+  // Parcelas" na própria fatura). Sem esta exceção, a parcela real confirmada pelo banco era descartada
+  // como "já existe" e nunca chegava a entrar em STATE.transactions — ficando, inclusive, fora do alcance
+  // da limpeza automática já existente para este exato cenário (aplicarAntecipacoesDeParcelas, que só
+  // consegue suprimir a projeção obsoleta quando encontra evidência real já salva). Só para este cartão —
+  // os demais continuam com a mesma regra de sempre (uma parcela futura projetada também bloqueia
+  // reimportações, intencionalmente, para nunca duplicar).
+  const ehPlaceholderFuturoDescartavelPB = t => !!t.parcelaFutura && ehCartaoPersonnaliteBlack(entry.conta);
   if(Number(entry.totalParcelas)>1){
     const chave = chaveIdentidadeParcela(entry);
     const existente = STATE.transactions.find(t=> Number(t.totalParcelas)>1 && chaveIdentidadeParcela(t)===chave);
-    if(existente) return { tipo:'exata', tx:existente };
+    if(existente && !ehPlaceholderFuturoDescartavelPB(existente)) return { tipo:'exata', tx:existente };
   }
   // A verificação de duplicidade só compara lançamentos da MESMA conta — o mesmo valor, mesma descrição
   // e data próxima em contas diferentes são movimentações genuinamente distintas (ex.: um Pix de
@@ -20628,14 +20658,14 @@ function encontrarDuplicata(entry){
   const candidatos = STATE.transactions.filter(t=> t.conta===entry.conta && Math.abs(Number(t.valor)-valorAbs) < 0.01 && t.tipo===entry.tipo);
   for(const t of candidatos){
     if(t.data===entry.data){
-      if(saoParcelasDiferentes(entry,t)) continue;
+      if(saoParcelasDiferentes(entry,t) || ehPlaceholderFuturoDescartavelPB(t)) continue;
       return { tipo:'exata', tx:t };
     }
   }
   for(const t of candidatos){
     const diffDias = Math.abs((new Date(entry.data+"T00:00:00") - new Date(t.data+"T00:00:00"))/86400000);
     if(diffDias<=3){
-      if(saoParcelasDiferentes(entry,t)) continue;
+      if(saoParcelasDiferentes(entry,t) || ehPlaceholderFuturoDescartavelPB(t)) continue;
       return { tipo:'provavel', tx:t };
     }
   }
