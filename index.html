@@ -9357,7 +9357,18 @@ function reconciliacaoFatura(conta, competencia){
   const saldoAnteriorOrigem = saldoAnteriorBanco!=null ? 'competencia-anterior' : (saldoAnteriorManual!=null ? 'manual' : null);
   const totalInformado = STATE.faturaTotalBanco[chaveAtual] ?? null;
   const temSaldoAnterior = saldoAnterior!=null, temTotalInformado = totalInformado!=null;
-  const totalCalculadoCent = Math.round(((temSaldoAnterior?saldoAnterior:0) + compras - (pagamentos+estornos))*100);
+  // Personnalité Black (Itaú) — requisito "Correção exclusiva das faturas do Personnalité Black": o
+  // próprio banco confirma, no rodapé da fatura exportada, que o saldo de uma fatura já fechada NUNCA é
+  // somado ao total da fatura seguinte ("Após o pagamento da fatura fechada, o valor daquele saldo não
+  // será mais somado ao total da fatura."). Ao contrário de outros cartões (ex.: Ourocard BB, cujo total
+  // informado pelo próprio banco já inclui o saldo rotativo não pago — ver requisito "Corrigir valores dos
+  // cards da fatura"), o "Valor"/total que o Itaú informa para este cartão é sempre só as compras da
+  // própria competência, líquidas de pagamentos/estornos — nunca o saldo anterior. Somar saldoAnterior ao
+  // cálculo para ESTE cartão inflava indevidamente tanto o Total calculado da conciliação quanto o "valor
+  // total da fatura" exibido nos cards (ver faturaTotalExibicao, que reaproveita rec.totalCalculado). Só
+  // para este cartão — os demais continuam somando o saldo anterior exatamente como antes.
+  const incluiSaldoAnteriorNoCalculo = temSaldoAnterior && !ehCartaoPersonnaliteBlack(conta);
+  const totalCalculadoCent = Math.round(((incluiSaldoAnteriorNoCalculo?saldoAnterior:0) + compras - (pagamentos+estornos))*100);
   const totalCalculado = totalCalculadoCent/100;
   const diferenca = temTotalInformado ? Math.round((totalCalculado-totalInformado)*100)/100 : null;
   const estado = (!temSaldoAnterior || !temTotalInformado) ? 'pendente' : (Math.abs(diferenca)<0.005 ? 'conciliada' : 'divergente');
@@ -12155,23 +12166,30 @@ function registrosNaoListadosDoIntervalo(ano, mes, diaIni, diaFim){
    resultado do mês anterior). Os lançamentos são os mesmos em todos os meses a partir do mês de início de
    cada um (mesma lista recorrente); só o valor calculado de itens de cartão muda, pois é a fatura
    específica daquele mês. */
+/* Tipos de conta elegíveis para o indicador "Saldo Atual (Hoje)" (card do app-header/Painel Financeiro/
+   Página Inicial — ver calcSaldoAtualFluxoCaixa) — requisito "Correção do cálculo do Saldo atual (hoje)":
+   Conta PJ, Conta Corrente, Poupança e Reserva de Emergência, qualquer que seja seu saldo (inclusive
+   negativo). Contracheque fica SEMPRE de fora, qualquer que seja seu saldo — exclusão obrigatória do
+   requisito. Composição DIFERENTE da usada pelo Saldo Inicial do Fluxo de Caixa (TIPOS_FLUXO_CAIXA/
+   contasElegiveisFluxoCaixa, que exclui Reserva de Emergência por definição própria daquela feature — o
+   Fluxo de Caixa só projeta contas "de movimento corrente", nunca a reserva) — nunca reaproveitada aqui,
+   para este indicador não herdar uma composição de contas pensada para outra finalidade. */
+const TIPOS_SALDO_ATUAL_HOJE = ['Conta Corrente','Conta PJ','Poupança','Reserva de Emergência'];
+function contasElegiveisSaldoAtualHoje(){
+  return contasBancarias().filter(c=>TIPOS_SALDO_ATUAL_HOJE.includes(STATE.contaTipos[c]||''));
+}
 /* Saldo real (efetivamente apurado, a partir dos lançamentos já registrados em STATE.transactions — não
-   dos itens previstos de STATE.projecoes) das contas elegíveis do Fluxo de Caixa, considerando tudo até
-   hoje. Mesma composição de contas do Saldo Inicial (getSaldoInicialBase/contasElegiveisFluxoCaixa) e
-   mesma função de corte por data já usada no Saldo Atual dos cards de Contas (saldoContaAteData). */
+   dos itens previstos de STATE.projecoes), somando o saldo líquido individual (já calculado por
+   saldoContaAteData, a MESMA função de corte por data já usada no Saldo Atual dos cards de Contas — nunca
+   recalculado por uma lógica própria) de cada conta elegível (ver contasElegiveisSaldoAtualHoje),
+   considerando tudo até hoje — lançamentos com data futura nunca entram, pois saldoContaAteData já corta
+   por data. Soma direta, inclusive saldos negativos, sem nenhuma compensação — cada conta só aparece uma
+   vez nesta soma (contasBancarias não lista a mesma conta duas vezes), então uma transferência interna
+   entre duas contas elegíveis já se cancela sozinha (sai de uma, entra na outra), sem risco de
+   duplicidade. */
 function calcSaldoAtualFluxoCaixa(){
   const dataRef = hojeISO();
-  const contasContracheque = STATE.contas.filter(c=>STATE.contaTipos[c]==='Contracheque');
-  // Item do requisito (rodada seguinte): o saldo atual da(s) conta(s) do tipo Contracheque (ex.: TRT) é
-  // somado ao saldo do dia atual/Saldo Atual (Hoje) — usado pelo card "Saldo Atual (Hoje)" do Painel
-  // Financeiro (renderDashboard). Contracheque continua fora do Saldo Inicial/contasElegiveisFluxoCaixa
-  // (composição já documentada e usada como base da projeção mês a mês) — só este valor "hoje" do
-  // Dashboard passa a incluir o crédito já recebido. As linhas "Saldo do Dia" das tabelas do Fluxo de
-  // Caixa (ver aplicarLinhasSaldoDiario) usam SEMPRE só as contas elegíveis (Corrente/PJ/Poupança, sem
-  // Contracheque) — composição explicitamente pedida no requisito dessas linhas — então não reaproveitam
-  // esta função, que é específica do card do Dashboard.
-  return contasElegiveisFluxoCaixa().reduce((s,c)=> s + saldoContaAteData(c, dataRef), 0)
-    + contasContracheque.reduce((s,c)=> s + saldoContaAteData(c, dataRef), 0);
+  return contasElegiveisSaldoAtualHoje().reduce((s,c)=> s + saldoContaAteData(c, dataRef), 0);
 }
 /* Injeta uma linha especial "Saldo do Dia" SOMENTE nos dias que já possuem ao menos um lançamento nas
    próprias tabelas do Fluxo de Caixa (STATE.projecoes já filtrado/calculado por calcProjecoesMes) — nunca
@@ -15734,8 +15752,13 @@ function renderFaturaAtualModal(){
   // nunca recalculado aqui) encadeado com os totais já filtrados acima. Sem nenhum filtro ativo, compras =
   // totalAvistaFiltrado+totalParceladoFiltrado = rec.compras e totalPagamentosFiltrado+totalEstornosFiltrado
   // = rec.pagamentos+rec.estornos (mesma fonte), então o resultado é idêntico a rec.totalCalculado — igual
-  // à seção Conciliação com o banco abaixo, por construção, nunca por coincidência.
-  const totalFatFiltrado = (rec.temSaldoAnterior ? rec.saldoAnterior : 0) + totalAvistaFiltrado + totalParceladoFiltrado - totalPagamentosFiltrado - totalEstornosFiltrado;
+  // à seção Conciliação com o banco abaixo, por construção, nunca por coincidência. Personnalité Black
+  // (Itaú) é a única exceção — mesma condição já aplicada dentro da própria reconciliacaoFatura (ver
+  // requisito "Correção exclusiva das faturas do Personnalité Black"): o saldo anterior nunca entra no
+  // total para este cartão (o Itaú nunca o soma à fatura seguinte), então este card precisa seguir
+  // exatamente a mesma condição para continuar idêntico a rec.totalCalculado, nunca um cálculo paralelo.
+  const incluiSaldoAnteriorNesteCard = rec.temSaldoAnterior && !ehCartaoPersonnaliteBlack(conta);
+  const totalFatFiltrado = (incluiSaldoAnteriorNesteCard ? rec.saldoAnterior : 0) + totalAvistaFiltrado + totalParceladoFiltrado - totalPagamentosFiltrado - totalEstornosFiltrado;
   const filtrosAtivos = filtrosPadraoAtivos(f, [{campo:'tipo'},{campo:'parcela'}]) || !!fBusca.trim();
   const camposFiltroFatura = camposFiltroTipoParcelaCascata(det.itens, f);
   const qtdAtivosFatura = contarFiltrosPadraoAtivos(f, camposFiltroFatura);
@@ -20616,10 +20639,24 @@ function encontrarDuplicata(entry){
   // tipo (Despesa/Receita) tenham sido calculados de forma diferente entre uma importação e outra (ver
   // chaveIdentidadeParcela). Checado ANTES do critério padrão abaixo, que exige o mesmo `tipo` e por isso
   // nunca pegaria uma reimportação em que o tipo saiu errado.
+  // Personnalité Black (Itaú) — requisito "Correção exclusiva das faturas do Personnalité Black", seção 2
+  // ("Parcelas antecipadas"): quando o candidato encontrado é só uma parcela FUTURA ainda especulativa
+  // (t.parcelaFutura — projetada por sincronizarParcelasFuturas, um mês por parcela, nunca confirmada por
+  // nenhum arquivo real do banco), ela nunca bloqueia a importação real da MESMA parcela quando o Itaú a
+  // confirma de fato — mesmo que a "antecipação de parcelas" desse cartão a traga, no arquivo real, numa
+  // competência bem diferente da projetada (a Itaú às vezes cobra de uma vez, numa única fatura, várias
+  // parcelas que só venceriam em faturas futuras, concedendo inclusive um desconto — ver "Desc Antecipa
+  // Parcelas" na própria fatura). Sem esta exceção, a parcela real confirmada pelo banco era descartada
+  // como "já existe" e nunca chegava a entrar em STATE.transactions — ficando, inclusive, fora do alcance
+  // da limpeza automática já existente para este exato cenário (aplicarAntecipacoesDeParcelas, que só
+  // consegue suprimir a projeção obsoleta quando encontra evidência real já salva). Só para este cartão —
+  // os demais continuam com a mesma regra de sempre (uma parcela futura projetada também bloqueia
+  // reimportações, intencionalmente, para nunca duplicar).
+  const ehPlaceholderFuturoDescartavelPB = t => !!t.parcelaFutura && ehCartaoPersonnaliteBlack(entry.conta);
   if(Number(entry.totalParcelas)>1){
     const chave = chaveIdentidadeParcela(entry);
     const existente = STATE.transactions.find(t=> Number(t.totalParcelas)>1 && chaveIdentidadeParcela(t)===chave);
-    if(existente) return { tipo:'exata', tx:existente };
+    if(existente && !ehPlaceholderFuturoDescartavelPB(existente)) return { tipo:'exata', tx:existente };
   }
   // A verificação de duplicidade só compara lançamentos da MESMA conta — o mesmo valor, mesma descrição
   // e data próxima em contas diferentes são movimentações genuinamente distintas (ex.: um Pix de
@@ -20628,14 +20665,14 @@ function encontrarDuplicata(entry){
   const candidatos = STATE.transactions.filter(t=> t.conta===entry.conta && Math.abs(Number(t.valor)-valorAbs) < 0.01 && t.tipo===entry.tipo);
   for(const t of candidatos){
     if(t.data===entry.data){
-      if(saoParcelasDiferentes(entry,t)) continue;
+      if(saoParcelasDiferentes(entry,t) || ehPlaceholderFuturoDescartavelPB(t)) continue;
       return { tipo:'exata', tx:t };
     }
   }
   for(const t of candidatos){
     const diffDias = Math.abs((new Date(entry.data+"T00:00:00") - new Date(t.data+"T00:00:00"))/86400000);
     if(diffDias<=3){
-      if(saoParcelasDiferentes(entry,t)) continue;
+      if(saoParcelasDiferentes(entry,t) || ehPlaceholderFuturoDescartavelPB(t)) continue;
       return { tipo:'provavel', tx:t };
     }
   }
