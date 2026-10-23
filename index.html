@@ -9332,6 +9332,24 @@ function reconciliacaoFatura(conta, competencia){
   const estado = (!temSaldoAnterior || !temTotalInformado) ? 'pendente' : (Math.abs(diferenca)<0.005 ? 'conciliada' : 'divergente');
   return { compras, pagamentos, estornos, saldoAnterior, saldoAnteriorOrigem, totalCalculado, totalInformado, diferenca, estado, temSaldoAnterior, temTotalInformado };
 }
+/* Valor da fatura usado nos cards de RESUMO/EXIBIÇÃO (card do cartão na aba Contas e Cartões e card "valor
+   total da fatura" do modal Ver Fatura) — requisito "Corrigir valores dos cards da fatura": fonte única,
+   reaproveitando diretamente o "Total calculado" da Conciliação com o banco (reconciliacaoFatura) sempre
+   que houver saldo anterior conhecido (de uma competência anterior já importada do banco, ou informado
+   manualmente) — esse total já soma saldo anterior + compras − pagamentos − estornos, o valor real cobrado
+   pelo banco, nunca recalculado de forma paralela aqui. Sem saldo anterior conhecido (cartão sem nenhum
+   dado bancário ainda importado), cai no valor tradicional (faturaPorCompetencia: só compras − estornos da
+   própria competência) — comportamento inalterado para os demais cartões, que nunca tiveram esse dado
+   disponível (seção "Preservar... o funcionamento dos demais cartões" do requisito).
+   Usada SOMENTE nestes dois pontos de exibição. O valor "oficial" usado no resto do app (Dashboard, Fluxo
+   de Caixa, Próximas Faturas, detecção de duplicidade na importação, Status de pagamento etc.) continua
+   sendo faturaPorCompetencia, sem nenhuma mudança — são métricas conceitualmente diferentes ("quanto você
+   gastou nesta competência" vs. "quanto o banco está cobrando agora", que inclui o saldo rotativo não
+   pago de competências anteriores). */
+function faturaTotalExibicao(conta, competencia){
+  const rec = reconciliacaoFatura(conta, competencia);
+  return rec.temSaldoAnterior ? rec.totalCalculado : faturaPorCompetencia(conta, competencia);
+}
 /* Próximas faturas de um cartão (modal 👁), a partir do mês seguinte ao selecionado no topo
    do app. Usa exatamente a mesma função (faturaPorCompetencia) já usada na aba Contas e Cartões, no
    Fluxo de Caixa e no Dashboard — nunca um valor guardado — então é sempre consistente com o resto do
@@ -15375,12 +15393,12 @@ function renderCartoes(){
       <tbody>
       ${aplicarOrdenacaoClique(cartoesOrdenadosPorVencimento(), 'cartoes', {
         cartao:{tipo:'texto', valor:c=>c},
-        valorFatura:{tipo:'moeda', valor:c=>faturaPorCompetencia(c,competencia)},
+        valorFatura:{tipo:'moeda', valor:c=>faturaTotalExibicao(c,competencia)},
         fechamento:{tipo:'data', valor:c=>(faturaOverride(c,competencia)&&faturaOverride(c,competencia).fechamento)||fechamentoDataCalculada(competencia,c)},
         vencimento:{tipo:'data', valor:c=>(faturaOverride(c,competencia)&&faturaOverride(c,competencia).vencimento)||vencimentoDataCalculada(competencia,c)},
         saldoParcelado:{tipo:'moeda', valor:c=>detalheSaldoParceladoEmAberto(c,competencia).valor},
       }).map(c=>{
-        const v = faturaPorCompetencia(c,competencia);
+        const v = faturaTotalExibicao(c,competencia);
         const venc = vencimentoLabel(competencia, c);
         const fech = fechamentoLabel(competencia, c);
         // fech/venc já vêm prontos para exibição (incluindo o "(ajustado)" quando há um ajuste pontual
@@ -15622,16 +15640,19 @@ function renderFaturaAtualModal(){
   // Status automático (mesma fonte única usada no card da aba Cartões — ver statusDetalhadoFatura), só
   // para exibição: mantém este modal sempre sincronizado com o Status mostrado na tabela.
   const stFatura = statusDetalhadoFatura(conta, competencia);
-  // Conciliação com o total informado pelo próprio banco (ver reconciliacaoFatura) — demonstrativo
-  // separado do resumo padrão acima, nunca substitui "valor total da fatura" (convenção global do app).
+  // Conciliação com o total informado pelo próprio banco (ver reconciliacaoFatura) — fonte única também do
+  // card "valor total da fatura" do resumo acima (ver faturaTotalExibicao/requisito "Corrigir valores dos
+  // cards da fatura"), nunca um cálculo paralelo.
   const rec = reconciliacaoFatura(conta, competencia);
   const chaveRecAtual = `${conta}|${competencia}`;
   const editandoSaldoAnterior = !!UI.faturaAtualModal.editandoSaldoAnterior;
   // Filtros do próprio modal (Data por período, Tipo e Parcela — seleção múltipla) + busca por descrição,
   // mesmo motor genérico usado em Registros/Ver Extrato/Lançamentos futuros (ver criarFiltrosPadrao). Os
-  // cards do painel-resumo (valor total, parceladas, à vista, créditos) são recalculados com base SOMENTE
-  // nos itens filtrados/exibidos — sem nenhum filtro ativo, equivalem exatamente aos valores oficiais de
-  // itensFatura/faturaPorCompetencia.
+  // cards do painel-resumo (parceladas, à vista, créditos e pagamentos) são recalculados com base SOMENTE
+  // nos itens filtrados/exibidos. "Valor total da fatura" é o único que nunca é uma soma independente dos
+  // itens: sem nenhum filtro ativo, equivale exatamente a rec.totalCalculado (Conciliação com o banco, ver
+  // faturaTotalExibicao) — com filtro ativo, mantém o mesmo saldo anterior real (rec.saldoAnterior, fixo
+  // para toda a competência) encadeado só com o subconjunto filtrado de compras/créditos.
   const f = UI.faturaAtualModal.filtros;
   const fBusca = UI.faturaAtualModal.busca || '';
   let itensFiltrados = det.itens.filter(t=> passaFiltroData(t.data, f)
@@ -15641,16 +15662,30 @@ function renderFaturaAtualModal(){
     const fb = fBusca.trim().toLowerCase();
     itensFiltrados = itensFiltrados.filter(t=>(t.descricao||'').toLowerCase().includes(fb));
   }
-  // Mesma exclusão de CATEGORIAS_FATURA já aplicada em itensFatura para os totais oficiais (o pagamento da
-  // própria fatura, quando aparece como um lançamento a mais dentro da competência — ver comentário de
-  // itensFatura —, nunca compõe o valor total/parcelado/à vista/créditos, mesmo aparecendo normalmente na
-  // tabela abaixo) — para totalFatFiltrado etc. continuarem batendo com os valores oficiais quando nenhum
-  // filtro da UI está ativo, exatamente como o comentário acima já promete.
+  // Mesma exclusão de CATEGORIAS_FATURA já aplicada em itensFatura para os totais de compras/à vista/
+  // parceladas/estornos (o pagamento da própria fatura, quando aparece como um lançamento a mais dentro da
+  // competência — ver comentário de itensFatura —, nunca compõe esses totais, mesmo aparecendo
+  // normalmente na tabela abaixo).
   const itensFiltradosQueCompoemFatura = itensFiltrados.filter(t=>!CATEGORIAS_FATURA.includes(t.categoria));
-  const totalFatFiltrado = itensFiltradosQueCompoemFatura.reduce((s,t)=> s + (t.tipo==='Receita' ? -(Number(t.valor)||0) : (Number(t.valor)||0)), 0);
   const totalParceladoFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Despesa' && ehCompraParceladaDeFatura(t)).reduce((s,t)=>s+(Number(t.valor)||0),0);
   const totalAvistaFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Despesa' && !ehCompraParceladaDeFatura(t)).reduce((s,t)=>s+(Number(t.valor)||0),0);
-  const totalCreditosFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
+  // "Créditos e pagamentos" (requisito "Corrigir valores dos cards da fatura"): estornos (créditos reais
+  // lançados nesta competência) MAIS o(s) pagamento(s) da própria fatura — antes só mostrava os estornos,
+  // escondendo o quanto já foi pago. Pagamentos vêm exatamente da mesma categoria usada por
+  // reconciliacaoFatura ('Recebimento por Pagamento de Fatura'), filtrados pelos mesmos critérios de
+  // Data/Tipo/Parcela/busca da UI — ao contrário dos totais acima, aqui SEM excluir CATEGORIAS_FATURA
+  // (é exatamente o que se quer somar).
+  const totalEstornosFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const totalPagamentosFiltrado = itensFiltrados.filter(t=>t.categoria==='Recebimento por Pagamento de Fatura').reduce((s,t)=>s+(Number(t.valor)||0),0);
+  const totalCreditosFiltrado = totalEstornosFiltrado + totalPagamentosFiltrado;
+  // "Valor total da fatura" (requisito "Corrigir valores dos cards da fatura"): nunca mais uma soma
+  // independente de compras − estornos (que ignora saldo anterior e pagamentos) — reaproveita diretamente
+  // o saldo anterior já calculado pela Conciliação com o banco (rec.saldoAnterior/rec.temSaldoAnterior,
+  // nunca recalculado aqui) encadeado com os totais já filtrados acima. Sem nenhum filtro ativo, compras =
+  // totalAvistaFiltrado+totalParceladoFiltrado = rec.compras e totalCreditosFiltrado = rec.pagamentos +
+  // rec.estornos (mesma fonte), então o resultado é idêntico a rec.totalCalculado — igual à seção
+  // Conciliação com o banco abaixo, por construção, nunca por coincidência.
+  const totalFatFiltrado = (rec.temSaldoAnterior ? rec.saldoAnterior : 0) + totalAvistaFiltrado + totalParceladoFiltrado - totalCreditosFiltrado;
   const filtrosAtivos = filtrosPadraoAtivos(f, [{campo:'tipo'},{campo:'parcela'}]) || !!fBusca.trim();
   const camposFiltroFatura = camposFiltroTipoParcelaCascata(det.itens, f);
   const qtdAtivosFatura = contarFiltrosPadraoAtivos(f, camposFiltroFatura);
