@@ -19101,10 +19101,10 @@ function renderModalParcelasEmprestimo(){
 function renderImportStep1(){
   // Conta do tipo Reserva de Emergência: importação restrita EXCLUSIVAMENTE a .csv (extrato PicPay); conta
   // do tipo Contracheque: restrita EXCLUSIVAMENTE a .pdf (Demonstrativo de Pagamento do TRT); NuCartão
-  // (Nubank): restrita EXCLUSIVAMENTE a .csv, no formato próprio da fatura do Nubank; NuConta (Nubank):
-  // restrita a .ofx OU .csv, nos dois formatos próprios do extrato do Nubank (ver
-  // ehCartaoNubank/ehContaCorrenteNubank) — ver handleFile, que repete essa mesma checagem para o caso de
-  // arrastar-e-soltar um arquivo de outro tipo.
+  // (Nubank): restrita a .csv (formato próprio da fatura do Nubank) OU .ofx (formato padrão do protocolo,
+  // ver seção "Importação do NuCartão"); NuConta (Nubank): restrita a .ofx OU .csv, nos dois formatos
+  // próprios do extrato do Nubank (ver ehCartaoNubank/ehContaCorrenteNubank) — ver handleFile, que repete
+  // essa mesma checagem para o caso de arrastar-e-soltar um arquivo de outro tipo.
   const contaDestino = UI.importMap.contaDestino;
   const ehContaReservaEmergencia = STATE.contaTipos[contaDestino]==='Reserva de Emergência';
   const ehContaContracheque = STATE.contaTipos[contaDestino]==='Contracheque';
@@ -19113,12 +19113,12 @@ function renderImportStep1(){
   const ehContaInt = ehContaInter(contaDestino);
   const hint = ehContaReservaEmergencia ? 'Conta do tipo Reserva de Emergência — aceita somente o extrato .csv exportado do PicPay.'
     : ehContaContracheque ? 'Formato aceito: PDF (.pdf)'
-    : ehCartaoNu ? 'NuCartão (Nubank) — aceita somente a fatura .csv exportada do Nubank.'
+    : ehCartaoNu ? 'NuCartão (Nubank) — aceita a fatura .csv ou .ofx exportada do Nubank.'
     : ehContaNu ? 'NuConta (Nubank) — aceita extrato .ofx ou .csv exportado do Nubank.'
     : ehContaInt ? 'Conta Inter — aceita somente o extrato .pdf exportado do Banco Inter.'
     : 'Aceita extratos em .ofx ou .xlsx exportados do seu banco ou cartão.';
   const accept = ehContaReservaEmergencia ? '.csv' : ehContaContracheque ? '.pdf,application/pdf'
-    : ehCartaoNu ? '.csv' : ehContaNu ? '.ofx,.csv' : ehContaInt ? '.pdf,application/pdf' : '.ofx,.xlsx,.pdf';
+    : ehCartaoNu ? '.csv,.ofx' : ehContaNu ? '.ofx,.csv' : ehContaInt ? '.pdf,application/pdf' : '.ofx,.xlsx,.pdf';
   return `
   <span class="step-badge">Passo 2 de 4 · Escolher arquivo</span>
   <div class="info-card" style="margin-top:0;"><span class="info-card-icon">📌</span><span>Conta de destino: <b>${escapeHtml(UI.importMap.contaDestino)}</b> · Período: <b>${MESES[UI.importRefMes-1]}/${UI.importRefAno}</b> <button type="button" class="icon-btn" id="btnImportVoltarPre" title="Trocar período/conta" style="padding:1px 4px;">✏️</button></span></div>
@@ -20053,12 +20053,14 @@ function handleFile(file){
   }
   const contaDestino = UI.importMap.contaDestino;
   const ehContaReservaEmergencia = STATE.contaTipos[contaDestino]==='Reserva de Emergência';
-  // NuCartão (Nubank): a fatura só é exportada em .csv, num formato próprio (data já em AAAA-MM-DD, valor
-  // entre aspas em formato brasileiro) — nunca .ofx/.xlsx/.pdf, que os demais cartões desta aplicação usam
-  // (ver parseCSVNuCartaoFatura/ehCartaoNubank).
+  // NuCartão (Nubank): a fatura é exportada em .csv, num formato próprio (data já em AAAA-MM-DD, valor
+  // entre aspas em formato brasileiro — ver parseCSVNuCartaoFatura), OU em .ofx, no formato padrão do
+  // protocolo (mesmo parser genérico usado pelos demais cartões — ver o ramo ".ofx" mais abaixo, que já
+  // extrai FITID para deduplicação e classifica despesa/crédito/estorno/pagamento pelo TRNTYPE+sinal,
+  // sem nenhuma lógica específica de banco) — nunca .xlsx/.pdf, que os demais cartões desta aplicação usam.
   const ehCartaoNu = ehCartaoNubank(contaDestino);
-  if(ehCartaoNu && UI.importFileType!=='csv'){
-    alert('O NuCartão (Nubank) aceita somente a fatura exportada em .csv.');
+  if(ehCartaoNu && UI.importFileType!=='csv' && UI.importFileType!=='ofx'){
+    alert('O NuCartão (Nubank) aceita a fatura exportada em .csv ou .ofx.');
     return;
   }
   // NuConta (Nubank): o extrato é exportado em .ofx (formato padrão, já suportado) ou em .csv, num formato
