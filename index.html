@@ -21204,19 +21204,49 @@ function posicionarMenuRegCard(){
   const lista = document.querySelector('.reg-card-menu-lista');
   if(!btn || !lista) return;
   document.body.appendChild(lista);
+  // Mover a lista para filha direta de <body> tira-a da STACKING CONTEXT do próprio modal (que, por ter
+  // position:fixed, cria uma própria — ver attrZIndexModal/zIndexModal, z-index dinâmico a partir de 500,
+  // +100 por modal empilhado) — o z-index:230 do CSS só era suficiente enquanto a lista ainda era
+  // descendente do modal (comparado só dentro daquela stacking context); como sibling do próprio overlay
+  // do modal, 230 < 500 faz o restante do modal (inclusive .modal-foot, o rodapé com o botão Fechar)
+  // renderizar POR CIMA da lista sempre que as duas áreas se sobrepõem na tela — exatamente a causa do
+  // clique em Editar/Duplicar/Excluir não registrar quando a lista abre perto do rodapé do modal. Calculado
+  // dinamicamente (nunca um valor fixo arbitrário) para sempre ficar acima de QUALQUER overlay aberto no
+  // momento, inclusive com modais empilhados.
+  const maiorZIndexOverlay = [...document.querySelectorAll('.overlay')].reduce((max,o)=> Math.max(max, parseInt(getComputedStyle(o).zIndex,10)||0), 0);
+  lista.style.zIndex = String(maiorZIndexOverlay + 10);
   const margem = 8;
   const rBtn = btn.getBoundingClientRect();
   const larguraLista = lista.offsetWidth;
   const alturaLista = lista.offsetHeight;
-  const vw = window.innerWidth, vh = window.innerHeight;
+  // Causa raiz real do "botão de ações não funciona no modo mobile" (confirmada via diagnóstico ao vivo:
+  // a lista sempre chegava a existir no DOM, corretamente movida para <body>, com display/opacity normais
+  // — só a POSIÇÃO calculada caía fora da área realmente visível da tela). window.innerWidth/innerHeight
+  // refletem o viewport de LAYOUT, que no mobile pode ser maior do que a área VISÍVEL de verdade (barra de
+  // endereço do navegador recolhendo/expandindo, teclado virtual aberto) — usar esses valores para
+  // "clampar" a posição do menu deixava a conta achar que havia espaço de sobra e posicionava a lista
+  // abaixo do que o usuário realmente enxerga na tela naquele momento, sem nenhum erro visível (a lista
+  // "existe", só que fora da área visível). window.visualViewport (quando disponível — todos os
+  // navegadores mobile relevantes) reflete a área VISÍVEL de verdade; usá-lo aqui (com fallback para
+  // innerWidth/innerHeight nos poucos navegadores sem suporte) corrige a causa raiz na origem.
+  const vv = window.visualViewport;
+  const vw = vv ? vv.width : window.innerWidth, vh = vv ? vv.height : window.innerHeight;
+  const voffX = vv ? vv.offsetLeft : 0, voffY = vv ? vv.offsetTop : 0;
   let left = rBtn.left;
-  if(left + larguraLista > vw - margem) left = vw - margem - larguraLista;
-  if(left < margem) left = margem;
+  if(left + larguraLista > voffX + vw - margem) left = voffX + vw - margem - larguraLista;
+  if(left < voffX + margem) left = voffX + margem;
   let top = rBtn.bottom + 4;
-  if(top + alturaLista > vh - margem){
+  if(top + alturaLista > voffY + vh - margem){
     const acima = rBtn.top - alturaLista - 4;
-    top = acima >= margem ? acima : Math.max(margem, vh - margem - alturaLista);
+    top = acima >= voffY + margem ? acima : Math.max(voffY + margem, voffY + vh - margem - alturaLista);
   }
+  // Clamp final: garante que a lista sempre fica dentro da área VISÍVEL, mesmo quando o próprio botão que
+  // abriu o menu está perto da borda (ou além) dessa área no momento do toque — ex.: o usuário rolou o
+  // modal até perto do fim da lista de lançamentos, então o botão ⋮ fica perto do limite inferior do que
+  // está realmente visível. Nem "abrir abaixo" nem "abrir acima" do botão (acima) garantem isso sozinhos
+  // quando o próprio botão já está perto/fora da área visível — "acima" calcula só em relação à posição do
+  // botão, sem nunca checar se o resultado ainda cabe dentro da área visível por cima.
+  top = Math.min(Math.max(top, voffY + margem), voffY + vh - margem - alturaLista);
   lista.style.left = `${left}px`;
   lista.style.top = `${top}px`;
 }
@@ -22338,23 +22368,9 @@ function bindEvents(){
   // Calor, Ver Fatura, Ver Próximas Faturas — todos na aba Contas e Cartões, UI.tab!=='registros') mesmo o
   // markup/estado (UI.regCardMenuAberto) sendo o mesmo. Fica fora do "if" para funcionar em qualquer aba.
   document.querySelectorAll('[data-reg-card-menu]').forEach(b=> b.addEventListener('click', e=>{
-    // DIAGNÓSTICO TEMPORÁRIO — investigando "botão de ações não funciona no modo mobile, só no modal
-    // Fatura" (card funciona normalmente, só o ⋮ não). Só dispara dentro do modal Ver Fatura (único
-    // contexto com o problema relatado), pra não incomodar o resto do app. Confirma se o toque está
-    // chegando até aqui e com que alvo exato, direto na tela, sem precisar de ferramentas de
-    // desenvolvedor. Remover depois.
-    const diagAtivo = !!UI.faturaAtualModal;
     e.stopPropagation();
     UI.regCardMenuAberto = UI.regCardMenuAberto===b.dataset.regCardMenu ? null : b.dataset.regCardMenu;
     render();
-    // DIAGNÓSTICO TEMPORÁRIO (parte 2) — o handler já confirmou que executa e acha o alvo certo; agora
-    // confirma o que sobrou DEPOIS do render(): a lista chegou a existir no DOM, e com que tamanho/posição
-    // real na tela (ou se nasceu com tamanho zero/fora da tela). Remover depois.
-    if(diagAtivo){
-      const lista = document.querySelector('.reg-card-menu-lista');
-      const rl = lista ? lista.getBoundingClientRect() : null;
-      alert(`[Diagnóstico 2] Depois do render().\nUI.regCardMenuAberto agora: ${UI.regCardMenuAberto}\nlista existe no DOM: ${!!lista}\nlista pai: ${lista ? (lista.parentElement===document.body?'body':lista.parentElement.tagName+'.'+lista.parentElement.className) : '—'}\nlista rect: ${rl ? JSON.stringify({x:Math.round(rl.x),y:Math.round(rl.y),w:Math.round(rl.width),h:Math.round(rl.height)}) : '—'}\nlista display/opacity: ${lista ? getComputedStyle(lista).display+'/'+getComputedStyle(lista).opacity : '—'}`);
-    }
   }));
   if(UI.regCardMenuAberto){
     // Correção "botão de ações não funciona no modo mobile" (modal Ver Fatura e demais que reaproveitam
