@@ -22331,7 +22331,20 @@ function bindEvents(){
     // "Corrigir posicionamento do menu de ações": rolar a página com o menu aberto o fecha (em vez de deixá-lo
     // "flutuando" desconectado do botão que o abriu, já que a lista agora é position:fixed — ver
     // posicionarMenuRegCard) — mesmo padrão de "fecha ao interagir fora dele" do clique acima.
-    window.addEventListener('scroll', ()=>{ UI.regCardMenuAberto = null; render(); }, { once:true, capture:true });
+    // Correção "botão de ações não funciona no modo mobile" (reproduzido nos modais que usam .reg-card
+    // dentro de um container rolável, ex.: Ver Fatura): o PRÓPRIO clique que abre o menu já pode disparar,
+    // alguns milissegundos depois, um evento de scroll INCIDENTAL no container (o navegador rolando o botão
+    // recém-focado de volta para dentro da área visível — muito mais comum em mobile, onde o modal ocupa
+    // quase a tela inteira e o botão costuma estar perto da borda) — sem este atraso, esse scroll do PRÓPRIO
+    // clique era capturado por este mesmo listener e fechava o menu antes do usuário conseguir tocar em
+    // qualquer opção. Armar o listener só depois de um pequeno atraso deixa esse scroll incidental (sempre
+    // muito mais rápido que isso) acontecer primeiro, sem perder a função original de fechar o menu quando o
+    // usuário rola a tela de propósito depois de o menu já estar aberto.
+    const idMenuAoArmar = UI.regCardMenuAberto;
+    setTimeout(()=>{
+      if(UI.regCardMenuAberto!==idMenuAoArmar) return; // já fechado por outro motivo nesse meio-tempo
+      window.addEventListener('scroll', ()=>{ UI.regCardMenuAberto = null; render(); }, { once:true, capture:true });
+    }, 300);
   }
   // "Ajustes de interface — modo mobile", itens 9/10: mesmo padrão de menu único acima (✏️/📄/🗑️ do
   // .reg-card), agora para os ⋮ de grupo/categoria/subcategoria da aba Configurações → Categorias — reaproveita
