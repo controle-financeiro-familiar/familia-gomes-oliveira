@@ -9397,12 +9397,19 @@ function reconciliacaoFatura(conta, competencia){
    (seção "Preservar... o funcionamento dos demais cartões" do requisito).
    Correção do requisito "Faturas sem lançamentos devem apresentar R$ 0,00": ter saldo anterior conhecido
    não basta, por si só, para "herdar" esse saldo como se fosse o valor desta competência — isso inflava
-   indevidamente faturas sem NENHUM lançamento (nem compra, nem pagamento, nem estorno) e sem nenhum total
-   bancário informado para esta própria competência, mostrando o saldo em aberto da competência ANTERIOR
-   como se já fosse uma nova fatura desta. Só usa totalCalculado quando esta própria competência tem
-   evidência real de fatura: 1+ lançamentos nela (qtdLancamentos>0 — compra, pagamento OU estorno já
-   contam) ou um total bancário já informado diretamente para ela (temTotalInformado, mesmo que $0 de
-   compras novas); sem nenhum dos dois, nunca existiu fatura para esta competência e o valor é R$ 0,00.
+   indevidamente faturas sem NENHUM lançamento (nem compra, nem pagamento, nem estorno), mostrando o saldo
+   em aberto da competência ANTERIOR como se já fosse uma nova fatura desta. Sem nenhum lançamento nesta
+   própria competência (qtdLancamentos===0), totalCalculado NUNCA é usado — ele é a soma saldo anterior +
+   compras − pagamentos − estornos, uma fórmula que só faz sentido quando há alguma movimentação real desta
+   competência para encadear; sem nenhuma, o valor correto é o que o PRÓPRIO banco já confirmou
+   diretamente para ela (temTotalInformado/totalInformado — ainda que seja exatamente R$ 0,00, como um OFX
+   de uma fatura fechada sem nenhuma compra nova) ou, sem nenhuma confirmação bancária, R$ 0,00 (nunca
+   presumir o saldo anterior como se já fosse o valor desta fatura). Caso real que expôs o bug: um cartão
+   com saldo anterior conhecido de uma competência anterior E um total bancário de R$ 0,00 já importado
+   para a própria competência (fatura fechada sem nenhum lançamento) continuava retornando o saldo
+   anterior por inteiro, em vez do R$ 0,00 que o próprio banco confirmou. Com 1+ lançamentos nesta
+   competência (qtdLancamentos>0 — compra, pagamento OU estorno já contam), o encadeamento normal
+   (totalCalculado) continua sendo usado, exatamente como antes.
    O valor "oficial" usado no resto do app para outras finalidades (Dashboard, Próximas Faturas, detecção
    de duplicidade na importação, Status de pagamento etc.) continua sendo faturaPorCompetencia, sem nenhuma
    mudança — são métricas conceitualmente diferentes ("quanto você gastou nesta competência" vs. "quanto o
@@ -9410,8 +9417,7 @@ function reconciliacaoFatura(conta, competencia){
 function faturaTotalExibicao(conta, competencia){
   const rec = reconciliacaoFatura(conta, competencia);
   if(!rec.temSaldoAnterior) return faturaPorCompetencia(conta, competencia);
-  const semFaturaNestaCompetencia = rec.qtdLancamentos===0 && !rec.temTotalInformado;
-  if(semFaturaNestaCompetencia) return 0;
+  if(rec.qtdLancamentos===0) return rec.temTotalInformado ? rec.totalInformado : 0;
   return rec.totalCalculado;
 }
 /* Próximas faturas de um cartão (modal 👁), a partir do mês seguinte ao selecionado no topo
@@ -15805,14 +15811,18 @@ function renderFaturaAtualModal(){
   // exatamente a mesma condição para continuar idêntico a rec.totalCalculado, nunca um cálculo paralelo.
   // Requisito "Faturas sem lançamentos devem apresentar R$ 0,00" (ver também faturaTotalExibicao, mesma
   // regra): sem NENHUM lançamento nesta competência (det.itens, nunca itensFiltrados — a ausência de
-  // lançamento vale para a fatura inteira, não só para o subconjunto filtrado no momento) e sem total
-  // bancário informado diretamente para ela, não existe fatura real aqui — nunca "herdar" o saldo em
-  // aberto da competência anterior como se já fosse uma nova fatura desta. Com 1+ lançamentos (de
-  // qualquer tipo: compra, pagamento ou estorno) ou total bancário já confirmado para esta própria
-  // competência, o cálculo encadeado abaixo continua normalmente.
-  const semFaturaNestaCompetenciaCard = rec.temSaldoAnterior && det.itens.length===0 && !rec.temTotalInformado;
+  // lançamento vale para a fatura inteira, não só para o subconjunto filtrado no momento), o encadeamento
+  // "saldo anterior + compras − pagamentos − estornos" não se aplica — sem nenhuma movimentação real desta
+  // competência para encadear, o valor correto é o que o PRÓPRIO banco já confirmou diretamente para ela
+  // (rec.totalInformado — mesmo que seja exatamente R$ 0,00) ou, sem nenhuma confirmação bancária, R$ 0,00
+  // — nunca o saldo em aberto da competência anterior como se já fosse uma nova fatura desta. Com 1+
+  // lançamentos (de qualquer tipo: compra, pagamento ou estorno), o cálculo encadeado abaixo continua
+  // normalmente.
+  const semFaturaNestaCompetenciaCard = det.itens.length===0;
   const incluiSaldoAnteriorNesteCard = rec.temSaldoAnterior && !ehCartaoPersonnaliteBlack(conta) && !semFaturaNestaCompetenciaCard;
-  const totalFatFiltrado = semFaturaNestaCompetenciaCard ? 0 : ((incluiSaldoAnteriorNesteCard ? rec.saldoAnterior : 0) + totalAvistaFiltrado + totalParceladoFiltrado - totalPagamentosFiltrado - totalEstornosFiltrado);
+  const totalFatFiltrado = semFaturaNestaCompetenciaCard
+    ? (rec.temTotalInformado ? rec.totalInformado : 0)
+    : ((incluiSaldoAnteriorNesteCard ? rec.saldoAnterior : 0) + totalAvistaFiltrado + totalParceladoFiltrado - totalPagamentosFiltrado - totalEstornosFiltrado);
   const filtrosAtivos = filtrosPadraoAtivos(f, [{campo:'tipo'},{campo:'parcela'}]) || !!fBusca.trim();
   const camposFiltroFatura = camposFiltroTipoParcelaCascata(det.itens, f);
   const qtdAtivosFatura = contarFiltrosPadraoAtivos(f, camposFiltroFatura);
