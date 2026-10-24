@@ -9368,25 +9368,11 @@ function itensFatura(conta, competencia){
    faturaSaldoAnteriorManual, nunca inventados) estiverem disponíveis é que calcula uma diferença e decide
    se a fatura está conciliada:
    Total calculado = Saldo anterior + Compras − (Pagamentos + Estornos)
-   Saldo anterior (requisito "Contabilizar pagamento da fatura anterior na fatura seguinte"): o quanto
-   REALMENTE ainda falta pagar da fatura da competência anterior — nunca mais o total bruto informado pelo
-   banco para ela usado direto, que não descontava nenhum pagamento feito dentro da própria competência
-   anterior (bug: uma fatura anterior totalmente paga continuava inflando a fatura seguinte com o valor
-   cheio, como se nada tivesse sido pago). Quando o banco informou diretamente o total da competência
-   ANTERIOR (STATE.faturaTotalBanco, o caso comum — extrato já importado), o saldo anterior passa a ser
-   esse total MENOS os pagamentos e estornos feitos dentro da PRÓPRIA competência anterior (mesmas
-   categorias já usadas abaixo para a competência atual) — nunca compras, que o próprio total informado já
-   inclui; sem nenhum pagamento na competência anterior, o resultado é idêntico ao valor bruto de antes
-   (comportamento preservado). Só quando o banco NÃO informou o total da competência anterior diretamente
-   (sem extrato importado para ela) é que cai para uma cadeia recursiva no "Total calculado" dela própria —
-   que por sua vez depende do saldo anterior dela, e assim por diante — como estimativa, ou para o valor
-   manual (STATE.faturaSaldoAnteriorManual) desta competência. Sem nenhum dos três, a conciliação fica
-   "pendente" (nunca presume saldo anterior = 0). Trava de profundidade (_prof) só como rede de segurança
-   contra uma cadeia corrompida/circular — nunca esperada em uso normal, já que a recursão só é acionada
-   quando falta o total bancário direto, e para sozinha assim que encontra uma competência sem nenhum saldo
-   anterior conhecido. */
-function reconciliacaoFatura(conta, competencia, _prof){
-  const profundidade = _prof||0;
+   Saldo anterior: por padrão, o total informado pelo banco NA COMPETÊNCIA ANTERIOR deste mesmo cartão (já
+   capturado numa importação anterior, ver STATE.faturaTotalBanco) — só cai para um valor digitado
+   manualmente (STATE.faturaSaldoAnteriorManual) quando essa competência anterior não tem total bancário
+   conhecido. Sem nenhum dos dois, a conciliação fica "pendente" (nunca presume saldo anterior = 0). */
+function reconciliacaoFatura(conta, competencia){
   const det = itensFatura(conta, competencia);
   const compras = det.totalParcelado + det.totalAvista;
   const pagamentos = det.itens.filter(t=>t.categoria==='Recebimento por Pagamento de Fatura').reduce((s,t)=>s+(Number(t.valor)||0),0);
@@ -9396,22 +9382,11 @@ function reconciliacaoFatura(conta, competencia, _prof){
   // fazia esta conta dar negativo e o Math.max(0,...) zerar os estornos de verdade escondendo-os).
   const estornos = det.totalCreditos;
   const chaveAtual = `${conta}|${competencia}`;
-  const competenciaAnterior = incrementarCompetencia(competencia,-1);
-  const chaveAnterior = `${conta}|${competenciaAnterior}`;
+  const chaveAnterior = `${conta}|${incrementarCompetencia(competencia,-1)}`;
+  const saldoAnteriorBanco = STATE.faturaTotalBanco[chaveAnterior];
   const saldoAnteriorManual = STATE.faturaSaldoAnteriorManual[chaveAtual];
-  let saldoAnterior = null, saldoAnteriorOrigem = null;
-  const totalInformadoAnterior = STATE.faturaTotalBanco[chaveAnterior];
-  if(totalInformadoAnterior!=null){
-    const detAnterior = itensFatura(conta, competenciaAnterior);
-    const pagamentosAnterior = detAnterior.itens.filter(t=>t.categoria==='Recebimento por Pagamento de Fatura').reduce((s,t)=>s+(Number(t.valor)||0),0);
-    const estornosAnterior = detAnterior.totalCreditos;
-    saldoAnterior = Math.round((totalInformadoAnterior - pagamentosAnterior - estornosAnterior)*100)/100;
-    saldoAnteriorOrigem = 'competencia-anterior';
-  } else if(profundidade<120){ // trava de segurança — ver comentário acima
-    const recAnterior = reconciliacaoFatura(conta, competenciaAnterior, profundidade+1);
-    if(recAnterior.temSaldoAnterior){ saldoAnterior = recAnterior.totalCalculado; saldoAnteriorOrigem = 'competencia-anterior'; }
-  }
-  if(saldoAnterior==null && saldoAnteriorManual!=null){ saldoAnterior = saldoAnteriorManual; saldoAnteriorOrigem = 'manual'; }
+  const saldoAnterior = saldoAnteriorBanco!=null ? saldoAnteriorBanco : (saldoAnteriorManual!=null ? saldoAnteriorManual : null);
+  const saldoAnteriorOrigem = saldoAnteriorBanco!=null ? 'competencia-anterior' : (saldoAnteriorManual!=null ? 'manual' : null);
   const totalInformado = STATE.faturaTotalBanco[chaveAtual] ?? null;
   const temSaldoAnterior = saldoAnterior!=null, temTotalInformado = totalInformado!=null;
   // Personnalité Black (Itaú) — requisito "Correção exclusiva das faturas do Personnalité Black": o
