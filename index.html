@@ -22338,6 +22338,15 @@ function bindEvents(){
   // Calor, Ver Fatura, Ver Próximas Faturas — todos na aba Contas e Cartões, UI.tab!=='registros') mesmo o
   // markup/estado (UI.regCardMenuAberto) sendo o mesmo. Fica fora do "if" para funcionar em qualquer aba.
   document.querySelectorAll('[data-reg-card-menu]').forEach(b=> b.addEventListener('click', e=>{
+    // DIAGNÓSTICO TEMPORÁRIO — investigando "botão de ações não funciona no modo mobile, só no modal
+    // Fatura" (card funciona normalmente, só o ⋮ não). Só dispara dentro do modal Ver Fatura (único
+    // contexto com o problema relatado), pra não incomodar o resto do app. Confirma se o toque está
+    // chegando até aqui e com que alvo exato, direto na tela, sem precisar de ferramentas de
+    // desenvolvedor. Remover depois.
+    if(UI.faturaAtualModal){
+      const r = b.getBoundingClientRect();
+      alert(`[Diagnóstico] Handler do ⋮ executou.\nid: ${b.dataset.regCardMenu}\ne.target === botão: ${e.target===b || b.contains(e.target)}\ne.target: ${e.target.tagName}.${e.target.className}\nbotão rect: ${JSON.stringify({x:Math.round(r.x),y:Math.round(r.y),w:Math.round(r.width),h:Math.round(r.height)})}\nUI.regCardMenuAberto antes: ${UI.regCardMenuAberto}`);
+    }
     e.stopPropagation();
     UI.regCardMenuAberto = UI.regCardMenuAberto===b.dataset.regCardMenu ? null : b.dataset.regCardMenu;
     render();
