@@ -21185,9 +21185,25 @@ function buildParsedFromMap(){
       sem nunca deixar a borda esquerda do menu passar da margem de segurança do lado esquerdo;
    3) verticalmente, prefere abrir abaixo do botão; se não houver espaço embaixo, abre acima dele. */
 function posicionarMenuRegCard(){
+  // Correção "botão de ações não funciona no modo mobile" (reproduzido especificamente dentro de modais
+  // como Ver Fatura/Ver Extrato, nunca na lista "solta" de Registros): browsers WebKit/Safari (iOS) têm um
+  // bug antigo e bem documentado em que um elemento position:fixed renderizado como DESCENDENTE de um
+  // ancestral com overflow:auto/scroll (aqui, .modal-body — item 7 do requisito "rolagem de modal no
+  // mobile") fica "preso" dentro da área de rolagem desse ancestral na hora de pintar a tela, mesmo com
+  // position:fixed calculado corretamente em JS (getBoundingClientRect/left/top) — o menu fica invisível
+  // ou sem resposta ao toque, sem nenhum erro no console. A lista de Registros nunca sofre disso por nunca
+  // estar dentro de um container próprio com overflow (rola a página inteira). Correção definitiva: mover
+  // a própria lista para ser filha direta de <body> (fora de qualquer container com overflow) sempre que
+  // o menu estiver aberto — os listeners de clique (✏️/📄/🗑️) já ligados ao elemento sobrevivem
+  // normalmente a essa reinserção (appendChild move o nó, nunca o recria). Como cada render() recria um
+  // nó novo dentro de root (ver template de .reg-card-menu), a lista movida na chamada ANTERIOR desta
+  // função — já órfã, fora da árvore de root — precisa ser removida primeiro, senão acumularia uma cópia
+  // extra em <body> a cada render enquanto o menu ficar aberto.
+  document.querySelectorAll('body > .reg-card-menu-lista').forEach(el=> el.remove());
   const btn = document.querySelector('.reg-card-menu-btn[aria-expanded="true"]');
   const lista = document.querySelector('.reg-card-menu-lista');
   if(!btn || !lista) return;
+  document.body.appendChild(lista);
   const margem = 8;
   const rBtn = btn.getBoundingClientRect();
   const larguraLista = lista.offsetWidth;
