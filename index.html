@@ -15803,8 +15803,16 @@ function renderFaturaAtualModal(){
   // requisito "Correção exclusiva das faturas do Personnalité Black"): o saldo anterior nunca entra no
   // total para este cartão (o Itaú nunca o soma à fatura seguinte), então este card precisa seguir
   // exatamente a mesma condição para continuar idêntico a rec.totalCalculado, nunca um cálculo paralelo.
-  const incluiSaldoAnteriorNesteCard = rec.temSaldoAnterior && !ehCartaoPersonnaliteBlack(conta);
-  const totalFatFiltrado = (incluiSaldoAnteriorNesteCard ? rec.saldoAnterior : 0) + totalAvistaFiltrado + totalParceladoFiltrado - totalPagamentosFiltrado - totalEstornosFiltrado;
+  // Requisito "Faturas sem lançamentos devem apresentar R$ 0,00" (ver também faturaTotalExibicao, mesma
+  // regra): sem NENHUM lançamento nesta competência (det.itens, nunca itensFiltrados — a ausência de
+  // lançamento vale para a fatura inteira, não só para o subconjunto filtrado no momento) e sem total
+  // bancário informado diretamente para ela, não existe fatura real aqui — nunca "herdar" o saldo em
+  // aberto da competência anterior como se já fosse uma nova fatura desta. Com 1+ lançamentos (de
+  // qualquer tipo: compra, pagamento ou estorno) ou total bancário já confirmado para esta própria
+  // competência, o cálculo encadeado abaixo continua normalmente.
+  const semFaturaNestaCompetenciaCard = rec.temSaldoAnterior && det.itens.length===0 && !rec.temTotalInformado;
+  const incluiSaldoAnteriorNesteCard = rec.temSaldoAnterior && !ehCartaoPersonnaliteBlack(conta) && !semFaturaNestaCompetenciaCard;
+  const totalFatFiltrado = semFaturaNestaCompetenciaCard ? 0 : ((incluiSaldoAnteriorNesteCard ? rec.saldoAnterior : 0) + totalAvistaFiltrado + totalParceladoFiltrado - totalPagamentosFiltrado - totalEstornosFiltrado);
   const filtrosAtivos = filtrosPadraoAtivos(f, [{campo:'tipo'},{campo:'parcela'}]) || !!fBusca.trim();
   const camposFiltroFatura = camposFiltroTipoParcelaCascata(det.itens, f);
   const qtdAtivosFatura = contarFiltrosPadraoAtivos(f, camposFiltroFatura);
