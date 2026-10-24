@@ -22343,13 +22343,18 @@ function bindEvents(){
     // contexto com o problema relatado), pra não incomodar o resto do app. Confirma se o toque está
     // chegando até aqui e com que alvo exato, direto na tela, sem precisar de ferramentas de
     // desenvolvedor. Remover depois.
-    if(UI.faturaAtualModal){
-      const r = b.getBoundingClientRect();
-      alert(`[Diagnóstico] Handler do ⋮ executou.\nid: ${b.dataset.regCardMenu}\ne.target === botão: ${e.target===b || b.contains(e.target)}\ne.target: ${e.target.tagName}.${e.target.className}\nbotão rect: ${JSON.stringify({x:Math.round(r.x),y:Math.round(r.y),w:Math.round(r.width),h:Math.round(r.height)})}\nUI.regCardMenuAberto antes: ${UI.regCardMenuAberto}`);
-    }
+    const diagAtivo = !!UI.faturaAtualModal;
     e.stopPropagation();
     UI.regCardMenuAberto = UI.regCardMenuAberto===b.dataset.regCardMenu ? null : b.dataset.regCardMenu;
     render();
+    // DIAGNÓSTICO TEMPORÁRIO (parte 2) — o handler já confirmou que executa e acha o alvo certo; agora
+    // confirma o que sobrou DEPOIS do render(): a lista chegou a existir no DOM, e com que tamanho/posição
+    // real na tela (ou se nasceu com tamanho zero/fora da tela). Remover depois.
+    if(diagAtivo){
+      const lista = document.querySelector('.reg-card-menu-lista');
+      const rl = lista ? lista.getBoundingClientRect() : null;
+      alert(`[Diagnóstico 2] Depois do render().\nUI.regCardMenuAberto agora: ${UI.regCardMenuAberto}\nlista existe no DOM: ${!!lista}\nlista pai: ${lista ? (lista.parentElement===document.body?'body':lista.parentElement.tagName+'.'+lista.parentElement.className) : '—'}\nlista rect: ${rl ? JSON.stringify({x:Math.round(rl.x),y:Math.round(rl.y),w:Math.round(rl.width),h:Math.round(rl.height)}) : '—'}\nlista display/opacity: ${lista ? getComputedStyle(lista).display+'/'+getComputedStyle(lista).opacity : '—'}`);
+    }
   }));
   if(UI.regCardMenuAberto){
     // Correção "botão de ações não funciona no modo mobile" (modal Ver Fatura e demais que reaproveitam
