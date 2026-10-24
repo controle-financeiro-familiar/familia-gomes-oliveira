@@ -12829,6 +12829,16 @@ function render(){
   window.scrollTo(0, scrollY);
   const novosWraps = document.querySelectorAll('.table-wrap, .modal, .modal-body, .filtro-multisel-lista');
   novosWraps.forEach((w,i)=>{ if(wrapScrolls[i]!==undefined) w.scrollTop = wrapScrolls[i]; });
+  // Reposiciona o menu de ações (⋮) DEPOIS de restaurar a rolagem acima — bindEvents() (chamado mais
+  // cedo, antes desta restauração) já tinha chamado posicionarMenuRegCard() uma vez, mas naquele momento
+  // o .modal-body recém-criado ainda estava com scrollTop=0 (valor padrão de todo elemento novo), então
+  // a posição do botão medida ali (getBoundingClientRect) refletia como se o modal estivesse todo rolado
+  // para o topo — nunca a posição real, rolada, onde o usuário de fato tocou. Resultado: o menu sempre
+  // calculava como se não houvesse espaço abaixo do botão e caía no clamp do fim da área visível, abrindo
+  // sempre perto do rodapé da tela em vez de exatamente ao lado do botão tocado. Chamar de novo agora,
+  // síncrono (sem requestAnimationFrame, que só rodaria no próximo quadro e poderia deixar a posição
+  // errada piscar na tela por um instante), corrige antes do navegador pintar o resultado deste render().
+  posicionarMenuRegCard();
   requestAnimationFrame(ajustarNavResponsiva);
   requestAnimationFrame(ajustarAgrupamentoFiltros);
   requestAnimationFrame(ajustarFonteCartoesResumo);
@@ -21196,14 +21206,29 @@ function posicionarMenuRegCard(){
   // a própria lista para ser filha direta de <body> (fora de qualquer container com overflow) sempre que
   // o menu estiver aberto — os listeners de clique (✏️/📄/🗑️) já ligados ao elemento sobrevivem
   // normalmente a essa reinserção (appendChild move o nó, nunca o recria). Como cada render() recria um
-  // nó novo dentro de root (ver template de .reg-card-menu), a lista movida na chamada ANTERIOR desta
-  // função — já órfã, fora da árvore de root — precisa ser removida primeiro, senão acumularia uma cópia
-  // extra em <body> a cada render enquanto o menu ficar aberto.
-  document.querySelectorAll('body > .reg-card-menu-lista').forEach(el=> el.remove());
+  // nó novo dentro de root (ver template de .reg-card-menu) para o item ATUALMENTE aberto, uma lista já
+  // órfã em <body> de uma chamada de um render ANTERIOR (outro item, ou o mesmo já reposicionado por uma
+  // chamada anterior neste MESMO render — ver 2ª chamada síncrona em render(), depois de restaurar a
+  // rolagem) precisa ser diferenciada: a de dentro de `root` é sempre a fonte da verdade mais recente (se
+  // existir, acabou de nascer para o item atualmente aberto); qualquer outra solta em <body> é descartável.
+  // Nunca remover a única lista existente só porque ela já está em <body> — isso apagaria, sem recriar, a
+  // mesma lista que uma chamada anterior deste próprio render já posicionou corretamente.
+  const listaFresca = root.querySelector('.reg-card-menu-lista');
   const btn = document.querySelector('.reg-card-menu-btn[aria-expanded="true"]');
-  const lista = document.querySelector('.reg-card-menu-lista');
-  if(!btn || !lista) return;
-  document.body.appendChild(lista);
+  const orfas = [...document.querySelectorAll('body > .reg-card-menu-lista')];
+  if(!btn){
+    // Nenhum menu aberto nesta passada — nenhuma lista órfã pode sobrar em <body>.
+    orfas.forEach(el=>el.remove());
+    return;
+  }
+  // Uma lista nova (listaFresca) sempre substitui qualquer órfã de uma chamada/render anterior (outro
+  // item estava aberto, ou este mesmo item mudou de conteúdo); sem lista nova — 2ª chamada deste mesmo
+  // render, ou reposicionamento por resize — mantém no máximo 1 órfã já existente, nunca a recriando.
+  if(listaFresca) orfas.forEach(el=>el.remove());
+  else orfas.slice(1).forEach(el=>el.remove());
+  const lista = listaFresca || document.querySelector('body > .reg-card-menu-lista');
+  if(!lista) return;
+  if(lista.parentElement!==document.body) document.body.appendChild(lista);
   // Mover a lista para filha direta de <body> tira-a da STACKING CONTEXT do próprio modal (que, por ter
   // position:fixed, cria uma própria — ver attrZIndexModal/zIndexModal, z-index dinâmico a partir de 500,
   // +100 por modal empilhado) — o z-index:230 do CSS só era suficiente enquanto a lista ainda era
