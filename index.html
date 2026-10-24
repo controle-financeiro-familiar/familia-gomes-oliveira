@@ -9368,52 +9368,57 @@ function itensFatura(conta, competencia){
    faturaSaldoAnteriorManual, nunca inventados) estiverem disponíveis é que calcula uma diferença e decide
    se a fatura está conciliada:
    Total calculado = Saldo anterior + Compras − (Pagamentos + Estornos)
-   Pagamentos: usa pagamentoFaturaValor(conta, competencia) — o mesmo reconhecimento sofisticado de
-   pagamento já usado pelo Status de pagamento da fatura (janela real de fechamento, vínculo por
-   t.cartaoFatura, espelho automático — ver pagamentosCandidatosFatura) — e NUNCA o filtro ingênuo por
-   t.competencia===competencia usado antes aqui: esse filtro ingênuo não reconhecia pagamentos cujo próprio
-   lançamento não tinha t.competencia preenchido igual à competência da fatura (ex.: despesa "Pagamento de
-   Fatura de Cartão de Crédito" numa conta corrente, vinculada por t.cartaoFatura, ou um espelho cuja data
-   caiu na janela mas cuja competência ficou vazia) — deixando "Pagamentos: R$ 0,00" aparecer mesmo com a
-   fatura já comprovadamente paga em Status de pagamento (relato real: fatura de Outubro do Estilo Elo
-   Nanquim paga, mas o saldo anterior de Novembro continuava com o valor cheio, sem nenhum pagamento
-   refletido).
-   Saldo anterior: o quanto REALMENTE ainda falta pagar da fatura da competência anterior. Quando o banco
-   informou diretamente o total da competência ANTERIOR (STATE.faturaTotalBanco), o saldo anterior é esse
-   total MENOS os pagamentos e estornos já reconhecidos (pela mesma regra acima) dentro da própria
-   competência anterior — nunca compras, que o total informado já inclui; sem nenhum pagamento, o resultado
-   é idêntico ao valor bruto informado pelo banco. Só quando o banco NÃO informou o total da competência
-   anterior diretamente é que cai para uma cadeia recursiva no "Total calculado" dela própria (que por sua
-   vez depende do saldo anterior dela, e assim por diante), ou para o valor manual
-   (STATE.faturaSaldoAnteriorManual) desta competência. Sem nenhum dos três, a conciliação fica "pendente"
-   (nunca presume saldo anterior = 0). Trava de profundidade (_prof) só como rede de segurança contra uma
-   cadeia corrompida/circular — nunca esperada em uso normal. */
+   Saldo anterior: SEMPRE o valor bruto da fatura da competência anterior (o total informado pelo banco —
+   STATE.faturaTotalBanco — ou o valor manual — STATE.faturaSaldoAnteriorManual — exatamente como
+   cadastrado, nunca líquido de pagamento aqui: requisito explícito "o campo Saldo Anterior deve
+   corresponder exatamente ao Valor Total da Fatura da competência imediatamente anterior... não utilizar o
+   valor efetivamente pago"). Só quando nenhum dos dois é conhecido é que cai para uma cadeia recursiva no
+   "Total calculado" da competência anterior (que já vem líquido, por indução) — nesse caso específico
+   `pagamentos`/`estornos` abaixo não voltam a descontar o que já foi descontado dentro dela.
+   Pagamentos/Estornos: a soma dos reconhecidos (via pagamentoFaturaValor — mesmo reconhecimento sofisticado
+   do Status de pagamento: janela real de fechamento, vínculo por t.cartaoFatura, espelho automático — nunca
+   um filtro ingênuo por t.competencia) tanto na PRÓPRIA competência atual quanto na competência ANTERIOR —
+   são os pagamentos/estornos da competência anterior que efetivamente abatem o Saldo Anterior bruto trazido
+   para esta fatura (requisito: "a fatura de Outubro paga deve ser contabilizada na fatura de Novembro,
+   fazendo o Total calculado ser Saldo Anterior − Pagamentos − Estornos + Compras", relato real: Estilo Elo
+   Nanquim, Outubro quitado em 22/10, Saldo Anterior de Novembro = R$2.451,57 e Pagamentos de Novembro
+   também R$2.451,57, mesmo o pagamento tendo sido feito em Outubro). Nunca contado em dobro: cada
+   lançamento só corresponde a UMA fatura (ver pagamentosCandidatosFatura), e no fallback recursivo acima
+   pagamentosAnterior/estornosAnterior ficam zerados (já embutidos no saldoAnterior herdado). */
 function reconciliacaoFatura(conta, competencia, _prof){
   const profundidade = _prof||0;
   const det = itensFatura(conta, competencia);
   const compras = det.totalParcelado + det.totalAvista;
-  const pagamentos = pagamentoFaturaValor(conta, competencia);
+  const pagamentosAtual = pagamentoFaturaValor(conta, competencia);
   // det.totalCreditos (ver itensFatura) já exclui as categorias de CATEGORIAS_FATURA — "Recebimento por
   // Pagamento de Fatura" entre elas — então já é só o total de ESTORNOS, sem o pagamento; nunca subtrair
   // `pagamentos` de novo aqui (bug corrigido nesta rodada: um cartão com pagamento maior que os estornos
   // fazia esta conta dar negativo e o Math.max(0,...) zerar os estornos de verdade escondendo-os).
-  const estornos = det.totalCreditos;
+  const estornosAtual = det.totalCreditos;
   const chaveAtual = `${conta}|${competencia}`;
   const competenciaAnterior = incrementarCompetencia(competencia,-1);
   const chaveAnterior = `${conta}|${competenciaAnterior}`;
   const saldoAnteriorManual = STATE.faturaSaldoAnteriorManual[chaveAtual];
-  let saldoAnterior = null, saldoAnteriorOrigem = null;
+  let saldoAnterior = null, saldoAnteriorOrigem = null, pagamentosAnterior = 0, estornosAnterior = 0;
   const totalInformadoAnterior = STATE.faturaTotalBanco[chaveAnterior];
   if(totalInformadoAnterior!=null){
-    const pagamentosAnterior = pagamentoFaturaValor(conta, competenciaAnterior);
-    const estornosAnterior = itensFatura(conta, competenciaAnterior).totalCreditos;
-    saldoAnterior = Math.round((totalInformadoAnterior - pagamentosAnterior - estornosAnterior)*100)/100;
+    saldoAnterior = totalInformadoAnterior; // bruto — nunca líquido de pagamento aqui
     saldoAnteriorOrigem = 'competencia-anterior';
+    pagamentosAnterior = pagamentoFaturaValor(conta, competenciaAnterior);
+    estornosAnterior = itensFatura(conta, competenciaAnterior).totalCreditos;
+  } else if(saldoAnteriorManual!=null){
+    saldoAnterior = saldoAnteriorManual; // também bruto — mesmo tratamento do valor informado pelo banco
+    saldoAnteriorOrigem = 'manual';
+    pagamentosAnterior = pagamentoFaturaValor(conta, competenciaAnterior);
+    estornosAnterior = itensFatura(conta, competenciaAnterior).totalCreditos;
   } else if(profundidade<120){ // trava de segurança — ver comentário acima
     const recAnterior = reconciliacaoFatura(conta, competenciaAnterior, profundidade+1);
+    // recAnterior.totalCalculado já é líquido (por indução) — não há "bruto" conhecido aqui, então
+    // pagamentosAnterior/estornosAnterior ficam em 0: descontá-los de novo seria dobrar o desconto.
     if(recAnterior.temSaldoAnterior){ saldoAnterior = recAnterior.totalCalculado; saldoAnteriorOrigem = 'competencia-anterior'; }
   }
-  if(saldoAnterior==null && saldoAnteriorManual!=null){ saldoAnterior = saldoAnteriorManual; saldoAnteriorOrigem = 'manual'; }
+  const pagamentos = pagamentosAnterior + pagamentosAtual;
+  const estornos = estornosAnterior + estornosAtual;
   const totalInformado = STATE.faturaTotalBanco[chaveAtual] ?? null;
   const temSaldoAnterior = saldoAnterior!=null, temTotalInformado = totalInformado!=null;
   // Personnalité Black (Itaú) — requisito "Correção exclusiva das faturas do Personnalité Black": o
@@ -9427,7 +9432,10 @@ function reconciliacaoFatura(conta, competencia, _prof){
   // total da fatura" exibido nos cards (ver faturaTotalExibicao, que reaproveita rec.totalCalculado). Só
   // para este cartão — os demais continuam somando o saldo anterior exatamente como antes.
   const incluiSaldoAnteriorNoCalculo = temSaldoAnterior && !ehCartaoPersonnaliteBlack(conta);
-  const totalCalculadoCent = Math.round(((incluiSaldoAnteriorNoCalculo?saldoAnterior:0) + compras - (pagamentos+estornos))*100);
+  // Quando o saldo anterior não entra no cálculo (Personnalité Black — ver comentário acima), os pagamentos/
+  // estornos DA COMPETÊNCIA ANTERIOR também não entram: eles só existem para abater esse saldo anterior, que
+  // aqui nem é somado — descontá-los mesmo assim subtrairia algo que nunca foi somado.
+  const totalCalculadoCent = Math.round(((incluiSaldoAnteriorNoCalculo?saldoAnterior:0) + compras - ((incluiSaldoAnteriorNoCalculo?pagamentosAnterior:0)+pagamentosAtual) - ((incluiSaldoAnteriorNoCalculo?estornosAnterior:0)+estornosAtual))*100);
   const totalCalculado = totalCalculadoCent/100;
   const diferenca = temTotalInformado ? Math.round((totalCalculado-totalInformado)*100)/100 : null;
   const estado = (!temSaldoAnterior || !temTotalInformado) ? 'pendente' : (Math.abs(diferenca)<0.005 ? 'conciliada' : 'divergente');
