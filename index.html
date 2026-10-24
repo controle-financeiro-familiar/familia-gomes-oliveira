@@ -17096,7 +17096,7 @@ function renderResumo(){
       </span>
     </h2>
     <div class="cartoes-resumo-grid cartoes-resumo-grid-extrato">
-      <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(resumoTopo.saldoAtual)}</div><div class="lbl">Saldo Inicial</div></div></div>
+      <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(resumoTopo.saldoAtual)}</div><div class="lbl">Saldo Inicial</div></div><button type="button" class="icon-btn" id="btnEditarSaldoInicialFluxoCaixa" style="margin-left:auto;" title="Ajustar o saldo inicial de cada conta" aria-label="Ajustar o saldo inicial de cada conta">✏️</button></div>
       <div class="cartoes-resumo-item receita"><span class="ico">⬆️</span><div><div class="val">${fmtBRL(resumoTopo.entradas)}</div><div class="lbl">Entradas Projetadas</div></div></div>
       <div class="cartoes-resumo-item despesa"><span class="ico">⬇️</span><div><div class="val">${fmtBRL(resumoTopo.saidas)}</div><div class="lbl">Saídas Projetadas</div></div></div>
       <div class="cartoes-resumo-item ${classeReceitaDespesaMoeda(resumoTopo.saldoProjetado)}"><span class="ico">📆</span><div><div class="val">${fmtBRL(resumoTopo.saldoProjetado)}</div><div class="lbl">Saldo Projetado</div></div></div>
