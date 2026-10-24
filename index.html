@@ -21185,9 +21185,25 @@ function buildParsedFromMap(){
       sem nunca deixar a borda esquerda do menu passar da margem de segurança do lado esquerdo;
    3) verticalmente, prefere abrir abaixo do botão; se não houver espaço embaixo, abre acima dele. */
 function posicionarMenuRegCard(){
+  // Correção "botão de ações não funciona no modo mobile" (reproduzido especificamente dentro de modais
+  // como Ver Fatura/Ver Extrato, nunca na lista "solta" de Registros): browsers WebKit/Safari (iOS) têm um
+  // bug antigo e bem documentado em que um elemento position:fixed renderizado como DESCENDENTE de um
+  // ancestral com overflow:auto/scroll (aqui, .modal-body — item 7 do requisito "rolagem de modal no
+  // mobile") fica "preso" dentro da área de rolagem desse ancestral na hora de pintar a tela, mesmo com
+  // position:fixed calculado corretamente em JS (getBoundingClientRect/left/top) — o menu fica invisível
+  // ou sem resposta ao toque, sem nenhum erro no console. A lista de Registros nunca sofre disso por nunca
+  // estar dentro de um container próprio com overflow (rola a página inteira). Correção definitiva: mover
+  // a própria lista para ser filha direta de <body> (fora de qualquer container com overflow) sempre que
+  // o menu estiver aberto — os listeners de clique (✏️/📄/🗑️) já ligados ao elemento sobrevivem
+  // normalmente a essa reinserção (appendChild move o nó, nunca o recria). Como cada render() recria um
+  // nó novo dentro de root (ver template de .reg-card-menu), a lista movida na chamada ANTERIOR desta
+  // função — já órfã, fora da árvore de root — precisa ser removida primeiro, senão acumularia uma cópia
+  // extra em <body> a cada render enquanto o menu ficar aberto.
+  document.querySelectorAll('body > .reg-card-menu-lista').forEach(el=> el.remove());
   const btn = document.querySelector('.reg-card-menu-btn[aria-expanded="true"]');
   const lista = document.querySelector('.reg-card-menu-lista');
   if(!btn || !lista) return;
+  document.body.appendChild(lista);
   const margem = 8;
   const rBtn = btn.getBoundingClientRect();
   const larguraLista = lista.offsetWidth;
@@ -22327,23 +22343,43 @@ function bindEvents(){
     render();
   }));
   if(UI.regCardMenuAberto){
-    document.addEventListener('click', ()=>{ UI.regCardMenuAberto = null; render(); }, { once:true });
-    // "Corrigir posicionamento do menu de ações": rolar a página com o menu aberto o fecha (em vez de deixá-lo
-    // "flutuando" desconectado do botão que o abriu, já que a lista agora é position:fixed — ver
-    // posicionarMenuRegCard) — mesmo padrão de "fecha ao interagir fora dele" do clique acima.
-    // Correção "botão de ações não funciona no modo mobile" (reproduzido nos modais que usam .reg-card
-    // dentro de um container rolável, ex.: Ver Fatura): o PRÓPRIO clique que abre o menu já pode disparar,
-    // alguns milissegundos depois, um evento de scroll INCIDENTAL no container (o navegador rolando o botão
-    // recém-focado de volta para dentro da área visível — muito mais comum em mobile, onde o modal ocupa
-    // quase a tela inteira e o botão costuma estar perto da borda) — sem este atraso, esse scroll do PRÓPRIO
-    // clique era capturado por este mesmo listener e fechava o menu antes do usuário conseguir tocar em
-    // qualquer opção. Armar o listener só depois de um pequeno atraso deixa esse scroll incidental (sempre
-    // muito mais rápido que isso) acontecer primeiro, sem perder a função original de fechar o menu quando o
-    // usuário rola a tela de propósito depois de o menu já estar aberto.
+    // Correção "botão de ações não funciona no modo mobile" (modal Ver Fatura e demais que reaproveitam
+    // .reg-card dentro de um container rolável): tanto o fechamento "ao clicar fora" quanto o "ao rolar a
+    // tela" só são armados depois de um pequeno atraso — nunca no mesmo ciclo síncrono do clique que abriu
+    // o menu. Dois efeitos colaterais do PRÓPRIO clique/render que abre o menu podem, sem esse atraso,
+    // fechá-lo antes do usuário conseguir tocar em qualquer opção:
+    // 1) render() restaura a posição de rolagem de .modal/.modal-body/.table-wrap logo depois de redesenhar
+    //    a tela (ver wrapScrolls em render()) — esse ajuste programático de scrollTop pode por si só gerar
+    //    um evento de scroll no container, capturado pelo listener de "fechar ao rolar" abaixo;
+    // 2) em alguns navegadores/containers mobile (especialmente dentro de um app instalado/standalone), um
+    //    único toque pode gerar mais de um evento "click" sintético para o mesmo gesto — se o listener de
+    //    "fechar ao clicar fora" já estivesse armado no mesmo instante, um segundo clique fantasma fecharia
+    //    o menu silenciosamente, sem o usuário nunca chegar a vê-lo aberto.
+    // Um pequeno atraso antes de armar os dois deixa esses efeitos colaterais do próprio clique acontecerem
+    // primeiro, sem perder a função original de fechar o menu ao interagir fora dele ou rolar a tela DE
+    // PROPÓSITO depois que ele já está aberto.
     const idMenuAoArmar = UI.regCardMenuAberto;
+    const scrollsNaAbertura = new Map();
+    document.querySelectorAll('.table-wrap, .modal, .modal-body, .filtro-multisel-lista').forEach(w=> scrollsNaAbertura.set(w, w.scrollTop));
+    const scrollYNaAbertura = window.scrollY;
+    const houveScrollReal = ()=>{
+      if(Math.abs(window.scrollY - scrollYNaAbertura) > 4) return true;
+      for(const [w, antes] of scrollsNaAbertura){ if(Math.abs(w.scrollTop - antes) > 4) return true; }
+      return false;
+    };
     setTimeout(()=>{
       if(UI.regCardMenuAberto!==idMenuAoArmar) return; // já fechado por outro motivo nesse meio-tempo
-      window.addEventListener('scroll', ()=>{ UI.regCardMenuAberto = null; render(); }, { once:true, capture:true });
+      document.addEventListener('click', ()=>{ UI.regCardMenuAberto = null; render(); }, { once:true });
+      // "Corrigir posicionamento do menu de ações": rolar a página com o menu aberto o fecha (em vez de
+      // deixá-lo "flutuando" desconectado do botão que o abriu, já que a lista agora é position:fixed —
+      // ver posicionarMenuRegCard). Só fecha num scroll com deslocamento real (>4px) em relação à posição
+      // no momento em que o menu abriu — nunca por causa de um reajuste incidental (ex.: a própria
+      // restauração de wrapScrolls do render seguinte, que sempre restaura para o MESMO valor, delta zero).
+      const fecharSeScrollReal = ()=>{
+        if(houveScrollReal()){ UI.regCardMenuAberto = null; render(); }
+        else window.addEventListener('scroll', fecharSeScrollReal, { once:true, capture:true });
+      };
+      window.addEventListener('scroll', fecharSeScrollReal, { once:true, capture:true });
     }, 300);
   }
   // "Ajustes de interface — modo mobile", itens 9/10: mesmo padrão de menu único acima (✏️/📄/🗑️ do
