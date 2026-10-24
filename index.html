@@ -7201,6 +7201,28 @@ function agendarSnapshotLocal(){
   clearTimeout(debounceSnapshotLocal);
   debounceSnapshotLocal = setTimeout(salvarSnapshotLocal, 2000); // debounce — evita gravar no IndexedDB a cada tecla digitada
 }
+/* Correção "alterações não estão sendo fixadas" (relatado em apps instalados/PWA no mobile): o debounce
+   de 2s acima existe para não gravar no IndexedDB a cada tecla digitada, mas se o usuário fechar o app
+   (remover dos recentes, trocar de app) DENTRO dessa janela de 2s depois da última alteração — muito
+   comum em mobile, onde fechar o app é um gesto rápido — o setTimeout pendente nunca chega a disparar: o
+   processo é encerrado pelo sistema operacional antes, perdendo justamente a alteração mais recente (a
+   única rede de proteção que sobra é a gravação manual no OneDrive, nunca automática — ver scheduleSave).
+   'beforeunload' (usado só para o aviso nativo de alterações não salvas) NÃO é confiável nesse cenário:
+   não dispara de forma consistente quando um app instalado é removido da lista de recentes no mobile
+   (é um encerramento abrupto do processo, não uma navegação que o navegador consiga interceptar).
+   'visibilitychange' para 'hidden' e 'pagehide', ao contrário, disparam de forma confiável nesse momento
+   (o app ainda está vivo por uma janela curta antes de ser suspenso/encerrado de verdade) — usados aqui
+   para ADIANTAR a gravação pendente, cancelando o debounce e salvando imediatamente, em vez de esperar os
+   2s que talvez nunca cheguem. Idempotente/seguro chamar à toa (salvarSnapshotLocal só grava o estado
+   atual; sem nenhuma alteração pendente, debounceSnapshotLocal já é null e nada acontece). */
+function flushSnapshotLocalPendente(){
+  if(debounceSnapshotLocal==null) return;
+  clearTimeout(debounceSnapshotLocal);
+  debounceSnapshotLocal = null;
+  salvarSnapshotLocal();
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flushSnapshotLocalPendente(); });
+window.addEventListener('pagehide', flushSnapshotLocalPendente);
 /* Ponto único de sincronização (SyncManager — itens 1, 2 e 9 do requisito): orquestra o lock contra
    sincronizações concorrentes, o estado visível no cabeçalho, e só marca "Sincronizado"/atualiza a "Última
    atualização dos dados" depois que backup + gravação + validação de AMBOS os arquivos forem confirmados
