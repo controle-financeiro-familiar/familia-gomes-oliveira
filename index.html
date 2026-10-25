@@ -6762,6 +6762,7 @@ function loadCSVRegistros(text){
   aplicarResponsavelPadraoPorTipo();
   consolidarDuplicatasDeParcelas(); // saneia duplicidades reais de parcelas de cartão ANTES de tudo abaixo (ver função) — inclusive as trazidas por versões antigas do importador
   reconciliarPagamentosFatura(); // cria os espelhos de pagamento de fatura que ainda faltarem (ver função)
+  corrigirCartaoFaturaDeEspelhosExistentes(); // preenche o Cartão que faltava em despesas já reconciliadas no passado (ver função)
   conciliarProjecoesComExtrato(); // vincula lançamentos previstos do Fluxo de Caixa aos seus correspondentes reais no Extrato (ver função)
   corrigirCompetenciaTransacoes(); // depois de reconciliarPagamentosFatura, para corrigir também os espelhos recém-criados
   aplicarAntecipacoesDeParcelas(); // depois de competências/duplicidades saneadas: remove parcela futura já quitada por antecipação (ver função)
@@ -7043,6 +7044,7 @@ function loadCSVConfig(text){
   aplicarResponsavelPadraoPorTipo();
   consolidarDuplicatasDeParcelas(); // idem — saneia duplicidades de parcelas trazidas por versões antigas do importador (ver função)
   reconciliarPagamentosFatura(); // cartões/fechamentos podem ter chegado só agora — reconcilia de novo (idempotente)
+  corrigirCartaoFaturaDeEspelhosExistentes(); // idem — preenche o Cartão que faltava em despesas já reconciliadas (ver função)
   conciliarProjecoesComExtrato(); // idem — lançamentos previstos podem ter novos candidatos no Extrato recém-carregado
   corrigirCompetenciaTransacoes(); // idem — cardConfig/contaTipos podem ter chegado só agora com este arquivo
   aplicarAntecipacoesDeParcelas(); // idem — remove parcela futura já quitada por antecipação (ver função)
@@ -9130,6 +9132,14 @@ function reconciliarPagamentosFatura(){
     const { cartao, competencia } = candidatos[0];
     const vinculoId = uid();
     despesa.transferenciaVinculoId = vinculoId;
+    // Grava também o vínculo explícito de Cartão/Competência na PRÓPRIA despesa bancária (requisito
+    // "Correção do Reconhecimento de Pagamentos: NuCartão e Estilo Elo Nanquim") — sem isso, um pagamento
+    // reconciliado só por esta rota (valor+janela, sem vínculo manual do usuário) nunca seria reconhecido
+    // pelo critério explícito de pagamentosElegiveisConciliacao (Conciliação com o banco), mesmo já tendo
+    // identificado sem ambiguidade a qual cartão e competência ele pertence. Nunca sobrescreve um valor já
+    // existente (`||`), só preenche o que faltava — mesma regra "só acrescenta" do resto desta rotina.
+    despesa.cartaoFatura = cartao;
+    despesa.competencia = despesa.competencia || competencia;
     STATE.transactions.push({
       id: uid(), data: despesa.data,
       descricao: `Recebimento de pagamento de fatura (espelho automático de "${despesa.descricao}")`,
@@ -9144,6 +9154,37 @@ function reconciliarPagamentosFatura(){
     criados++;
   });
   return criados;
+}
+/* Migração de saneamento (requisito "Correção do Reconhecimento de Pagamentos: NuCartão e Estilo Elo
+   Nanquim"): despesas de "Pagamento de Fatura de Cartão de Crédito" que JÁ foram reconciliadas no passado
+   pela rota automática por valor+janela (ver reconciliarPagamentosFatura acima — t.transferenciaVinculoId
+   setado, espelho já criado na conta do cartão) nunca tiveram t.cartaoFatura preenchido na própria despesa,
+   porque aquela rota só grava o vínculo (transferenciaVinculoId), nunca o campo Cartão. Isso não era um
+   problema até o critério ficar explícito (Conciliação com o banco — ver pagamentosElegiveisConciliacao, que
+   exige t.cartaoFatura preenchido): essas despesas, embora já identificadas sem ambiguidade (o espelho prova
+   a qual cartão e competência pertencem), passaram a não ser mais reconhecidas pelo campo Pagamentos — caso
+   real auditado: NuCartão (R$180,21 em 13/10) e Estilo Elo Nanquim (R$2.451,57 em 22/10), ambas já com
+   vínculo e competência corretos, só faltando o campo Cartão na própria despesa.
+   Usa o identificador PERSISTENTE do vínculo (t.transferenciaVinculoId, nunca a descrição ou o nome exibido)
+   para achar o espelho já existente e preencher o Cartão (a conta do espelho) e, só se também estiver
+   faltando, a Competência — nunca sobrescreve um valor já existente, só completa o que falta. Idempotente:
+   uma despesa já com t.cartaoFatura preenchido (de qualquer origem — esta mesma migração, vínculo manual do
+   usuário, ou já corrigida numa execução anterior) nunca é reconsiderada. Roda em todo carregamento do
+   arquivo, logo depois de reconciliarPagamentosFatura (que pode ter acabado de criar vínculos novos nesta
+   mesma chamada). */
+function corrigirCartaoFaturaDeEspelhosExistentes(){
+  let corrigidos = 0;
+  STATE.transactions.forEach(t=>{
+    if(!(t.tipo==='Despesa' && t.categoria==='Pagamento de Fatura de Cartão de Crédito' && !STATE.cartoes.includes(t.conta))) return;
+    if(t.cartaoFatura || !t.transferenciaVinculoId) return;
+    const espelho = STATE.transactions.find(o=> o.id!==t.id && o.transferenciaVinculoId===t.transferenciaVinculoId
+      && o.conta!==t.conta && STATE.cartoes.includes(o.conta) && o.categoria==='Recebimento por Pagamento de Fatura');
+    if(!espelho) return;
+    t.cartaoFatura = espelho.conta;
+    t.competencia = t.competencia || espelho.competencia;
+    corrigidos++;
+  });
+  return corrigidos;
 }
 /* Identificação automática do Cartão de um lançamento já classificado como "Pagamento de Fatura de Cartão
    de Crédito" (campo Cartão do modal de edição — ver renderTxModal/camposCartaoFatura). Preferência, na
@@ -11487,6 +11528,7 @@ function commitEdicaoLancamentoExistente(novo, antigo, conta, contaTransferencia
   // Editar um lançamento já replicado não estende nem atualiza os meses seguintes sozinho; para
   // propagar o novo valor-base adiante, o usuário clica em "Replicar Contracheque" de novo (idempotente).
   reconciliarPagamentosFatura(); // se este lançamento é um pagamento de fatura, já espelha na hora
+  corrigirCartaoFaturaDeEspelhosExistentes(); // preenche o Cartão que faltava em despesas já reconciliadas (ver função)
   conciliarProjecoesComExtrato(); // se este lançamento realiza algum previsto do Fluxo de Caixa, já concilia na hora
   UI.editingTx=null; UI.pendingEdicaoParcela=null; UI.confirmEditarParcela=null;
   scheduleSave(); render();
@@ -15090,7 +15132,7 @@ function aplicarEdicaoLote(m){
       if(Number(t.totalParcelas)>1 && t.parcelamentoId) sincronizarParcelasFuturas(t);
     }
   });
-  if(alterados>0){ reconciliarPagamentosFatura(); conciliarProjecoesComExtrato(); scheduleSave(); }
+  if(alterados>0){ reconciliarPagamentosFatura(); corrigirCartaoFaturaDeEspelhosExistentes(); conciliarProjecoesComExtrato(); scheduleSave(); }
   return alterados;
 }
 /* Rótulo do cabeçalho de grupo de data usado na lista mobile de Registros (item 11 do requisito de
@@ -24344,6 +24386,7 @@ function bindEvents(){
     // lançamentos recém-importados aparecem automaticamente sempre que a data deles cair dentro do
     // período/filtros já selecionados, sem necessidade de nenhum ajuste aqui.
     reconciliarPagamentosFatura(); // se este extrato trouxe uma despesa/receita de pagamento de fatura, já espelha
+    corrigirCartaoFaturaDeEspelhosExistentes(); // preenche o Cartão que faltava em despesas já reconciliadas (ver função)
     conciliarProjecoesComExtrato(); // se este extrato trouxe lançamentos que realizam previstos do Fluxo de Caixa, já concilia na hora
     scheduleSave();
     if(ignorados>0) mostrarToast(`${selecionados.length} lançamento(s) importado(s). ${ignorados} deixado(s) de fora por já estarem registrados.`);
