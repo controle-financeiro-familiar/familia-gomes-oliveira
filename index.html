@@ -9028,6 +9028,28 @@ function pagamentosCandidatosFatura(conta, competencia){
 function pagamentoFaturaValor(conta, competencia){
   return pagamentosCandidatosFatura(conta, competencia).reduce((s,t)=> s + (Number(t.valor)||0), 0);
 }
+/* Lançamentos elegíveis para o campo "Pagamentos" da Conciliação com o banco (requisito "Correção dos
+   Critérios de Pagamentos na Conciliação Bancária") — critério DELIBERADAMENTE mais restrito que
+   pagamentosCandidatosFatura/pagamentoFaturaValor (usado em Status de pagamento, Cartões, Dashboard,
+   Próximas Faturas, verificação de duplicidade — nenhum desses muda aqui): só o pagamento lançado em OUTRA
+   conta da aplicação (nunca a própria conta do cartão) com Cartão (t.cartaoFatura) E Competência
+   (t.competencia) explicitamente vinculados AMBOS à fatura consultada — nunca por correspondência de valor,
+   data ou janela de fechamento, e nunca um espelho/recebimento já existente na própria conta do cartão
+   (criado automaticamente por reconciliarPagamentosFatura, ou importado direto do extrato do cartão) — esse
+   espelho continua existindo normalmente para fins de registro/conciliação, só não entra mais nesta soma.
+   Cada lançamento só pode bater com UMA fatura (t.competencia é um valor único), então nunca há risco de
+   contar o mesmo pagamento em dobro, mesmo quando ele também tem um espelho correspondente no cartão. */
+function pagamentosElegiveisConciliacao(conta, competencia){
+  return STATE.transactions.filter(t=>
+    t.tipo==='Despesa' && t.categoria==='Pagamento de Fatura de Cartão de Crédito'
+    && !STATE.cartoes.includes(t.conta)
+    && t.cartaoFatura===conta
+    && t.competencia===competencia
+  );
+}
+function pagamentoFaturaValorElegivelConciliacao(conta, competencia){
+  return pagamentosElegiveisConciliacao(conta, competencia).reduce((s,t)=> s + (Number(t.valor)||0), 0);
+}
 // Tolerância de centavos ao comparar valor da fatura com valor pago, para diferenças residuais de
 // arredondamento nunca impedirem o reconhecimento de uma fatura como totalmente paga.
 const EPSILON_FATURA = 0.01;
@@ -9378,23 +9400,26 @@ function itensFatura(conta, competencia){
    valor efetivamente pago"). Só quando nenhum dos dois é conhecido é que cai para uma cadeia recursiva no
    "Total calculado" da competência anterior (que já vem líquido, por indução) — nesse caso específico
    `pagamentos`/`estornos` abaixo não voltam a descontar o que já foi descontado dentro dela.
-   Pagamentos: a soma dos reconhecidos (via pagamentoFaturaValor — mesmo reconhecimento sofisticado do
-   Status de pagamento: janela real de fechamento, vínculo por t.cartaoFatura, espelho automático — nunca um
-   filtro ingênuo por t.competencia) tanto na PRÓPRIA competência atual quanto na competência ANTERIOR — são
-   os pagamentos da competência anterior que efetivamente abatem o Saldo Anterior bruto trazido para esta
-   fatura (requisito: "a fatura de Outubro paga deve ser contabilizada na fatura de Novembro, fazendo o
-   Total calculado ser Saldo Anterior − Pagamentos − Estornos + Compras", relato real: Estilo Elo Nanquim,
-   Outubro quitado em 22/10, Saldo Anterior de Novembro = R$2.451,57 e Pagamentos de Novembro também
-   R$2.451,57, mesmo o pagamento tendo sido feito em Outubro). Nunca contado em dobro: cada lançamento só
-   corresponde a UMA fatura (ver pagamentosCandidatosFatura), e no fallback recursivo acima pagamentosAnterior
-   fica zerado (já embutido no saldoAnterior herdado).
+   Pagamentos: requisito "Correção dos Critérios de Pagamentos na Conciliação Bancária" — critério
+   DELIBERADAMENTE mais restrito que o Status de pagamento usado no resto do app (ver
+   pagamentosElegiveisConciliacao/pagamentoFaturaValorElegivelConciliacao, nunca pagamentoFaturaValor aqui):
+   só pagamentos lançados em OUTRA conta da aplicação (nunca a própria conta do cartão — exclui espelhos,
+   automáticos ou importados direto do extrato do cartão) com Cartão E Competência explicitamente vinculados
+   à fatura — nunca por correspondência de valor/data/janela. A soma é tanto da PRÓPRIA competência atual
+   quanto da competência ANTERIOR — são os pagamentos da competência anterior que efetivamente abatem o
+   Saldo Anterior bruto trazido para esta fatura (requisito: "a fatura de Outubro paga deve ser contabilizada
+   na fatura de Novembro, fazendo o Total calculado ser Saldo Anterior − Pagamentos − Estornos + Compras",
+   relato real: Estilo Elo Nanquim, Outubro quitado em 22/10, Saldo Anterior de Novembro = R$2.451,57 e
+   Pagamentos de Novembro também R$2.451,57, mesmo o pagamento tendo sido feito em Outubro). Nunca contado em
+   dobro: cada lançamento só tem UMA competência vinculada (só pode bater com UMA chamada desta função), e no
+   fallback recursivo abaixo pagamentosAnterior fica zerado (já embutido no saldoAnterior herdado).
    Estornos: ao contrário de Pagamentos, soma SÓ os reconhecidos na PRÓPRIA competência atual (det.totalCreditos)
    — nunca os da competência anterior (requisito explícito do usuário: diferente do campo Pagamentos). */
 function reconciliacaoFatura(conta, competencia, _prof){
   const profundidade = _prof||0;
   const det = itensFatura(conta, competencia);
   const compras = det.totalParcelado + det.totalAvista;
-  const pagamentosAtual = pagamentoFaturaValor(conta, competencia);
+  const pagamentosAtual = pagamentoFaturaValorElegivelConciliacao(conta, competencia);
   // det.totalCreditos (ver itensFatura) já exclui as categorias de CATEGORIAS_FATURA — "Recebimento por
   // Pagamento de Fatura" entre elas — então já é só o total de ESTORNOS, sem o pagamento; nunca subtrair
   // `pagamentos` de novo aqui (bug corrigido nesta rodada: um cartão com pagamento maior que os estornos
@@ -9409,11 +9434,11 @@ function reconciliacaoFatura(conta, competencia, _prof){
   if(totalInformadoAnterior!=null){
     saldoAnterior = totalInformadoAnterior; // bruto — nunca líquido de pagamento aqui
     saldoAnteriorOrigem = 'competencia-anterior';
-    pagamentosAnterior = pagamentoFaturaValor(conta, competenciaAnterior);
+    pagamentosAnterior = pagamentoFaturaValorElegivelConciliacao(conta, competenciaAnterior);
   } else if(saldoAnteriorManual!=null){
     saldoAnterior = saldoAnteriorManual; // também bruto — mesmo tratamento do valor informado pelo banco
     saldoAnteriorOrigem = 'manual';
-    pagamentosAnterior = pagamentoFaturaValor(conta, competenciaAnterior);
+    pagamentosAnterior = pagamentoFaturaValorElegivelConciliacao(conta, competenciaAnterior);
   } else if(profundidade<120){ // trava de segurança — ver comentário acima
     const recAnterior = reconciliacaoFatura(conta, competenciaAnterior, profundidade+1);
     // recAnterior.totalCalculado já é líquido (por indução) — não há "bruto" conhecido aqui, então
@@ -9446,36 +9471,22 @@ function reconciliacaoFatura(conta, competencia, _prof){
   const estado = (!temSaldoAnterior || !temTotalInformado) ? 'pendente' : (Math.abs(diferenca)<0.005 ? 'conciliada' : 'divergente');
   return { compras, pagamentos, estornos, saldoAnterior, saldoAnteriorOrigem, totalCalculado, totalInformado, diferenca, estado, temSaldoAnterior, temTotalInformado, qtdLancamentos: det.qtd };
 }
-/* Lançamentos individuais que compõem exatamente o campo "Pagamentos" de reconciliacaoFatura (requisito
-   "Detalhamento dos Pagamentos no Painel de Conciliação Bancária") — mesma fonte e mesmos critérios
-   (pagamentosCandidatosFatura, tanto da competência atual quanto da anterior, que é o que abate o Saldo
-   Anterior bruto — ver reconciliacaoFatura), nunca um cálculo paralelo: a soma de `itens` aqui é sempre
-   idêntica a rec.pagamentos, por construção. Nunca inclui estornos (campo próprio na conciliação, requisito
-   explícito). Cada lançamento aparece uma única vez: pagamentosCandidatosFatura já garante que cada um
-   corresponde a exatamente UMA fatura (ver seu comentário), então não há risco de contar o lançamento
-   bancário original e o espelho como dois pagamentos — pagamentosCandidatosFatura devolve só um dos dois
-   lados (o que efetivamente identifica a fatura: o espelho no cartão, OU a despesa vinculada/sem vínculo na
-   conta corrente, nunca os dois juntos para o mesmo pagamento). */
+/* Lançamentos individuais que compõem exatamente o campo "Pagamentos" de reconciliacaoFatura (requisitos
+   "Detalhamento dos Pagamentos no Painel de Conciliação Bancária" e "Correção dos Critérios de Pagamentos na
+   Conciliação Bancária") — mesma fonte e mesmos critérios restritos (pagamentosElegiveisConciliacao, tanto
+   da competência atual quanto da anterior, que é o que abate o Saldo Anterior bruto — ver
+   reconciliacaoFatura), nunca um cálculo paralelo: a soma de `itens` aqui é sempre idêntica a rec.pagamentos,
+   por construção. Nunca inclui estornos, pagamentos importados direto do extrato do cartão, nem espelhos
+   automáticos (campo próprio na conciliação / exclusões explícitas do requisito). Cada lançamento aparece
+   uma única vez: pagamentosElegiveisConciliacao já exige Cartão+Competência explícitos, então nunca há risco
+   de contar o mesmo pagamento em duas faturas. "Conta de origem" é sempre t.conta — nunca a própria conta do
+   cartão, por construção do critério. */
 function detalhamentoPagamentosFatura(conta, competencia){
   const competenciaAnterior = incrementarCompetencia(competencia, -1);
-  const mapeia = (t, competenciaDaFatura) => {
-    // "Conta de origem": de onde o dinheiro realmente saiu. Para o lado do cartão (espelho "Recebimento por
-    // Pagamento de Fatura"), busca o lançamento bancário original vinculado (mesmo transferenciaVinculoId —
-    // ver reconciliarPagamentosFatura); sem vínculo, é um recebimento já importado diretamente do PRÓPRIO
-    // extrato do cartão (ex.: "PGTO. CASH AG." pago na agência), sem conta bancária de origem separada.
-    const ehLadoCartao = t.conta===conta && t.categoria==='Recebimento por Pagamento de Fatura';
-    let contaOrigem;
-    if(ehLadoCartao){
-      const espelho = t.transferenciaVinculoId ? STATE.transactions.find(o=> o.id!==t.id && o.transferenciaVinculoId===t.transferenciaVinculoId) : null;
-      contaOrigem = espelho ? espelho.conta : `Extrato do próprio cartão (${conta})`;
-    } else {
-      contaOrigem = t.conta;
-    }
-    return { id:t.id, data:t.data, descricao:t.descricao, contaOrigem, cartao:conta, competencia:competenciaDaFatura, valor: Number(t.valor)||0 };
-  };
+  const mapeia = (t, competenciaDaFatura) => ({ id:t.id, data:t.data, descricao:t.descricao, contaOrigem:t.conta, competencia:competenciaDaFatura, valor: Number(t.valor)||0 });
   const itens = [
-    ...pagamentosCandidatosFatura(conta, competenciaAnterior).map(t=>mapeia(t, competenciaAnterior)),
-    ...pagamentosCandidatosFatura(conta, competencia).map(t=>mapeia(t, competencia)),
+    ...pagamentosElegiveisConciliacao(conta, competenciaAnterior).map(t=>mapeia(t, competenciaAnterior)),
+    ...pagamentosElegiveisConciliacao(conta, competencia).map(t=>mapeia(t, competencia)),
   ];
   const total = Math.round(itens.reduce((s,i)=>s+i.valor,0)*100)/100;
   return { itens, total };
@@ -16651,18 +16662,16 @@ function renderPagamentosDetalheModal(){
         ${itens.length ? `
         <div class="table-wrap reg-tabela-principal" style="overflow:visible;max-height:none;" data-ordenar-tabela="pagamentosDetalhe"><table style="width:100%;table-layout:fixed;">
           <thead><tr>
-            ${thOrdenavel('pagamentosDetalhe','data','Data',{style:'width:9%;'})}
-            <th style="width:27%;">Descrição</th>
-            <th style="width:16%;">Conta de origem</th>
-            <th style="width:14%;">Cartão</th>
-            <th style="width:12%;">Competência</th>
-            ${thOrdenavel('pagamentosDetalhe','valor','Valor',{style:'width:12%;text-align:right;'})}
+            ${thOrdenavel('pagamentosDetalhe','data','Data',{style:'width:11%;'})}
+            <th style="width:35%;">Descrição</th>
+            <th style="width:20%;">Conta de origem</th>
+            <th style="width:16%;">Competência</th>
+            ${thOrdenavel('pagamentosDetalhe','valor','Valor',{style:'width:18%;text-align:right;'})}
           </tr></thead>
           <tbody>${itensPagina.map(i=>`<tr>
             <td>${fmtData(i.data)}</td>
             <td>${escapeHtml(i.descricao)}</td>
             <td>${escapeHtml(i.contaOrigem)}</td>
-            <td>${escapeHtml(i.cartao)}</td>
             <td>${competenciaLabel(i.competencia)}</td>
             <td style="text-align:right;" class="val-cell pos">${fmtBRL(i.valor)}</td>
           </tr>`).join('')}</tbody>
@@ -16671,7 +16680,7 @@ function renderPagamentosDetalheModal(){
           data: i=>fmtData(i.data),
           contaLinha1: i=>escapeHtml(i.contaOrigem),
           valorTexto: i=>fmtBRL(i.valor), valorClasse: ()=>'pos',
-          secundario: i=>`${escapeHtml(i.cartao)} · ${competenciaLabel(i.competencia)}`,
+          secundario: i=>competenciaLabel(i.competencia),
           tags: ()=>'',
           semAcao: ()=>true,
         })}
