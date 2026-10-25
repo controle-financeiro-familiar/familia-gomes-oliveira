@@ -6129,6 +6129,7 @@ function criarUIPadrao(){
   novaProjecaoModal: null, // { ano, mes } — escolha do mês a partir do qual um novo lançamento previsto passa a aparecer
   conciliarProjecaoModal: null, // { itemId, competencia, selecionados, pagina, porPagina } — revisão manual dos candidatos de conciliação de um previsto "pendente"/já conciliado (ver renderConciliarProjecaoModal) — selecionados: ids marcados nos checkboxes, ainda não confirmados; pagina/porPagina paginam a tabela de candidatos (mesmo padrão da tabela de Registros), sem nunca limitar o conjunto de candidatos calculado (só a exibição) — a ordenação por clique usa o mecanismo genérico de UI.ordenacaoTabelas (idTabela 'conciliarCandidatos'), não precisa de estado próprio aqui
   naoListadosModal: null, // { ano, mes, diaIni, diaFim, pagina, porPagina } — auditoria/rastreabilidade de uma linha "Lançamentos não listados" do Extrato Consolidado: mostra os registros individuais somados nela (ver renderNaoListadosModal/registrosNaoListadosDoIntervalo), somente consulta, nunca edição; pagina/porPagina paginam a tabela (mesmo componente/padrão de Ver Extrato/Mapa de Calor)
+  pagamentosDetalheModal: null, // { conta, competencia, pagina, porPagina } — "Detalhamento dos Pagamentos", aberto do ícone 🔍 ao lado do campo Pagamentos da Conciliação com o banco (Ver Fatura): lista os lançamentos somados em rec.pagamentos (ver detalhamentoPagamentosFatura), somente consulta, nunca edição; pagina/porPagina paginam a tabela (mesmo componente/padrão de Ver Extrato/Mapa de Calor); a ordenação por clique usa o mecanismo genérico de UI.ordenacaoTabelas (idTabela 'pagamentosDetalhe')
   confirmDelProjecao: null, // { itemId, competencia } — pergunta se a exclusão de um lançamento previsto deve valer só para esta competência (ver STATE.projecaoExclusoesPorCompetencia) ou para o lançamento inteiro (todas as competências)
   confirmDelParcela: null, // { id } — pergunta se a exclusão de uma parcela deve incluir as parcelas futuras da mesma compra
   pendingEdicaoParcela: null, // { novo, antigo, conta } — edição já validada de uma parcela existente, aguardando o usuário escolher o escopo de propagação (ver confirmEditarParcela) antes de ser efetivamente salva
@@ -6222,6 +6223,8 @@ const CAMADAS_MODAL = [
                                         // partir do botão "🔍 Verificar duplicidade" de dentro de qualquer
                                         // modal de Nível 1 da aba Contas e Cartões (Ver Extrato/Lançamentos
                                         // futuros/Ver Fatura/Ver Próximas Faturas), por isso fica acima deles
+  'pagamentosDetalheModal',            // Ver Fatura — "Detalhamento dos Pagamentos", aberto do ícone 🔍 ao
+                                        // lado do campo Pagamentos da Conciliação com o banco
   'editingTx',                         // ovTx — Editar/Novo Lançamento
   'edicaoLoteModal',                   // ovEdicaoLote — Edição em Lote (aberto de dentro de Ver Fatura/Ver
                                         // Próximas Faturas/Ver Extrato/Ver Lançamentos futuros)
@@ -9442,6 +9445,40 @@ function reconciliacaoFatura(conta, competencia, _prof){
   const diferenca = temTotalInformado ? Math.round((totalCalculado-totalInformado)*100)/100 : null;
   const estado = (!temSaldoAnterior || !temTotalInformado) ? 'pendente' : (Math.abs(diferenca)<0.005 ? 'conciliada' : 'divergente');
   return { compras, pagamentos, estornos, saldoAnterior, saldoAnteriorOrigem, totalCalculado, totalInformado, diferenca, estado, temSaldoAnterior, temTotalInformado, qtdLancamentos: det.qtd };
+}
+/* Lançamentos individuais que compõem exatamente o campo "Pagamentos" de reconciliacaoFatura (requisito
+   "Detalhamento dos Pagamentos no Painel de Conciliação Bancária") — mesma fonte e mesmos critérios
+   (pagamentosCandidatosFatura, tanto da competência atual quanto da anterior, que é o que abate o Saldo
+   Anterior bruto — ver reconciliacaoFatura), nunca um cálculo paralelo: a soma de `itens` aqui é sempre
+   idêntica a rec.pagamentos, por construção. Nunca inclui estornos (campo próprio na conciliação, requisito
+   explícito). Cada lançamento aparece uma única vez: pagamentosCandidatosFatura já garante que cada um
+   corresponde a exatamente UMA fatura (ver seu comentário), então não há risco de contar o lançamento
+   bancário original e o espelho como dois pagamentos — pagamentosCandidatosFatura devolve só um dos dois
+   lados (o que efetivamente identifica a fatura: o espelho no cartão, OU a despesa vinculada/sem vínculo na
+   conta corrente, nunca os dois juntos para o mesmo pagamento). */
+function detalhamentoPagamentosFatura(conta, competencia){
+  const competenciaAnterior = incrementarCompetencia(competencia, -1);
+  const mapeia = (t, competenciaDaFatura) => {
+    // "Conta de origem": de onde o dinheiro realmente saiu. Para o lado do cartão (espelho "Recebimento por
+    // Pagamento de Fatura"), busca o lançamento bancário original vinculado (mesmo transferenciaVinculoId —
+    // ver reconciliarPagamentosFatura); sem vínculo, é um recebimento já importado diretamente do PRÓPRIO
+    // extrato do cartão (ex.: "PGTO. CASH AG." pago na agência), sem conta bancária de origem separada.
+    const ehLadoCartao = t.conta===conta && t.categoria==='Recebimento por Pagamento de Fatura';
+    let contaOrigem;
+    if(ehLadoCartao){
+      const espelho = t.transferenciaVinculoId ? STATE.transactions.find(o=> o.id!==t.id && o.transferenciaVinculoId===t.transferenciaVinculoId) : null;
+      contaOrigem = espelho ? espelho.conta : `Extrato do próprio cartão (${conta})`;
+    } else {
+      contaOrigem = t.conta;
+    }
+    return { id:t.id, data:t.data, descricao:t.descricao, contaOrigem, cartao:conta, competencia:competenciaDaFatura, valor: Number(t.valor)||0 };
+  };
+  const itens = [
+    ...pagamentosCandidatosFatura(conta, competenciaAnterior).map(t=>mapeia(t, competenciaAnterior)),
+    ...pagamentosCandidatosFatura(conta, competencia).map(t=>mapeia(t, competencia)),
+  ];
+  const total = Math.round(itens.reduce((s,i)=>s+i.valor,0)*100)/100;
+  return { itens, total };
 }
 /* Valor da fatura usado nos cards de RESUMO/EXIBIÇÃO (card do cartão na aba Contas e Cartões, card "valor
    total da fatura" do modal Ver Fatura e, desde o requisito "Correções no painel de Cartões e Extrato
@@ -12857,6 +12894,7 @@ function render(){
     ${UI.modalInstalarIOS ? renderModalInstalarIOS() : ""}
     ${UI.projecaoFaturaModal!==null ? renderProjecaoFaturaModal() : ""}
     ${UI.faturaAtualModal!==null ? renderFaturaAtualModal() : ""}
+    ${UI.pagamentosDetalheModal!==null ? renderPagamentosDetalheModal() : ""}
     ${UI.modalDuplicidade!==null ? renderModalDuplicidade() : ""}
     ${UI.regCardDetalheId!==null ? renderRegCardDetalheModal() : ""}
     ${UI.evolucaoReservaModal!==null ? renderEvolucaoReservaModal() : ""}
@@ -15960,7 +15998,7 @@ function renderFaturaAtualModal(){
               `}
             </div>
             <div><span class="hint" style="margin:0;">Compras e despesas</span><br><b>${fmtBRL(rec.compras)}</b></div>
-            <div><span class="hint" style="margin:0;">Pagamentos</span><br><b class="val neg">${rec.pagamentos>0?'-':''}${fmtBRL(rec.pagamentos)}</b></div>
+            <div><span class="hint" style="margin:0;">Pagamentos</span><br><b class="val neg">${rec.pagamentos>0?'-':''}${fmtBRL(rec.pagamentos)}</b> <button type="button" class="icon-btn" data-abrir-pagamentos-detalhe="${escapeHtml(chaveRecAtual)}" title="Ver os lançamentos que compõem este valor" aria-label="Ver os lançamentos que compõem este valor">🔍</button></div>
             <div><span class="hint" style="margin:0;">Estornos</span><br><b class="val neg">${rec.estornos>0?'-':''}${fmtBRL(rec.estornos)}</b></div>
             <div><span class="hint" style="margin:0;">Total calculado</span><br><b>${fmtBRL(rec.totalCalculado)}</b></div>
             <div><span class="hint" style="margin:0;">Total informado pelo banco</span><br><b>${rec.temTotalInformado ? fmtBRL(rec.totalInformado) : `— (importe o ${formatoArquivoBanco} desta competência)`}</b></div>
@@ -16577,6 +16615,72 @@ function renderNaoListadosModal(){
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" id="cancelNaoListadosModal">Cancelar</button>
+      </div>
+    </div>
+  </div>`;
+}
+/* "Detalhamento dos Pagamentos no Painel de Conciliação Bancária": mostra os lançamentos individuais que
+   compõem exatamente o campo "Pagamentos" da Conciliação com o banco (ver detalhamentoPagamentosFatura —
+   mesma fonte, nunca um cálculo paralelo, então o Total aqui embaixo é sempre idêntico ao valor exibido no
+   painel). Somente consulta, igual a renderNaoListadosModal (mesmo padrão de modal/paginação/ordenação). */
+function renderPagamentosDetalheModal(){
+  const cfg = UI.pagamentosDetalheModal;
+  const { conta, competencia } = cfg;
+  const { itens: itensBase, total } = detalhamentoPagamentosFatura(conta, competencia);
+  const itens = aplicarOrdenacaoClique(itensBase.slice(), 'pagamentosDetalhe', {
+    data:{tipo:'data', valor:t=>t.data}, valor:{tipo:'moeda', valor:t=>t.valor},
+  });
+  const porPagina = cfg.porPagina || 5;
+  const totalPaginas = porPagina==='TODOS' ? 1 : Math.max(1, Math.ceil(itens.length/porPagina));
+  if(!cfg.pagina || cfg.pagina<1) cfg.pagina = 1;
+  else if(cfg.pagina>totalPaginas) cfg.pagina = totalPaginas;
+  const inicioIdx = porPagina==='TODOS' ? 0 : (cfg.pagina-1)*porPagina;
+  const fimIdx = porPagina==='TODOS' ? itens.length : Math.min(inicioIdx+porPagina, itens.length);
+  const itensPagina = itens.slice(inicioIdx, fimIdx);
+  const rodapePaginacao = renderRodapePaginacaoGenerica(itens.length, porPagina, cfg.pagina, totalPaginas, inicioIdx, fimIdx,
+    { selectId:'pagamentosDetalhePorPagina', dataAttr:'pagamentos-detalhe-pagina', unidade:'lançamentos' });
+  return `
+  <div class="overlay" id="ovPagamentosDetalhe" ${attrZIndexModal('pagamentosDetalheModal')}>
+    <div class="modal" style="width:100%;max-width:1100px;">
+      <div class="modal-head">
+        <h3>🔍 Detalhamento dos Pagamentos</h3>
+        <button class="close-x" id="closePagamentosDetalhe">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="hint" style="margin-top:0;">${escapeHtml(conta)} — ${competenciaLabel(competencia)}. Lançamentos considerados no cálculo do campo Pagamentos desta fatura. Somente consulta — para editar ou excluir um lançamento, use a aba Registros.</p>
+        ${itens.length ? `
+        <div class="table-wrap reg-tabela-principal" style="overflow:visible;max-height:none;" data-ordenar-tabela="pagamentosDetalhe"><table style="width:100%;table-layout:fixed;">
+          <thead><tr>
+            ${thOrdenavel('pagamentosDetalhe','data','Data',{style:'width:9%;'})}
+            <th style="width:27%;">Descrição</th>
+            <th style="width:16%;">Conta de origem</th>
+            <th style="width:14%;">Cartão</th>
+            <th style="width:12%;">Competência</th>
+            ${thOrdenavel('pagamentosDetalhe','valor','Valor',{style:'width:12%;text-align:right;'})}
+          </tr></thead>
+          <tbody>${itensPagina.map(i=>`<tr>
+            <td>${fmtData(i.data)}</td>
+            <td>${escapeHtml(i.descricao)}</td>
+            <td>${escapeHtml(i.contaOrigem)}</td>
+            <td>${escapeHtml(i.cartao)}</td>
+            <td>${competenciaLabel(i.competencia)}</td>
+            <td style="text-align:right;" class="val-cell pos">${fmtBRL(i.valor)}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+        ${renderCardsLancamentosModal(itensPagina, {
+          data: i=>fmtData(i.data),
+          contaLinha1: i=>escapeHtml(i.contaOrigem),
+          valorTexto: i=>fmtBRL(i.valor), valorClasse: ()=>'pos',
+          secundario: i=>`${escapeHtml(i.cartao)} · ${competenciaLabel(i.competencia)}`,
+          tags: ()=>'',
+          semAcao: ()=>true,
+        })}
+        <div class="registros-rodape">${rodapePaginacao}</div>
+        <div class="saldo-final-projetado pos" style="margin-top:10px;"><span>Total dos Pagamentos (${itens.length} lançamento${itens.length===1?'':'s'})</span><span class="val">${fmtBRL(total)}</span></div>
+        ` : `<div class="empty-state"><div class="big">🔍</div>Nenhum pagamento identificado para esta fatura.<br><span class="val" style="margin-top:6px;display:inline-block;">${fmtBRL(0)}</span></div>`}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="cancelPagamentosDetalhe">Fechar</button>
       </div>
     </div>
   </div>`;
@@ -22605,6 +22709,26 @@ function bindEvents(){
     if(v==='prev') UI.naoListadosModal.pagina = Math.max(1, UI.naoListadosModal.pagina-1);
     else if(v==='next') UI.naoListadosModal.pagina = UI.naoListadosModal.pagina+1; // clamp final em renderNaoListadosModal()
     else UI.naoListadosModal.pagina = Number(v);
+    render();
+  }));
+  /* ---- Modal: "Detalhamento dos Pagamentos" (🔍 ao lado do campo Pagamentos da Conciliação com o banco) ---- */
+  document.querySelectorAll('[data-abrir-pagamentos-detalhe]').forEach(btn=> btn.addEventListener('click', ()=>{
+    UI.pagamentosDetalheModal = { conta: UI.faturaAtualModal.conta, competencia: chaveMes(UI.ano, UI.mes), pagina:1, porPagina:5 };
+    render();
+  }));
+  document.getElementById('closePagamentosDetalhe')?.addEventListener('click', ()=>{ UI.pagamentosDetalheModal=null; render(); });
+  document.getElementById('cancelPagamentosDetalhe')?.addEventListener('click', ()=>{ UI.pagamentosDetalheModal=null; render(); });
+  document.getElementById('pagamentosDetalhePorPagina')?.addEventListener('change', e=>{
+    const v = e.target.value;
+    UI.pagamentosDetalheModal.porPagina = v==='TODOS' ? 'TODOS' : Number(v);
+    UI.pagamentosDetalheModal.pagina = 1;
+    render();
+  });
+  document.querySelectorAll('[data-pagamentos-detalhe-pagina]').forEach(b=> b.addEventListener('click', ()=>{
+    const v = b.dataset.pagamentosDetalhePagina;
+    if(v==='prev') UI.pagamentosDetalheModal.pagina = Math.max(1, UI.pagamentosDetalheModal.pagina-1);
+    else if(v==='next') UI.pagamentosDetalheModal.pagina = UI.pagamentosDetalheModal.pagina+1; // clamp final em renderPagamentosDetalheModal()
+    else UI.pagamentosDetalheModal.pagina = Number(v);
     render();
   }));
   /* ---- Modal: revisão manual da conciliação (multi-seleção) ---- */
