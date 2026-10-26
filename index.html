@@ -9083,15 +9083,21 @@ function candidatosCartaoFaturaParaPagamento(despesa){
    "Pagamento de Fatura de Cartão de Crédito", com Cartão e Competência definidos (a opção explícita
    "Cartão não cadastrado" NUNCA conta como identificado — fica sem espelho, para o usuário regularizar).
    Lançamento espelho: Receita, categoria "Recebimento por Pagamento de Fatura", descrição fixa "Pagto
-   cartão crédito", mesmo valor/data/competência, na conta do cartão identificado — ligado ao lançamento
-   de origem por transferenciaVinculoId (mesmo campo já usado por aplicarTransferenciaInterna), então a
-   exclusão em massa (que já expande por este campo — ver chamadas de removerLancamentos) remove o
+   cartão crédito", mesmo valor e mesma data do lançamento original, na conta do cartão identificado — mas
+   NUNCA na mesma competência: requisito "Ajustar competência dos lançamentos espelho de pagamentos de
+   cartão de crédito" — a competência do espelho é sempre a competência IMEDIATAMENTE SEGUINTE à
+   competência do lançamento original (ver incrementarCompetencia, que já trata a virada de ano
+   dezembro→janeiro), nunca o mês da própria data do pagamento, e nunca a mesma competência da origem. A
+   competência da despesa bancária em si nunca é alterada por este mecanismo — só a do espelho. Os dois
+   lados ficam ligados por transferenciaVinculoId (mesmo campo já usado por aplicarTransferenciaInterna),
+   então a exclusão em massa (que já expande por este campo — ver chamadas de removerLancamentos) remove o
    espelho automaticamente junto com a origem, sem nenhuma lógica extra aqui.
    sincronizarEspelhoPagamentoFatura cuida de UM lançamento (chamado logo após salvá-lo, ver
    commitEdicaoLancamentoExistente) — cria o espelho que faltava, atualiza um já existente (valor, data,
-   cartão ou competência alterados — inclusive "transferir o espelho para o novo cartão/competência", só
-   atualizando o conta/competencia do espelho já vinculado, nunca criando um lançamento novo) ou remove o
-   espelho que deixou de ser válido (categoria mudou, ou cartão/competência foram apagados).
+   cartão ou competência da ORIGEM alterados — inclusive "transferir o espelho para o novo cartão/nova
+   competência seguinte", só atualizando o conta/competencia do espelho já vinculado, nunca criando um
+   lançamento novo) ou remove o espelho que deixou de ser válido (categoria mudou, ou cartão/competência
+   foram apagados).
    sincronizarTodosEspelhosPagamentoFatura roda em lote (carregamento dos arquivos .cfg/.log, depois de
    importar um extrato, ou após uma edição em massa) — sempre idempotente: nunca duplica (reusa o espelho
    já ligado por transferenciaVinculoId) e nunca refaz o trabalho de uma origem já processada e inalterada. */
@@ -9110,11 +9116,12 @@ function sincronizarEspelhoPagamentoFatura(despesa){
     }
     return false;
   }
+  const competenciaEspelho = incrementarCompetencia(despesa.competencia, 1);
   if(espelhoExistente){
     espelhoExistente.data = despesa.data;
     espelhoExistente.valor = Number(despesa.valor)||0;
     espelhoExistente.conta = despesa.cartaoFatura;
-    espelhoExistente.competencia = despesa.competencia;
+    espelhoExistente.competencia = competenciaEspelho;
     return false;
   }
   const vinculoId = despesa.transferenciaVinculoId || uid();
@@ -9123,7 +9130,7 @@ function sincronizarEspelhoPagamentoFatura(despesa){
     id: uid(), data: despesa.data, descricao: 'Pagto cartão crédito', valor: Number(despesa.valor)||0,
     categoria: 'Recebimento por Pagamento de Fatura', grupo: 'Transações', subgrupo: 'Transferências',
     tipo: 'Receita', natureza: despesa.natureza || 'Variável',
-    conta: despesa.cartaoFatura, pgto: 'Cartão de Crédito', competencia: despesa.competencia,
+    conta: despesa.cartaoFatura, pgto: 'Cartão de Crédito', competencia: competenciaEspelho,
     parcelaAtual: null, totalParcelas: null, parcelamentoId: '',
     responsavel: '', entreFamilia: true, transferenciaInterna: true, transferenciaVinculoId: vinculoId,
     origemImportacao: despesa.origemImportacao || false
