@@ -6022,8 +6022,6 @@ let STATE = {
   subcategoriaResponsavel: {...SUBCATEGORIA_RESPONSAVEL_DEFAULT}, // { [subcategoria]: responsável } — pré-definido no cadastro da subcategoria (grupo Renda Familiar), usado automaticamente nos lançamentos
   projecoes: PROJECOES_DEFAULT.map(p=>({...p, id:uid()})), // aba Projeções: lançamentos previstos do fluxo de caixa mensal (editável)
   metas: [], // aba Metas de Gastos: { id, nome, nivel, grupo, categoria, subcategoria, valor, competenciaInicio, recorrencia, observacoes }
-  faturaTotalBanco: {}, // { "conta|AAAA-MM": valorAbsoluto } — total da fatura informado pelo próprio banco (ex.: <LEDGERBAL><BALAMT> do OFX), capturado na importação de um cartão de crédito — ver extrairSaldoFaturaBancoOFX/reconciliacaoFatura. Nunca calculado pelo app; só o que o arquivo do banco realmente informou.
-  faturaSaldoAnteriorManual: {}, // { "conta|AAAA-MM": valorAbsoluto } — saldo da fatura anterior informado manualmente pelo usuário (ver reconciliacaoFatura), usado só quando a competência anterior não tem faturaTotalBanco cadastrado (conciliação ficaria "Pendente" sem isso)
 
   ready: false,
   dirty: false, // true quando há alterações ainda não salvas nos arquivos .cfg/.log conectados
@@ -6129,7 +6127,6 @@ function criarUIPadrao(){
   novaProjecaoModal: null, // { ano, mes } — escolha do mês a partir do qual um novo lançamento previsto passa a aparecer
   conciliarProjecaoModal: null, // { itemId, competencia, selecionados, pagina, porPagina } — revisão manual dos candidatos de conciliação de um previsto "pendente"/já conciliado (ver renderConciliarProjecaoModal) — selecionados: ids marcados nos checkboxes, ainda não confirmados; pagina/porPagina paginam a tabela de candidatos (mesmo padrão da tabela de Registros), sem nunca limitar o conjunto de candidatos calculado (só a exibição) — a ordenação por clique usa o mecanismo genérico de UI.ordenacaoTabelas (idTabela 'conciliarCandidatos'), não precisa de estado próprio aqui
   naoListadosModal: null, // { ano, mes, diaIni, diaFim, pagina, porPagina } — auditoria/rastreabilidade de uma linha "Lançamentos não listados" do Extrato Consolidado: mostra os registros individuais somados nela (ver renderNaoListadosModal/registrosNaoListadosDoIntervalo), somente consulta, nunca edição; pagina/porPagina paginam a tabela (mesmo componente/padrão de Ver Extrato/Mapa de Calor)
-  pagamentosDetalheModal: null, // { conta, competencia, pagina, porPagina } — "Detalhamento dos Pagamentos", aberto do ícone 🔍 ao lado do campo Pagamentos da Conciliação com o banco (Ver Fatura): lista os lançamentos somados em rec.pagamentos (ver detalhamentoPagamentosFatura), somente consulta, nunca edição; pagina/porPagina paginam a tabela (mesmo componente/padrão de Ver Extrato/Mapa de Calor); a ordenação por clique usa o mecanismo genérico de UI.ordenacaoTabelas (idTabela 'pagamentosDetalhe')
   confirmDelProjecao: null, // { itemId, competencia } — pergunta se a exclusão de um lançamento previsto deve valer só para esta competência (ver STATE.projecaoExclusoesPorCompetencia) ou para o lançamento inteiro (todas as competências)
   confirmDelParcela: null, // { id } — pergunta se a exclusão de uma parcela deve incluir as parcelas futuras da mesma compra
   pendingEdicaoParcela: null, // { novo, antigo, conta } — edição já validada de uma parcela existente, aguardando o usuário escolher o escopo de propagação (ver confirmEditarParcela) antes de ser efetivamente salva
@@ -6223,8 +6220,6 @@ const CAMADAS_MODAL = [
                                         // partir do botão "🔍 Verificar duplicidade" de dentro de qualquer
                                         // modal de Nível 1 da aba Contas e Cartões (Ver Extrato/Lançamentos
                                         // futuros/Ver Fatura/Ver Próximas Faturas), por isso fica acima deles
-  'pagamentosDetalheModal',            // Ver Fatura — "Detalhamento dos Pagamentos", aberto do ícone 🔍 ao
-                                        // lado do campo Pagamentos da Conciliação com o banco
   'editingTx',                         // ovTx — Editar/Novo Lançamento
   'edicaoLoteModal',                   // ovEdicaoLote — Edição em Lote (aberto de dentro de Ver Fatura/Ver
                                         // Próximas Faturas/Ver Extrato/Ver Lançamentos futuros)
@@ -6874,12 +6869,6 @@ function buildCSVConfig(){
   Object.keys(STATE.saldosIniciais).forEach(key=>{
     rows.push(['SALDOINICIAL', key, '', '', STATE.saldosIniciais[key], '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
   });
-  Object.keys(STATE.faturaTotalBanco||{}).forEach(key=>{
-    rows.push(['FATURATOTALBANCO', key, '', '', STATE.faturaTotalBanco[key], '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-  });
-  Object.keys(STATE.faturaSaldoAnteriorManual||{}).forEach(key=>{
-    rows.push(['FATURASALDOANTERIORMANUAL', key, '', '', STATE.faturaSaldoAnteriorManual[key], '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-  });
   STATE.contas.forEach(conta=>{
     rows.push(['CONTA', conta, '', '', '', '', '', '', '', '', conta, '', '', '', '', STATE.contaBandeira[conta]||'', STATE.cartoes.includes(conta) ? '1' : '', '', '', '', STATE.contaTipos[conta]||'', STATE.contaResponsavel[conta]||'', '', '']);
     const extra = STATE.contaExtra[conta];
@@ -6943,7 +6932,7 @@ function buildCSVConfig(){
 }
 function loadCSVConfig(text){
   const parsed = Papa.parse(text.trim(), { header:true, skipEmptyLines:true });
-  const cardConfig = {}, cardOverrides = {}, cardStatus = {}, saldosIniciais = {}, faturaTotalBanco = {}, faturaSaldoAnteriorManual = {}, contas = [], cartoes = [], categoriasCSV = [], meiosPagamento = [], contaTipos = {}, contaResponsavel = {}, contaBandeira = {}, contaExtra = {}, contaVinculada = {}, cardLimite = {}, gruposLimiteCartao = {}, responsaveis = [], responsavelIcone = {}, subcategoriaResponsavel = {}, projecoes = [], metas = [], contrachequeResumos = {}, projecaoExclusoes = {};
+  const cardConfig = {}, cardOverrides = {}, cardStatus = {}, saldosIniciais = {}, contas = [], cartoes = [], categoriasCSV = [], meiosPagamento = [], contaTipos = {}, contaResponsavel = {}, contaBandeira = {}, contaExtra = {}, contaVinculada = {}, cardLimite = {}, gruposLimiteCartao = {}, responsaveis = [], responsavelIcone = {}, subcategoriaResponsavel = {}, projecoes = [], metas = [], contrachequeResumos = {}, projecaoExclusoes = {};
   parsed.data.forEach(r=>{
     if(r.tipo_registro==='CARDCFG'){
       cardConfig[r.id] = { fechamento: r.dia_fechamento?Number(r.dia_fechamento):null, vencimento: r.dia_vencimento?Number(r.dia_vencimento):null };
@@ -6953,10 +6942,6 @@ function loadCSVConfig(text){
       cardStatus[r.id] = r.status;
     } else if(r.tipo_registro==='SALDOINICIAL'){
       saldosIniciais[r.id] = parseFloat(r.valor)||0;
-    } else if(r.tipo_registro==='FATURATOTALBANCO'){
-      faturaTotalBanco[r.id] = parseFloat(r.valor)||0;
-    } else if(r.tipo_registro==='FATURASALDOANTERIORMANUAL'){
-      faturaSaldoAnteriorManual[r.id] = parseFloat(r.valor)||0;
     } else if(r.tipo_registro==='CONTA'){
       contas.push(r.id);
       if(r.eh_cartao==='1') cartoes.push(r.id);
@@ -7002,7 +6987,6 @@ function loadCSVConfig(text){
     }
   });
   STATE.cardConfig = {...CARDCFG_DEFAULT, ...cardConfig}; STATE.cardOverrides = cardOverrides; STATE.cardStatus = cardStatus; STATE.saldosIniciais = saldosIniciais;
-  STATE.faturaTotalBanco = faturaTotalBanco; STATE.faturaSaldoAnteriorManual = faturaSaldoAnteriorManual;
   STATE.contrachequeResumos = contrachequeResumos;
   STATE.projecaoExclusoesPorCompetencia = projecaoExclusoes;
   STATE.contaResponsavel = { ...CONTA_RESPONSAVEL_DEFAULT, ...contaResponsavel };
@@ -7603,7 +7587,6 @@ function resetarEstadoParaSessaoZerada(){
   STATE.transactions = [];
   STATE.cardConfig = {...CARDCFG_DEFAULT};
   STATE.cardOverrides = {}; STATE.melhorCartaoManual = null; STATE.cardStatus = {}; STATE.saldosIniciais = {};
-  STATE.faturaTotalBanco = {}; STATE.faturaSaldoAnteriorManual = {};
   STATE.contas = [...CONTAS_DEFAULT]; STATE.cartoes = [...CARTOES_DEFAULT]; STATE.meiosPagamento = [...MEIOS_PAGAMENTO_DEFAULT];
   STATE.contaTipos = {...CONTA_TIPOS_DEFAULT}; STATE.contaResponsavel = {...CONTA_RESPONSAVEL_DEFAULT}; STATE.contaBandeira = {...CONTA_BANDEIRA_DEFAULT}; STATE.contaExtra = {}; STATE.contaVinculada = {}; STATE.cardLimite = {}; STATE.gruposLimiteCartao = {};
   STATE.responsaveis = [...RESPONSAVEIS_DEFAULT]; STATE.responsavelIcone = { "Ariana":"feminino", "Bruno":"masculino" };
@@ -9030,18 +9013,18 @@ function pagamentosCandidatosFatura(conta, competencia){
 function pagamentoFaturaValor(conta, competencia){
   return pagamentosCandidatosFatura(conta, competencia).reduce((s,t)=> s + (Number(t.valor)||0), 0);
 }
-/* Lançamentos elegíveis para o campo "Pagamentos" da Conciliação com o banco (requisito "Correção dos
-   Critérios de Pagamentos na Conciliação Bancária") — critério DELIBERADAMENTE mais restrito que
-   pagamentosCandidatosFatura/pagamentoFaturaValor (usado em Status de pagamento, Cartões, Dashboard,
-   Próximas Faturas, verificação de duplicidade — nenhum desses muda aqui): só o pagamento lançado em OUTRA
-   conta da aplicação (nunca a própria conta do cartão) com Cartão (t.cartaoFatura) E Competência
-   (t.competencia) explicitamente vinculados AMBOS à fatura consultada — nunca por correspondência de valor,
-   data ou janela de fechamento, e nunca um espelho/recebimento já existente na própria conta do cartão
-   (criado automaticamente por reconciliarPagamentosFatura, ou importado direto do extrato do cartão) — esse
-   espelho continua existindo normalmente para fins de registro/conciliação, só não entra mais nesta soma.
-   Cada lançamento só pode bater com UMA fatura (t.competencia é um valor único), então nunca há risco de
-   contar o mesmo pagamento em dobro, mesmo quando ele também tem um espelho correspondente no cartão. */
-function pagamentosElegiveisConciliacao(conta, competencia){
+/* Lançamentos reconhecidos como pagamento no cálculo do Valor total da fatura (ver calculoFaturaCartao) —
+   critério DELIBERADAMENTE mais restrito que pagamentosCandidatosFatura/pagamentoFaturaValor (usado em
+   Status de pagamento, Cartões, Dashboard, Próximas Faturas, verificação de duplicidade — nenhum desses
+   muda aqui): só o pagamento lançado em OUTRA conta da aplicação (nunca a própria conta do cartão) com
+   Cartão (t.cartaoFatura) E Competência (t.competencia) explicitamente vinculados AMBOS à fatura consultada
+   — nunca por correspondência de valor, data ou janela de fechamento, e nunca um espelho/recebimento já
+   existente na própria conta do cartão (criado automaticamente por reconciliarPagamentosFatura, ou
+   importado direto do extrato do cartão) — esse espelho continua existindo normalmente para fins de
+   registro, só não entra mais nesta soma. Cada lançamento só pode bater com UMA fatura (t.competencia é um
+   valor único), então nunca há risco de contar o mesmo pagamento em dobro, mesmo quando ele também tem um
+   espelho correspondente no cartão. */
+function pagamentosVinculadosFatura(conta, competencia){
   return STATE.transactions.filter(t=>
     t.tipo==='Despesa' && t.categoria==='Pagamento de Fatura de Cartão de Crédito'
     && !STATE.cartoes.includes(t.conta)
@@ -9049,8 +9032,8 @@ function pagamentosElegiveisConciliacao(conta, competencia){
     && t.competencia===competencia
   );
 }
-function pagamentoFaturaValorElegivelConciliacao(conta, competencia){
-  return pagamentosElegiveisConciliacao(conta, competencia).reduce((s,t)=> s + (Number(t.valor)||0), 0);
+function pagamentoFaturaValorVinculado(conta, competencia){
+  return pagamentosVinculadosFatura(conta, competencia).reduce((s,t)=> s + (Number(t.valor)||0), 0);
 }
 // Tolerância de centavos ao comparar valor da fatura com valor pago, para diferenças residuais de
 // arredondamento nunca impedirem o reconhecimento de uma fatura como totalmente paga.
@@ -9135,7 +9118,7 @@ function reconciliarPagamentosFatura(){
     // Grava também o vínculo explícito de Cartão/Competência na PRÓPRIA despesa bancária (requisito
     // "Correção do Reconhecimento de Pagamentos: NuCartão e Estilo Elo Nanquim") — sem isso, um pagamento
     // reconciliado só por esta rota (valor+janela, sem vínculo manual do usuário) nunca seria reconhecido
-    // pelo critério explícito de pagamentosElegiveisConciliacao (Conciliação com o banco), mesmo já tendo
+    // pelo critério explícito de pagamentosVinculadosFatura, mesmo já tendo
     // identificado sem ambiguidade a qual cartão e competência ele pertence. Nunca sobrescreve um valor já
     // existente (`||`), só preenche o que faltava — mesma regra "só acrescenta" do resto desta rotina.
     despesa.cartaoFatura = cartao;
@@ -9160,8 +9143,8 @@ function reconciliarPagamentosFatura(){
    pela rota automática por valor+janela (ver reconciliarPagamentosFatura acima — t.transferenciaVinculoId
    setado, espelho já criado na conta do cartão) nunca tiveram t.cartaoFatura preenchido na própria despesa,
    porque aquela rota só grava o vínculo (transferenciaVinculoId), nunca o campo Cartão. Isso não era um
-   problema até o critério ficar explícito (Conciliação com o banco — ver pagamentosElegiveisConciliacao, que
-   exige t.cartaoFatura preenchido): essas despesas, embora já identificadas sem ambiguidade (o espelho prova
+   problema até o critério ficar explícito (ver pagamentosVinculadosFatura, que exige t.cartaoFatura
+   preenchido): essas despesas, embora já identificadas sem ambiguidade (o espelho prova
    a qual cartão e competência pertencem), passaram a não ser mais reconhecidas pelo campo Pagamentos — caso
    real auditado: NuCartão (R$180,21 em 13/10) e Estilo Elo Nanquim (R$2.451,57 em 22/10), ambas já com
    vínculo e competência corretos, só faltando o campo Cartão na própria despesa.
@@ -9423,75 +9406,47 @@ function itensFatura(conta, competencia){
   const totalCreditos = itensQueCompoemFatura.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
   return { itens, qtd: itens.length, totalParcelado, totalAvista, totalCreditos, total: faturaPorCompetencia(conta, competencia) };
 }
-/* Conciliação da fatura de um cartão de crédito com o total informado pelo PRÓPRIO banco (requisito
-   "Correção da importação e conciliação de faturas do Banco do Brasil") — uma ferramenta de VALIDAÇÃO do
-   que já foi importado/classificado, nunca uma segunda convenção de cálculo: o "valor total da fatura"
-   usado no resto do app (faturaPorCompetencia, cards da aba Contas e Cartões, Fluxo de Caixa etc.) continua
-   sendo só "quanto você gastou de fato nesta competência" (sem o saldo rotativo não pago de antes) — essa
-   é a convenção financeira global do FinUs e não muda aqui (ver restrição explícita do requisito). Esta
-   função soma separadamente compras, pagamentos e estornos, e só quando tanto o saldo anterior quanto o
-   total informado pelo banco (ambos provenientes de dados reais — ver STATE.faturaTotalBanco/
-   faturaSaldoAnteriorManual, nunca inventados) estiverem disponíveis é que calcula uma diferença e decide
-   se a fatura está conciliada:
-   Total calculado = Saldo anterior + Compras − (Pagamentos + Estornos)
-   Saldo anterior: SEMPRE o valor bruto da fatura da competência anterior (o total informado pelo banco —
-   STATE.faturaTotalBanco — ou o valor manual — STATE.faturaSaldoAnteriorManual — exatamente como
-   cadastrado, nunca líquido de pagamento aqui: requisito explícito "o campo Saldo Anterior deve
-   corresponder exatamente ao Valor Total da Fatura da competência imediatamente anterior... não utilizar o
-   valor efetivamente pago"). Só quando nenhum dos dois é conhecido é que cai para uma cadeia recursiva no
-   "Total calculado" da competência anterior (que já vem líquido, por indução) — nesse caso específico
-   `pagamentos`/`estornos` abaixo não voltam a descontar o que já foi descontado dentro dela.
-   Pagamentos: requisito "Correção dos Critérios de Pagamentos na Conciliação Bancária" — critério
-   DELIBERADAMENTE mais restrito que o Status de pagamento usado no resto do app (ver
-   pagamentosElegiveisConciliacao/pagamentoFaturaValorElegivelConciliacao, nunca pagamentoFaturaValor aqui):
-   só pagamentos lançados em OUTRA conta da aplicação (nunca a própria conta do cartão — exclui espelhos,
-   automáticos ou importados direto do extrato do cartão) com Cartão E Competência explicitamente vinculados
-   à fatura — nunca por correspondência de valor/data/janela. A soma é tanto da PRÓPRIA competência atual
-   quanto da competência ANTERIOR — são os pagamentos da competência anterior que efetivamente abatem o
-   Saldo Anterior bruto trazido para esta fatura (requisito: "a fatura de Outubro paga deve ser contabilizada
-   na fatura de Novembro, fazendo o Total calculado ser Saldo Anterior − Pagamentos − Estornos + Compras",
-   relato real: Estilo Elo Nanquim, Outubro quitado em 22/10, Saldo Anterior de Novembro = R$2.451,57 e
-   Pagamentos de Novembro também R$2.451,57, mesmo o pagamento tendo sido feito em Outubro). Nunca contado em
-   dobro: cada lançamento só tem UMA competência vinculada (só pode bater com UMA chamada desta função), e no
-   fallback recursivo abaixo pagamentosAnterior fica zerado (já embutido no saldoAnterior herdado).
-   Estornos: ao contrário de Pagamentos, soma SÓ os reconhecidos na PRÓPRIA competência atual (det.totalCreditos)
-   — nunca os da competência anterior (requisito explícito do usuário: diferente do campo Pagamentos). */
-function reconciliacaoFatura(conta, competencia, _prof){
+/* Primeira competência (a mais antiga) com algum lançamento de cartão de crédito registrado para esta
+   conta — usada por calculoFaturaCartao como caso-base da cadeia de Saldo Anterior: antes dela, não há
+   nenhum histórico rastreado pelo app, então o Saldo Anterior é R$0 (nunca presumido). null quando o cartão
+   não tem nenhum lançamento ainda. */
+function primeiraCompetenciaComLancamentos(conta){
+  const competencias = STATE.transactions.filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia).map(t=>t.competencia);
+  return competencias.length ? competencias.reduce((min,c)=> c<min?c:min) : null;
+}
+/* Valor total de uma fatura de cartão de crédito, já líquido de pagamentos/estornos e encadeado com o
+   saldo restante da competência anterior — cálculo totalmente autocontido, sem nenhuma dependência de
+   dado importado ou informado pelo banco (requisito "Remover conciliação com o banco dos modais Fatura":
+   "o reconhecimento de pagamentos e o cálculo dos valores e status devem continuar funcionando de forma
+   automática e independente"). O "valor total da fatura" usado no resto do app (faturaPorCompetencia, cards
+   da aba Contas e Cartões, Fluxo de Caixa etc.) continua sendo só "quanto você gastou de fato nesta
+   competência" (sem o saldo rotativo não pago de antes) — essa convenção não muda aqui.
+   Total calculado = Saldo anterior + Compras − Pagamentos − Estornos
+   Saldo anterior: o Total calculado da competência ANTERIOR, recursivamente (cadeia mês a mês) — nunca um
+   valor importado ou digitado. Caso-base: antes da primeira competência com algum lançamento rastreado para
+   este cartão (ver primeiraCompetenciaComLancamentos), Saldo Anterior = R$0 (nada rastreado antes, nada
+   presumido). Como o Total calculado de cada competência já é líquido por indução, um pagamento que quita a
+   fatura de Outubro automaticamente zera o Saldo Anterior herdado por Novembro — nunca é preciso (nem
+   correto) descontar esse mesmo pagamento de novo aqui: ele já foi descontado dentro do próprio
+   totalCalculado(Outubro).
+   Pagamentos/Estornos: só os reconhecidos na PRÓPRIA competência (nunca da anterior, que já está embutida no
+   Saldo Anterior). Pagamentos usa pagamentoFaturaValorVinculado: só os lançados em OUTRA conta da aplicação
+   (nunca a própria conta do cartão — exclui espelhos, automáticos ou importados direto do extrato do cartão)
+   com Cartão E Competência explicitamente vinculados à fatura — nunca por correspondência de valor/data/
+   janela. Estornos usa det.totalCreditos (ver itensFatura), que já exclui as categorias de CATEGORIAS_FATURA
+   — "Recebimento por Pagamento de Fatura" entre elas — então já é só o crédito de verdade, sem o pagamento. */
+function calculoFaturaCartao(conta, competencia, _prof){
   const profundidade = _prof||0;
   const det = itensFatura(conta, competencia);
   const compras = det.totalParcelado + det.totalAvista;
-  const pagamentosAtual = pagamentoFaturaValorElegivelConciliacao(conta, competencia);
-  // det.totalCreditos (ver itensFatura) já exclui as categorias de CATEGORIAS_FATURA — "Recebimento por
-  // Pagamento de Fatura" entre elas — então já é só o total de ESTORNOS, sem o pagamento; nunca subtrair
-  // `pagamentos` de novo aqui (bug corrigido nesta rodada: um cartão com pagamento maior que os estornos
-  // fazia esta conta dar negativo e o Math.max(0,...) zerar os estornos de verdade escondendo-os).
-  const estornosAtual = det.totalCreditos;
-  const chaveAtual = `${conta}|${competencia}`;
+  const pagamentos = pagamentoFaturaValorVinculado(conta, competencia);
+  const estornos = det.totalCreditos;
   const competenciaAnterior = incrementarCompetencia(competencia,-1);
-  const chaveAnterior = `${conta}|${competenciaAnterior}`;
-  const saldoAnteriorManual = STATE.faturaSaldoAnteriorManual[chaveAtual];
-  let saldoAnterior = null, saldoAnteriorOrigem = null, pagamentosAnterior = 0;
-  const totalInformadoAnterior = STATE.faturaTotalBanco[chaveAnterior];
-  if(totalInformadoAnterior!=null){
-    saldoAnterior = totalInformadoAnterior; // bruto — nunca líquido de pagamento aqui
-    saldoAnteriorOrigem = 'competencia-anterior';
-    pagamentosAnterior = pagamentoFaturaValorElegivelConciliacao(conta, competenciaAnterior);
-  } else if(saldoAnteriorManual!=null){
-    saldoAnterior = saldoAnteriorManual; // também bruto — mesmo tratamento do valor informado pelo banco
-    saldoAnteriorOrigem = 'manual';
-    pagamentosAnterior = pagamentoFaturaValorElegivelConciliacao(conta, competenciaAnterior);
-  } else if(profundidade<120){ // trava de segurança — ver comentário acima
-    const recAnterior = reconciliacaoFatura(conta, competenciaAnterior, profundidade+1);
-    // recAnterior.totalCalculado já é líquido (por indução) — não há "bruto" conhecido aqui, então
-    // pagamentosAnterior fica em 0: descontá-lo de novo seria dobrar o desconto.
-    if(recAnterior.temSaldoAnterior){ saldoAnterior = recAnterior.totalCalculado; saldoAnteriorOrigem = 'competencia-anterior'; }
+  const primeiraCompetencia = primeiraCompetenciaComLancamentos(conta);
+  let saldoAnterior = 0;
+  if(primeiraCompetencia!=null && competenciaAnterior>=primeiraCompetencia && profundidade<120){ // trava de segurança contra uma cadeia corrompida/circular — nunca esperada em uso normal
+    saldoAnterior = calculoFaturaCartao(conta, competenciaAnterior, profundidade+1).totalCalculado;
   }
-  const pagamentos = pagamentosAnterior + pagamentosAtual;
-  // Estornos: só os reconhecidos na PRÓPRIA competência atual — ao contrário de Pagamentos, não soma os da
-  // competência anterior (requisito explícito do usuário).
-  const estornos = estornosAtual;
-  const totalInformado = STATE.faturaTotalBanco[chaveAtual] ?? null;
-  const temSaldoAnterior = saldoAnterior!=null, temTotalInformado = totalInformado!=null;
   // Personnalité Black (Itaú) — requisito "Correção exclusiva das faturas do Personnalité Black": o
   // próprio banco confirma, no rodapé da fatura exportada, que o saldo de uma fatura já fechada NUNCA é
   // somado ao total da fatura seguinte ("Após o pagamento da fatura fechada, o valor daquele saldo não
@@ -9499,73 +9454,32 @@ function reconciliacaoFatura(conta, competencia, _prof){
   // informado pelo próprio banco já inclui o saldo rotativo não pago — ver requisito "Corrigir valores dos
   // cards da fatura"), o "Valor"/total que o Itaú informa para este cartão é sempre só as compras da
   // própria competência, líquidas de pagamentos/estornos — nunca o saldo anterior. Somar saldoAnterior ao
-  // cálculo para ESTE cartão inflava indevidamente tanto o Total calculado da conciliação quanto o "valor
-  // total da fatura" exibido nos cards (ver faturaTotalExibicao, que reaproveita rec.totalCalculado). Só
-  // para este cartão — os demais continuam somando o saldo anterior exatamente como antes.
-  const incluiSaldoAnteriorNoCalculo = temSaldoAnterior && !ehCartaoPersonnaliteBlack(conta);
-  // Quando o saldo anterior não entra no cálculo (Personnalité Black — ver comentário acima), os pagamentos
-  // DA COMPETÊNCIA ANTERIOR também não entram: eles só existem para abater esse saldo anterior, que aqui nem
-  // é somado — descontá-los mesmo assim subtrairia algo que nunca foi somado.
-  const totalCalculadoCent = Math.round(((incluiSaldoAnteriorNoCalculo?saldoAnterior:0) + compras - ((incluiSaldoAnteriorNoCalculo?pagamentosAnterior:0)+pagamentosAtual) - estornosAtual)*100);
+  // cálculo para ESTE cartão inflava indevidamente o "valor total da fatura" exibido nos cards (ver
+  // faturaTotalExibicao, que reaproveita este totalCalculado). Só para este cartão — os demais continuam
+  // somando o saldo anterior exatamente como antes.
+  const incluiSaldoAnteriorNoCalculo = !ehCartaoPersonnaliteBlack(conta);
+  const totalCalculadoCent = Math.round(((incluiSaldoAnteriorNoCalculo?saldoAnterior:0) + compras - pagamentos - estornos)*100);
   const totalCalculado = totalCalculadoCent/100;
-  const diferenca = temTotalInformado ? Math.round((totalCalculado-totalInformado)*100)/100 : null;
-  const estado = (!temSaldoAnterior || !temTotalInformado) ? 'pendente' : (Math.abs(diferenca)<0.005 ? 'conciliada' : 'divergente');
-  return { compras, pagamentos, estornos, saldoAnterior, saldoAnteriorOrigem, totalCalculado, totalInformado, diferenca, estado, temSaldoAnterior, temTotalInformado, qtdLancamentos: det.qtd };
-}
-/* Lançamentos individuais que compõem exatamente o campo "Pagamentos" de reconciliacaoFatura (requisitos
-   "Detalhamento dos Pagamentos no Painel de Conciliação Bancária" e "Correção dos Critérios de Pagamentos na
-   Conciliação Bancária") — mesma fonte e mesmos critérios restritos (pagamentosElegiveisConciliacao, tanto
-   da competência atual quanto da anterior, que é o que abate o Saldo Anterior bruto — ver
-   reconciliacaoFatura), nunca um cálculo paralelo: a soma de `itens` aqui é sempre idêntica a rec.pagamentos,
-   por construção. Nunca inclui estornos, pagamentos importados direto do extrato do cartão, nem espelhos
-   automáticos (campo próprio na conciliação / exclusões explícitas do requisito). Cada lançamento aparece
-   uma única vez: pagamentosElegiveisConciliacao já exige Cartão+Competência explícitos, então nunca há risco
-   de contar o mesmo pagamento em duas faturas. "Conta de origem" é sempre t.conta — nunca a própria conta do
-   cartão, por construção do critério. */
-function detalhamentoPagamentosFatura(conta, competencia){
-  const competenciaAnterior = incrementarCompetencia(competencia, -1);
-  const mapeia = (t, competenciaDaFatura) => ({ id:t.id, data:t.data, descricao:t.descricao, contaOrigem:t.conta, competencia:competenciaDaFatura, valor: Number(t.valor)||0 });
-  const itens = [
-    ...pagamentosElegiveisConciliacao(conta, competenciaAnterior).map(t=>mapeia(t, competenciaAnterior)),
-    ...pagamentosElegiveisConciliacao(conta, competencia).map(t=>mapeia(t, competencia)),
-  ];
-  const total = Math.round(itens.reduce((s,i)=>s+i.valor,0)*100)/100;
-  return { itens, total };
+  return { compras, pagamentos, estornos, saldoAnterior, totalCalculado, qtdLancamentos: det.qtd };
 }
 /* Valor da fatura usado nos cards de RESUMO/EXIBIÇÃO (card do cartão na aba Contas e Cartões, card "valor
-   total da fatura" do modal Ver Fatura e, desde o requisito "Correções no painel de Cartões e Extrato
-   Consolidado", também pelo valor projetado do item de cartão no Extrato Consolidado — ver
-   valorProjecaoItem) — requisito "Corrigir valores dos cards da fatura": fonte única, reaproveitando
-   diretamente o "Total calculado" da Conciliação com o banco (reconciliacaoFatura) sempre que houver saldo
-   anterior conhecido (de uma competência anterior já importada do banco, ou informado manualmente) — esse
-   total já soma saldo anterior + compras − pagamentos − estornos, o valor real cobrado pelo banco, nunca
-   recalculado de forma paralela aqui. Sem saldo anterior conhecido (cartão sem nenhum dado bancário ainda
-   importado), cai no valor tradicional (faturaPorCompetencia: só compras − estornos da própria
-   competência) — comportamento inalterado para os demais cartões, que nunca tiveram esse dado disponível
-   (seção "Preservar... o funcionamento dos demais cartões" do requisito).
-   Correção do requisito "Faturas sem lançamentos devem apresentar R$ 0,00": ter saldo anterior conhecido
-   não basta, por si só, para "herdar" esse saldo como se fosse o valor desta competência — isso inflava
-   indevidamente faturas sem NENHUM lançamento (nem compra, nem pagamento, nem estorno), mostrando o saldo
-   em aberto da competência ANTERIOR como se já fosse uma nova fatura desta. Sem nenhum lançamento nesta
-   própria competência (qtdLancamentos===0), totalCalculado NUNCA é usado — ele é a soma saldo anterior +
-   compras − pagamentos − estornos, uma fórmula que só faz sentido quando há alguma movimentação real desta
-   competência para encadear; sem nenhuma, o valor correto é o que o PRÓPRIO banco já confirmou
-   diretamente para ela (temTotalInformado/totalInformado — ainda que seja exatamente R$ 0,00, como um OFX
-   de uma fatura fechada sem nenhuma compra nova) ou, sem nenhuma confirmação bancária, R$ 0,00 (nunca
-   presumir o saldo anterior como se já fosse o valor desta fatura). Caso real que expôs o bug: um cartão
-   com saldo anterior conhecido de uma competência anterior E um total bancário de R$ 0,00 já importado
-   para a própria competência (fatura fechada sem nenhum lançamento) continuava retornando o saldo
-   anterior por inteiro, em vez do R$ 0,00 que o próprio banco confirmou. Com 1+ lançamentos nesta
-   competência (qtdLancamentos>0 — compra, pagamento OU estorno já contam), o encadeamento normal
-   (totalCalculado) continua sendo usado, exatamente como antes.
+   total da fatura" do modal Ver Fatura e também pelo valor projetado do item de cartão no Extrato
+   Consolidado — ver valorProjecaoItem): fonte única, reaproveitando diretamente o "Total calculado" de
+   calculoFaturaCartao — esse total já soma saldo anterior (autocalculado, encadeado mês a mês) + compras −
+   pagamentos − estornos, nunca recalculado de forma paralela aqui.
+   Requisito "Faturas sem lançamentos devem apresentar R$ 0,00": sem NENHUM lançamento nesta própria
+   competência (qtdLancamentos===0 — nem compra, nem pagamento, nem estorno), totalCalculado NUNCA é usado —
+   mostrar o saldo em aberto da competência ANTERIOR como se já fosse uma nova fatura desta, sem nenhuma
+   movimentação real para encadear, seria presumir dívida que ainda não foi confirmada por nenhum lançamento
+   desta competência; o valor correto nesse caso é R$ 0,00. Com 1+ lançamentos (de qualquer tipo), o
+   encadeamento normal (totalCalculado) é usado.
    O valor "oficial" usado no resto do app para outras finalidades (Dashboard, Próximas Faturas, detecção
    de duplicidade na importação, Status de pagamento etc.) continua sendo faturaPorCompetencia, sem nenhuma
-   mudança — são métricas conceitualmente diferentes ("quanto você gastou nesta competência" vs. "quanto o
-   banco está cobrando agora", que inclui o saldo rotativo não pago de competências anteriores). */
+   mudança — são métricas conceitualmente diferentes ("quanto você gastou nesta competência" vs. "quanto
+   ainda falta pagar agora", que inclui o saldo não pago de competências anteriores). */
 function faturaTotalExibicao(conta, competencia){
-  const rec = reconciliacaoFatura(conta, competencia);
-  if(!rec.temSaldoAnterior) return faturaPorCompetencia(conta, competencia);
-  if(rec.qtdLancamentos===0) return rec.temTotalInformado ? rec.totalInformado : 0;
+  const rec = calculoFaturaCartao(conta, competencia);
+  if(rec.qtdLancamentos===0) return 0;
   return rec.totalCalculado;
 }
 /* Próximas faturas de um cartão (modal 👁), a partir do mês seguinte ao selecionado no topo
@@ -12947,7 +12861,6 @@ function render(){
     ${UI.modalInstalarIOS ? renderModalInstalarIOS() : ""}
     ${UI.projecaoFaturaModal!==null ? renderProjecaoFaturaModal() : ""}
     ${UI.faturaAtualModal!==null ? renderFaturaAtualModal() : ""}
-    ${UI.pagamentosDetalheModal!==null ? renderPagamentosDetalheModal() : ""}
     ${UI.modalDuplicidade!==null ? renderModalDuplicidade() : ""}
     ${UI.regCardDetalheId!==null ? renderRegCardDetalheModal() : ""}
     ${UI.evolucaoReservaModal!==null ? renderEvolucaoReservaModal() : ""}
@@ -15916,22 +15829,14 @@ function renderFaturaAtualModal(){
   // Status automático (mesma fonte única usada no card da aba Cartões — ver statusDetalhadoFatura), só
   // para exibição: mantém este modal sempre sincronizado com o Status mostrado na tabela.
   const stFatura = statusDetalhadoFatura(conta, competencia);
-  // Conciliação com o total informado pelo próprio banco (ver reconciliacaoFatura) — fonte única também do
-  // card "valor total da fatura" do resumo acima (ver faturaTotalExibicao/requisito "Corrigir valores dos
-  // cards da fatura"), nunca um cálculo paralelo.
-  const rec = reconciliacaoFatura(conta, competencia);
-  const chaveRecAtual = `${conta}|${competencia}`;
-  const editandoSaldoAnterior = !!UI.faturaAtualModal.editandoSaldoAnterior;
-  // Formato de arquivo do banco mencionado nas dicas da seção Conciliação com o banco abaixo — cartão
-  // Personnalité Black aceita exclusivamente .xlsx (nunca .ofx, que este cartão não emite — ver
-  // ehCartaoPersonnaliteBlack/requisito "Corrigir formato de importação do cartão Personnalité Black");
-  // os demais cartões continuam mencionando OFX normalmente, sem nenhuma mudança de comportamento.
-  const formatoArquivoBanco = ehCartaoPersonnaliteBlack(conta) ? 'XLSX' : 'OFX';
+  // Valor total da fatura (ver calculoFaturaCartao) — fonte única também do card "valor total da fatura" do
+  // resumo abaixo (ver faturaTotalExibicao), nunca um cálculo paralelo.
+  const rec = calculoFaturaCartao(conta, competencia);
   // Filtros do próprio modal (Data por período, Tipo e Parcela — seleção múltipla) + busca por descrição,
   // mesmo motor genérico usado em Registros/Ver Extrato/Lançamentos futuros (ver criarFiltrosPadrao). Os
   // cards do painel-resumo (parceladas, à vista, pagamentos, estornos) são recalculados com base SOMENTE
   // nos itens filtrados/exibidos. "Valor total da fatura" é o único que nunca é uma soma independente dos
-  // itens: sem nenhum filtro ativo, equivale exatamente a rec.totalCalculado (Conciliação com o banco, ver
+  // itens: sem nenhum filtro ativo, equivale exatamente a rec.totalCalculado (ver calculoFaturaCartao/
   // faturaTotalExibicao) — com filtro ativo, mantém o mesmo saldo anterior real (rec.saldoAnterior, fixo
   // para toda a competência) encadeado só com o subconjunto filtrado de compras/créditos.
   const f = UI.faturaAtualModal.filtros;
@@ -15953,35 +15858,31 @@ function renderFaturaAtualModal(){
   // Pagamentos e Estornos (requisito "Corrigir valores dos cards da fatura", seção "Separação do card
   // Créditos e pagamentos"): dois cards independentes, nunca mais um único "créditos e pagamentos"
   // combinado — Estornos é só o crédito real lançado na competência (mesma categorização de sempre);
-  // Pagamentos vem exatamente da mesma categoria usada por reconciliacaoFatura ('Recebimento por Pagamento
+  // Pagamentos vem exatamente da mesma categoria usada por calculoFaturaCartao ('Recebimento por Pagamento
   // de Fatura'), filtrado pelos mesmos critérios de Data/Tipo/Parcela/busca da UI — ao contrário dos
   // totais acima, aqui SEM excluir CATEGORIAS_FATURA (é exatamente o que se quer mostrar).
   const totalEstornosFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
   const totalPagamentosFiltrado = itensFiltrados.filter(t=>t.categoria==='Recebimento por Pagamento de Fatura').reduce((s,t)=>s+(Number(t.valor)||0),0);
-  // "Valor total da fatura" (requisito "Corrigir valores dos cards da fatura"): nunca mais uma soma
-  // independente de compras − estornos (que ignora saldo anterior e pagamentos) — reaproveita diretamente
-  // o saldo anterior já calculado pela Conciliação com o banco (rec.saldoAnterior/rec.temSaldoAnterior,
-  // nunca recalculado aqui) encadeado com os totais já filtrados acima. Sem nenhum filtro ativo, compras =
-  // totalAvistaFiltrado+totalParceladoFiltrado = rec.compras e totalPagamentosFiltrado+totalEstornosFiltrado
-  // = rec.pagamentos+rec.estornos (mesma fonte), então o resultado é idêntico a rec.totalCalculado — igual
-  // à seção Conciliação com o banco abaixo, por construção, nunca por coincidência. Personnalité Black
-  // (Itaú) é a única exceção — mesma condição já aplicada dentro da própria reconciliacaoFatura (ver
-  // requisito "Correção exclusiva das faturas do Personnalité Black"): o saldo anterior nunca entra no
-  // total para este cartão (o Itaú nunca o soma à fatura seguinte), então este card precisa seguir
-  // exatamente a mesma condição para continuar idêntico a rec.totalCalculado, nunca um cálculo paralelo.
+  // "Valor total da fatura": nunca uma soma independente de compras − estornos (que ignora saldo anterior e
+  // pagamentos) — reaproveita diretamente o saldo anterior já calculado por calculoFaturaCartao
+  // (rec.saldoAnterior, nunca recalculado aqui) encadeado com os totais já filtrados acima. Sem nenhum
+  // filtro ativo, compras = totalAvistaFiltrado+totalParceladoFiltrado = rec.compras e
+  // totalPagamentosFiltrado+totalEstornosFiltrado = rec.pagamentos+rec.estornos (mesma fonte), então o
+  // resultado é idêntico a rec.totalCalculado, por construção, nunca por coincidência. Personnalité Black
+  // (Itaú) é a única exceção — mesma condição já aplicada dentro da própria calculoFaturaCartao: o saldo
+  // anterior nunca entra no total para este cartão (o Itaú nunca o soma à fatura seguinte), então este card
+  // precisa seguir exatamente a mesma condição para continuar idêntico a rec.totalCalculado.
   // Requisito "Faturas sem lançamentos devem apresentar R$ 0,00" (ver também faturaTotalExibicao, mesma
   // regra): sem NENHUM lançamento nesta competência (det.itens, nunca itensFiltrados — a ausência de
   // lançamento vale para a fatura inteira, não só para o subconjunto filtrado no momento), o encadeamento
   // "saldo anterior + compras − pagamentos − estornos" não se aplica — sem nenhuma movimentação real desta
-  // competência para encadear, o valor correto é o que o PRÓPRIO banco já confirmou diretamente para ela
-  // (rec.totalInformado — mesmo que seja exatamente R$ 0,00) ou, sem nenhuma confirmação bancária, R$ 0,00
-  // — nunca o saldo em aberto da competência anterior como se já fosse uma nova fatura desta. Com 1+
-  // lançamentos (de qualquer tipo: compra, pagamento ou estorno), o cálculo encadeado abaixo continua
-  // normalmente.
+  // competência para encadear, o valor correto é R$ 0,00 (nunca presumir o saldo em aberto da competência
+  // anterior como se já fosse uma nova fatura desta). Com 1+ lançamentos (de qualquer tipo: compra,
+  // pagamento ou estorno), o cálculo encadeado abaixo continua normalmente.
   const semFaturaNestaCompetenciaCard = det.itens.length===0;
-  const incluiSaldoAnteriorNesteCard = rec.temSaldoAnterior && !ehCartaoPersonnaliteBlack(conta) && !semFaturaNestaCompetenciaCard;
+  const incluiSaldoAnteriorNesteCard = !ehCartaoPersonnaliteBlack(conta) && !semFaturaNestaCompetenciaCard;
   const totalFatFiltrado = semFaturaNestaCompetenciaCard
-    ? (rec.temTotalInformado ? rec.totalInformado : 0)
+    ? 0
     : ((incluiSaldoAnteriorNesteCard ? rec.saldoAnterior : 0) + totalAvistaFiltrado + totalParceladoFiltrado - totalPagamentosFiltrado - totalEstornosFiltrado);
   const filtrosAtivos = filtrosPadraoAtivos(f, [{campo:'tipo'},{campo:'parcela'}]) || !!fBusca.trim();
   const camposFiltroFatura = camposFiltroTipoParcelaCascata(det.itens, f);
@@ -16029,35 +15930,6 @@ function renderFaturaAtualModal(){
           <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(totalParceladoFiltrado)}</div><div class="lbl">compras parceladas</div></div></div>
           ${totalPagamentosFiltrado>0 ? `<div class="cartoes-resumo-item"><span class="ico">➖</span><div><div class="val neg">-${fmtBRL(totalPagamentosFiltrado)}</div><div class="lbl">pagamentos</div></div></div>` : ''}
           ${totalEstornosFiltrado>0 ? `<div class="cartoes-resumo-item"><span class="ico">↩️</span><div><div class="val neg">-${fmtBRL(totalEstornosFiltrado)}</div><div class="lbl">estornos</div></div></div>` : ''}
-        </div>
-        <div class="conciliacao-fatura-banco no-print" style="margin-top:14px;padding:12px 16px;border-radius:10px;border:1px solid var(--line);">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
-            <b>Conciliação com o banco</b>
-            ${rec.estado==='conciliada' ? `<span class="tag Receita">✅ Conciliada</span>`
-              : rec.estado==='divergente' ? `<span class="tag Despesa">⚠️ Divergente</span>`
-              : `<span class="tag Variavel">⏳ Pendente</span>`}
-          </div>
-          <div class="conciliacao-fatura-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px 16px;font-size:13px;">
-            <div>
-              <span class="hint" style="margin:0;">Saldo anterior</span><br>
-              ${editandoSaldoAnterior ? `
-                <input type="text" inputmode="decimal" id="inpSaldoAnteriorFatura" value="${rec.saldoAnterior!=null?fmtMoedaInput(rec.saldoAnterior):''}" style="width:110px;text-align:right;border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-family:var(--mono);">
-                <button type="button" class="icon-btn" id="btnSalvarSaldoAnteriorFatura" title="Salvar">✅</button>
-                <button type="button" class="icon-btn" id="btnCancelarSaldoAnteriorFatura" title="Cancelar">✕</button>
-              ` : `
-                <b>${rec.saldoAnterior!=null ? fmtBRL(rec.saldoAnterior) : '—'}</b>
-                <button type="button" class="icon-btn" data-editar-saldo-anterior-fatura="${escapeHtml(chaveRecAtual)}" title="${rec.saldoAnteriorOrigem==='competencia-anterior' ? 'Vindo da competência anterior — editar manualmente' : 'Informar manualmente'}" aria-label="Editar saldo anterior">✏️</button>
-                ${rec.saldoAnteriorOrigem==='manual' ? `<span class="hint" style="margin:0;display:block;">(informado manualmente)</span>` : ''}
-              `}
-            </div>
-            <div><span class="hint" style="margin:0;">Compras e despesas</span><br><b>${fmtBRL(rec.compras)}</b></div>
-            <div><span class="hint" style="margin:0;">Pagamentos</span><br><b class="val neg">${rec.pagamentos>0?'-':''}${fmtBRL(rec.pagamentos)}</b> <button type="button" class="icon-btn" data-abrir-pagamentos-detalhe="${escapeHtml(chaveRecAtual)}" title="Ver os lançamentos que compõem este valor" aria-label="Ver os lançamentos que compõem este valor">🔍</button></div>
-            <div><span class="hint" style="margin:0;">Estornos</span><br><b class="val neg">${rec.estornos>0?'-':''}${fmtBRL(rec.estornos)}</b></div>
-            <div><span class="hint" style="margin:0;">Total calculado</span><br><b>${fmtBRL(rec.totalCalculado)}</b></div>
-            <div><span class="hint" style="margin:0;">Total informado pelo banco</span><br><b>${rec.temTotalInformado ? fmtBRL(rec.totalInformado) : `— (importe o ${formatoArquivoBanco} desta competência)`}</b></div>
-            <div><span class="hint" style="margin:0;">Diferença</span><br><b class="${rec.diferenca!=null && Math.abs(rec.diferenca)>=0.005 ? 'val neg' : ''}">${rec.diferenca!=null ? fmtBRL(rec.diferenca) : '—'}</b></div>
-          </div>
-          ${!rec.temSaldoAnterior ? `<p class="hint" style="margin:8px 0 0;">Falta o saldo da fatura anterior para concluir a conciliação — importe o ${formatoArquivoBanco} da competência anterior deste cartão (preenche automaticamente) ou informe manualmente (✏️ acima).</p>` : (!rec.temTotalInformado ? `<p class="hint" style="margin:8px 0 0;">Falta o total informado pelo banco desta competência — importe o ${formatoArquivoBanco} desta fatura para preenchê-lo automaticamente.</p>` : '')}
         </div>
         ${det.itens.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
@@ -16668,70 +16540,6 @@ function renderNaoListadosModal(){
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" id="cancelNaoListadosModal">Cancelar</button>
-      </div>
-    </div>
-  </div>`;
-}
-/* "Detalhamento dos Pagamentos no Painel de Conciliação Bancária": mostra os lançamentos individuais que
-   compõem exatamente o campo "Pagamentos" da Conciliação com o banco (ver detalhamentoPagamentosFatura —
-   mesma fonte, nunca um cálculo paralelo, então o Total aqui embaixo é sempre idêntico ao valor exibido no
-   painel). Somente consulta, igual a renderNaoListadosModal (mesmo padrão de modal/paginação/ordenação). */
-function renderPagamentosDetalheModal(){
-  const cfg = UI.pagamentosDetalheModal;
-  const { conta, competencia } = cfg;
-  const { itens: itensBase, total } = detalhamentoPagamentosFatura(conta, competencia);
-  const itens = aplicarOrdenacaoClique(itensBase.slice(), 'pagamentosDetalhe', {
-    data:{tipo:'data', valor:t=>t.data}, valor:{tipo:'moeda', valor:t=>t.valor},
-  });
-  const porPagina = cfg.porPagina || 5;
-  const totalPaginas = porPagina==='TODOS' ? 1 : Math.max(1, Math.ceil(itens.length/porPagina));
-  if(!cfg.pagina || cfg.pagina<1) cfg.pagina = 1;
-  else if(cfg.pagina>totalPaginas) cfg.pagina = totalPaginas;
-  const inicioIdx = porPagina==='TODOS' ? 0 : (cfg.pagina-1)*porPagina;
-  const fimIdx = porPagina==='TODOS' ? itens.length : Math.min(inicioIdx+porPagina, itens.length);
-  const itensPagina = itens.slice(inicioIdx, fimIdx);
-  const rodapePaginacao = renderRodapePaginacaoGenerica(itens.length, porPagina, cfg.pagina, totalPaginas, inicioIdx, fimIdx,
-    { selectId:'pagamentosDetalhePorPagina', dataAttr:'pagamentos-detalhe-pagina', unidade:'lançamentos' });
-  return `
-  <div class="overlay" id="ovPagamentosDetalhe" ${attrZIndexModal('pagamentosDetalheModal')}>
-    <div class="modal" style="width:100%;max-width:1100px;">
-      <div class="modal-head">
-        <h3>🔍 Detalhamento dos Pagamentos</h3>
-        <button class="close-x" id="closePagamentosDetalhe">✕</button>
-      </div>
-      <div class="modal-body">
-        <p class="hint" style="margin-top:0;">${escapeHtml(conta)} — ${competenciaLabel(competencia)}. Lançamentos considerados no cálculo do campo Pagamentos desta fatura. Somente consulta — para editar ou excluir um lançamento, use a aba Registros.</p>
-        ${itens.length ? `
-        <div class="table-wrap reg-tabela-principal" style="overflow:visible;max-height:none;" data-ordenar-tabela="pagamentosDetalhe"><table style="width:100%;table-layout:fixed;">
-          <thead><tr>
-            ${thOrdenavel('pagamentosDetalhe','data','Data',{style:'width:11%;'})}
-            <th style="width:35%;">Descrição</th>
-            <th style="width:20%;">Conta de origem</th>
-            <th style="width:16%;">Competência</th>
-            ${thOrdenavel('pagamentosDetalhe','valor','Valor',{style:'width:18%;text-align:right;'})}
-          </tr></thead>
-          <tbody>${itensPagina.map(i=>`<tr>
-            <td>${fmtData(i.data)}</td>
-            <td>${escapeHtml(i.descricao)}</td>
-            <td>${escapeHtml(i.contaOrigem)}</td>
-            <td>${competenciaLabel(i.competencia)}</td>
-            <td style="text-align:right;" class="val-cell pos">${fmtBRL(i.valor)}</td>
-          </tr>`).join('')}</tbody>
-        </table></div>
-        ${renderCardsLancamentosModal(itensPagina, {
-          data: i=>fmtData(i.data),
-          contaLinha1: i=>escapeHtml(i.contaOrigem),
-          valorTexto: i=>fmtBRL(i.valor), valorClasse: ()=>'pos',
-          secundario: i=>competenciaLabel(i.competencia),
-          tags: ()=>'',
-          semAcao: ()=>true,
-        })}
-        <div class="registros-rodape">${rodapePaginacao}</div>
-        <div class="saldo-final-projetado pos" style="margin-top:10px;"><span>Total dos Pagamentos (${itens.length} lançamento${itens.length===1?'':'s'})</span><span class="val">${fmtBRL(total)}</span></div>
-        ` : `<div class="empty-state"><div class="big">🔍</div>Nenhum pagamento identificado para esta fatura.<br><span class="val" style="margin-top:6px;display:inline-block;">${fmtBRL(0)}</span></div>`}
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" id="cancelPagamentosDetalhe">Fechar</button>
       </div>
     </div>
   </div>`;
@@ -20014,18 +19822,6 @@ function parseOFXText(text){
   });
   return rows;
 }
-/* Total da fatura informado pelo PRÓPRIO banco (tag <BALAMT> dentro de <LEDGERBAL>, padrão do protocolo
-   OFX — fora dos blocos <STMTTRN>, aparece uma única vez no arquivo) — usado como "total informado pelo
-   banco" na conciliação de faturas de cartão de crédito (ver reconciliacaoFatura). Em cartão de crédito,
-   o banco grava esse saldo como um valor NEGATIVO (dívida); devolvido aqui já em valor absoluto (o quanto
-   é devido), ou null quando o arquivo não traz essa tag — nunca presume um total quando a informação não
-   está disponível. */
-function extrairSaldoFaturaBancoOFX(text){
-  const m = text.match(/<BALAMT>([^<\r\n]+)/i);
-  if(!m) return null;
-  const v = parseFloat(m[1].trim().replace(',','.'));
-  return isNaN(v) ? null : Math.abs(v);
-}
 /* Códigos de banco (COMPE) mais comuns entre os bancos brasileiros, para resolver o nome quando o extrato
    traz apenas o código numérico (ex.: <BANKID>001</BANKID>) — seção 17 do requisito. Lista deliberadamente
    não-exaustiva: cobre os bancos mais usados nesta aplicação; um código fora da lista fica como o próprio
@@ -20822,7 +20618,7 @@ function handleFile(file){
     // cadastro da conta já selecionada pelo usuário.
     aplicarDadosBancariosExtraidosExtrato(UI.importMap.contaDestino, extrairDadosBancariosOFX(text));
     const temMoedaEstrangeira = rows.some(r=>r[3]);
-    UI.importRaw = { type:'ofx', headers:['Data','Descrição','Valor'], rows, saldoFaturaBancoAbs: extrairSaldoFaturaBancoOFX(text) };
+    UI.importRaw = { type:'ofx', headers:['Data','Descrição','Valor'], rows };
     if(temMoedaEstrangeira){
       UI.modalTaxasConversao = { rows: rows.filter(r=>r[3]) };
       UI.importStep = 3; render();
@@ -22067,21 +21863,6 @@ function bindEvents(){
   document.getElementById('closeFaturaAtual')?.addEventListener('click', ()=>{ UI.faturaAtualModal=null; render(); });
   document.getElementById('closeFaturaAtual2')?.addEventListener('click', ()=>{ UI.faturaAtualModal=null; render(); });
   document.getElementById('printFaturaAtual')?.addEventListener('click', ()=>imprimirModal('ovFaturaAtual'));
-  // Conciliação com o banco — editar manualmente o saldo da fatura anterior (ver reconciliacaoFatura),
-  // usado só quando a competência anterior não tem total bancário próprio capturado por uma importação.
-  document.querySelectorAll('[data-editar-saldo-anterior-fatura]').forEach(b=> b.addEventListener('click', ()=>{
-    UI.faturaAtualModal.editandoSaldoAnterior = true; render();
-  }));
-  document.getElementById('btnCancelarSaldoAnteriorFatura')?.addEventListener('click', ()=>{
-    UI.faturaAtualModal.editandoSaldoAnterior = false; render();
-  });
-  document.getElementById('btnSalvarSaldoAnteriorFatura')?.addEventListener('click', ()=>{
-    const chave = `${UI.faturaAtualModal.conta}|${chaveMes(UI.ano, UI.mes)}`;
-    const valor = parseMoedaTexto(document.getElementById('inpSaldoAnteriorFatura')?.value);
-    STATE.faturaSaldoAnteriorManual[chave] = valor;
-    UI.faturaAtualModal.editandoSaldoAnterior = false;
-    scheduleSave();
-  });
   // Paginação da Fatura — mesmo padrão da tabela de Registros (ver renderRodapePaginacaoGenerica).
   document.getElementById('faturaPorPagina')?.addEventListener('change', e=>{
     const v = e.target.value;
@@ -22760,26 +22541,6 @@ function bindEvents(){
     if(v==='prev') UI.naoListadosModal.pagina = Math.max(1, UI.naoListadosModal.pagina-1);
     else if(v==='next') UI.naoListadosModal.pagina = UI.naoListadosModal.pagina+1; // clamp final em renderNaoListadosModal()
     else UI.naoListadosModal.pagina = Number(v);
-    render();
-  }));
-  /* ---- Modal: "Detalhamento dos Pagamentos" (🔍 ao lado do campo Pagamentos da Conciliação com o banco) ---- */
-  document.querySelectorAll('[data-abrir-pagamentos-detalhe]').forEach(btn=> btn.addEventListener('click', ()=>{
-    UI.pagamentosDetalheModal = { conta: UI.faturaAtualModal.conta, competencia: chaveMes(UI.ano, UI.mes), pagina:1, porPagina:5 };
-    render();
-  }));
-  document.getElementById('closePagamentosDetalhe')?.addEventListener('click', ()=>{ UI.pagamentosDetalheModal=null; render(); });
-  document.getElementById('cancelPagamentosDetalhe')?.addEventListener('click', ()=>{ UI.pagamentosDetalheModal=null; render(); });
-  document.getElementById('pagamentosDetalhePorPagina')?.addEventListener('change', e=>{
-    const v = e.target.value;
-    UI.pagamentosDetalheModal.porPagina = v==='TODOS' ? 'TODOS' : Number(v);
-    UI.pagamentosDetalheModal.pagina = 1;
-    render();
-  });
-  document.querySelectorAll('[data-pagamentos-detalhe-pagina]').forEach(b=> b.addEventListener('click', ()=>{
-    const v = b.dataset.pagamentosDetalhePagina;
-    if(v==='prev') UI.pagamentosDetalheModal.pagina = Math.max(1, UI.pagamentosDetalheModal.pagina-1);
-    else if(v==='next') UI.pagamentosDetalheModal.pagina = UI.pagamentosDetalheModal.pagina+1; // clamp final em renderPagamentosDetalheModal()
-    else UI.pagamentosDetalheModal.pagina = Number(v);
     render();
   }));
   /* ---- Modal: revisão manual da conciliação (multi-seleção) ---- */
@@ -24297,23 +24058,6 @@ function bindEvents(){
     // oficial do contracheque (cards do Extrato: Margem Consignável/Bruto/Descontos/Líquido — ver
     // renderExtratoContaModal) fica salvo por competência, nunca sobrescrevendo outras já importadas.
     const contaDestinoImport = UI.importMap.contaDestino;
-    // Conciliação de fatura de cartão de crédito (ver reconciliacaoFatura): quando este OFX trouxe o total
-    // da fatura informado pelo PRÓPRIO banco (<LEDGERBAL><BALAMT>, ver extrairSaldoFaturaBancoOFX), guarda
-    // esse valor associado à conta+competência desta importação — é o "total informado pelo banco" contra
-    // o qual a conciliação confere o cálculo do app. Nunca sobrescreve com um valor inventado: só grava
-    // quando o próprio arquivo realmente trouxe essa tag.
-    if(UI.importRaw && UI.importRaw.type==='ofx' && UI.importRaw.saldoFaturaBancoAbs!=null && STATE.cartoes.includes(contaDestinoImport)){
-      STATE.faturaTotalBanco[`${contaDestinoImport}|${UI.importRefAno}-${pad2(UI.importRefMes)}`] = UI.importRaw.saldoFaturaBancoAbs;
-    }
-    // Mesma captura acima, agora para a fatura .xlsx do Personnalité Black (ver extrairResumoPersonnaliteXLSX/
-    // UI.pbValidacao.totalDestaFatura — o total que a própria planilha do Itaú informa na tabela "Cartão/
-    // Valor/Vencimento") — requisito "Corrigir formato de importação do cartão Personnalité Black", seção 2
-    // ("Adaptar o módulo de conciliação para utilizar os dados extraídos do arquivo XLSX... total informado
-    // pelo banco"). Mesma STATE.faturaTotalBanco, fonte única já usada por reconciliacaoFatura para todos os
-    // cartões — nenhum campo nem lógica de conciliação paralela só para este cartão.
-    if(UI.importRaw && UI.importRaw.type==='xlsx-pb' && UI.pbValidacao && UI.pbValidacao.totalDestaFatura!=null && STATE.cartoes.includes(contaDestinoImport)){
-      STATE.faturaTotalBanco[`${contaDestinoImport}|${UI.importRefAno}-${pad2(UI.importRefMes)}`] = UI.pbValidacao.totalDestaFatura;
-    }
     if(STATE.contaTipos[contaDestinoImport]==='Contracheque'){
       const competenciaImportada = `${UI.importRefAno}-${pad2(UI.importRefMes)}`;
       STATE.transactions = STATE.transactions.filter(t=> !(t.conta===contaDestinoImport && t.contrachequeProjecao && competenciaDeData(t.data)===competenciaImportada));
