@@ -2600,15 +2600,14 @@ summary::marker{content:'';}
    por todo o restante do app, preservando o empilhamento/adaptação existente no mobile. */
 .cartoes-resumo-grid-contas{grid-template-columns:repeat(5,1fr);}
 @media(max-width:900px){ .cartoes-resumo-grid-contas{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));} }
-/* Modal Ver Fatura — resumo em 6 cards numa única linha, todos com a mesma largura/altura (requisito
-   "Correção dos cálculos e reorganização dos cards do modal Fatura"): Saldo fatura anterior, Pagamentos,
+/* Modal Ver Fatura — resumo em 6 cards numa única linha: Saldo fatura anterior, Pagamentos,
    Estornos/Créditos, Compras à vista, Compras parceladas, Valor total da fatura, nessa ordem (mesma ordem
-   do DOM — ver renderFaturaAtualModal, sem precisar de nenhum grid-column/grid-row especial por item). Só o
-   valor monetário do último card (Valor total da fatura) tem a fonte 3px maior que os demais — nunca o
-   card em si, que mantém as mesmas dimensões de todos os outros. Abaixo de 900px/700px, reduz para 3/2
-   colunas (2/3 linhas) — mesmos breakpoints já usados em .cartoes-resumo-grid-contas. */
-.fatura-resumo-cards{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:16px;}
-.fatura-resumo-cards .fatura-resumo-valor-total .val{font-size:calc(var(--val-font-size, 15px) + 3px);}
+   do DOM — ver renderFaturaAtualModal, sem precisar de nenhum grid-column/grid-row especial por item). O
+   último card (Valor total da fatura) é um pouco mais largo (1.3fr) que os demais (1fr) e seu valor
+   monetário tem a fonte 8px maior. Abaixo de 900px/700px, reduz para 3/2 colunas (2/3 linhas) — mesmos
+   breakpoints já usados em .cartoes-resumo-grid-contas. */
+.fatura-resumo-cards{display:grid;grid-template-columns:repeat(5,minmax(0, 1fr)) 1.3fr;gap:10px;margin:14px 0;}
+.fatura-resumo-cards .fatura-resumo-valor-total .val{font-size:calc(var(--val-font-size, 15px) + 8px);}
 @media(max-width:900px){ .fatura-resumo-cards{grid-template-columns:repeat(3,minmax(0,1fr));} }
 @media(max-width:700px){ .fatura-resumo-cards{grid-template-columns:repeat(2,minmax(0,1fr));} }
 /* "Contas e Cartões — Tablet", item 2: só nesta faixa (701–900px), o card "conta(s)" (1º) some do resumo do
