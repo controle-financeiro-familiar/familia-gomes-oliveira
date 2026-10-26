@@ -9433,18 +9433,12 @@ function calculoFaturaCartao(conta, competencia){
   const compras = det.totalParcelado + det.totalAvista;
   const pagamentos = det.itens.filter(t=>t.categoria==='Recebimento por Pagamento de Fatura').reduce((s,t)=>s+(Number(t.valor)||0),0);
   const estornos = det.totalCreditos;
-  // Personnalité Black (Itaú) — requisito "Correção exclusiva das faturas do Personnalité Black": o
-  // próprio banco confirma, no rodapé da fatura exportada, que o saldo de uma fatura já fechada NUNCA é
-  // somado ao total da fatura seguinte ("Após o pagamento da fatura fechada, o valor daquele saldo não
-  // será mais somado ao total da fatura."). Ao contrário de outros cartões (ex.: Ourocard BB, cujo total
-  // informado pelo próprio banco já inclui o saldo rotativo não pago — ver requisito "Corrigir valores dos
-  // cards da fatura"), o "Valor"/total que o Itaú informa para este cartão é sempre só as compras da
-  // própria competência, líquidas de pagamentos/estornos — nunca o saldo anterior. Somar saldoAnterior ao
-  // cálculo para ESTE cartão inflava indevidamente o "valor total da fatura" exibido nos cards (ver
-  // faturaTotalExibicao, que reaproveita este totalCalculado). Só para este cartão — os demais continuam
-  // somando o saldo anterior exatamente como antes.
-  const incluiSaldoAnteriorNoCalculo = !ehCartaoPersonnaliteBlack(conta);
-  const totalCalculadoCent = Math.round(((incluiSaldoAnteriorNoCalculo?saldoAnterior:0) + compras - pagamentos - estornos)*100);
+  // Personnalité Black (requisito "Corrigir cálculo do valor total da fatura do Personnalité Black"): usa
+  // exatamente a mesma fórmula dos demais cartões, sem nenhum tratamento especial — a exceção que existia
+  // aqui anteriormente (excluir o saldo anterior do cálculo deste cartão) foi removida por decisão
+  // explícita deste requisito, que determina a fórmula idêntica para todos os cartões, independentemente
+  // do valor total informado no arquivo XLSX importado.
+  const totalCalculadoCent = Math.round((saldoAnterior + compras - pagamentos - estornos)*100);
   const totalCalculado = totalCalculadoCent/100;
   return { saldoAnterior, compras, pagamentos, estornos, totalCalculado, qtdLancamentos: det.qtd };
 }
@@ -20173,7 +20167,7 @@ function extrairResumoPersonnaliteXLSX(matriz){
    estimativa inicial; o usuário confirma/ajusta a taxa efetiva no modal de compra internacional antes de
    importar, igual ao que já acontece para os demais cartões. */
 const RE_MOEDA_XLSX = /([A-Z]{2,3})\s*([\d.,]+)[\s\S]*?cota[cç][aã]o\s*R\$\s*([\d.,]+)/i;
-function parsePersonnaliteBlackFaturaXLSX(matriz){
+function parsePersonnaliteBlackFaturaXLSX(matriz, conta){
   const out = [];
   let iCabecalho = -1;
   for(let i=0;i<matriz.length;i++){
@@ -20202,9 +20196,26 @@ function parsePersonnaliteBlackFaturaXLSX(matriz){
     // do lançamento original; a informação de parcela vive só nos campos próprios da aplicação).
     const mParc = parcelamento.match(/(\d{1,2})\s*de\s*(\d{1,2})/i);
     const parcelaExplicita = mParc ? { parcelaAtual: parseInt(mParc[1],10), totalParcelas: parseInt(mParc[2],10) } : null;
-    if(/^PAGAMENTO EFETUADO/i.test(descricao)) continue; // pagamento da própria fatura, não é uma compra
     // Nesta fatura, valor positivo = despesa (compra) e valor negativo = crédito/estorno/devolução.
     const tipo = valorCel<0 ? 'Receita' : 'Despesa';
+    // Requisito "Corrigir cálculo do valor total da fatura do Personnalité Black": "PAGAMENTO EFETUADO"
+    // (pagamento desta fatura, sempre um crédito nesta planilha) deixa de ser descartado na importação —
+    // antes era simplesmente ignorado (continue), fazendo o card "Pagamentos" nunca refletir os pagamentos
+    // já efetuados nesta fatura. Agora é importado como um lançamento normal, com a subcategoria
+    // "Recebimento por Pagamento de Fatura" já determinada com certeza pelo próprio texto do banco —
+    // mesma subcategoria usada por calculoFaturaCartao para todos os cartões, sem tratamento especial para
+    // este. "SALDO ANTERIOR" (quando a própria fatura traz essa linha) é convertido para o formato literal
+    // "Saldo Anterior - {cartão}" já usado em toda a aplicação para identificar o saldo da fatura anterior
+    // (ver lancamentoSaldoAnteriorCartao) — nunca o texto original do banco, que poderia variar entre
+    // faturas e não seria reconhecido pela busca exata por categoria+descrição.
+    let categoriaExplicita = null;
+    const descNorm = normalizarTexto(descricao);
+    if(/^saldoanterior/.test(descNorm)){
+      descricao = `Saldo Anterior - ${conta}`;
+      categoriaExplicita = 'Saldo Inicial/Anterior';
+    } else if(/^pagamentoefetuado/.test(descNorm)){
+      categoriaExplicita = 'Recebimento por Pagamento de Fatura';
+    }
     let moedaInfo = null;
     const obsMoeda = String(linha[cMoeda]??'');
     const mMoeda = obsMoeda.match(RE_MOEDA_XLSX);
@@ -20213,7 +20224,7 @@ function parsePersonnaliteBlackFaturaXLSX(matriz){
       if(valorCel<0) valorOriginal = -Math.abs(valorOriginal);
       moedaInfo = { valorOriginal, moeda: mMoeda[1].toUpperCase(), taxaArquivo: parseFloat(mMoeda[3].replace(/\./g,'').replace(',', '.')) };
     }
-    out.push([data, descricao, valorCel, moedaInfo, tipo, parcelaExplicita]);
+    out.push([data, descricao, valorCel, moedaInfo, tipo, parcelaExplicita, categoriaExplicita]);
   }
   return out;
 }
@@ -20346,14 +20357,15 @@ function handleFile(file){
           const matriz = XLSX.utils.sheet_to_json(wb.Sheets[nomeAba], { header:1, raw:true, defval:'' });
           if(!isPersonnaliteBlackXLSX(matriz)) continue;
           achouPersonnalite = true;
-          const rows = parsePersonnaliteBlackFaturaXLSX(matriz);
+          const rows = parsePersonnaliteBlackFaturaXLSX(matriz, contaDestino);
           UI.importRaw = { type:'xlsx-pb', headers:['Data','Descrição','Valor'], rows };
           UI.importIsContracheque = false;
           // Validação da importação: compara a soma dos lançamentos extraídos ao valor total desta fatura,
           // informado no resumo do próprio arquivo (linha do cartão na tabela "Cartão/Valor/Vencimento").
-          // Diferente do PDF antigo, este arquivo não traz "fatura anterior" nem "pagamentos efetuados"
-          // separadamente — uma eventual diferença pode refletir saldo anterior, encargos ou pagamentos
-          // não detalhados linha a linha aqui, e é mostrada para o usuário conferir antes de importar.
+          // "SALDO ANTERIOR" e "PAGAMENTO EFETUADO" (quando a própria fatura traz essas linhas) já entram
+          // nesta soma, corretamente classificados por parsePersonnaliteBlackFaturaXLSX — uma eventual
+          // diferença residual pode refletir encargos ou ajustes não detalhados linha a linha aqui, e é
+          // mostrada para o usuário conferir antes de importar.
           const somaImportados = rows.reduce((s,r)=>s+(Number(r[2])||0), 0);
           const resumo = extrairResumoPersonnaliteXLSX(matriz);
           UI.pbValidacao = (resumo.totalFatura!==null)
