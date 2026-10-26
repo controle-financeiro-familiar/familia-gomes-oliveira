@@ -9107,7 +9107,12 @@ function candidatosCartaoFaturaParaPagamento(despesa){
    competência da despesa bancária em si nunca é alterada por este mecanismo — só a do espelho. Os dois
    lados ficam ligados por transferenciaVinculoId (mesmo campo já usado por aplicarTransferenciaInterna),
    então a exclusão em massa (que já expande por este campo — ver chamadas de removerLancamentos) remove o
-   espelho automaticamente junto com a origem, sem nenhuma lógica extra aqui.
+   espelho automaticamente junto com a origem, sem nenhuma lógica extra aqui. O espelho NUNCA é marcado com
+   transferenciaInterna=true (requisito "Corrigir subcategoria dos lançamentos espelho de pagamentos de
+   faturas"): esse campo só é lido por aplicarTransferenciaInterna, o mecanismo genérico de "Transação
+   Interna entre Contas" — marcá-lo fazia um lançamento espelho aberto para edição ser salvo com a
+   subcategoria fixa "Transferências entre Contas (Próprias)" em vez de "Recebimento por Pagamento de
+   Fatura" assim que passasse por commitEdicaoLancamentoExistente.
    sincronizarEspelhoPagamentoFatura cuida de UM lançamento (chamado logo após salvá-lo, ver
    commitEdicaoLancamentoExistente) — cria o espelho que faltava, atualiza um já existente (valor, data,
    cartão ou competência da ORIGEM alterados — inclusive "transferir o espelho para o novo cartão/nova
@@ -9122,8 +9127,13 @@ function ehOrigemPagamentoFaturaValida(t){
     && !STATE.cartoes.includes(t.conta) && t.cartaoFatura && STATE.cartoes.includes(t.cartaoFatura) && !!t.competencia;
 }
 function sincronizarEspelhoPagamentoFatura(despesa){
+  // Reconhece o espelho já existente SÓ pelo vínculo persistente (transferenciaVinculoId, igual ao
+  // critério já usado por aplicarTransferenciaInterna) — nunca pela subcategoria atual dele, que pode já
+  // estar errada (requisito "Corrigir subcategoria dos lançamentos espelho de pagamentos de faturas": um
+  // espelho corrompido no passado por outro mecanismo nunca pode ficar "invisível" para esta função e
+  // acabar duplicado por uma nova criação).
   const espelhoExistente = despesa.transferenciaVinculoId
-    ? STATE.transactions.find(o=>o.id!==despesa.id && o.transferenciaVinculoId===despesa.transferenciaVinculoId && o.categoria==='Recebimento por Pagamento de Fatura')
+    ? STATE.transactions.find(o=>o.id!==despesa.id && o.transferenciaVinculoId===despesa.transferenciaVinculoId)
     : null;
   if(!ehOrigemPagamentoFaturaValida(despesa)){
     if(espelhoExistente){
@@ -9138,6 +9148,16 @@ function sincronizarEspelhoPagamentoFatura(despesa){
     espelhoExistente.valor = Number(despesa.valor)||0;
     espelhoExistente.conta = despesa.cartaoFatura;
     espelhoExistente.competencia = competenciaEspelho;
+    // Reforça sempre a classificação correta, nunca confiando que já esteja certa (requisito acima) — um
+    // espelho criado por uma versão anterior, ou corrompido por aplicarTransferenciaInterna (acionada
+    // porque o campo transferenciaInterna=true, usado só pelo mecanismo genérico de "Transação Interna
+    // entre Contas", nunca deveria ter sido marcado aqui), é corrigido no lugar, sem excluir/recriar.
+    espelhoExistente.tipo = 'Receita';
+    espelhoExistente.categoria = 'Recebimento por Pagamento de Fatura';
+    espelhoExistente.grupo = 'Transações'; espelhoExistente.subgrupo = 'Transferências';
+    espelhoExistente.descricao = 'Pagto cartão crédito';
+    espelhoExistente.pgto = 'Cartão de Crédito';
+    espelhoExistente.transferenciaInterna = false;
     return false;
   }
   const vinculoId = despesa.transferenciaVinculoId || uid();
@@ -9148,7 +9168,12 @@ function sincronizarEspelhoPagamentoFatura(despesa){
     tipo: 'Receita', natureza: despesa.natureza || 'Variável',
     conta: despesa.cartaoFatura, pgto: 'Cartão de Crédito', competencia: competenciaEspelho,
     parcelaAtual: null, totalParcelas: null, parcelamentoId: '',
-    responsavel: '', entreFamilia: true, transferenciaInterna: true, transferenciaVinculoId: vinculoId,
+    // transferenciaInterna=false: este NÃO é um lançamento de "Transação Interna entre Contas" (único
+    // mecanismo que de fato lê esse campo para decidir a classificação, ver aplicarTransferenciaInterna) —
+    // é a contrapartida contábil do pagamento de fatura, com subcategoria própria e fixa. entreFamilia
+    // continua true (sozinho já exclui da renda familiar/orçamento — ver calcDashboard/ehDespesaOrcamento
+    // — sem precisar do outro campo).
+    responsavel: '', entreFamilia: true, transferenciaInterna: false, transferenciaVinculoId: vinculoId,
     origemImportacao: despesa.origemImportacao || false
   });
   return true;
