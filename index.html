@@ -9015,28 +9015,44 @@ function pagamentosCandidatosFatura(conta, competencia){
   }
   return [...doCartao, ...doCorrenteVinculado, ...doCorrenteSemVinculo];
 }
-/* Quanto já foi efetivamente pago de uma fatura: soma dos lançamentos identificados por
-   pagamentosCandidatosFatura (ver ali a regra completa de correspondência, incluindo os dois formatos
-   possíveis de pagamento). O mesmo lançamento nunca é contado em mais de uma fatura: quando tem
-   competência vinculada, essa competência é um valor único (só pode bater com UMA chamada desta função);
-   sem competência vinculada, as janelas de competências consecutivas nunca se sobrepõem, e o lado da
-   conta corrente só é aceito pelo valor EXATO do saldo residual. */
-function pagamentoFaturaValor(conta, competencia){
-  return pagamentosCandidatosFatura(conta, competencia).reduce((s,t)=> s + (Number(t.valor)||0), 0);
-}
 // Tolerância de centavos ao comparar valor da fatura com valor pago, para diferenças residuais de
 // arredondamento nunca impedirem o reconhecimento de uma fatura como totalmente paga.
 const EPSILON_FATURA = 0.01;
+/* Total pago de uma fatura, exclusivamente para fins do status (coluna Status do painel Cartões —
+   requisito "Corrigir identificação dos status de pagamento das faturas"): soma as despesas "Pagamento de
+   Fatura de Cartão de Crédito" lançadas em QUALQUER conta bancária (nunca a própria conta de um cartão),
+   com Cartão (t.cartaoFatura) e Competência batendo EXATAMENTE com esta fatura — usando a competência do
+   próprio lançamento de ORIGEM, nunca a do lançamento espelho (que fica na competência SEGUINTE, ver
+   sincronizarEspelhoPagamentoFatura) nem nenhuma janela de datas/valor aproximado. Nunca soma o lançamento
+   espelho em si — ele é só a contrapartida contábil no cartão, usada pelo cálculo da fatura (ver
+   calculoFaturaCartao), nunca pelo status, para o mesmo pagamento nunca ser descontado duas vezes. Soma
+   livremente múltiplos lançamentos (parciais, antecipados ou não) da mesma competência, em contas
+   diferentes. */
+function totalPagoFaturaOrigem(conta, competencia){
+  return STATE.transactions.filter(t=>
+    t.tipo==='Despesa' && t.categoria==='Pagamento de Fatura de Cartão de Crédito'
+    && !STATE.cartoes.includes(t.conta) && t.cartaoFatura===conta && t.competencia===competencia
+  ).reduce((s,t)=>s+(Number(t.valor)||0),0);
+}
+/* Valor efetivamente devido de uma fatura ANTES da baixa dos pagamentos (requisito acima, seção 3) —
+   nunca o residual já líquido de pagamentos (calculoFaturaCartao.totalCalculado, que já desconta
+   Pagamentos e geraria uma comparação incorreta/circular com totalPagoFaturaOrigem acima): reaproveita os
+   mesmos componentes já calculados por calculoFaturaCartao (Saldo fatura anterior + Compras à vista +
+   Compras parceladas − Estornos/Créditos), nunca uma fórmula paralela — só sem subtrair Pagamentos. Sem
+   nenhum lançamento nesta competência, R$0 — mesmo critério já usado por faturaTotalExibicao. */
+function valorDevidoFatura(conta, competencia){
+  const rec = calculoFaturaCartao(conta, competencia);
+  if(rec.qtdLancamentos===0) return 0;
+  return Math.round((rec.saldoAnterior + rec.compras - rec.estornos)*100)/100;
+}
 /* Classifica o pagamento de uma fatura: { paga, parcial, pago, total }.
-   - paga=false: nenhum pagamento identificado (pago ~ 0) — nunca considerar paga "só por existir um
-     lançamento parecido"; exige a correspondência completa de pagamentosCandidatosFatura.
-   - paga=true, parcial=false: pago cobre o valor total da fatura (ou a ultrapassa) — "Paga — Totalmente".
-     Cobre tanto o caso de um único lançamento no valor exato quanto múltiplos que somam o total.
-   - paga=true, parcial=true: há pagamento comprovado, mas ainda inferior ao valor total — "Paga —
-     Parcialmente". */
+   - paga=false: nenhum pagamento de origem identificado (pago ~ 0).
+   - paga=true, parcial=false: pago cobre o valor devido (ou o ultrapassa) — "Paga".
+   - paga=true, parcial=true: há pagamento comprovado, mas ainda inferior ao valor devido — "Parcialmente
+     paga" (ou "Parcialmente paga — Atrasada", já decidido por statusDetalhadoFatura a partir daqui). */
 function statusPagamentoFatura(conta, competencia){
-  const total = faturaPorCompetencia(conta, competencia);
-  const pago = pagamentoFaturaValor(conta, competencia);
+  const total = valorDevidoFatura(conta, competencia);
+  const pago = totalPagoFaturaOrigem(conta, competencia);
   if(pago <= EPSILON_FATURA) return { paga:false, parcial:false, pago, total };
   const totalmente = total<=EPSILON_FATURA || pago >= (total - EPSILON_FATURA);
   return { paga:true, parcial:!totalmente, pago, total };
@@ -11954,7 +11970,7 @@ function calcProjecoesMultiMesCompetencias(anoBase, mesBase, qtdMeses){
 }
 /* Quanto de uma fatura de cartão já foi pago a partir de uma conta ELEGÍVEL do Fluxo de Caixa (Conta
    Corrente/PJ/Poupança) — usado tanto pelo valor pendente quanto pela conciliação da própria linha do
-   cartão (ver calcProjecoesMes), nunca pelo restante da reconciliação de faturas (pagamentoFaturaValor,
+   cartão (ver calcProjecoesMes), nunca pelo restante da reconciliação de faturas (totalPagoFaturaOrigem,
    sem essa restrição de conta, continua sendo a fonte de verdade do status "Paga"/"Atrasada" exibido em
    Contas e Cartões). Um pagamento "espelhado" (crédito na própria conta do cartão) só conta aqui quando a
    ORIGEM do vínculo (transferenciaVinculoId) é uma dessas 3 contas — sem isso, não há como saber de onde
