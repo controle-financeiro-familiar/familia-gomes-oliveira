@@ -2281,7 +2281,7 @@ tr.drag-over-baixo{ box-shadow: inset 0 -2px 0 0 var(--navy-900); }
   #areaImpressao tr{ page-break-inside:avoid; break-inside:avoid; }
   #areaImpressao .fatura-digital-head, #areaImpressao .cartoes-resumo-item, #areaImpressao .conta-financeira-card,
   #areaImpressao .competencia-futura-card{ page-break-inside:avoid; break-inside:avoid; }
-  #areaImpressao .cartoes-resumo-grid, #areaImpressao .competencias-futuras-grid{ page-break-inside:avoid; break-inside:avoid; }
+  #areaImpressao .cartoes-resumo-grid, #areaImpressao .competencias-futuras-grid, #areaImpressao .fatura-resumo-cards{ page-break-inside:avoid; break-inside:avoid; }
   #areaImpressao .modal.tem-competencia-selecionada .cartoes-resumo-grid.resumo-competencia-selecionada-print{ display:grid !important; }
   #areaImpressao .modal.tem-competencia-selecionada .no-print-quando-selecionada{ display:none !important; }
   /* Cabeçalhos de seção do relatório mensal (título + linha de colunas, dentro do <thead> só para repetir
@@ -2600,6 +2600,26 @@ summary::marker{content:'';}
    por todo o restante do app, preservando o empilhamento/adaptação existente no mobile. */
 .cartoes-resumo-grid-contas{grid-template-columns:repeat(5,1fr);}
 @media(max-width:900px){ .cartoes-resumo-grid-contas{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));} }
+/* Modal Ver Fatura — resumo em 6 cards/4 colunas/2 linhas (requisito "Correção do valor da fatura e
+   reorganização dos cards"): Saldo fatura anterior e Valor total da fatura ocupam as duas linhas, nas
+   colunas das pontas (mais largas: 1.5fr); Pagamentos/Estornos (1ª linha) e Compras à vista/parceladas (2ª
+   linha) dividem as duas colunas do meio (1fr cada). Ordem no DOM (ver renderFaturaAtualModal): Saldo
+   anterior, Pagamentos, Estornos, Valor total, À vista, Parcelado — o posicionamento automático do grid já
+   preenche exatamente o layout pedido só com essa ordem + os dois `grid-row:span 2` abaixo, sem precisar
+   de `grid-column`/`grid-row` explícito em cada item. Os dois cards-âncora (saldo anterior e valor total)
+   ganham destaque visual (borda e fundo) por serem o ponto de partida e o resultado final da fórmula. */
+.fatura-resumo-cards{display:grid;grid-template-columns:1.5fr 1fr 1fr 1.5fr;gap:10px;margin-bottom:16px;}
+.fatura-resumo-cards .cartoes-resumo-item{grid-row:span 1;}
+.fatura-resumo-cards .fatura-resumo-saldo-anterior,.fatura-resumo-cards .fatura-resumo-valor-total{
+  grid-row:span 2;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;
+  background:#fff;border:1.5px solid var(--navy-900);
+}
+.fatura-resumo-cards .fatura-resumo-valor-total .val{font-size:calc(var(--val-font-size, 15px) + 2px);}
+@media(max-width:700px){
+  .fatura-resumo-cards{grid-template-columns:1fr 1fr;}
+  .fatura-resumo-cards .fatura-resumo-saldo-anterior,.fatura-resumo-cards .fatura-resumo-valor-total{grid-column:1 / -1;grid-row:auto;flex-direction:row;align-items:center;}
+  .fatura-resumo-cards .fatura-resumo-valor-total{order:6;}
+}
 /* "Contas e Cartões — Tablet", item 2: só nesta faixa (701–900px), o card "conta(s)" (1º) some do resumo do
    painel Contas — os 4 restantes (saldo inicial/saldo líquido/entradas/saídas) já usam o mesmo grid
    auto-fit/minmax(140px,1fr) logo acima, que recalcula sozinho a quantidade de colunas a partir dos itens
@@ -2641,14 +2661,12 @@ summary::marker{content:'';}
      de contagem de lançamentos futuros some por já constar no cabeçalho do modal (fatura-digital-head-info). */
   .cartoes-resumo-grid-futuros .cartoes-resumo-item:nth-child(2){display:none;}
   .cartoes-resumo-grid-futuros .cartoes-resumo-item:nth-child(3){order:2;}
-  /* Modal Fatura: no mobile, a ordem dos cards-resumo passa a ser Compras à Vista, Compras Parceladas,
-     Pagamentos, Estornos (cada um condicional/ausente quando zero), Valor Total da Fatura por último —
-     mesmo princípio já usado nos demais modais acima (reordena só via CSS order, nunca o DOM/impressão).
-     Modal Próximas Faturas reaproveita a mesma classe mas ainda só tem até 4 cards (Valor Total, À Vista,
-     Parceladas, Créditos e Pagamentos combinado) — as 4 primeiras regras continuam válidas para os dois
-     modais (mesmo significado posicional: 1º=Total, 2º=À Vista, 3º=Parceladas, 4º=o 1º indicador de
-     crédito, seja ele "Pagamentos" ou o antigo "Créditos e Pagamentos" combinado); a 5ª regra (Estornos) só
-     existe de fato no modal Fatura. */
+  /* Modal Próximas Faturas: no mobile, a ordem dos cards-resumo passa a ser Compras à Vista, Compras
+     Parceladas, Créditos e Pagamentos (combinado), Valor Total da Fatura por último — mesmo princípio já
+     usado nos demais modais acima (reordena só via CSS order, nunca o DOM/impressão). O modal Ver Fatura
+     deixou de usar esta classe (ver .fatura-resumo-cards, com seu próprio layout de 6 cards/4 colunas), daí
+     a 5ª regra (Estornos) abaixo não ter mais efeito nele — mantida só por não atrapalhar, caso volte a
+     existir um 5º card aqui algum dia. */
   .cartoes-resumo-grid-fatura .cartoes-resumo-item:nth-child(1){order:5;}
   .cartoes-resumo-grid-fatura .cartoes-resumo-item:nth-child(2){order:1;}
   .cartoes-resumo-grid-fatura .cartoes-resumo-item:nth-child(3){order:2;}
@@ -15829,16 +15847,24 @@ function renderFaturaAtualModal(){
   // Status automático (mesma fonte única usada no card da aba Cartões — ver statusDetalhadoFatura), só
   // para exibição: mantém este modal sempre sincronizado com o Status mostrado na tabela.
   const stFatura = statusDetalhadoFatura(conta, competencia);
-  // Valor total da fatura (ver calculoFaturaCartao) — fonte única também do card "valor total da fatura" do
-  // resumo abaixo (ver faturaTotalExibicao), nunca um cálculo paralelo.
+  // Valor total da fatura (ver calculoFaturaCartao) — fonte ÚNICA de todos os 6 cards do resumo abaixo
+  // (Saldo fatura anterior, Pagamentos, Estornos/Créditos, Valor total da fatura, Compras à vista, Compras
+  // parceladas — requisito "Correção do valor da fatura e reorganização dos cards"): nenhum deles é
+  // recalculado a partir dos itens filtrados/exibidos na tabela abaixo — a filtragem (Data/Tipo/Parcela/
+  // busca) afeta só a LISTA de lançamentos, nunca estes 6 cards, que sempre mostram os valores verdadeiros
+  // da fatura inteira, idênticos aos usados na coluna "Valor da fatura" da tabela de Cartões (ver
+  // faturaTotalExibicao) — nunca um cálculo paralelo. Um cálculo próprio a partir de itensFiltrados já
+  // divergiu de faturaTotalExibicao no passado (ex.: um pagamento vinculado por Cartão+Competência numa
+  // conta corrente nunca aparece ali, que só lista lançamentos da PRÓPRIA conta do cartão — ver
+  // pagamentoFaturaValorVinculado/calculoFaturaCartao), daí a exigência explícita de reaproveitar o mesmo
+  // resultado em vez de duplicar a regra. Compras à vista/parceladas vêm de `det` (a mesma chamada de
+  // itensFatura já usada internamente por calculoFaturaCartao para compor rec.compras — nunca um segundo
+  // filtro sobre os lançamentos).
   const rec = calculoFaturaCartao(conta, competencia);
+  const valorTotalFatura = faturaTotalExibicao(conta, competencia);
   // Filtros do próprio modal (Data por período, Tipo e Parcela — seleção múltipla) + busca por descrição,
-  // mesmo motor genérico usado em Registros/Ver Extrato/Lançamentos futuros (ver criarFiltrosPadrao). Os
-  // cards do painel-resumo (parceladas, à vista, pagamentos, estornos) são recalculados com base SOMENTE
-  // nos itens filtrados/exibidos. "Valor total da fatura" é o único que nunca é uma soma independente dos
-  // itens: sem nenhum filtro ativo, equivale exatamente a rec.totalCalculado (ver calculoFaturaCartao/
-  // faturaTotalExibicao) — com filtro ativo, mantém o mesmo saldo anterior real (rec.saldoAnterior, fixo
-  // para toda a competência) encadeado só com o subconjunto filtrado de compras/créditos.
+  // mesmo motor genérico usado em Registros/Ver Extrato/Lançamentos futuros (ver criarFiltrosPadrao) —
+  // afetam somente a tabela de lançamentos abaixo, nunca os 6 cards do resumo (ver comentário acima).
   const f = UI.faturaAtualModal.filtros;
   const fBusca = UI.faturaAtualModal.busca || '';
   let itensFiltrados = det.itens.filter(t=> passaFiltroData(t.data, f)
@@ -15848,42 +15874,6 @@ function renderFaturaAtualModal(){
     const fb = fBusca.trim().toLowerCase();
     itensFiltrados = itensFiltrados.filter(t=>(t.descricao||'').toLowerCase().includes(fb));
   }
-  // Mesma exclusão de CATEGORIAS_FATURA já aplicada em itensFatura para os totais de compras/à vista/
-  // parceladas/estornos (o pagamento da própria fatura, quando aparece como um lançamento a mais dentro da
-  // competência — ver comentário de itensFatura —, nunca compõe esses totais, mesmo aparecendo
-  // normalmente na tabela abaixo).
-  const itensFiltradosQueCompoemFatura = itensFiltrados.filter(t=>!CATEGORIAS_FATURA.includes(t.categoria));
-  const totalParceladoFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Despesa' && ehCompraParceladaDeFatura(t)).reduce((s,t)=>s+(Number(t.valor)||0),0);
-  const totalAvistaFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Despesa' && !ehCompraParceladaDeFatura(t)).reduce((s,t)=>s+(Number(t.valor)||0),0);
-  // Pagamentos e Estornos (requisito "Corrigir valores dos cards da fatura", seção "Separação do card
-  // Créditos e pagamentos"): dois cards independentes, nunca mais um único "créditos e pagamentos"
-  // combinado — Estornos é só o crédito real lançado na competência (mesma categorização de sempre);
-  // Pagamentos vem exatamente da mesma categoria usada por calculoFaturaCartao ('Recebimento por Pagamento
-  // de Fatura'), filtrado pelos mesmos critérios de Data/Tipo/Parcela/busca da UI — ao contrário dos
-  // totais acima, aqui SEM excluir CATEGORIAS_FATURA (é exatamente o que se quer mostrar).
-  const totalEstornosFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
-  const totalPagamentosFiltrado = itensFiltrados.filter(t=>t.categoria==='Recebimento por Pagamento de Fatura').reduce((s,t)=>s+(Number(t.valor)||0),0);
-  // "Valor total da fatura": nunca uma soma independente de compras − estornos (que ignora saldo anterior e
-  // pagamentos) — reaproveita diretamente o saldo anterior já calculado por calculoFaturaCartao
-  // (rec.saldoAnterior, nunca recalculado aqui) encadeado com os totais já filtrados acima. Sem nenhum
-  // filtro ativo, compras = totalAvistaFiltrado+totalParceladoFiltrado = rec.compras e
-  // totalPagamentosFiltrado+totalEstornosFiltrado = rec.pagamentos+rec.estornos (mesma fonte), então o
-  // resultado é idêntico a rec.totalCalculado, por construção, nunca por coincidência. Personnalité Black
-  // (Itaú) é a única exceção — mesma condição já aplicada dentro da própria calculoFaturaCartao: o saldo
-  // anterior nunca entra no total para este cartão (o Itaú nunca o soma à fatura seguinte), então este card
-  // precisa seguir exatamente a mesma condição para continuar idêntico a rec.totalCalculado.
-  // Requisito "Faturas sem lançamentos devem apresentar R$ 0,00" (ver também faturaTotalExibicao, mesma
-  // regra): sem NENHUM lançamento nesta competência (det.itens, nunca itensFiltrados — a ausência de
-  // lançamento vale para a fatura inteira, não só para o subconjunto filtrado no momento), o encadeamento
-  // "saldo anterior + compras − pagamentos − estornos" não se aplica — sem nenhuma movimentação real desta
-  // competência para encadear, o valor correto é R$ 0,00 (nunca presumir o saldo em aberto da competência
-  // anterior como se já fosse uma nova fatura desta). Com 1+ lançamentos (de qualquer tipo: compra,
-  // pagamento ou estorno), o cálculo encadeado abaixo continua normalmente.
-  const semFaturaNestaCompetenciaCard = det.itens.length===0;
-  const incluiSaldoAnteriorNesteCard = !ehCartaoPersonnaliteBlack(conta) && !semFaturaNestaCompetenciaCard;
-  const totalFatFiltrado = semFaturaNestaCompetenciaCard
-    ? 0
-    : ((incluiSaldoAnteriorNesteCard ? rec.saldoAnterior : 0) + totalAvistaFiltrado + totalParceladoFiltrado - totalPagamentosFiltrado - totalEstornosFiltrado);
   const filtrosAtivos = filtrosPadraoAtivos(f, [{campo:'tipo'},{campo:'parcela'}]) || !!fBusca.trim();
   const camposFiltroFatura = camposFiltroTipoParcelaCascata(det.itens, f);
   const qtdAtivosFatura = contarFiltrosPadraoAtivos(f, camposFiltroFatura);
@@ -15924,12 +15914,13 @@ function renderFaturaAtualModal(){
             ${temOrdemManualFatura ? `<button type="button" class="btn btn-ghost btn-sm no-print btn-restaurar-ordem" id="btnRestaurarOrdemFatura" title="Esta fatura tem uma ordem manual salva (arrastar-e-soltar), que prevalece sobre a ordenação padrão por data. Clique para voltar à ordenação padrão." aria-label="Restaurar ordenação padrão por data">↺ Ordem manual ativa — restaurar por data</button>` : ''}
           </div>
         </div>
-        <div class="cartoes-resumo-grid cartoes-resumo-grid-fatura">
-          <div class="cartoes-resumo-item"><span class="ico">💰</span><div><div class="val">${fmtBRL(totalFatFiltrado)}</div><div class="lbl">valor total da fatura</div></div></div>
-          <div class="cartoes-resumo-item"><span class="ico">🛒</span><div><div class="val">${fmtBRL(totalAvistaFiltrado)}</div><div class="lbl">compras à vista</div></div></div>
-          <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(totalParceladoFiltrado)}</div><div class="lbl">compras parceladas</div></div></div>
-          ${totalPagamentosFiltrado>0 ? `<div class="cartoes-resumo-item"><span class="ico">➖</span><div><div class="val neg">-${fmtBRL(totalPagamentosFiltrado)}</div><div class="lbl">pagamentos</div></div></div>` : ''}
-          ${totalEstornosFiltrado>0 ? `<div class="cartoes-resumo-item"><span class="ico">↩️</span><div><div class="val neg">-${fmtBRL(totalEstornosFiltrado)}</div><div class="lbl">estornos</div></div></div>` : ''}
+        <div class="fatura-resumo-cards">
+          <div class="cartoes-resumo-item fatura-resumo-saldo-anterior"><span class="ico">📄</span><div><div class="val">${fmtBRL(rec.saldoAnterior)}</div><div class="lbl">saldo fatura anterior</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">➖</span><div><div class="val ${rec.pagamentos>0?'neg':''}">${rec.pagamentos>0?'-':''}${fmtBRL(rec.pagamentos)}</div><div class="lbl">pagamentos</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">↩️</span><div><div class="val ${rec.estornos>0?'neg':''}">${rec.estornos>0?'-':''}${fmtBRL(rec.estornos)}</div><div class="lbl">estornos/créditos</div></div></div>
+          <div class="cartoes-resumo-item fatura-resumo-valor-total"><span class="ico">💰</span><div><div class="val">${fmtBRL(valorTotalFatura)}</div><div class="lbl">valor total da fatura</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">🛒</span><div><div class="val">${fmtBRL(det.totalAvista)}</div><div class="lbl">compras à vista</div></div></div>
+          <div class="cartoes-resumo-item"><span class="ico">📦</span><div><div class="val">${fmtBRL(det.totalParcelado)}</div><div class="lbl">compras parceladas</div></div></div>
         </div>
         ${det.itens.length ? `
         <div class="toolbar toolbar-modal-padrao no-print" style="margin-top:14px;">
