@@ -15863,27 +15863,16 @@ function renderFaturaAtualModal(){
   // totais acima, aqui SEM excluir CATEGORIAS_FATURA (é exatamente o que se quer mostrar).
   const totalEstornosFiltrado = itensFiltradosQueCompoemFatura.filter(t=>t.tipo==='Receita').reduce((s,t)=>s+(Number(t.valor)||0),0);
   const totalPagamentosFiltrado = itensFiltrados.filter(t=>t.categoria==='Recebimento por Pagamento de Fatura').reduce((s,t)=>s+(Number(t.valor)||0),0);
-  // "Valor total da fatura": nunca uma soma independente de compras − estornos (que ignora saldo anterior e
-  // pagamentos) — reaproveita diretamente o saldo anterior já calculado por calculoFaturaCartao
-  // (rec.saldoAnterior, nunca recalculado aqui) encadeado com os totais já filtrados acima. Sem nenhum
-  // filtro ativo, compras = totalAvistaFiltrado+totalParceladoFiltrado = rec.compras e
-  // totalPagamentosFiltrado+totalEstornosFiltrado = rec.pagamentos+rec.estornos (mesma fonte), então o
-  // resultado é idêntico a rec.totalCalculado, por construção, nunca por coincidência. Personnalité Black
-  // (Itaú) é a única exceção — mesma condição já aplicada dentro da própria calculoFaturaCartao: o saldo
-  // anterior nunca entra no total para este cartão (o Itaú nunca o soma à fatura seguinte), então este card
-  // precisa seguir exatamente a mesma condição para continuar idêntico a rec.totalCalculado.
-  // Requisito "Faturas sem lançamentos devem apresentar R$ 0,00" (ver também faturaTotalExibicao, mesma
-  // regra): sem NENHUM lançamento nesta competência (det.itens, nunca itensFiltrados — a ausência de
-  // lançamento vale para a fatura inteira, não só para o subconjunto filtrado no momento), o encadeamento
-  // "saldo anterior + compras − pagamentos − estornos" não se aplica — sem nenhuma movimentação real desta
-  // competência para encadear, o valor correto é R$ 0,00 (nunca presumir o saldo em aberto da competência
-  // anterior como se já fosse uma nova fatura desta). Com 1+ lançamentos (de qualquer tipo: compra,
-  // pagamento ou estorno), o cálculo encadeado abaixo continua normalmente.
-  const semFaturaNestaCompetenciaCard = det.itens.length===0;
-  const incluiSaldoAnteriorNesteCard = !ehCartaoPersonnaliteBlack(conta) && !semFaturaNestaCompetenciaCard;
-  const totalFatFiltrado = semFaturaNestaCompetenciaCard
-    ? 0
-    : ((incluiSaldoAnteriorNesteCard ? rec.saldoAnterior : 0) + totalAvistaFiltrado + totalParceladoFiltrado - totalPagamentosFiltrado - totalEstornosFiltrado);
+  // "Valor total da fatura" (requisito "Corrigir valor da fatura no painel Cartões"): nunca mais um cálculo
+  // independente a partir dos itens filtrados (totalAvistaFiltrado/totalPagamentosFiltrado/etc. — esses
+  // continuam existindo só para os OUTROS cards do resumo, que respondem aos filtros) — este card específico
+  // sempre mostra o valor verdadeiro da fatura inteira, idêntico ao usado na coluna "Valor da fatura" da
+  // tabela de Cartões (ver faturaTotalExibicao), nunca recalculado em paralelo e nunca afetado por filtro
+  // algum. Um cálculo próprio aqui já divergiu de faturaTotalExibicao no passado (ex.: um pagamento vinculado
+  // por Cartão+Competência numa conta corrente nunca aparece em itensFiltrados, que só lista lançamentos da
+  // PRÓPRIA conta do cartão — ver pagamentoFaturaValorVinculado/calculoFaturaCartao), daí a exigência
+  // explícita de reaproveitar o mesmo resultado em vez de duplicar a regra.
+  const totalFatFiltrado = faturaTotalExibicao(conta, competencia);
   const filtrosAtivos = filtrosPadraoAtivos(f, [{campo:'tipo'},{campo:'parcela'}]) || !!fBusca.trim();
   const camposFiltroFatura = camposFiltroTipoParcelaCascata(det.itens, f);
   const qtdAtivosFatura = contarFiltrosPadraoAtivos(f, camposFiltroFatura);
