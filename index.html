@@ -5102,6 +5102,7 @@ function competenciaFaturaAntiga(dataISO, conta){
 function migrarCompetenciaParaVencimento(){
   STATE.transactions.forEach(t=>{
     if(t.pgto!=='Cartão de Crédito' || !t.competencia || !t.data) return;
+    if(t.categoria==='Saldo Inicial/Anterior') return; // competência armazenada explicitamente, nunca derivada da Data (ver corrigirCompetenciaTransacoes)
     const cfg = STATE.cardConfig[t.conta];
     if(!cfg || !cfg.fechamento || !cfg.vencimento || cfg.fechamento<=cfg.vencimento) return;
     if(t.competencia === competenciaFaturaAntiga(t.data, t.conta)){
@@ -5314,6 +5315,14 @@ function corrigirCompetenciaTransacoes(){
     // lançado na própria conta do cartão ou numa conta corrente comum usada para pagar (ver
     // pagamentosCandidatosFatura, que reconhece as duas formas).
     if(CATEGORIAS_FATURA.includes(t.categoria)) return;
+    // O lançamento "Saldo Anterior - {cartão}" (categoria "Saldo Inicial/Anterior") também nunca é
+    // recalculado por data — requisito "Geração automática do Saldo Anterior...": sua Competência é
+    // armazenada EXPLICITAMENTE (a competência SEGUINTE à da fatura de origem — ver
+    // sincronizarSaldoAnteriorCartao), deliberadamente diferente do mês da própria Data (a data de
+    // fechamento da fatura ANTERIOR). Sem esta exceção, esta mesma regra (linha abaixo) recalculava a
+    // competência a partir da Data e a devolvia para a competência de ORIGEM (ou outra, por coincidência
+    // de calendário) — exatamente o bug que fazia os dois meses nunca convergirem corretamente.
+    if(t.categoria==='Saldo Inicial/Anterior' && t.pgto==='Cartão de Crédito' && STATE.cartoes.includes(t.conta)) return;
     if(t.pgto==='Cartão de Crédito' && STATE.cartoes.includes(t.conta)){
       t.competencia = competenciaFatura(t.data, t.conta);
       return;
@@ -5878,7 +5887,30 @@ function competenciaFatura(dataISO, conta){
   if(cfg && cfg.fechamento && cfg.vencimento && cfg.fechamento > cfg.vencimento){
     mes += 1; if(mes>12){ mes=1; ano+=1; }
   }
-  return `${ano}-${pad2(mes)}`;
+  const estimativa = `${ano}-${pad2(mes)}`;
+  // Requisito "Geração automática do Saldo Anterior e determinação da competência das faturas", seção 2:
+  // a competência é determinada PRIORITARIAMENTE pela data de fechamento AJUSTADA (faturaOverride) da
+  // competência em questão — nunca só pelo dia de fechamento padrão do cartão usado acima como estimativa.
+  // Sem nenhum ajuste salvo para este cartão, pula esta checagem por inteiro (mesmo resultado de sempre,
+  // sem custo extra, e sem risco de reclassificar nada). Com algum ajuste existente: uma data pertence à
+  // competência X quando cai estritamente DEPOIS do fechamento efetivo de X-1 e até (inclusive) o
+  // fechamento efetivo de X — a mesma relação de fronteira já embutida no cálculo de "estimativa" acima
+  // (fechamentoDataCalculada(X,conta) é, por construção, exatamente o limite superior de X), só que agora
+  // usando o fechamento EFETIVO (fechamentoEfetivoFatura, que aplica faturaOverride) de cada lado — nunca
+  // janelaPagamentoFatura, cuja janela (competencia, competencia+1] representa outra relação (usada para
+  // decidir pagamentos, não para classificar compras) e daria o mês errado em cartões cujo fechamento é
+  // depois do vencimento (ver o 2º ajuste acima). Testa a própria estimativa e as duas competências
+  // vizinhas (±1 mês — um ajuste de fechamento nunca desloca a data por mais de um mês da estimativa
+  // padrão); sem nenhum ajuste relevante nas 3, a estimativa padrão prevalece, exatamente como antes.
+  if(STATE.cardOverrides && Object.keys(STATE.cardOverrides).some(k=>k.startsWith(conta+'|'))){
+    for(const delta of [0,-1,1]){
+      const comp = incrementarCompetencia(estimativa, delta);
+      const limiteSuperior = fechamentoEfetivoFatura(conta, comp);
+      const limiteInferior = fechamentoEfetivoFatura(conta, incrementarCompetencia(comp, -1));
+      if(limiteSuperior && dataISO > (limiteInferior||'') && dataISO <= limiteSuperior) return comp;
+    }
+  }
+  return estimativa;
 }
 function competenciaLabel(comp){
   if(!comp) return '';
@@ -6707,7 +6739,7 @@ async function aplicarSnapshotLocalPendente(){
 async function registrarUltimaContagemReg(n){ try{ await idbSetHandle('ultimaContagemReg', n); }catch(e){} }
 async function obterUltimaContagemReg(){ try{ return await idbGetHandle('ultimaContagemReg'); }catch(e){ return null; } }
 
-const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao','ofx_fitid','rende_facil_origem_id','rende_facil_tipo','cartao_fatura'];
+const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao','ofx_fitid','rende_facil_origem_id','rende_facil_tipo','cartao_fatura','saldo_anterior_origem_competencia'];
 
 /* ---------- Arquivo de REGISTROS (só lançamentos) ---------- */
 function buildCSVRegistros(){
@@ -6722,7 +6754,7 @@ function buildCSVRegistros(){
     // "vinculado por t.cartaoFatura") — faltava nesta lista até esta correção, então o vínculo escolhido
     // manualmente pelo usuário era perdido a cada recarregamento da aplicação (requisito "Corrigir
     // reconhecimento e persistência dos pagamentos de faturas", seção 2).
-    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '', t.ofxFitid||'', t.rendeFacilOrigemId||'', t.rendeFacilTipo||'', t.cartaoFatura||'']);
+    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '', t.ofxFitid||'', t.rendeFacilOrigemId||'', t.rendeFacilTipo||'', t.cartaoFatura||'', t.saldoAnteriorOrigemCompetencia||'']);
   });
   return Papa.unparse(rows);
 }
@@ -6744,6 +6776,7 @@ function loadCSVRegistros(text){
         ofxFitid: r.ofx_fitid||'',
         rendeFacilOrigemId: r.rende_facil_origem_id||'', rendeFacilTipo: r.rende_facil_tipo||'',
         cartaoFatura: r.cartao_fatura||'',
+        saldoAnteriorOrigemCompetencia: r.saldo_anterior_origem_competencia||'',
       });
     }
   });
@@ -6768,6 +6801,11 @@ function loadCSVRegistros(text){
   conciliarProjecoesComExtrato(); // vincula lançamentos previstos do Fluxo de Caixa aos seus correspondentes reais no Extrato (ver função)
   corrigirCompetenciaTransacoes(); // depois de sincronizarTodosEspelhosPagamentoFatura, para corrigir também os espelhos recém-criados
   aplicarAntecipacoesDeParcelas(); // depois de competências/duplicidades saneadas: remove parcela futura já quitada por antecipação (ver função)
+  // Por último (depois de corrigirCompetenciaTransacoes/aplicarAntecipacoesDeParcelas, as últimas correções
+  // que ainda podem mudar a qual competência uma compra pertence — ver competenciaFatura, agora sensível a
+  // faturaOverride): o Valor total da fatura de origem usado aqui precisa já estar na composição FINAL,
+  // nunca uma foto antiga de antes dessas correções.
+  sincronizarSaldoAnteriorTodosCartoes(); // gera/atualiza o Saldo Anterior de cada competência a partir da anterior (ver função)
   corrigirLancamentosSemClassificacao(); // por último: só sobra sem grupo/categoria quem nenhuma correção acima resolveu
 }
 /* Corrige, para compras já cadastradas antes da correção deste bug, a competência das parcelas futuras
@@ -7038,6 +7076,7 @@ function loadCSVConfig(text){
   conciliarProjecoesComExtrato(); // idem — lançamentos previstos podem ter novos candidatos no Extrato recém-carregado
   corrigirCompetenciaTransacoes(); // idem — cardConfig/contaTipos podem ter chegado só agora com este arquivo
   aplicarAntecipacoesDeParcelas(); // idem — remove parcela futura já quitada por antecipação (ver função)
+  sincronizarSaldoAnteriorTodosCartoes(); // idem — cardConfig/cardOverrides podem ter chegado só agora com este arquivo; roda por último, depois que as competências já estão na composição final
 }
 function mesclarLista(doArquivo, padrao){
   if(!doArquivo.length) return [...padrao];
@@ -9034,16 +9073,19 @@ function totalPagoFaturaOrigem(conta, competencia){
     && !STATE.cartoes.includes(t.conta) && t.cartaoFatura===conta && t.competencia===competencia
   ).reduce((s,t)=>s+(Number(t.valor)||0),0);
 }
-/* Valor efetivamente devido de uma fatura ANTES da baixa dos pagamentos (requisito acima, seção 3) —
-   nunca o residual já líquido de pagamentos (calculoFaturaCartao.totalCalculado, que já desconta
-   Pagamentos e geraria uma comparação incorreta/circular com totalPagoFaturaOrigem acima): reaproveita os
-   mesmos componentes já calculados por calculoFaturaCartao (Saldo fatura anterior + Compras à vista +
-   Compras parceladas − Estornos/Créditos), nunca uma fórmula paralela — só sem subtrair Pagamentos. Sem
-   nenhum lançamento nesta competência, R$0 — mesmo critério já usado por faturaTotalExibicao. */
+/* Valor efetivamente devido de uma fatura, para comparar com totalPagoFaturaOrigem acima (requisito
+   "Corrigir reconhecimento de pagamentos e status das faturas") — o mesmo "Valor total da fatura" já
+   exibido no card (faturaTotalExibicao/calculoFaturaCartao.totalCalculado), nunca uma fórmula paralela.
+   Não é uma comparação circular: totalCalculado = Saldo fatura anterior + Compras − Pagamentos (já
+   registrados NESTA competência, ver calculoFaturaCartao) − Estornos — e "Pagamentos" aqui é só a
+   contrapartida de um pagamento bancário de uma competência ANTERIOR, deslocada para esta competência
+   pela regra de espelhamento (sincronizarEspelhoPagamentoFatura, competência seguinte) — nunca o
+   pagamento bancário desta própria competência, que só é espelhado na competência SEGUINTE e por isso
+   nunca está incluído aqui. totalCalculado é, portanto, exatamente o saldo que esta fatura ainda precisa
+   receber de um pagamento bancário desta competência — a mesma definição de "valor devido" que
+   totalPagoFaturaOrigem deve bater para a fatura ser considerada Paga. */
 function valorDevidoFatura(conta, competencia){
-  const rec = calculoFaturaCartao(conta, competencia);
-  if(rec.qtdLancamentos===0) return 0;
-  return Math.round((rec.saldoAnterior + rec.compras - rec.estornos)*100)/100;
+  return faturaTotalExibicao(conta, competencia);
 }
 /* Classifica o pagamento de uma fatura: { paga, parcial, pago, total }.
    - paga=false: nenhum pagamento de origem identificado (pago ~ 0).
@@ -9477,10 +9519,17 @@ function itensFatura(conta, competencia){
    itensFatura, que só traz itens com t.competencia===competencia). Normalmente importado/lançado na data de
    fechamento da própria fatura, mas a competência (não a data) é o critério de vínculo, por ser mais
    robusto a pequenas diferenças de data. null quando não existir — nesse caso Saldo fatura anterior é R$0
-   (nunca presumido por soma de competências anteriores nem herdado do Total calculado de outra fatura). */
+   (nunca presumido por soma de competências anteriores nem herdado do Total calculado de outra fatura).
+   Exige também Tipo "Despesa" (requisito "Corrigir reconhecimento de pagamentos e status das faturas",
+   item 10) — é a classificação consistente em toda a aplicação para este marcador (um saldo devido é
+   sempre uma obrigação/Despesa, nunca uma Receita): um lançamento com a mesma Categoria+Descrição mas
+   Tipo "Receita" não é reconhecido como o saldo anterior desta fatura (ficaria contabilmente inconsistente
+   — nunca presumir dívida a partir de um lançamento que, pelo próprio Tipo, representa o contrário), nem é
+   alterado por esta função (preserva o lançamento original tal como está, para o usuário conferir/corrigir
+   sua classificação, se for o caso). */
 function lancamentoSaldoAnteriorCartao(conta, competencia){
   return itensFatura(conta, competencia).itens.find(t=>
-    t.categoria==='Saldo Inicial/Anterior' && t.descricao===`Saldo Anterior - ${conta}`
+    t.categoria==='Saldo Inicial/Anterior' && t.descricao===`Saldo Anterior - ${conta}` && t.tipo==='Despesa'
   ) || null;
 }
 /* Valor total de uma fatura de cartão de crédito (requisito "Correção dos cálculos e reorganização dos
@@ -9533,6 +9582,81 @@ function faturaTotalExibicao(conta, competencia){
   const rec = calculoFaturaCartao(conta, competencia);
   if(rec.qtdLancamentos===0) return 0;
   return rec.totalCalculado;
+}
+/* ---------- Geração automática do Saldo Anterior ----------
+   Requisito "Geração automática do Saldo Anterior e determinação da competência das faturas": para cada
+   cartão e competência, cria/atualiza automaticamente o lançamento literal "Saldo Anterior - {cartão}" da
+   competência SEGUINTE, usando o Valor total da fatura já calculado (faturaTotalExibicao/
+   calculoFaturaCartao.totalCalculado — nunca o saldo residual após pagamentos, nem um recálculo
+   paralelo) e a data de fechamento EFETIVA desta competência (fechamentoEfetivoFatura, abaixo).
+   Sem dependência circular: o total de uma competência nunca depende do seu PRÓPRIO Saldo Anterior — só
+   do de uma competência ANTERIOR, já persistido. sincronizarSaldoAnteriorTodosCartoes (abaixo) sempre
+   processa as competências de cada cartão em ordem CRONOLÓGICA ascendente, então o valor usado como
+   origem aqui já está estável antes de ser lido.
+   Identificação persistente do lançamento automático (requisito "sem depender exclusivamente da
+   descrição"): t.saldoAnteriorOrigemCompetencia guarda a própria competência de ORIGEM que gerou este
+   lançamento — não vazio só nos lançamentos criados por esta função; um "Saldo Anterior - {cartão}"
+   JÁ EXISTENTE sem esse campo preenchido é tratado como lançamento MANUAL e nunca é criado/alterado por
+   aqui (requisito "preservando registros manuais"), mesmo que a fatura de origem também exista.
+   Fatura de origem zerada (ou negativa — fatura em crédito, nunca representada como uma "dívida"
+   negativa): remove o lançamento automático da competência seguinte, se existir — nunca transporta um
+   valor residual indevido (requisito "Regra para faturas zeradas"). */
+function fechamentoEfetivoFatura(conta, competencia){
+  const ov = faturaOverride(conta, competencia);
+  return (ov && ov.fechamento) ? ov.fechamento : fechamentoDataCalculada(competencia, conta);
+}
+function sincronizarSaldoAnteriorCartao(conta, competenciaOrigem){
+  const competenciaDestino = incrementarCompetencia(competenciaOrigem, 1);
+  const existente = lancamentoSaldoAnteriorCartao(conta, competenciaDestino);
+  if(existente && !existente.saldoAnteriorOrigemCompetencia) return false; // lançamento manual — nunca tocado
+  const valorOrigem = faturaTotalExibicao(conta, competenciaOrigem);
+  if(valorOrigem <= EPSILON_FATURA){
+    if(existente) STATE.transactions = STATE.transactions.filter(t=>t!==existente);
+    return false;
+  }
+  const dataEfetiva = fechamentoEfetivoFatura(conta, competenciaOrigem) || `${competenciaOrigem}-01`;
+  const valorArredondado = Math.round(valorOrigem*100)/100;
+  if(existente){
+    if(existente.valor===valorArredondado && existente.data===dataEfetiva && existente.saldoAnteriorOrigemCompetencia===competenciaOrigem) return false;
+    existente.valor = valorArredondado; existente.data = dataEfetiva; existente.saldoAnteriorOrigemCompetencia = competenciaOrigem;
+    return true;
+  }
+  STATE.transactions.push({
+    id: uid(), data: dataEfetiva, descricao: `Saldo Anterior - ${conta}`, valor: valorArredondado, tipo: 'Despesa',
+    categoria: 'Saldo Inicial/Anterior', grupo: 'Transações', subgrupo: 'Ajustes de Saldo', natureza: 'Fixo',
+    conta, pgto: 'Cartão de Crédito', competencia: competenciaDestino,
+    parcelaAtual: null, totalParcelas: null, parcelamentoId: '', responsavel: '', entreFamilia: false,
+    saldoAnteriorOrigemCompetencia: competenciaOrigem
+  });
+  return true;
+}
+/* Roda a sincronização acima para todos os cartões, em ordem cronológica ascendente de competência (ver
+   docstring acima — nunca depende do próprio Saldo Anterior da competência sendo processada), cobrindo da
+   competência mais antiga até uma competência além da mais recente com lançamentos (a próxima fatura, que
+   pode ainda não ter nenhuma compra própria, mas já precisa herdar o saldo da anterior — ver exemplo do
+   requisito, Infinite Visa Estilo Novembro/2026). Idempotente: chamado ao carregar os arquivos .cfg/.log,
+   depois de importar um extrato, depois de salvar/editar em massa um lançamento e sempre depois de
+   sincronizarTodosEspelhosPagamentoFatura (cujos espelhos, já na competência correta, afetam o Valor
+   total da fatura usado aqui como origem). */
+function sincronizarSaldoAnteriorTodosCartoes(){
+  if(!STATE.cartoes?.length) return 0;
+  let alterados = 0;
+  STATE.cartoes.forEach(conta=>{
+    // Nunca usa a presença do próprio marcador "Saldo Anterior" para decidir até onde o encadeamento
+    // avança — senão o lançamento criado numa competência além da última com movimentação REAL (ver
+    // docstring acima) passaria a contar como "atividade" na PRÓXIMA chamada, empurrando o limite por mais
+    // um mês a cada sincronização e nunca convergindo (requisito "Processamento repetido não gera
+    // lançamentos duplicados" — aqui, em particular, nunca um avanço sem fim).
+    const competencias = [...new Set(STATE.transactions.filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia && t.categoria!=='Saldo Inicial/Anterior').map(t=>t.competencia))].sort();
+    if(!competencias.length) return;
+    let atual = competencias[0];
+    const max = competencias[competencias.length-1];
+    while(atual<=max){
+      if(sincronizarSaldoAnteriorCartao(conta, atual)) alterados++;
+      atual = incrementarCompetencia(atual, 1);
+    }
+  });
+  return alterados;
 }
 /* Próximas faturas de um cartão (modal 👁), a partir do mês seguinte ao selecionado no topo
    do app. Usa exatamente a mesma função (faturaPorCompetencia) já usada na aba Contas e Cartões, no
@@ -11494,6 +11618,7 @@ function commitEdicaoLancamentoExistente(novo, antigo, conta, contaTransferencia
   // Editar um lançamento já replicado não estende nem atualiza os meses seguintes sozinho; para
   // propagar o novo valor-base adiante, o usuário clica em "Replicar Contracheque" de novo (idempotente).
   sincronizarEspelhoPagamentoFatura(novo); // se este lançamento é um pagamento de fatura, já cria/atualiza/remove o espelho na hora
+  sincronizarSaldoAnteriorTodosCartoes(); // este lançamento pode ter mudado o Valor total de alguma fatura — propaga para o Saldo Anterior da competência seguinte
   conciliarProjecoesComExtrato(); // se este lançamento realiza algum previsto do Fluxo de Caixa, já concilia na hora
   UI.editingTx=null; UI.pendingEdicaoParcela=null; UI.confirmEditarParcela=null;
   scheduleSave(); render();
@@ -15096,7 +15221,7 @@ function aplicarEdicaoLote(m){
       if(Number(t.totalParcelas)>1 && t.parcelamentoId) sincronizarParcelasFuturas(t);
     }
   });
-  if(alterados>0){ sincronizarTodosEspelhosPagamentoFatura(); conciliarProjecoesComExtrato(); scheduleSave(); }
+  if(alterados>0){ sincronizarTodosEspelhosPagamentoFatura(); sincronizarSaldoAnteriorTodosCartoes(); conciliarProjecoesComExtrato(); scheduleSave(); }
   return alterados;
 }
 /* Rótulo do cabeçalho de grupo de data usado na lista mobile de Registros (item 11 do requisito de
@@ -22785,6 +22910,8 @@ function bindEvents(){
   document.getElementById('btnRestaurarPadraoFatura')?.addEventListener('click', ()=>{
     const { conta, competencia } = UI.faturaEditModal;
     delete STATE.cardOverrides[`${conta}|${competencia}`];
+    corrigirCompetenciaTransacoes(); // volta a usar a data de fechamento padrão — reclassifica lançamentos afetados por esta janela
+    sincronizarSaldoAnteriorTodosCartoes(); // idem — atualiza o Saldo Anterior gerado a partir desta fatura com a composição já corrigida
     UI.faturaEditModal=null; scheduleSave();
   });
   document.getElementById('saveFaturaEditModal')?.addEventListener('click', ()=>{
@@ -22803,8 +22930,18 @@ function bindEvents(){
       inpLimite.focus();
       return;
     }
-    const fechamento = document.getElementById('fFaturaFechamento').value || null;
-    const vencimento = document.getElementById('fFaturaVencimento').value || null;
+    // Requisito "Geração automática do Saldo Anterior e determinação da competência das faturas", seção 2:
+    // "Não considerar como ajuste uma data que permaneça igual à data padrão" — o campo já abre preenchido
+    // com o valor calculado (ver data-edit-fatura acima), então salvar sem alterar nada NUNCA pode gravar
+    // um ajuste igual ao padrão (ficaria indistinguível de um ajuste real feito pelo usuário, inclusive
+    // para competenciaFatura, que só considera janelas de fechamento ajustado quando existe ALGUM ajuste
+    // salvo para o cartão). Cada campo (fechamento/vencimento) é comparado individualmente ao que o
+    // próprio sistema calcularia sem ajuste nenhum (mesma referência já usada por vencimentoLabel/
+    // fechamentoLabel para decidir se mostram "(ajustado)").
+    const fechamentoDigitado = document.getElementById('fFaturaFechamento').value || null;
+    const vencimentoDigitado = document.getElementById('fFaturaVencimento').value || null;
+    const fechamento = (fechamentoDigitado && fechamentoDigitado!==fechamentoDataCalculada(competencia, conta)) ? fechamentoDigitado : null;
+    const vencimento = (vencimentoDigitado && vencimentoDigitado!==vencimentoDataCalculada(competencia, conta)) ? vencimentoDigitado : null;
     const key = `${conta}|${competencia}`;
     if(!fechamento && !vencimento){ delete STATE.cardOverrides[key]; }
     else { STATE.cardOverrides[key] = { fechamento, vencimento }; }
@@ -22816,6 +22953,8 @@ function bindEvents(){
       ? [...document.querySelectorAll('.fCartaoVinculado')].filter(el=>el.checked).map(el=>el.dataset.cartao)
       : [];
     aplicarVinculoLimiteCartao(conta, cartoesVinculadosSelecionados, limiteTotalNovo);
+    corrigirCompetenciaTransacoes(); // a data de fechamento ajustada mudou — reclassifica lançamentos afetados por esta nova janela
+    sincronizarSaldoAnteriorTodosCartoes(); // idem — atualiza o Saldo Anterior gerado a partir desta fatura com a composição já corrigida
     UI.faturaEditModal=null; scheduleSave();
   });
 
@@ -24167,6 +24306,7 @@ function bindEvents(){
     // lançamentos recém-importados aparecem automaticamente sempre que a data deles cair dentro do
     // período/filtros já selecionados, sem necessidade de nenhum ajuste aqui.
     sincronizarTodosEspelhosPagamentoFatura(); // se este extrato trouxe uma despesa de pagamento de fatura já com Cartão/Competência definidos, já espelha
+    sincronizarSaldoAnteriorTodosCartoes(); // este extrato pode ter mudado o Valor total de alguma fatura — propaga para o Saldo Anterior da competência seguinte
     conciliarProjecoesComExtrato(); // se este extrato trouxe lançamentos que realizam previstos do Fluxo de Caixa, já concilia na hora
     scheduleSave();
     if(ignorados>0) mostrarToast(`${selecionados.length} lançamento(s) importado(s). ${ignorados} deixado(s) de fora por já estarem registrados.`);
