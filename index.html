@@ -5571,12 +5571,20 @@ function sugerirCategoria(desc){
 function ehPagamentoDeFaturaPorTexto(desc){
   const d = normalizarTexto(desc||'');
   if(d.includes('pagamentoefetuado')) return true;
-  const temPagamento = /pgto|pagto|pagamento/.test(d);
-  if(temPagamento && d.includes('fatura')) return true;
+  // "pag" cobre tanto a forma completa ("pagamento") quanto abreviações comuns em extratos bancários
+  // ("PAG", "PAGTO") — "pgto" é a única abreviação que NÃO contém "pag" (não tem a letra A depois do P),
+  // por isso testada separadamente (requisito "Correção da classificação de pagamentos de cartão de
+  // crédito": reconhecer "PAGTO CARTAO", "PAGAMENTO CARTAO", "PGTO FATURA", "PAG FAT CARTAO" etc.).
+  const temPagamento = /pgto|pag/.test(d);
+  if(!temPagamento) return false;
+  // "fatura" (completo) ou "cartao" (mesmo sem a palavra "fatura" — "PAGTO CARTAO"/"PAGAMENTO CARTAO" já
+  // identificam sem ambiguidade um pagamento de fatura de cartão de crédito, nunca uma compra: uma compra
+  // não é descrita com um prefixo de pagamento). "fat" cobre a abreviação "PAG FAT CARTAO".
+  if(d.includes('fatura') || d.includes('fat') || d.includes('cartao')) return true;
   // "PGTO. QR CODE PIX ..." é o jeito mais comum de pagar a fatura do Ourocard/BB pelo próprio banco —
   // não menciona "fatura" em lugar nenhum do texto, só o mecanismo do pagamento (Pix via QR Code) e um
   // código de referência genérico no lugar de nome de estabelecimento.
-  if(temPagamento && d.includes('qrcode') && d.includes('pix')) return true;
+  if(d.includes('qrcode') && d.includes('pix')) return true;
   return false;
 }
 /* Segundo sinal, independente do texto: quando a importação é para um CARTÃO e o valor bate (com uma
@@ -10766,7 +10774,7 @@ function renderRendeFacilContaModal(){
           <thead><tr><th>Data da aplicação</th><th style="text-align:right;">Capital remanescente</th><th style="text-align:right;">Dias de permanência</th><th style="text-align:right;">Rendimento acumulado</th><th style="text-align:right;">IOF projetado</th><th style="text-align:right;">IR projetado</th></tr></thead>
           <tbody>
             ${resultado.composicaoAtual.map(l=>`<tr>
-              <td data-label="Data da aplicação">${fmtData(l.data)}</td>
+              <td data-label="Data da aplicação">${fmtData(l.data)}${l.origemSaldoAnterior ? ' <span class="hint">(saldo anterior)</span>' : ''}</td>
               <td data-label="Capital remanescente" style="text-align:right;">${fmtBRL(l.capitalCent/100)}</td>
               <td data-label="Dias de permanência" style="text-align:right;">${l.diasPermanencia}</td>
               <td data-label="Rendimento acumulado" style="text-align:right;" class="val-cell pos">${fmtBRL(l.rendimentoCent/100)}</td>
@@ -11302,14 +11310,39 @@ function salvarCacheTaxasDI(cache){
 }
 function dataISOParaBR(iso){ const [a,m,d] = iso.split('-'); return `${d}/${m}/${a}`; }
 function dataBRParaISO(br){ const [d,m,a] = br.split('/'); return `${a}-${m}-${d}`; }
-/* "Dia útil aproximado" (segunda a sexta) — não conhece feriados nacionais, então um feriado em dia de
-   semana pode aparecer aqui como "faltante" mesmo sem nenhuma taxa DI esperada para ele; é só uma
-   aproximação para sinalizar possíveis lacunas de sincronização (ver divergências do ledger), nunca usada
-   para decidir se um dia rende — isso é decidido só pela presença ou ausência da taxa em si no cache (ver
+/* Domingo de Páscoa do ano informado (algoritmo de Gauss/Meeus, válido para o calendário gregoriano) —
+   usado só para derivar os feriados móveis nacionais abaixo (Carnaval, Sexta-feira Santa, Corpus Christi),
+   nunca para nenhum outro cálculo do app. Devolve a data em UTC à meia-noite. */
+function dataPascoaUTC(ano){
+  const a = ano%19, b = Math.floor(ano/100), c = ano%100, d = Math.floor(b/4), e = b%4;
+  const f = Math.floor((b+8)/25), g = Math.floor((b-f+1)/3), h = (19*a+b-d-g+15)%30;
+  const i = Math.floor(c/4), k = c%4, l = (32+2*e+2*i-h-k)%7;
+  const m = Math.floor((a+11*h+22*l)/451);
+  const mes = Math.floor((h+l-7*m+114)/31), dia = ((h+l-7*m+114)%31)+1;
+  return new Date(Date.UTC(ano, mes-1, dia));
+}
+/* Feriados nacionais do Brasil (requisito "Correção da conciliação financeira — BB Rende Fácil", seção 6:
+   "considerar o calendário aplicável à taxa DI" — a B3/Banco Central não publica taxa DI em feriado
+   nacional, então um feriado em dia de semana nunca pode ser tratado como uma lacuna de sincronização).
+   Cobre os feriados fixos (sempre na mesma data) e os móveis derivados da Páscoa (Carnaval = 47 dias
+   antes; Sexta-feira Santa = 2 dias antes; Corpus Christi = 60 dias depois) — os únicos que, por lei
+   federal, suspendem o expediente bancário/B3 em todo o país; feriados estaduais/municipais não entram
+   aqui (não afetam a publicação nacional da taxa DI). */
+function ehFeriadoNacionalBrasil(iso){
+  const [ano, mes, dia] = iso.split('-').map(Number);
+  const FERIADOS_FIXOS = new Set(['01-01','04-21','05-01','09-07','10-12','11-02','11-15','11-20','12-25']);
+  if(FERIADOS_FIXOS.has(`${pad2(mes)}-${pad2(dia)}`)) return true;
+  const pascoa = dataPascoaUTC(ano);
+  const diasAteEstaData = Math.round((new Date(Date.UTC(ano,mes-1,dia)) - pascoa) / 86400000);
+  return diasAteEstaData===-47 || diasAteEstaData===-2 || diasAteEstaData===60; // Carnaval (terça), Sexta-feira Santa, Corpus Christi
+}
+/* "Dia útil aproximado" (segunda a sexta, exceto feriado nacional — ver ehFeriadoNacionalBrasil) — usado
+   só para sinalizar possíveis lacunas de sincronização da taxa DI (ver divergências do ledger), nunca para
+   decidir se um dia rende — isso é decidido só pela presença ou ausência da taxa em si no cache (ver
    fatorAcumuladoDI). */
 function ehDiaUtilAproximado(iso){
   const dow = new Date(iso+'T00:00:00').getDay();
-  return dow!==0 && dow!==6;
+  return dow!==0 && dow!==6 && !ehFeriadoNacionalBrasil(iso);
 }
 /* Busca na API pública do Banco Central (SGS, sem autenticação — https://api.bcb.gov.br) as taxas DI
    diárias que ainda faltam no cache local para o intervalo [inicioISO, fimISO], mescla no cache e devolve
@@ -11385,20 +11418,48 @@ function fatorAcumuladoDI(dataInicioISO, dataFimISO, taxas, divergenciasOut){
    totalResgates/rendimentoRealizado/irRealizado/iofRealizado) somam só os movimentos com data >= essa
    data; os de antes entram apenas no "saldo inicial" (saldoInicialBruto/capitalInicio), preservando a
    continuidade entre competências (seção 3 do requisito). Sem essa data, os totais "do período" cobrem
-   tudo. Retorna null quando a conta nunca teve nenhum movimento de BB Rende Fácil. */
+   tudo. Retorna null quando a conta nunca teve nenhum movimento de BB Rende Fácil nem nenhum Saldo
+   Anterior aproveitável (ver abaixo).
+   Requisito "Correção da conciliação financeira — BB Rende Fácil", seção 1: o lançamento "Saldo Anterior
+   - {conta}" (ehSaldoAnterior — o MESMO marcador genérico já usado para o saldo inicial da conta no
+   Fluxo de Caixa, ver aplicarSaldoAnteriorConta) alimenta o saldo bruto inicial do próprio Rende Fácil
+   quando ele for o dado mais antigo disponível para esta conta — nunca contabilizado como aplicação nova,
+   nunca como rendimento, nunca inventando lotes/datas que o extrato não detalha. Quando já existir
+   histórico de aplicações/resgates anterior a ele (ehMovimentoRendeFacilBB com data < a do Saldo
+   Anterior mais recente ainda assim anterior ao 1º movimento conhecido), esse histórico é quem prevalece
+   — o Saldo Anterior nunca é somado por cima dele (evita duplicidade). Entra em `lotes` como um lote
+   comum, seguindo a mesma ordem FIFO e o mesmo cálculo de rendimento dos demais — nunca uma regra
+   paralela. */
 async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenciaISO){
   const movs = STATE.transactions
     .filter(t=>t.conta===conta && ehMovimentoRendeFacilBB(t) && t.data<=dataCorteISO)
     .sort((a,b)=> compararDataCronologica(a.data,b.data) || (a.categoria===CATEGORIAS_RENDE_FACIL_BB[0] ? -1 : (b.categoria===CATEGORIAS_RENDE_FACIL_BB[0] ? 1 : 0)));
-  if(!movs.length) return null;
+  const saldosAnterioresConta = STATE.transactions
+    .filter(t=>t.conta===conta && ehSaldoAnterior(t) && t.data<=dataCorteISO)
+    .sort((a,b)=> compararDataCronologica(a.data,b.data));
+  let loteSaldoAnteriorSemente = null;
+  if(saldosAnterioresConta.length){
+    const candidatos = movs.length ? saldosAnterioresConta.filter(s=>s.data<=movs[0].data) : saldosAnterioresConta;
+    if(candidatos.length) loteSaldoAnteriorSemente = candidatos[candidatos.length-1]; // o mais recente dos aproveitáveis
+  }
+  if(!movs.length && !loteSaldoAnteriorSemente) return null;
 
-  const taxas = await obterTaxasDIPeriodo(movs[0].data, dataCorteISO);
+  const dataMaisAntiga = loteSaldoAnteriorSemente && (!movs.length || loteSaldoAnteriorSemente.data<=movs[0].data) ? loteSaldoAnteriorSemente.data : movs[0].data;
+  const taxas = await obterTaxasDIPeriodo(dataMaisAntiga, dataCorteISO);
   const divergencias = new Set();
   let lotes = []; // {id, data, capitalCent}
+  if(loteSaldoAnteriorSemente){
+    const capCent = Math.round(Math.abs(Number(loteSaldoAnteriorSemente.valor)||0)*100);
+    if(capCent>0) lotes.push({ id:loteSaldoAnteriorSemente.id, data:loteSaldoAnteriorSemente.data, capitalCent:capCent, origemSaldoAnterior:true });
+  }
   let snapshotLotesAntesPeriodo = null; // capturado uma única vez, logo antes do 1º movimento "do período"
   let totalAplicacoesCent = 0, totalResgatesLiquidoCent = 0, totalResgatesBrutoCent = 0;
   let rendimentoRealizadoCent = 0, irRealizadoCent = 0, iofRealizadoCent = 0;
   const resgatesDetalhados = [];
+  // Sem nenhum movimento real nesta competência (só o Saldo Anterior semeado acima, ex.: mês sem nenhuma
+  // aplicação/resgate automático), a fotografia "antes do período" é a composição atual mesmo — nunca fica
+  // esquecida em branco só porque o laço abaixo não tem nenhuma iteração para capturá-la.
+  if(!movs.length) snapshotLotesAntesPeriodo = lotes.filter(l=>l.capitalCent>0).map(l=>({ data:l.data, capitalCent:l.capitalCent }));
 
   for(const t of movs){
     const noPeriodo = !dataInicioCompetenciaISO || t.data>=dataInicioCompetenciaISO;
@@ -11461,7 +11522,10 @@ async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenc
       }
     }
   }
-  if(snapshotLotesAntesPeriodo===null) snapshotLotesAntesPeriodo = []; // nenhum movimento antes da competência exibida
+  // Nenhum movimento desta competência teve noPeriodo===true (ex.: só houve aplicações/resgates em meses
+  // anteriores) — a fotografia "antes do período" é a composição FINAL dos lotes depois de processar toda
+  // a história conhecida, nunca um array vazio (perderia o capital/rendimento já acumulado até aqui).
+  if(snapshotLotesAntesPeriodo===null) snapshotLotesAntesPeriodo = lotes.filter(l=>l.capitalCent>0).map(l=>({ data:l.data, capitalCent:l.capitalCent }));
 
   // Saldo bruto/capital "no início do período" — mesma lógica de projeção usada abaixo para a data de
   // corte, só que aplicada à fotografia ANTERIOR ao período (um dia antes do 1º dia da competência).
@@ -11488,7 +11552,7 @@ async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenc
     rendimentoNaoRealizadoCent += rendimentoCent;
     iofProjetadoCent += iofCent;
     irProjetadoCent += irCent;
-    composicaoAtual.push({ data:lote.data, capitalCent:lote.capitalCent, rendimentoCent, iofCent, irCent, diasPermanencia });
+    composicaoAtual.push({ data:lote.data, capitalCent:lote.capitalCent, rendimentoCent, iofCent, irCent, diasPermanencia, origemSaldoAnterior:!!lote.origemSaldoAnterior });
   });
 
   const saldoBrutoFinalCent = capitalRemanescenteCent + rendimentoNaoRealizadoCent;
@@ -21249,6 +21313,23 @@ function buildParsedFromMap(){
       // categoria por palavra-chave que implique o tipo contrário é descartada, para não deixar o
       // lançamento com categoria e tipo inconsistentes entre si.
       tipo = e.tipoExplicito;
+      // Requisito "Correção da classificação de pagamentos de cartão de crédito — Importação de
+      // Extratos": mesmo com tipoExplicito já determinado pela estrutura do arquivo, um extrato de conta
+      // bancária (nunca a própria conta do cartão) cuja descrição identifica INEQUIVOCAMENTE o pagamento
+      // de uma fatura de cartão (ehPagamentoDeFaturaPorTexto — "pagto/pagamento ... fatura/cartão",
+      // "pagamento efetuado", "qrcode pix") é sempre classificado como Despesa/"Pagamento de Fatura de
+      // Cartão de Crédito" — nenhuma receita legítima é descrita dessa forma (diferente de um
+      // estorno/devolução/reembolso, com palavras próprias, nunca confundidas com esta). Corrige tanto o
+      // tipo (nunca o inverso: Despesa→Receita) quanto a categoria (nunca presa à sugestão genérica por
+      // palavra-chave, que pode não ter essa frase específica) — relevante sobretudo para extratos PDF
+      // (ex.: Banco Inter) cujo sinal do valor extraído do texto às vezes não reflete corretamente um
+      // débito. Nunca se aplica à própria conta do cartão (lá, "Pagto cartão crédito" recebido É mesmo uma
+      // Receita — ver sincronizarEspelhoPagamentoFatura/requisito de espelhamento, que não passa por aqui).
+      const ehPagamentoDeFaturaBancario = !STATE.cartoes.includes(conta) && ehPagamentoDeFaturaPorTexto(e.descricao);
+      if(ehPagamentoDeFaturaBancario){
+        tipo = 'Despesa'; // nunca o contrário — ver comentário acima
+        catSugerida = 'Pagamento de Fatura de Cartão de Crédito';
+      }
       if(catSugerida && !CATEGORIAS.some(c=>c[0]===catSugerida && c[3]===tipo)) catSugerida = '';
     } else if(ehPagamentoDeFatura(e.descricao, conta, e.valor)){
       // Sinal textual/de valor (ver ehPagamentoDeFaturaPorTexto/PorValor) — só chega aqui quando o parser
