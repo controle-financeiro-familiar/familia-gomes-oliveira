@@ -9034,16 +9034,19 @@ function totalPagoFaturaOrigem(conta, competencia){
     && !STATE.cartoes.includes(t.conta) && t.cartaoFatura===conta && t.competencia===competencia
   ).reduce((s,t)=>s+(Number(t.valor)||0),0);
 }
-/* Valor efetivamente devido de uma fatura ANTES da baixa dos pagamentos (requisito acima, seção 3) —
-   nunca o residual já líquido de pagamentos (calculoFaturaCartao.totalCalculado, que já desconta
-   Pagamentos e geraria uma comparação incorreta/circular com totalPagoFaturaOrigem acima): reaproveita os
-   mesmos componentes já calculados por calculoFaturaCartao (Saldo fatura anterior + Compras à vista +
-   Compras parceladas − Estornos/Créditos), nunca uma fórmula paralela — só sem subtrair Pagamentos. Sem
-   nenhum lançamento nesta competência, R$0 — mesmo critério já usado por faturaTotalExibicao. */
+/* Valor efetivamente devido de uma fatura, para comparar com totalPagoFaturaOrigem acima (requisito
+   "Corrigir reconhecimento de pagamentos e status das faturas") — o mesmo "Valor total da fatura" já
+   exibido no card (faturaTotalExibicao/calculoFaturaCartao.totalCalculado), nunca uma fórmula paralela.
+   Não é uma comparação circular: totalCalculado = Saldo fatura anterior + Compras − Pagamentos (já
+   registrados NESTA competência, ver calculoFaturaCartao) − Estornos — e "Pagamentos" aqui é só a
+   contrapartida de um pagamento bancário de uma competência ANTERIOR, deslocada para esta competência
+   pela regra de espelhamento (sincronizarEspelhoPagamentoFatura, competência seguinte) — nunca o
+   pagamento bancário desta própria competência, que só é espelhado na competência SEGUINTE e por isso
+   nunca está incluído aqui. totalCalculado é, portanto, exatamente o saldo que esta fatura ainda precisa
+   receber de um pagamento bancário desta competência — a mesma definição de "valor devido" que
+   totalPagoFaturaOrigem deve bater para a fatura ser considerada Paga. */
 function valorDevidoFatura(conta, competencia){
-  const rec = calculoFaturaCartao(conta, competencia);
-  if(rec.qtdLancamentos===0) return 0;
-  return Math.round((rec.saldoAnterior + rec.compras - rec.estornos)*100)/100;
+  return faturaTotalExibicao(conta, competencia);
 }
 /* Classifica o pagamento de uma fatura: { paga, parcial, pago, total }.
    - paga=false: nenhum pagamento de origem identificado (pago ~ 0).
@@ -9477,10 +9480,17 @@ function itensFatura(conta, competencia){
    itensFatura, que só traz itens com t.competencia===competencia). Normalmente importado/lançado na data de
    fechamento da própria fatura, mas a competência (não a data) é o critério de vínculo, por ser mais
    robusto a pequenas diferenças de data. null quando não existir — nesse caso Saldo fatura anterior é R$0
-   (nunca presumido por soma de competências anteriores nem herdado do Total calculado de outra fatura). */
+   (nunca presumido por soma de competências anteriores nem herdado do Total calculado de outra fatura).
+   Exige também Tipo "Despesa" (requisito "Corrigir reconhecimento de pagamentos e status das faturas",
+   item 10) — é a classificação consistente em toda a aplicação para este marcador (um saldo devido é
+   sempre uma obrigação/Despesa, nunca uma Receita): um lançamento com a mesma Categoria+Descrição mas
+   Tipo "Receita" não é reconhecido como o saldo anterior desta fatura (ficaria contabilmente inconsistente
+   — nunca presumir dívida a partir de um lançamento que, pelo próprio Tipo, representa o contrário), nem é
+   alterado por esta função (preserva o lançamento original tal como está, para o usuário conferir/corrigir
+   sua classificação, se for o caso). */
 function lancamentoSaldoAnteriorCartao(conta, competencia){
   return itensFatura(conta, competencia).itens.find(t=>
-    t.categoria==='Saldo Inicial/Anterior' && t.descricao===`Saldo Anterior - ${conta}`
+    t.categoria==='Saldo Inicial/Anterior' && t.descricao===`Saldo Anterior - ${conta}` && t.tipo==='Despesa'
   ) || null;
 }
 /* Valor total de uma fatura de cartão de crédito (requisito "Correção dos cálculos e reorganização dos
