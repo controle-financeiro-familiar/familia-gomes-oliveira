@@ -6766,6 +6766,10 @@ function buildCSVRegistros(){
   });
   return Papa.unparse(rows);
 }
+// Ver loadCSVConfig — distingue a inicialização normal (configuracoes.cfg carregado antes de
+// registros.log, quando STATE.transactions ainda não é confiável para o self-heal de
+// conciliarProjecoesComExtrato) de uma releitura posterior de registros.log já dentro da mesma sessão.
+let registrosJaCarregadosNestaSessao = false;
 function loadCSVRegistros(text){
   const parsed = Papa.parse(text.trim(), { header:true, skipEmptyLines:true });
   const transactions = [];
@@ -6806,6 +6810,7 @@ function loadCSVRegistros(text){
   aplicarResponsavelPadraoPorTipo();
   consolidarDuplicatasDeParcelas(); // saneia duplicidades reais de parcelas de cartão ANTES de tudo abaixo (ver função) — inclusive as trazidas por versões antigas do importador
   sincronizarTodosEspelhosPagamentoFatura(); // cria/corrige/remove os espelhos de pagamento de fatura (ver função)
+  registrosJaCarregadosNestaSessao = true; // ver loadCSVConfig — a partir daqui, STATE.transactions já reflete os dados reais desta sessão
   conciliarProjecoesComExtrato(); // vincula lançamentos previstos do Fluxo de Caixa aos seus correspondentes reais no Extrato (ver função)
   corrigirCompetenciaTransacoes(); // depois de sincronizarTodosEspelhosPagamentoFatura, para corrigir também os espelhos recém-criados
   aplicarAntecipacoesDeParcelas(); // depois de competências/duplicidades saneadas: remove parcela futura já quitada por antecipação (ver função)
@@ -7081,7 +7086,18 @@ function loadCSVConfig(text){
   aplicarResponsavelPadraoPorTipo();
   consolidarDuplicatasDeParcelas(); // idem — saneia duplicidades de parcelas trazidas por versões antigas do importador (ver função)
   sincronizarTodosEspelhosPagamentoFatura(); // cartões/fechamentos podem ter chegado só agora — sincroniza de novo (idempotente)
-  conciliarProjecoesComExtrato(); // idem — lançamentos previstos podem ter novos candidatos no Extrato recém-carregado
+  // Requisito "Correção da conciliação financeira — BB Rende Fácil, Extrato Consolidado e Persistência dos
+  // Lançamentos Fixos", seção 3: na inicialização normal, configuracoes.cfg é carregado ANTES de
+  // registros.log (ver carregarArquivosDoOneDrive) — nesse momento STATE.transactions ainda não reflete os
+  // dados reais desta sessão (vazio, ou de um arquivo diferente ainda não substituído). Rodar o self-heal
+  // de conciliarProjecoesComExtrato aqui tratava esse vazio temporário como "o lançamento real foi
+  // excluído", apagando permanentemente vínculos manuais já conciliados antes mesmo de registros.log
+  // terminar de carregar — exatamente a perda relatada mesmo depois de usar Salvar (a perda acontecia na
+  // RELEITURA seguinte, não na gravação). Só roda aqui quando registros.log já foi carregado ao menos uma
+  // vez nesta sessão (ver registrosJaCarregadosNestaSessao/loadCSVRegistros) — nos demais casos, a própria
+  // loadCSVRegistros (chamada sempre em seguida na inicialização) já faz essa reconciliação com os dados
+  // completos e corretos.
+  if(registrosJaCarregadosNestaSessao) conciliarProjecoesComExtrato(); // idem — lançamentos previstos podem ter novos candidatos no Extrato recém-carregado
   corrigirCompetenciaTransacoes(); // idem — cardConfig/contaTipos podem ter chegado só agora com este arquivo
   aplicarAntecipacoesDeParcelas(); // idem — remove parcela futura já quitada por antecipação (ver função)
   sincronizarSaldoAnteriorTodosCartoes(); // idem — cardConfig/cardOverrides podem ter chegado só agora com este arquivo; roda por último, depois que as competências já estão na composição final
@@ -9036,9 +9052,19 @@ function pagamentosCandidatosFatura(conta, competencia){
   const naJanela = data => janela ? (data && data > janela.fechIni && (!janela.fechFim || data <= janela.fechFim)) : false;
   const dentroDaFatura = t => t.competencia ? (t.competencia===competencia) : naJanela(t.data);
 
+  // O espelho (ver sincronizarEspelhoPagamentoFatura) grava sempre a competência SEGUINTE à da fatura
+  // efetivamente paga — t.competencia do próprio espelho nunca representa a fatura em si, só onde esse
+  // crédito aparece no cálculo encadeado (calculoFaturaCartao). Para decidir a qual fatura este pagamento
+  // pertence (ex.: em pagamentoFaturaElegivelDetalhes/Extrato Consolidado), usa sempre a competência do
+  // lançamento de ORIGEM do vínculo (a mesma fonte de verdade de totalPagoFaturaOrigem) — nunca a do
+  // espelho, senão o pagamento de uma fatura aparece deslocado 1 mês para frente (requisito "Correção da
+  // conciliação financeira — BB Rende Fácil, Extrato Consolidado e Persistência dos Lançamentos Fixos",
+  // seção 2: valor do lançamento de cartão no Extrato Consolidado divergindo do valor projetado).
   const doCartao = STATE.transactions.filter(t=>{
     const base = t.conta===conta && t.pgto==='Cartão de Crédito' && t.tipo==='Receita' && t.categoria==='Recebimento por Pagamento de Fatura';
-    return base && dentroDaFatura(t);
+    if(!base) return false;
+    const origem = t.transferenciaVinculoId ? STATE.transactions.find(o=>o.id!==t.id && o.transferenciaVinculoId===t.transferenciaVinculoId) : null;
+    return origem ? origem.competencia===competencia : dentroDaFatura(t);
   });
   const pagoCartao = doCartao.reduce((s,t)=> s + (Number(t.valor)||0), 0);
 
@@ -11389,14 +11415,19 @@ function percentualRendeFacilPorPrazo(diasPermanencia){
    misturando percentuais de faixas diferentes dentro do mesmo depósito). Dias sem taxa DI publicada no
    cache (fins de semana/feriados — não rendem mesmo, ver ehDiaUtilAproximado) simplesmente não entram no
    produtório; dias ÚTEIS sem taxa publicada ainda são registrados em `divergenciasOut` (um Set passado
-   pelo chamador) como uma lacuna real de dados, nunca tratados como 0% silenciosamente. */
-function fatorAcumuladoDI(dataInicioISO, dataFimISO, taxas, divergenciasOut){
+   pelo chamador) como uma lacuna real de dados, nunca tratados como 0% silenciosamente.
+   dataReferenciaISO (requisito "BB Rende Fácil — seção 1.1"): a taxa DI do PRÓPRIO dia de referência da
+   conciliação nunca é usada no cálculo (o DI daquele dia normalmente ainda nem foi publicado) nem gera
+   alerta de pendência — o último dia efetivamente considerado é sempre o dia útil anterior a ela. Nunca
+   substitui pela taxa do dia anterior; simplesmente não acumula nenhum fator para esse dia específico. */
+function fatorAcumuladoDI(dataInicioISO, dataFimISO, taxas, divergenciasOut, dataReferenciaISO){
   const diasPermanencia = Math.round((new Date(dataFimISO+'T00:00:00') - new Date(dataInicioISO+'T00:00:00')) / 86400000);
   const percentualFaixa = percentualRendeFacilPorPrazo(diasPermanencia);
   let fator = 1;
   const inicio = new Date(dataInicioISO+'T00:00:00'), fim = new Date(dataFimISO+'T00:00:00');
   for(let d=new Date(inicio.getTime()+86400000); d<=fim; d.setDate(d.getDate()+1)){
     const iso = d.toISOString().slice(0,10);
+    if(dataReferenciaISO && iso===dataReferenciaISO) continue;
     const taxaDia = taxas[iso];
     if(taxaDia!==undefined) fator *= (1 + (taxaDia/100)*percentualFaixa);
     else if(ehDiaUtilAproximado(iso) && divergenciasOut) divergenciasOut.add(iso);
@@ -11423,28 +11454,29 @@ function fatorAcumuladoDI(dataInicioISO, dataFimISO, taxas, divergenciasOut){
    Requisito "Correção da conciliação financeira — BB Rende Fácil", seção 1: o lançamento "Saldo Anterior
    - {conta}" (ehSaldoAnterior — o MESMO marcador genérico já usado para o saldo inicial da conta no
    Fluxo de Caixa, ver aplicarSaldoAnteriorConta) alimenta o saldo bruto inicial do próprio Rende Fácil
-   quando ele for o dado mais antigo disponível para esta conta — nunca contabilizado como aplicação nova,
-   nunca como rendimento, nunca inventando lotes/datas que o extrato não detalha. Quando já existir
-   histórico de aplicações/resgates anterior a ele (ehMovimentoRendeFacilBB com data < a do Saldo
-   Anterior mais recente ainda assim anterior ao 1º movimento conhecido), esse histórico é quem prevalece
-   — o Saldo Anterior nunca é somado por cima dele (evita duplicidade). Entra em `lotes` como um lote
-   comum, seguindo a mesma ordem FIFO e o mesmo cálculo de rendimento dos demais — nunca uma regra
-   paralela. */
+   quando existir — nunca contabilizado como aplicação nova, nunca como rendimento, nunca inventando
+   lotes/datas que o extrato não detalha.
+   Requisito "Correção da conciliação financeira — BB Rende Fácil, Extrato Consolidado e Persistência dos
+   Lançamentos Fixos", seção 1.2/1.3: o Saldo Anterior MAIS RECENTE até a data de corte é sempre quem
+   decide — representa a posição já reconciliada da conta naquela data (um ponto de corte conhecido e
+   confiável), então SUBSTITUI (nunca soma por cima) qualquer movimentação estritamente anterior a ele,
+   mesmo que exista algum histórico detalhado antes dessa data: usar os dois ao mesmo tempo tanto duplicava
+   o saldo quanto, paradoxalmente, ainda deixava a posição inicial errada sempre que esse histórico anterior
+   fosse incompleto (ex.: movimentações de uma competência mais antiga importadas depois de o Saldo
+   Anterior já ter sido definido) — daí a extensa divergência observada em contas reais. Entra em `lotes`
+   como um lote comum, seguindo a mesma ordem FIFO e o mesmo cálculo de rendimento dos demais — nunca uma
+   regra paralela. */
 async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenciaISO){
-  const movs = STATE.transactions
-    .filter(t=>t.conta===conta && ehMovimentoRendeFacilBB(t) && t.data<=dataCorteISO)
-    .sort((a,b)=> compararDataCronologica(a.data,b.data) || (a.categoria===CATEGORIAS_RENDE_FACIL_BB[0] ? -1 : (b.categoria===CATEGORIAS_RENDE_FACIL_BB[0] ? 1 : 0)));
-  const saldosAnterioresConta = STATE.transactions
+  const loteSaldoAnteriorSemente = STATE.transactions
     .filter(t=>t.conta===conta && ehSaldoAnterior(t) && t.data<=dataCorteISO)
-    .sort((a,b)=> compararDataCronologica(a.data,b.data));
-  let loteSaldoAnteriorSemente = null;
-  if(saldosAnterioresConta.length){
-    const candidatos = movs.length ? saldosAnterioresConta.filter(s=>s.data<=movs[0].data) : saldosAnterioresConta;
-    if(candidatos.length) loteSaldoAnteriorSemente = candidatos[candidatos.length-1]; // o mais recente dos aproveitáveis
-  }
+    .sort((a,b)=> compararDataCronologica(a.data,b.data))
+    .pop() || null;
+  const movs = STATE.transactions
+    .filter(t=>t.conta===conta && ehMovimentoRendeFacilBB(t) && t.data<=dataCorteISO && (!loteSaldoAnteriorSemente || t.data>loteSaldoAnteriorSemente.data))
+    .sort((a,b)=> compararDataCronologica(a.data,b.data) || (a.categoria===CATEGORIAS_RENDE_FACIL_BB[0] ? -1 : (b.categoria===CATEGORIAS_RENDE_FACIL_BB[0] ? 1 : 0)));
   if(!movs.length && !loteSaldoAnteriorSemente) return null;
 
-  const dataMaisAntiga = loteSaldoAnteriorSemente && (!movs.length || loteSaldoAnteriorSemente.data<=movs[0].data) ? loteSaldoAnteriorSemente.data : movs[0].data;
+  const dataMaisAntiga = loteSaldoAnteriorSemente ? loteSaldoAnteriorSemente.data : movs[0].data;
   const taxas = await obterTaxasDIPeriodo(dataMaisAntiga, dataCorteISO);
   const divergencias = new Set();
   let lotes = []; // {id, data, capitalCent}
@@ -11480,7 +11512,7 @@ async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenc
       const consumos = [];
       while(restanteLiquidoCent>0 && lotes.some(l=>l.capitalCent>0)){
         const lote = lotes.find(l=>l.capitalCent>0);
-        const { fator, diasPermanencia } = fatorAcumuladoDI(lote.data, t.data, taxas, divergencias);
+        const { fator, diasPermanencia } = fatorAcumuladoDI(lote.data, t.data, taxas, divergencias, dataCorteISO);
         const percIOF = percentualIOFRegressivo(diasPermanencia);
         const percIR = percentualIRRegressivo(diasPermanencia);
         const divisor = fator - (fator-1)*(percIOF+percIR);
@@ -11534,7 +11566,7 @@ async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenc
     const diaAnteriorPeriodoISO = new Date(new Date(dataInicioCompetenciaISO+'T00:00:00').getTime()-86400000).toISOString().slice(0,10);
     snapshotLotesAntesPeriodo.forEach(lote=>{
       capitalInicioCent += lote.capitalCent;
-      const { fator } = fatorAcumuladoDI(lote.data, diaAnteriorPeriodoISO, taxas, divergencias);
+      const { fator } = fatorAcumuladoDI(lote.data, diaAnteriorPeriodoISO, taxas, divergencias, dataCorteISO);
       rendimentoInicioNaoRealizadoCent += Math.round(lote.capitalCent*(fator-1));
     });
   }
@@ -11544,7 +11576,7 @@ async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenc
   let capitalRemanescenteCent = 0, rendimentoNaoRealizadoCent = 0, iofProjetadoCent = 0, irProjetadoCent = 0;
   const composicaoAtual = [];
   lotes.filter(l=>l.capitalCent>0).forEach(lote=>{
-    const { fator, diasPermanencia } = fatorAcumuladoDI(lote.data, dataCorteISO, taxas, divergencias);
+    const { fator, diasPermanencia } = fatorAcumuladoDI(lote.data, dataCorteISO, taxas, divergencias, dataCorteISO);
     const rendimentoCent = Math.round(lote.capitalCent*(fator-1));
     const iofCent = Math.round(rendimentoCent*percentualIOFRegressivo(diasPermanencia));
     const irCent = Math.round(rendimentoCent*percentualIRRegressivo(diasPermanencia));
