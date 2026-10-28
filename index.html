@@ -6773,7 +6773,7 @@ async function aplicarSnapshotLocalPendente(){
 async function registrarUltimaContagemReg(n){ try{ await idbSetHandle('ultimaContagemReg', n); }catch(e){} }
 async function obterUltimaContagemReg(){ try{ return await idbGetHandle('ultimaContagemReg'); }catch(e){ return null; } }
 
-const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao','ofx_fitid','rende_facil_origem_id','rende_facil_tipo','cartao_fatura','saldo_anterior_origem_competencia','competencia_manual','rende_facil_ajustes'];
+const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao','ofx_fitid','rende_facil_origem_id','rende_facil_tipo','cartao_fatura','saldo_anterior_origem_competencia','competencia_manual','rende_facil_ajustes','valor_manual'];
 
 /* ---------- Arquivo de REGISTROS (só lançamentos) ---------- */
 function buildCSVRegistros(){
@@ -6793,7 +6793,7 @@ function buildCSVRegistros(){
     // (edição individual ou em lote — ver saveTx/aplicarEdicaoLote), nunca a classificação automática por
     // data de fechamento (competenciaFatura/competenciaBaseLancamento). Sem isso, corrigirCompetenciaTransacoes
     // recalculava e descartava silenciosamente qualquer ajuste manual a cada carregamento/sincronização.
-    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '', t.ofxFitid||'', t.rendeFacilOrigemId||'', t.rendeFacilTipo||'', t.cartaoFatura||'', t.saldoAnteriorOrigemCompetencia||'', t.competenciaManual ? '1' : '', (t.rendeFacilAjustes && Object.keys(t.rendeFacilAjustes).length) ? JSON.stringify(t.rendeFacilAjustes) : '']);
+    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '', t.ofxFitid||'', t.rendeFacilOrigemId||'', t.rendeFacilTipo||'', t.cartaoFatura||'', t.saldoAnteriorOrigemCompetencia||'', t.competenciaManual ? '1' : '', (t.rendeFacilAjustes && Object.keys(t.rendeFacilAjustes).length) ? JSON.stringify(t.rendeFacilAjustes) : '', t.valorManual ? '1' : '']);
   });
   return Papa.unparse(rows);
 }
@@ -6822,6 +6822,7 @@ function loadCSVRegistros(text){
         saldoAnteriorOrigemCompetencia: r.saldo_anterior_origem_competencia||'',
         competenciaManual: r.competencia_manual==='1',
         rendeFacilAjustes: (()=>{ if(!r.rende_facil_ajustes) return undefined; try{ const o = JSON.parse(r.rende_facil_ajustes); return (o && typeof o==='object' && Object.keys(o).length) ? o : undefined; }catch(e){ return undefined; } })(),
+        valorManual: r.valor_manual==='1',
       });
     }
   });
@@ -9262,6 +9263,17 @@ function ehOrigemPagamentoFaturaValida(t){
     && !STATE.cartoes.includes(t.conta) && t.cartaoFatura && STATE.cartoes.includes(t.cartaoFatura) && !!t.competencia;
 }
 function sincronizarEspelhoPagamentoFatura(despesa){
+  // Requisito "Correção da persistência das transferências internas e dos ajustes manuais de parcelas",
+  // seção 1: despesa.transferenciaInterna=true marca EXCLUSIVAMENTE um par criado/gerido pelo mecanismo
+  // genérico de Transação Interna entre Contas (ver aplicarTransferenciaInterna) — nunca um pagamento de
+  // fatura. Os dois mecanismos compartilham o mesmo campo transferenciaVinculoId para ligar os dois lados,
+  // então, sem esta guarda, commitEdicaoLancamentoExistente (que chama as duas funções em sequência para
+  // QUALQUER lançamento salvo) fazia esta função "achar" o par de uma transferência interna recém-criada,
+  // concluir (corretamente) que não é um pagamento de fatura válido, e então EXCLUIR o espelho da
+  // transferência e zerar despesa.transferenciaVinculoId — exatamente a causa raiz do espelho de uma
+  // transferência interna nunca ser persistido. Nunca toca em nada quando o lançamento é uma transação
+  // interna — essa é território exclusivo de aplicarTransferenciaInterna.
+  if(despesa.transferenciaInterna) return false;
   // Reconhece o espelho já existente SÓ pelo vínculo persistente (transferenciaVinculoId, igual ao
   // critério já usado por aplicarTransferenciaInterna) — nunca pela subcategoria atual dele, que pode já
   // estar errada (requisito "Corrigir subcategoria dos lançamentos espelho de pagamentos de faturas": um
@@ -11913,7 +11925,14 @@ async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenc
 function sincronizarParcelasFuturas(ref){
   if(!ref || !ref.parcelamentoId || !(Number(ref.totalParcelas)>1)) return;
   const atual = Number(ref.parcelaAtual)||1, total = Number(ref.totalParcelas);
-  STATE.transactions = STATE.transactions.filter(t=> !(t.parcelamentoId===ref.parcelamentoId && t.id!==ref.id && Number(t.parcelaAtual)>atual));
+  // Requisito "Correção da persistência das transferências internas e dos ajustes manuais de parcelas",
+  // seção 2: uma parcela futura cujo valor foi ajustado manualmente (t.valorManual) NUNCA é apagada nem
+  // recriada por esta propagação — preserva o próprio lançamento (id, valor e demais campos) tal como
+  // está; só as demais parcelas (ainda automáticas) continuam sendo regeneradas normalmente a partir da
+  // referência. Sem esta exceção, qualquer edição que disparasse esta função (inclusive a migração de
+  // legado corrigirCompetenciaParcelasFuturas, que roda a cada carregamento do arquivo) descartava
+  // silenciosamente o ajuste manual de qualquer parcela que não fosse a própria referência.
+  STATE.transactions = STATE.transactions.filter(t=> !(t.parcelamentoId===ref.parcelamentoId && t.id!==ref.id && Number(t.parcelaAtual)>atual && !t.valorManual));
   // A limpeza da descrição vale tanto para o lançamento original (referência) quanto para todas as
   // parcelas futuras geradas a partir dele — nenhuma delas deve conter qualquer indicação de parcelamento.
   ref.descricao = limparDescricaoParcelamento(ref.descricao);
@@ -11932,6 +11951,8 @@ function sincronizarParcelasFuturas(ref){
   const competenciaBase = ref.competencia || (ehCartaoValido ? competenciaFatura(ref.data, ref.conta) : '');
   const descBase = ref.descricao;
   for(let n=atual+1; n<=total; n++){
+    // A parcela n já existe (preservada acima por ter valor ajustado manualmente) — nunca recriada.
+    if(STATE.transactions.some(t=>t.parcelamentoId===ref.parcelamentoId && Number(t.parcelaAtual)===n)) continue;
     // Compra no cartão de crédito: a data permanece igual à da parcela de referência (informação
     // histórica da compra original) — só a competência da fatura avança mês a mês.
     // Demais parcelamentos (empréstimos, financiamentos e outros pagos direto da conta, fora do cartão):
@@ -11950,6 +11971,22 @@ function sincronizarParcelasFuturas(ref){
       responsavel: ref.responsavel||'', entreFamilia: !!ref.entreFamilia, origemImportacao: !!ref.origemImportacao
     });
   }
+}
+/* "Restaurar valor automático" de UMA parcela específica (requisito "Correção da persistência das
+   transferências internas e dos ajustes manuais de parcelas", seção 2, "Identificação dos ajustes") —
+   remove só o marcador valorManual deste lançamento e deixa sincronizarParcelasFuturas (a partir da
+   referência do mesmo parcelamento) recalculá-lo normalmente, sem tocar em nenhuma outra parcela já
+   ajustada. Nunca se aplica à própria parcela de referência (a 1ª/mais antiga do grupo) — ela não tem um
+   "automático" alternativo para restaurar, seu valor É a base usada pelas demais. */
+function restaurarValorAutomaticoParcela(id){
+  const t = STATE.transactions.find(x=>x.id===id);
+  if(!t || !t.parcelamentoId || !(Number(t.totalParcelas)>1)) return false;
+  const grupo = STATE.transactions.filter(x=>x.parcelamentoId===t.parcelamentoId);
+  const ref = grupo.reduce((a,b)=> Number(b.parcelaAtual)<Number(a.parcelaAtual) ? b : a);
+  if(t.id===ref.id) return false;
+  t.valorManual = false;
+  sincronizarParcelasFuturas(ref);
+  return true;
 }
 /* Propaga os campos classificatórios de uma parcela (referência) para as parcelas ANTERIORES da mesma
    compra — usada quando o usuário escolhe "Todas as parcelas" na confirmação de edição de um lançamento
@@ -15630,7 +15667,11 @@ function aplicarEdicaoLote(m){
     }
     if(m.campos.valor && m.valores.valor!==''){
       const v = parseFloat(m.valores.valor);
-      if(v>0){ t.valor = v; mudou = true; }
+      // Requisito "Correção da persistência das transferências internas e dos ajustes manuais de
+      // parcelas", seção 2: o valor aplicado em lote é sempre uma escolha explícita do usuário — marcado
+      // como ajustado manualmente (t.valorManual) exatamente como na edição individual, para prevalecer
+      // sobre a propagação automática de parcelas (ver sincronizarParcelasFuturas).
+      if(v>0){ t.valor = v; t.valorManual = true; mudou = true; }
     }
     if(m.campos.descricao && m.valores.descricao.trim()){
       t.descricao = m.valores.descricao.trim();
@@ -24329,7 +24370,18 @@ function bindEvents(){
     // Transferências internas entre contas não têm categoria de gasto/receita (são só uma movimentação
     // patrimonial) — para todos os demais lançamentos, a subcategoria continua obrigatória.
     if(!UI.editingTx.transferenciaInterna && !CATEGORIAS.some(c=>c[0]===categoria)){ alert('Selecione uma subcategoria válida da lista (use a busca para encontrar pelo nome).'); return; }
-    const tipoAtual = UI.editingTx.transferenciaInterna ? UI.editingTx.tipo : (UI.editingTx.id ? UI.editingTx.tipo : UI.novoTipo);
+    // Requisito "Correção da persistência das transferências internas e dos ajustes manuais de parcelas",
+    // seção 1: para um lançamento NOVO (sem id ainda), o tipo atualmente selecionado SEMPRE vem de
+    // UI.novoTipo (a mesma fonte única já usada por qualquer outro lançamento novo, atualizada pelos
+    // botões 💸 Despesa/💰 Receita) — nunca de UI.editingTx.tipo, que só é inicializado quando o usuário
+    // efetivamente clica num desses botões. Marcar "Transação Interna entre Contas" sem antes clicar no
+    // botão de tipo (o caso mais comum: o padrão já abre em "Despesa", então o usuário nunca precisa
+    // clicar) deixava UI.editingTx.tipo indefinido, e com ele a classificação do lançamento, o tipo do
+    // espelho (tipoEspelho = txPrincipal.tipo==='Receita' ? 'Despesa' : 'Receita' sempre "Receita" quando
+    // tipo é undefined) e, por tabela, a causa raiz do espelho nunca ser gerado corretamente. Para um
+    // lançamento JÁ EXISTENTE (com id), UI.editingTx.tipo continua sendo a fonte — já populado com o tipo
+    // real salvo ao abrir a edição.
+    const tipoAtual = UI.editingTx.id ? UI.editingTx.tipo : UI.novoTipo;
     const info = UI.editingTx.transferenciaInterna
       ? { grupo:'', subgrupo:'', tipo: tipoAtual, natureza:'' }
       // O tipo vem do que está selecionado no formulário (mesmo critério já usado para filtrar as
@@ -24429,9 +24481,17 @@ function bindEvents(){
       }
       const idxAntigo = STATE.transactions.findIndex(t=>t.id===(UI.editingTx.id||''));
       const antigo = idxAntigo>=0 ? STATE.transactions[idxAntigo] : null;
+      // Requisito "Correção da persistência das transferências internas e dos ajustes manuais de
+      // parcelas", seção 2: o valor de uma parcela existente de uma compra parcelada é marcado como
+      // ajustado manualmente sempre que o usuário efetivamente o altera nesta edição — mantém o marcador
+      // já existente (de uma edição anterior) quando o valor não muda nesta vez, nunca reseta sozinho.
+      const ehParcelaDeGrupo = !!(UI.editingTx.id && UI.editingTx.parcelamentoId && Number(UI.editingTx.totalParcelas)>1);
+      const valorManualFinal = ehParcelaDeGrupo
+        ? (antigo && Math.abs((Number(antigo.valor)||0) - valorTotal) > 0.001 ? true : !!(antigo && antigo.valorManual))
+        : false;
       const novo = {
         id: UI.editingTx.id || uid(), data:dataFinal, descricao: descricaoBase,
-        valor: valorTotal,
+        valor: valorTotal, valorManual: valorManualFinal,
         categoria: UI.editingTx.transferenciaInterna ? '' : categoria, grupo:info.grupo, subgrupo:info.subgrupo, tipo:info.tipo, natureza:info.natureza,
         conta, pgto, competencia: competenciaFinal, competenciaManual: competenciaManualFinal,
         parcelaAtual: parcelaAtualNova, totalParcelas: UI.editingTx.totalParcelas||null, parcelamentoId: UI.editingTx.parcelamentoId||'',
