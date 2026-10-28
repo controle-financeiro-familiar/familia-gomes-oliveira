@@ -5578,6 +5578,20 @@ function sugerirCategoria(desc){
    fallback por sinal do valor — que erra quando o arquivo do banco não segue estritamente a convenção
    "negativo=despesa" para esse tipo específico de lançamento (é um crédito para o cartão, não uma compra,
    então o sentido certo deve vir do TEXTO, não do sinal). */
+/* Direção de um lançamento Pix pela própria descrição (requisito "Correção da classificação de
+   lançamentos Pix e transferências internas", seção 2): "Pix - Enviado" é sempre uma saída (Despesa),
+   "Pix - Recebido" é sempre uma entrada (Receita) — o texto do próprio banco já diz isso de forma
+   inequívoca, então prevalece sobre o sinal do valor extraído do arquivo (que pode vir incorreto/perdido
+   em alguns formatos, igual ao caso já corrigido para "pagamento de fatura") e sobre qualquer sugestão de
+   categoria por palavra-chave. Null quando a descrição não contém nenhum dos dois termos (ex.: um Pix
+   sem a palavra "Enviado"/"Recebido", que continua sendo decidido pelas demais regras). */
+function direcaoPixPorTexto(desc){
+  const d = normalizarTexto(desc||'');
+  if(!d.includes('pix')) return null;
+  if(d.includes('enviado')) return 'Despesa';
+  if(d.includes('recebido')) return 'Receita';
+  return null;
+}
 function ehPagamentoDeFaturaPorTexto(desc){
   const d = normalizarTexto(desc||'');
   if(d.includes('pagamentoefetuado')) return true;
@@ -6819,6 +6833,7 @@ function loadCSVRegistros(text){
   corrigirSubgruposMovidos();
   corrigirGrupoRenomeadoSemSubstituto();
   corrigirClassificacaoDesatualizada();
+  corrigirClassificacaoPixEnviadoRecebido(); // antes de corrigirSentidoDescricaoTransferencias — ver função
   corrigirSentidoDescricaoTransferencias();
   corrigirDescricaoSaldoAnterior();
   migrarCompetenciaParaVencimento();
@@ -11302,6 +11317,25 @@ function ajustarSentidoDescricao(descricao, tipo){
   if(tipo==='Receita') return descricao.replace(/Enviado/gi, 'Recebido');
   return descricao;
 }
+/* Corrige o TIPO de lançamentos já cadastrados/importados antes desta correção cuja descrição identifica
+   inequivocamente a direção do Pix ("Enviado"=Despesa, "Recebido"=Receita — ver direcaoPixPorTexto), mas
+   cujo Tipo salvo está invertido (requisito "Correção da classificação de lançamentos Pix e
+   transferências internas", seção 5). Roda a cada carregamento/sincronização (mesma convenção já usada
+   por corrigirClassificacaoDesatualizada/corrigirSentidoDescricaoTransferencias) — nunca sobrescreve uma
+   alteração manual por engano porque a regra é textual e inequívoca (nenhum uso legítimo de "Pix -
+   Enviado"/"Pix - Recebido" teria o sentido contrário ao da própria palavra). Quando a categoria salva já
+   não existir para o novo tipo, limpa-a (nunca deixa uma classificação inconsistente) em vez de inventar
+   uma nova — o usuário reclassifica depois, como em qualquer categoria órfã. */
+function corrigirClassificacaoPixEnviadoRecebido(){
+  STATE.transactions.forEach(t=>{
+    const direcao = direcaoPixPorTexto(t.descricao);
+    if(!direcao || t.tipo===direcao) return;
+    t.tipo = direcao;
+    if(t.categoria && !CATEGORIAS.some(c=>c[0]===t.categoria && c[3]===direcao)){
+      t.categoria=''; t.grupo=''; t.subgrupo=''; t.natureza='';
+    }
+  });
+}
 /* Corrige lançamentos de Transação Interna já salvos (importados ou criados antes desta correção) cuja
    descrição ainda tenha "Enviado"/"Recebido" incompatível com o próprio Tipo — comum no lançamento
    espelho, que nascia com a descrição copiada literalmente do lado principal. */
@@ -11351,6 +11385,27 @@ function aplicarTransferenciaInterna(txPrincipal, contaOutraPonta){
     espelhoExistente.conta = contaOutraPonta; espelhoExistente.competencia = txPrincipal.competencia || '';
     espelhoExistente.tipo = clEspelho.tipo; espelhoExistente.grupo = clEspelho.grupo; espelhoExistente.subgrupo = clEspelho.subgrupo;
     espelhoExistente.categoria = clEspelho.categoria; espelhoExistente.natureza = clEspelho.natureza;
+    return vinculoId;
+  }
+  // Requisito "Correção da classificação de lançamentos Pix e transferências internas", seção 4, item 5:
+  // antes de criar um lançamento espelho novo, procura um lançamento JÁ IMPORTADO (do próprio extrato do
+  // banco) na conta de destino que represente esta mesma transferência — mesmo valor e mesma data, ainda
+  // sem nenhum vínculo de transferência/pagamento de fatura — e vincula a ele em vez de duplicar. Nunca
+  // reaproveita um Saldo Anterior nem um movimento do BB Rende Fácil (não são o "Pix recebido" em si).
+  const candidatoJaImportado = STATE.transactions.find(t=>
+    t.id!==txPrincipal.id && t.conta===contaOutraPonta && t.tipo===clEspelho.tipo
+    && !t.transferenciaVinculoId && !ehSaldoAnterior(t) && !ehMovimentoRendeFacilBB(t)
+    && t.data===txPrincipal.data && Math.abs((Number(t.valor)||0) - (Number(txPrincipal.valor)||0)) <= EPSILON_FATURA
+  );
+  if(candidatoJaImportado){
+    candidatoJaImportado.transferenciaVinculoId = vinculoId;
+    candidatoJaImportado.entreFamilia = true;
+    candidatoJaImportado.transferenciaInterna = true;
+    candidatoJaImportado.categoria = clEspelho.categoria; candidatoJaImportado.grupo = clEspelho.grupo;
+    candidatoJaImportado.subgrupo = clEspelho.subgrupo; candidatoJaImportado.natureza = clEspelho.natureza;
+    candidatoJaImportado.competencia = txPrincipal.competencia || candidatoJaImportado.competencia;
+    candidatoJaImportado.responsavel = '';
+    candidatoJaImportado.descricao = ajustarSentidoDescricao(candidatoJaImportado.descricao, clEspelho.tipo);
     return vinculoId;
   }
   STATE.transactions.push({
@@ -21507,6 +21562,20 @@ function buildParsedFromMap(){
       // convenção oposta (ex.: a fatura PDF do Personnalité Black, impressa com valor positivo = compra)
       // já resolvem isso sozinhos e fornecem o tipo explicitamente, sem passar por este fallback.
       tipo = catSugerida ? tipoParaCategoriaSugerida(catSugerida, e.valor) : (e.valor<0 ? 'Despesa' : 'Receita');
+    }
+    // Requisito "Correção da classificação de lançamentos Pix e transferências internas", seção 2: a
+    // direção textual de um Pix ("Enviado"/"Recebido") prevalece sobre qualquer classificação anterior
+    // (sinal do valor, sugestão por palavra-chave, ou mesmo um tipoExplicito do parser, que para um
+    // extrato genérico OFX/CSV só reflete o sinal bruto do arquivo) — nunca, porém, sobre a classificação
+    // já certa e própria do extrato CSV da Reserva de Emergência (e.categoriaExplicita, ver comentário
+    // abaixo sobre a Forma de Pagamento) nem sobre um pagamento de fatura já identificado por texto
+    // (ehPagamentoDeFaturaBancario, que tem prioridade mais específica e raramente usa essas palavras).
+    if(!e.categoriaExplicita){
+      const direcaoPix = direcaoPixPorTexto(e.descricao);
+      if(direcaoPix && tipo!==direcaoPix){
+        tipo = direcaoPix;
+        if(catSugerida && !CATEGORIAS.some(c=>c[0]===catSugerida && c[3]===tipo)) catSugerida = '';
+      }
     }
     // Cada rubrica do contracheque (crédito ou desconto) é identificada pelo próprio código numérico —
     // muito mais confiável que a descrição, que pode variar entre demonstrativos (ver
