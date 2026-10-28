@@ -6221,6 +6221,7 @@ function criarUIPadrao(){
   aportesModal: false, // true quando o modal "Ver detalhes" de Investimentos/Reserva de Emergência está aberto
   futurosContaModal: null, // { conta, filtros, busca, pagina, porPagina } — modal "Ver lançamentos futuros" do card de Contas (lançamentos com data > hoje), com filtros próprios do modal (mesmo motor genérico de Data por período + seleção múltipla da aba Registros — ver criarFiltrosPadrao)
   rendeFacilContaModal: null, // { conta, ano, mes, carregando, resultado, erro } — modal "BB Rende Fácil" do card de uma conta bancária com aplicações/resgates automáticos (ver renderRendeFacilContaModal/calcularLedgerRendeFacil). `resultado` só é preenchido depois do cálculo assíncrono (busca a taxa DI histórica no Banco Central — ver abrirRendeFacilContaModal); enquanto isso, `carregando` fica true.
+  rendeFacilAjusteModal: null, // { contaOrigem, tipoLinha:'lote'|'resgate', id, data, campos:[{chave,label,valor}] } — modal de edição manual de uma linha da Composição atual ou de Resgates do BB Rende Fácil (ver renderRendeFacilAjusteModal/obterAjusteRendeFacil/definirAjusteRendeFacil). `campos` já vem pré-preenchido com os valores atualmente exibidos (automáticos ou já ajustados).
   evolucaoReservaModal: null, // { conta } — modal "Evolução" do card de uma conta Reserva de Emergência (ver renderEvolucaoReservaModal), substitui "Ver lançamentos futuros" para esse tipo de conta
   historicoContrachequeModal: null, // { conta, pagina, porPagina } — modal "Histórico" do card de uma conta Contracheque (ver renderHistoricoContrachequeModal), substitui "Ver lançamentos futuros" para esse tipo de conta; paginação com o mesmo componente genérico usado nos demais modais (ver renderRodapePaginacaoGenerica)
   editarSaldoInicialFluxoCaixaModal: null, // true — editar os saldos iniciais das contas que compõem o Fluxo de Caixa
@@ -6269,6 +6270,7 @@ const CAMADAS_MODAL = [
   'projecaoFaturaModal',               // painel Cartões — Ver Próximas Faturas
   'evolucaoReservaModal',              // painel Contas — Evolução (card Reserva de Emergência)
   'rendeFacilContaModal',              // painel Contas — BB Rende Fácil (cálculo automático de rendimentos)
+  'rendeFacilAjusteModal',             // painel Contas — BB Rende Fácil, edição manual de uma linha (aberto de dentro do modal acima)
   'historicoContrachequeModal',        // painel Contas — Histórico (card Contracheque)
   'aportesModal',                      // Painel Financeiro — detalhe de aportes em Economias
   'mapaCalorDiaModal',                 // Painel Financeiro — transações do dia, aberto de uma célula do Mapa de Calor de Despesas
@@ -6771,7 +6773,7 @@ async function aplicarSnapshotLocalPendente(){
 async function registrarUltimaContagemReg(n){ try{ await idbSetHandle('ultimaContagemReg', n); }catch(e){} }
 async function obterUltimaContagemReg(){ try{ return await idbGetHandle('ultimaContagemReg'); }catch(e){ return null; } }
 
-const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao','ofx_fitid','rende_facil_origem_id','rende_facil_tipo','cartao_fatura','saldo_anterior_origem_competencia','competencia_manual'];
+const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao','ofx_fitid','rende_facil_origem_id','rende_facil_tipo','cartao_fatura','saldo_anterior_origem_competencia','competencia_manual','rende_facil_ajustes'];
 
 /* ---------- Arquivo de REGISTROS (só lançamentos) ---------- */
 function buildCSVRegistros(){
@@ -6791,7 +6793,7 @@ function buildCSVRegistros(){
     // (edição individual ou em lote — ver saveTx/aplicarEdicaoLote), nunca a classificação automática por
     // data de fechamento (competenciaFatura/competenciaBaseLancamento). Sem isso, corrigirCompetenciaTransacoes
     // recalculava e descartava silenciosamente qualquer ajuste manual a cada carregamento/sincronização.
-    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '', t.ofxFitid||'', t.rendeFacilOrigemId||'', t.rendeFacilTipo||'', t.cartaoFatura||'', t.saldoAnteriorOrigemCompetencia||'', t.competenciaManual ? '1' : '']);
+    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '', t.ofxFitid||'', t.rendeFacilOrigemId||'', t.rendeFacilTipo||'', t.cartaoFatura||'', t.saldoAnteriorOrigemCompetencia||'', t.competenciaManual ? '1' : '', (t.rendeFacilAjustes && Object.keys(t.rendeFacilAjustes).length) ? JSON.stringify(t.rendeFacilAjustes) : '']);
   });
   return Papa.unparse(rows);
 }
@@ -6819,6 +6821,7 @@ function loadCSVRegistros(text){
         cartaoFatura: r.cartao_fatura||'',
         saldoAnteriorOrigemCompetencia: r.saldo_anterior_origem_competencia||'',
         competenciaManual: r.competencia_manual==='1',
+        rendeFacilAjustes: (()=>{ if(!r.rende_facil_ajustes) return undefined; try{ const o = JSON.parse(r.rende_facil_ajustes); return (o && typeof o==='object' && Object.keys(o).length) ? o : undefined; }catch(e){ return undefined; } })(),
       });
     }
   });
@@ -10873,34 +10876,32 @@ function renderRendeFacilContaModal(){
         ${resultado.composicaoAtual.length ? `
         <h4 style="margin:18px 0 6px;">Composição atual (aplicações ainda não totalmente resgatadas)</h4>
         <div class="table-wrap table-wrap-registros"><table>
-          <thead><tr><th>Data da aplicação</th><th style="text-align:right;">Capital remanescente</th><th style="text-align:right;">Dias de permanência</th><th style="text-align:right;">Rendimento acumulado</th><th style="text-align:right;">IOF projetado</th><th style="text-align:right;">IR projetado</th></tr></thead>
+          <thead><tr><th>Data da aplicação</th><th style="text-align:right;">Capital remanescente</th><th style="text-align:right;">Dias de permanência</th><th style="text-align:right;">Rendimento acumulado</th><th style="text-align:right;">IOF projetado</th><th style="text-align:right;">IR projetado</th><th style="text-align:center;">Ações</th></tr></thead>
           <tbody>
             ${resultado.composicaoAtual.map(l=>`<tr>
               <td data-label="Data da aplicação">${fmtData(l.data)}${l.origemSaldoAnterior ? ' <span class="hint">(saldo anterior)</span>' : ''}</td>
-              <td data-label="Capital remanescente" style="text-align:right;">${fmtBRL(l.capitalCent/100)}</td>
+              <td data-label="Capital remanescente" style="text-align:right;">${fmtBRL(l.capitalCent/100)}${l.ajustado.capital ? ' <span class="hint">(ajustado)</span>' : ''}</td>
               <td data-label="Dias de permanência" style="text-align:right;">${l.diasPermanencia}</td>
-              <td data-label="Rendimento acumulado" style="text-align:right;" class="val-cell pos">${fmtBRL(l.rendimentoCent/100)}</td>
-              <td data-label="IOF projetado" style="text-align:right;">${fmtBRL(l.iofCent/100)}</td>
-              <td data-label="IR projetado" style="text-align:right;">${fmtBRL(l.irCent/100)}</td>
+              <td data-label="Rendimento acumulado" style="text-align:right;" class="val-cell pos">${fmtBRL(l.rendimentoCent/100)}${l.ajustado.rendimento ? ' <span class="hint">(ajustado)</span>' : ''}</td>
+              <td data-label="IOF projetado" style="text-align:right;">${fmtBRL(l.iofCent/100)}${l.ajustado.iof ? ' <span class="hint">(ajustado)</span>' : ''}</td>
+              <td data-label="IR projetado" style="text-align:right;">${fmtBRL(l.irCent/100)}${l.ajustado.ir ? ' <span class="hint">(ajustado)</span>' : ''}</td>
+              <td data-label="Ações" style="text-align:center;"><button type="button" class="icon-btn" data-rende-facil-editar="lote" data-rende-facil-editar-id="${l.id}" title="Editar valores desta linha">✏️</button></td>
             </tr>`).join('')}
           </tbody>
         </table></div>` : `<div class="empty-state" style="margin-top:14px;"><div class="big">📭</div>Nenhum capital aplicado restante — todas as aplicações já foram resgatadas.</div>`}
         ${resultado.resgatesDetalhados.length ? `
         <h4 style="margin:18px 0 6px;">Resgates em ${competenciaLbl}</h4>
         <div class="table-wrap table-wrap-registros"><table>
-          <thead><tr><th>Data</th><th style="text-align:right;">Valor líquido</th><th style="text-align:right;">Rendimento bruto</th><th style="text-align:right;">IOF</th><th style="text-align:right;">IR</th></tr></thead>
+          <thead><tr><th>Data</th><th style="text-align:right;">Valor líquido</th><th style="text-align:right;">Rendimento bruto</th><th style="text-align:right;">IOF</th><th style="text-align:right;">IR</th><th style="text-align:center;">Ações</th></tr></thead>
           <tbody>
-            ${resultado.resgatesDetalhados.map(r=>{
-              const rendCent = r.consumos.reduce((s,c)=>s+c.rendimentoBrutoCent,0);
-              const iofCent = r.consumos.reduce((s,c)=>s+c.iofCent,0);
-              const irCent = r.consumos.reduce((s,c)=>s+c.irCent,0);
-              return `<tr>
+            ${resultado.resgatesDetalhados.map(r=>`<tr>
               <td data-label="Data">${fmtData(r.data)}</td>
-              <td data-label="Valor líquido" style="text-align:right;">${fmtBRL(r.valorLiquidoCent/100)}</td>
-              <td data-label="Rendimento bruto" style="text-align:right;" class="val-cell pos">${fmtBRL(rendCent/100)}</td>
-              <td data-label="IOF" style="text-align:right;">${fmtBRL(iofCent/100)}</td>
-              <td data-label="IR" style="text-align:right;">${fmtBRL(irCent/100)}</td>
-            </tr>`;}).join('')}
+              <td data-label="Valor líquido" style="text-align:right;">${fmtBRL(r.valorLiquidoCent/100)}${r.ajustado.valorLiquido ? ' <span class="hint">(ajustado)</span>' : ''}</td>
+              <td data-label="Rendimento bruto" style="text-align:right;" class="val-cell pos">${fmtBRL(r.rendimentoBrutoCent/100)}${r.ajustado.rendimentoBruto ? ' <span class="hint">(ajustado)</span>' : ''}</td>
+              <td data-label="IOF" style="text-align:right;">${fmtBRL(r.iofCent/100)}${r.ajustado.iof ? ' <span class="hint">(ajustado)</span>' : ''}</td>
+              <td data-label="IR" style="text-align:right;">${fmtBRL(r.irCent/100)}${r.ajustado.ir ? ' <span class="hint">(ajustado)</span>' : ''}</td>
+              <td data-label="Ações" style="text-align:center;"><button type="button" class="icon-btn" data-rende-facil-editar="resgate" data-rende-facil-editar-id="${r.origemId}" title="Editar valores desta linha">✏️</button></td>
+            </tr>`).join('')}
           </tbody>
         </table></div>` : ''}
         `}
@@ -10911,6 +10912,37 @@ function renderRendeFacilContaModal(){
       </div>
     </div>
   </div>`;
+}
+/* Campos editáveis de cada tipo de linha do ledger do BB Rende Fácil (requisito "Habilitar edição manual
+   dos valores no modal BB Rende Fácil", seção 3) — chave usada em t.rendeFacilAjustes/obterAjusteRendeFacil/
+   definirAjusteRendeFacil, e o rótulo exibido no formulário de edição (renderRendeFacilAjusteModal). */
+const RENDE_FACIL_CAMPOS_LOTE = [
+  { chave:'capital', label:'Capital remanescente' },
+  { chave:'rendimento', label:'Rendimento acumulado' },
+  { chave:'iof', label:'IOF projetado' },
+  { chave:'ir', label:'IR projetado' },
+];
+const RENDE_FACIL_CAMPOS_RESGATE = [
+  { chave:'valorLiquido', label:'Valor líquido' },
+  { chave:'rendimentoBruto', label:'Rendimento bruto' },
+  { chave:'iof', label:'IOF' },
+  { chave:'ir', label:'IR' },
+];
+/* Abre o formulário de edição manual (UI.rendeFacilAjusteModal) de uma linha específica da Composição
+   atual ou de Resgates — localiza a linha já calculada em UI.rendeFacilContaModal.resultado (nunca
+   recalcula aqui) e pré-preenche cada campo com o valor hoje exibido (automático ou já ajustado),
+   exatamente como pede a seção 2 do requisito ("preencher com os valores atuais"). */
+function abrirRendeFacilAjusteModal(tipoLinha, id){
+  const resultado = UI.rendeFacilContaModal?.resultado;
+  if(!resultado) return;
+  const linha = tipoLinha==='lote' ? resultado.composicaoAtual.find(l=>l.id===id) : resultado.resgatesDetalhados.find(r=>r.origemId===id);
+  if(!linha) return;
+  const defs = tipoLinha==='lote' ? RENDE_FACIL_CAMPOS_LOTE : RENDE_FACIL_CAMPOS_RESGATE;
+  UI.rendeFacilAjusteModal = {
+    contaOrigem: UI.rendeFacilContaModal.conta, tipoLinha, id, data: linha.data,
+    campos: defs.map(d=>({ chave:d.chave, label:d.label, valor: fmtMoedaInput(linha[`${d.chave}Cent`]/100), ajustado: !!linha.ajustado[d.chave] })),
+  };
+  render();
 }
 /* Abre o modal BB Rende Fácil de uma conta (ver renderRendeFacilContaModal) e dispara o cálculo
    assíncrono (depende da taxa DI histórica — ver calcularLedgerRendeFacil/obterTaxasDIPeriodo). A data de
@@ -11001,6 +11033,59 @@ async function abrirRendeFacilContaModal(conta){
   if(!UI.rendeFacilContaModal || UI.rendeFacilContaModal.conta!==conta || UI.rendeFacilContaModal.ano!==ano || UI.rendeFacilContaModal.mes!==mes) return;
   UI.rendeFacilContaModal = { conta, ano, mes, carregando:false, resultado };
   render();
+}
+/* Formulário de edição manual de uma linha do BB Rende Fácil (requisito "Habilitar edição manual dos
+   valores no modal BB Rende Fácil", seção 2) — um campo por valor financeiro da linha (ver
+   RENDE_FACIL_CAMPOS_LOTE/RENDE_FACIL_CAMPOS_RESGATE), com "Restaurar valor automático" (seção 7) ao lado
+   de cada campo já ajustado (nunca um botão único para a linha inteira — cada campo é ajustado/restaurado
+   independentemente, como pede a seção 3: "preservar os demais ajustes manuais do registro"). Data e
+   identificador nunca aparecem como campo editável (protegidos — seção 2, item 4). */
+function renderRendeFacilAjusteModal(){
+  const cfg = UI.rendeFacilAjusteModal;
+  return `
+  <div class="overlay" id="ovRendeFacilAjuste" ${attrZIndexModal('rendeFacilAjusteModal')}>
+    <div class="modal" style="width:480px;">
+      <div class="modal-head"><h3>✏️ Editar valores — ${fmtData(cfg.data)}</h3><button class="close-x" id="closeRendeFacilAjuste">✕</button></div>
+      <div class="modal-body">
+        <p class="hint" style="margin-top:0;">Um ajuste manual prevalece sobre o cálculo automático do FinUs, por exemplo quando o extrato oficial do Banco do Brasil apresenta um valor diferente. O lançamento original importado nunca é alterado.</p>
+        ${cfg.campos.map((c,i)=>`
+        <div class="field" style="margin-top:12px;">
+          <label>${escapeHtml(c.label)}${c.ajustado ? ' <span class="hint">(ajustado)</span>' : ''}</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="text" inputmode="decimal" id="fRendeFacilAjusteCampo${i}" value="${escapeHtml(c.valor)}" style="flex:1;">
+            ${c.ajustado ? `<button type="button" class="btn btn-ghost" data-rende-facil-restaurar="${c.chave}" title="Restaurar o valor calculado automaticamente para este campo">↺ Restaurar automático</button>` : ''}
+          </div>
+        </div>`).join('')}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="cancelRendeFacilAjuste">Cancelar</button>
+        <button class="btn btn-primary" id="saveRendeFacilAjuste">Salvar</button>
+      </div>
+    </div>
+  </div>`;
+}
+/* Aplica as alterações do formulário acima: só grava um ajuste nos campos efetivamente DIGITADOS de
+   forma diferente do valor hoje exibido (requisito seção 4: "Não identificar como ajustados os campos
+   cujos valores permaneçam iguais aos originais") — os demais campos do formulário, mesmo exibidos,
+   nunca sobrescrevem um ajuste ausente só porque o campo ficou preenchido com o mesmo valor calculado.
+   Recalcula o ledger imediatamente (abrirRendeFacilContaModal) e grava no armazenamento persistente
+   (scheduleSave) — seções 5/6. */
+function salvarRendeFacilAjuste(){
+  const cfg = UI.rendeFacilAjusteModal;
+  if(!cfg) return;
+  const defs = cfg.tipoLinha==='lote' ? RENDE_FACIL_CAMPOS_LOTE : RENDE_FACIL_CAMPOS_RESGATE;
+  cfg.campos.forEach((c,i)=>{
+    const input = document.getElementById(`fRendeFacilAjusteCampo${i}`);
+    if(!input) return;
+    const textoDigitado = input.value.trim();
+    if(textoDigitado==='' || textoDigitado===c.valor) return; // nada digitado, ou igual ao que já estava — não toca no ajuste existente
+    const novoValor = parseMoedaTexto(textoDigitado);
+    if(isNaN(novoValor)) { alert(`Valor inválido para "${defs.find(d=>d.chave===c.chave).label}".`); return; }
+    definirAjusteRendeFacil(cfg.id, c.chave, novoValor);
+  });
+  UI.rendeFacilAjusteModal = null;
+  scheduleSave();
+  abrirRendeFacilContaModal(cfg.contaOrigem);
 }
 /* ---------- Modal: Ver detalhes dos aportes em Economias (Painel Financeiro) ----------
    Agrupado por Categoria (t.subgrupo) → Subcategoria (t.categoria) → lançamentos, seguindo a mesma
@@ -11592,6 +11677,40 @@ function fatorAcumuladoDI(dataInicioISO, dataFimISO, taxas, divergenciasOut, dat
    Anterior já ter sido definido) — daí a extensa divergência observada em contas reais. Entra em `lotes`
    como um lote comum, seguindo a mesma ordem FIFO e o mesmo cálculo de rendimento dos demais — nunca uma
    regra paralela. */
+/* ---------- Ajustes manuais do BB Rende Fácil (requisito "Habilitar edição manual dos valores no modal
+   BB Rende Fácil") ----------
+   Cada ajuste é gravado como um campo extra (t.rendeFacilAjustes — objeto esparso {campo: valorEmReais})
+   no PRÓPRIO lançamento real que originou a linha ajustada (a aplicação/Saldo Anterior, para uma linha da
+   Composição atual; o resgate, para uma linha de Resgates) — nunca um registro paralelo, nunca
+   sobrescrevendo t.valor ou qualquer outro campo original (preserva o valor importado para auditoria —
+   seção 8). Persistido via registros.log (ver buildCSVRegistros/loadCSVRegistros, coluna
+   rende_facil_ajustes, JSON). Prioridade (seção 4): ajuste manual > cálculo automático — nunca o
+   contrário; calcularLedgerRendeFacil lê esses ajustes e os usa no lugar do valor calculado sempre que
+   presentes, recalculando os totais dependentes a partir deles. */
+function obterAjusteRendeFacil(id, campo){
+  const t = STATE.transactions.find(x=>x.id===id);
+  const v = t && t.rendeFacilAjustes ? t.rendeFacilAjustes[campo] : undefined;
+  return (v===undefined || v===null || v==='' || isNaN(Number(v))) ? null : Number(v);
+}
+/* Grava (ou, com valor null, remove — "Restaurar valor automático", seção 7) o ajuste manual de um campo
+   de uma linha do ledger do BB Rende Fácil, identificada pelo id do lançamento real de origem. Idempotente
+   e sem efeito colateral em qualquer outro lançamento — só este id, só este campo. */
+function definirAjusteRendeFacil(id, campo, valor){
+  const t = STATE.transactions.find(x=>x.id===id);
+  if(!t) return false;
+  if(valor===null || valor===undefined || valor===''){
+    if(t.rendeFacilAjustes){
+      delete t.rendeFacilAjustes[campo];
+      if(!Object.keys(t.rendeFacilAjustes).length) delete t.rendeFacilAjustes;
+    }
+    return true;
+  }
+  const num = Number(valor);
+  if(isNaN(num)) return false;
+  if(!t.rendeFacilAjustes) t.rendeFacilAjustes = {};
+  t.rendeFacilAjustes[campo] = Math.round(num*100)/100;
+  return true;
+}
 async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenciaISO){
   const loteSaldoAnteriorSemente = STATE.transactions
     .filter(t=>t.conta===conta && ehSaldoAnterior(t) && t.data<=dataCorteISO)
@@ -11659,12 +11778,7 @@ async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenc
         lote.capitalCent -= capitalConsumidoCent;
         restanteLiquidoCent -= liquidoCent;
         consumos.push({ loteData:lote.data, capitalConsumidoCent, rendimentoBrutoCent, iofCent, irCent, diasPermanencia });
-        if(noPeriodo){
-          totalResgatesBrutoCent += brutoCent;
-          rendimentoRealizadoCent += rendimentoBrutoCent;
-          iofRealizadoCent += iofCent;
-          irRealizadoCent += irCent;
-        }
+        if(noPeriodo) totalResgatesBrutoCent += brutoCent;
       }
       // Resgate maior que o capital disponível nos lotes conhecidos (dados incompletos — falta alguma
       // aplicação anterior no histórico lançado, ex.: um extrato bancário mais antigo nunca importado):
@@ -11672,11 +11786,19 @@ async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenc
       // "indicar os dados necessários para conciliação, sem presumir rendimentos inexistentes").
       if(restanteLiquidoCent>0) divergencias.add(`capital-insuficiente:${t.data}`);
       if(noPeriodo){
-        totalResgatesLiquidoCent += Math.abs(valorCent);
+        // Agregados AUTOMÁTICOS deste resgate (soma dos consumos, antes de qualquer ajuste manual — ver
+        // requisito "Habilitar edição manual dos valores no modal BB Rende Fácil") — rendimentoRealizadoCent/
+        // iofRealizadoCent/irRealizadoCent/totalResgatesLiquidoCent são recalculados NUMA PASSAGEM SEPARADA,
+        // depois de aplicar os ajustes manuais de cada resgate (ver bloco abaixo, após este laço), nunca
+        // somados aqui diretamente — evita contabilizar o valor automático quando existe um ajuste.
+        const rendimentoBrutoAutoCent = consumos.reduce((s,c)=>s+c.rendimentoBrutoCent,0);
+        const iofAutoCent = consumos.reduce((s,c)=>s+c.iofCent,0);
+        const irAutoCent = consumos.reduce((s,c)=>s+c.irCent,0);
         // origemId: id do próprio lançamento de resgate (STATE.transactions) — usado por
         // sincronizarLancamentosResultadoRendeFacil para vincular, de forma idempotente, os lançamentos
-        // sintéticos de rendimento/IR/IOF gerados a partir deste resgate específico.
-        resgatesDetalhados.push({ data:t.data, valorLiquidoCent:Math.abs(valorCent), consumos, naoCobertoCent:restanteLiquidoCent, origemId:t.id });
+        // sintéticos de rendimento/IR/IOF gerados a partir deste resgate específico, e por esta mesma
+        // função para ler/aplicar um ajuste manual (t.rendeFacilAjustes) feito nesta linha.
+        resgatesDetalhados.push({ data:t.data, valorLiquidoCentAuto:Math.abs(valorCent), rendimentoBrutoCentAuto:rendimentoBrutoAutoCent, iofCentAuto:iofAutoCent, irCentAuto:irAutoCent, consumos, naoCobertoCent:restanteLiquidoCent, origemId:t.id });
       }
     }
   }
@@ -11684,6 +11806,36 @@ async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenc
   // anteriores) — a fotografia "antes do período" é a composição FINAL dos lotes depois de processar toda
   // a história conhecida, nunca um array vazio (perderia o capital/rendimento já acumulado até aqui).
   if(snapshotLotesAntesPeriodo===null) snapshotLotesAntesPeriodo = lotes.filter(l=>l.capitalCent>0).map(l=>({ data:l.data, capitalCent:l.capitalCent }));
+
+  // Ajustes manuais (requisito "Habilitar edição manual dos valores no modal BB Rende Fácil", seções 3/4):
+  // cada resgate/aplicação do ledger é identificado pelo id do próprio lançamento real em STATE.transactions
+  // (origemId, para resgates; id do lote, para aplicações/Saldo Anterior na composição atual abaixo) —
+  // nunca um identificador novo. O ajuste fica gravado no PRÓPRIO lançamento (t.rendeFacilAjustes), nunca
+  // sobrescrevendo t.valor nem qualquer outro campo original (preserva o dado importado para auditoria —
+  // seção 8), e só entra em vigor na apresentação/nos totais deste ledger, recalculados a partir dele.
+  resgatesDetalhados.forEach(r=>{
+    const ajValorLiquido = obterAjusteRendeFacil(r.origemId, 'valorLiquido');
+    const ajRendimentoBruto = obterAjusteRendeFacil(r.origemId, 'rendimentoBruto');
+    const ajIof = obterAjusteRendeFacil(r.origemId, 'iof');
+    const ajIr = obterAjusteRendeFacil(r.origemId, 'ir');
+    r.valorLiquidoCent = ajValorLiquido!==null ? Math.round(ajValorLiquido*100) : r.valorLiquidoCentAuto;
+    r.rendimentoBrutoCent = ajRendimentoBruto!==null ? Math.round(ajRendimentoBruto*100) : r.rendimentoBrutoCentAuto;
+    r.iofCent = ajIof!==null ? Math.round(ajIof*100) : r.iofCentAuto;
+    r.irCent = ajIr!==null ? Math.round(ajIr*100) : r.irCentAuto;
+    r.ajustado = {
+      valorLiquido: ajValorLiquido!==null && Math.round(ajValorLiquido*100)!==r.valorLiquidoCentAuto,
+      rendimentoBruto: ajRendimentoBruto!==null && Math.round(ajRendimentoBruto*100)!==r.rendimentoBrutoCentAuto,
+      iof: ajIof!==null && Math.round(ajIof*100)!==r.iofCentAuto,
+      ir: ajIr!==null && Math.round(ajIr*100)!==r.irCentAuto,
+    };
+  });
+  // totalResgatesLiquidoPeriodo/rendimentoRealizadoPeriodo/iofRealizadoPeriodo/irRealizadoPeriodo (seção 6:
+  // "recalcular apenas os valores efetivamente impactados") somam sempre os valores JÁ AJUSTADOS de cada
+  // resgate, nunca os automáticos — refletem imediatamente qualquer ajuste manual, sem duplicidade.
+  totalResgatesLiquidoCent = resgatesDetalhados.reduce((s,r)=>s+r.valorLiquidoCent,0);
+  rendimentoRealizadoCent = resgatesDetalhados.reduce((s,r)=>s+r.rendimentoBrutoCent,0);
+  iofRealizadoCent = resgatesDetalhados.reduce((s,r)=>s+r.iofCent,0);
+  irRealizadoCent = resgatesDetalhados.reduce((s,r)=>s+r.irCent,0);
 
   // Saldo bruto/capital "no início do período" — mesma lógica de projeção usada abaixo para a data de
   // corte, só que aplicada à fotografia ANTERIOR ao período (um dia antes do 1º dia da competência).
@@ -11703,14 +11855,34 @@ async function calcularLedgerRendeFacil(conta, dataCorteISO, dataInicioCompetenc
   const composicaoAtual = [];
   lotes.filter(l=>l.capitalCent>0).forEach(lote=>{
     const { fator, diasPermanencia } = fatorAcumuladoDI(lote.data, dataCorteISO, taxas, divergencias, dataCorteISO);
-    const rendimentoCent = Math.round(lote.capitalCent*(fator-1));
-    const iofCent = Math.round(rendimentoCent*percentualIOFRegressivo(diasPermanencia));
-    const irCent = Math.round(rendimentoCent*percentualIRRegressivo(diasPermanencia));
-    capitalRemanescenteCent += lote.capitalCent;
+    const capitalAutoCent = lote.capitalCent;
+    const rendimentoAutoCent = Math.round(capitalAutoCent*(fator-1));
+    const iofAutoCent = Math.round(rendimentoAutoCent*percentualIOFRegressivo(diasPermanencia));
+    const irAutoCent = Math.round(rendimentoAutoCent*percentualIRRegressivo(diasPermanencia));
+    // Ajustes manuais desta linha da Composição atual (ver docstring acima) — identificada pelo id do
+    // próprio lançamento real (a aplicação, ou o Saldo Anterior quando origemSaldoAnterior).
+    const ajCapital = obterAjusteRendeFacil(lote.id, 'capital');
+    const ajRendimento = obterAjusteRendeFacil(lote.id, 'rendimento');
+    const ajIof = obterAjusteRendeFacil(lote.id, 'iof');
+    const ajIr = obterAjusteRendeFacil(lote.id, 'ir');
+    const capitalCent = ajCapital!==null ? Math.round(ajCapital*100) : capitalAutoCent;
+    const rendimentoCent = ajRendimento!==null ? Math.round(ajRendimento*100) : rendimentoAutoCent;
+    const iofCent = ajIof!==null ? Math.round(ajIof*100) : iofAutoCent;
+    const irCent = ajIr!==null ? Math.round(ajIr*100) : irAutoCent;
+    capitalRemanescenteCent += capitalCent;
     rendimentoNaoRealizadoCent += rendimentoCent;
     iofProjetadoCent += iofCent;
     irProjetadoCent += irCent;
-    composicaoAtual.push({ data:lote.data, capitalCent:lote.capitalCent, rendimentoCent, iofCent, irCent, diasPermanencia, origemSaldoAnterior:!!lote.origemSaldoAnterior });
+    composicaoAtual.push({
+      id: lote.id, data:lote.data, capitalCent, rendimentoCent, iofCent, irCent, diasPermanencia,
+      origemSaldoAnterior:!!lote.origemSaldoAnterior,
+      ajustado: {
+        capital: ajCapital!==null && Math.round(ajCapital*100)!==capitalAutoCent,
+        rendimento: ajRendimento!==null && Math.round(ajRendimento*100)!==rendimentoAutoCent,
+        iof: ajIof!==null && Math.round(ajIof*100)!==iofAutoCent,
+        ir: ajIr!==null && Math.round(ajIr*100)!==irAutoCent,
+      },
+    });
   });
 
   const saldoBrutoFinalCent = capitalRemanescenteCent + rendimentoNaoRealizadoCent;
@@ -13284,6 +13456,7 @@ function render(){
     ${UI.regCardDetalheId!==null ? renderRegCardDetalheModal() : ""}
     ${UI.evolucaoReservaModal!==null ? renderEvolucaoReservaModal() : ""}
     ${UI.rendeFacilContaModal!==null ? renderRendeFacilContaModal() : ""}
+    ${UI.rendeFacilAjusteModal!==null ? renderRendeFacilAjusteModal() : ""}
     ${UI.historicoContrachequeModal!==null ? renderHistoricoContrachequeModal() : ""}
     ${UI.aportesModal ? renderModalAportes() : ""}
     ${UI.mapaCalorDiaModal ? renderMapaCalorDiaModal() : ""}
@@ -22425,6 +22598,21 @@ function bindEvents(){
   document.getElementById('closeRendeFacilConta')?.addEventListener('click', ()=>{ UI.rendeFacilContaModal=null; render(); });
   document.getElementById('closeRendeFacilConta2')?.addEventListener('click', ()=>{ UI.rendeFacilContaModal=null; render(); });
   document.getElementById('printRendeFacilConta')?.addEventListener('click', ()=>imprimirModal('ovRendeFacilConta'));
+  document.querySelectorAll('[data-rende-facil-editar]').forEach(b=> b.addEventListener('click', ()=>{
+    abrirRendeFacilAjusteModal(b.dataset.rendeFacilEditar, b.dataset.rendeFacilEditarId);
+  }));
+  document.getElementById('closeRendeFacilAjuste')?.addEventListener('click', ()=>{ UI.rendeFacilAjusteModal=null; render(); });
+  document.getElementById('cancelRendeFacilAjuste')?.addEventListener('click', ()=>{ UI.rendeFacilAjusteModal=null; render(); });
+  document.getElementById('saveRendeFacilAjuste')?.addEventListener('click', salvarRendeFacilAjuste);
+  document.querySelectorAll('[data-rende-facil-restaurar]').forEach(b=> b.addEventListener('click', ()=>{
+    const cfg = UI.rendeFacilAjusteModal;
+    const campo = cfg.campos.find(c=>c.chave===b.dataset.rendeFacilRestaurar);
+    if(!confirm(`Restaurar o valor automático de "${campo.label}"? O ajuste manual deste campo será descartado.`)) return;
+    definirAjusteRendeFacil(cfg.id, campo.chave, null);
+    UI.rendeFacilAjusteModal = null;
+    scheduleSave();
+    abrirRendeFacilContaModal(cfg.contaOrigem);
+  }));
   document.querySelectorAll('[data-historico-contracheque]').forEach(b=> b.addEventListener('click', ()=>{
     UI.historicoContrachequeModal = { conta: b.dataset.historicoContracheque, pagina:1, porPagina:porPaginaLaptop(12) }; render();
   }));
