@@ -11191,9 +11191,16 @@ function mesesAteCompetencia(competencia){
 }
 function statusDetalhadoFatura(conta, competencia){
   const pag = statusPagamentoFatura(conta, competencia);
-  // Competência 2 meses ou mais no futuro: ainda não entrou em período de acompanhamento — evita que
-  // faturas futuras pareçam pendentes antes da hora.
-  if(mesesAteCompetencia(competencia)>=2) return { chave:'proxima', label:'Próxima', emoji:'⚪', pagamento:null, pago:pag.pago, totalFatura:pag.total };
+  // Requisito "Correção do status das faturas futuras com pagamentos registrados", seções 2/3: o status
+  // deve ser determinado PRIORITARIAMENTE pela existência/valor dos pagamentos vinculados, independente
+  // da distância entre a competência da fatura e a atual — "Próxima" só se aplica quando a competência
+  // está 2+ meses no futuro E não existe NENHUM pagamento reconhecido ainda (pag.pago<=EPSILON). Uma
+  // fatura futura (mesmo 2, 6 ou mais meses adiante) integral ou parcialmente paga nunca fica "pendente
+  // antes da hora" — os critérios "paga"/"parcial" abaixo continuam decidindo normalmente para ela.
+  const temPagamentoReconhecido = pag.pago > EPSILON_FATURA;
+  if(mesesAteCompetencia(competencia)>=2 && !temPagamentoReconhecido){
+    return { chave:'proxima', label:'Próxima', emoji:'⚪', pagamento:null, pago:pag.pago, totalFatura:pag.total };
+  }
   const ov = faturaOverride(conta, competencia);
   const vencISO = (ov && ov.vencimento) ? ov.vencimento : vencimentoDataCalculada(competencia, conta);
   const fechISO = (ov && ov.fechamento) ? ov.fechamento : fechamentoDataCalculada(competencia, conta);
