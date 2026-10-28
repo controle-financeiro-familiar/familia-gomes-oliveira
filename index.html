@@ -9809,18 +9809,38 @@ function limiteTotalCartao(conta){
   if(cfg.grupoLimiteId) return Number(STATE.gruposLimiteCartao[cfg.grupoLimiteId]?.limiteTotal)||0;
   return Number(cfg.limiteTotal)||0;
 }
-/* Quanto de um único cartão ainda compromete o limite: para cada competência em que o cartão teve
-   lançamentos, o saldo ainda não pago da fatura (nunca negativo) — isso já exclui automaticamente compras
-   totalmente pagas (saldo zero), já soma parcelas futuras (que viram lançamentos reais na própria
-   competência futura, ver sincronizarParcelasFuturas) e já ignora estornos/receitas isoladas (elas
-   reduzem o valor da própria fatura via faturaPorCompetencia, nunca aparecem como comprometimento
-   separado). Nunca armazenado — recalculado a cada chamada, então reflete imediatamente qualquer
-   lançamento novo, editado, excluído, pago ou estornado (seção 10 do requisito). */
+/* Quanto de um único cartão ainda compromete o limite (requisito "Revisão e correção do cálculo dos
+   limites dos cartões de crédito"): NUNCA a soma do saldo não pago de cada competência separadamente —
+   isso contava o mesmo saldo várias vezes, porque o "Saldo Anterior" (ver sincronizarSaldoAnteriorCartao)
+   encadeia o total não pago de uma competência para a seguinte, então o total de cada mês já inclui
+   (compostamente) o de todos os meses anteriores ainda em aberto. Somar esse total mês a mês inflava
+   artificialmente o comprometido sempre que havia mais de uma competência com lançamento do cartão —
+   o caso mais comum sendo justamente uma compra parcelada, cujas parcelas futuras já existem como
+   lançamentos reais em competências futuras (ver sincronizarParcelasFuturas), cada uma recebendo seu
+   próprio Saldo Anterior encadeado.
+   Graças a esse mesmo encadeamento, o Valor total da fatura (faturaTotalExibicao) da competência MAIS
+   RECENTE com algum lançamento do cartão já é, por construção, a soma de TODAS as compras e parcelas
+   (passadas e futuras) menos TODOS os pagamentos e estornos já reconhecidos até agora — exatamente a
+   definição de limite utilizado do requisito (compras à vista não liquidadas + saldo devedor de
+   parceladas, incluindo futuras + faturas anteriores não quitadas − pagamentos e estornos que liberam
+   limite). Basta então usar essa última competência, nunca somar todas. Nunca armazenado — recalculado a
+   cada chamada, então reflete imediatamente qualquer lançamento novo, editado, excluído, pago ou
+   estornado (seção 7 do requisito). */
 function comprometidoCartao(conta){
-  const competencias = new Set(STATE.transactions.filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia).map(t=>t.competencia));
-  let total = 0;
-  competencias.forEach(comp=>{ const st = statusPagamentoFatura(conta, comp); total += Math.max(0, st.total - st.pago); });
-  return total;
+  const competencias = [...new Set(STATE.transactions.filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia).map(t=>t.competencia))].sort();
+  if(!competencias.length) return 0;
+  const ultimaCompetencia = competencias[competencias.length-1];
+  return Math.max(0, faturaTotalExibicao(conta, ultimaCompetencia));
+}
+/* Composição do valor usado em comprometidoCartao (requisito "Revisão e correção do cálculo dos limites
+   dos cartões de crédito", seção 8: "disponibilizar... a composição dos valores considerados no
+   cálculo") — reaproveita diretamente calculoFaturaCartao da mesma competência de referência (a mais
+   recente com lançamento), nunca um recálculo paralelo. null quando o cartão nunca teve lançamento. */
+function composicaoLimiteUtilizadoCartao(conta){
+  const competencias = [...new Set(STATE.transactions.filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia).map(t=>t.competencia))].sort();
+  if(!competencias.length) return null;
+  const competenciaReferencia = competencias[competencias.length-1];
+  return { competenciaReferencia, ...calculoFaturaCartao(conta, competenciaReferencia) };
 }
 /* Comprometimento a considerar no limite deste cartão: se ele compartilha grupo, soma o comprometido de
    TODOS os cartões do grupo (seção 7 do requisito); senão, só o dele mesmo. */
@@ -11126,8 +11146,18 @@ function blocoLimiteCartaoHtml(conta, extraClass){
   const comprometidoC = comprometidoGrupoCartao(conta);
   const limiteDisponivelC = limiteTotalC - comprometidoC;
   const pctUtilizadoC = comprometidoC/limiteTotalC*100;
+  // Composição do comprometido (requisito "Revisão e correção do cálculo dos limites dos cartões de
+  // crédito", seção 8) — um cartão por grupo compartilhado, cada um com sua própria fatura de referência
+  // (ver composicaoLimiteUtilizadoCartao), nunca um recálculo paralelo.
+  const cfgGrupo = STATE.cardLimite[conta];
+  const membrosGrupo = cfgGrupo?.grupoLimiteId ? membrosGrupoLimite(cfgGrupo.grupoLimiteId) : [conta];
+  const composicaoTitle = membrosGrupo.map(c=>{
+    const comp = composicaoLimiteUtilizadoCartao(c);
+    if(!comp) return `${c}: sem lançamentos`;
+    return `${c} (fatura de referência ${competenciaLabel(comp.competenciaReferencia)}): saldo anterior ${fmtBRL(comp.saldoAnterior)} + compras ${fmtBRL(comp.compras)} − pagamentos ${fmtBRL(comp.pagamentos)} − estornos ${fmtBRL(comp.estornos)} = ${fmtBRL(comp.totalCalculado)}`;
+  }).join('\n');
   return `
-  <div class="limite-cartao-info${extraClass?' '+extraClass:''}" title="Limite ${comprometidoC>limiteTotalC?'excedido':'utilizado'}: ${fmtBRL(comprometidoC)} de ${fmtBRL(limiteTotalC)} (${pctUtilizadoC.toFixed(0)}%)">
+  <div class="limite-cartao-info${extraClass?' '+extraClass:''}" title="Limite ${comprometidoC>limiteTotalC?'excedido':'utilizado'}: ${fmtBRL(comprometidoC)} de ${fmtBRL(limiteTotalC)} (${pctUtilizadoC.toFixed(0)}%)\n\nComposição do valor utilizado:\n${composicaoTitle}">
     <div class="limite-cartao-valores"><b>${fmtBRL(comprometidoC)}</b> de ${fmtBRL(limiteTotalC)}</div>
     <div class="limite-cartao-barra">
       <div class="progress-track"><div class="progress-fill" style="width:${Math.min(100,Math.max(0,pctUtilizadoC)).toFixed(0)}%;background:${corLimiteCartao(pctUtilizadoC)};"></div></div>
