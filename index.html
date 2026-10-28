@@ -7236,9 +7236,11 @@ async function writeToHandle(tipo){
   }
 }
 function scheduleSave(){
-  // A aplicação não salva mais sozinha em segundo plano: qualquer alteração só marca os arquivos como
-  // "alterações não salvas" (ver STATE.dirty) — o próprio usuário decide quando gravar, com o botão
-  // Salvar, ou ao ser avisado ao tentar fechar a sessão com alterações pendentes.
+  // Requisito "Correção da persistência e sincronização automática dos dados", seção 1: toda alteração
+  // confirmada precisa chegar ao armazenamento persistente sem depender exclusivamente do botão Salvar —
+  // ver agendarAutoSave abaixo, que grava automaticamente no OneDrive (debounced) sempre que houver um
+  // arquivo conectado. O botão Salvar (maSalvar) continua existindo e chamando salvarArquivos() direto,
+  // como mecanismo ADICIONAL de segurança (seção 4) — nunca o único caminho de gravação.
   // Mesmo assim, isso já é uma atualização EFETIVA dos dados em sessão (lançamento, conta, cartão,
   // categoria etc. mudou agora) — por isso sempre registra a atualização, independente de já haver ou não
   // um arquivo conectado (ver requisito do filebar-info).
@@ -7247,12 +7249,29 @@ function scheduleSave(){
   houveAlteracaoDesdeUltimoBackup = true; // ver backupAutomaticoSeAplicavel — independente de STATE.dirty, que é só sobre o arquivo .cfg/.log conectado
   agendarBackupAposAlteracoes();
   agendarSnapshotLocal(); // LocalDataStore (item 7/8) — protege a alteração mesmo se a página fechar antes de sincronizar
+  agendarAutoSave(); // grava automaticamente no OneDrive (debounced) — ver função
   atualizarSyncEstado();
   // Qualquer alteração que passe por aqui pode ter criado, editado ou excluído lançamentos — se o modal de
   // Verificação de duplicidade estiver aberto neste momento, seus resultados são recalculados com os dados
   // atuais antes de re-renderizar (ver atualizarModalDuplicidadeSeAberto).
   atualizarModalDuplicidadeSeAberto();
   render();
+}
+/* Persistência automática (requisito "Correção da persistência e sincronização automática dos dados",
+   seções 1 e 3): sempre que houver um arquivo conectado no OneDrive, agenda uma gravação automática
+   (debounced — evita uma chamada à Graph API a cada tecla digitada, igual ao debounce já usado para o
+   snapshot local) alguns segundos após a última alteração. Reaproveita INTEGRALMENTE salvarArquivos()
+   (mesmo lock contra sincronizações concorrentes — syncEmAndamento — e a mesma confirmação só depois da
+   gravação+validação de ambos os arquivos, ver SyncManager) — nunca um caminho de gravação paralelo.
+   Idempotente/sempre seguro disparar: salvarArquivos() já verifica STATE.dirty implicitamente (grava o
+   estado ATUAL independente de chamadas repetidas); se uma sincronização já estiver em andamento quando
+   este timer disparar, salvarArquivos() devolve false sem gravar — a próxima alteração (ou o botão Salvar)
+   agenda/tenta de novo, nunca perdendo a alteração pendente (STATE.dirty continua true até confirmar). */
+let debounceAutoSave = null;
+function agendarAutoSave(){
+  clearTimeout(debounceAutoSave);
+  if(!(fileHandleReg || fileHandleCfg)) return; // nada conectado ainda — só o snapshot local protege por enquanto
+  debounceAutoSave = setTimeout(()=>{ if(STATE.dirty && !syncEmAndamento) salvarArquivos(); }, 5000);
 }
 let debounceSnapshotLocal = null;
 function agendarSnapshotLocal(){
