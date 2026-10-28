@@ -5282,15 +5282,21 @@ function corrigirCompetenciaTransacoes(){
   const jaCorrigidos = new Set();
   Object.values(porParcelamento).forEach(grupo=>{
     const ref = grupo.reduce((a,b)=> Number(b.parcelaAtual)<Number(a.parcelaAtual) ? b : a);
-    if(Number(ref.parcelaAtual)===1 || !ref.competencia){
-      ref.competencia = competenciaFatura(ref.data, ref.conta);
-    } else {
-      const decisao = decidirCompetenciaParcelaIsolada(ref);
-      if(decisao.classificacao==='corrigir') ref.competencia = decisao.competenciaSugerida;
+    // Requisito "Correção da conciliação no Extrato Consolidado e da edição de competências dos cartões",
+    // seção 2: uma competência definida manualmente (t.competenciaManual — ver saveTx/aplicarEdicaoLote)
+    // nunca é recalculada nem usada como base para "empurrar" as demais parcelas do mesmo parcelamento —
+    // cada parcela com o marcador é tratada individualmente, exatamente como está persistida.
+    if(!ref.competenciaManual){
+      if(Number(ref.parcelaAtual)===1 || !ref.competencia){
+        ref.competencia = competenciaFatura(ref.data, ref.conta);
+      } else {
+        const decisao = decidirCompetenciaParcelaIsolada(ref);
+        if(decisao.classificacao==='corrigir') ref.competencia = decisao.competenciaSugerida;
+      }
     }
     jaCorrigidos.add(ref.id);
     grupo.forEach(t=>{
-      if(t.id===ref.id) return;
+      if(t.id===ref.id || t.competenciaManual) { jaCorrigidos.add(t.id); return; }
       t.competencia = incrementarCompetencia(ref.competencia, Number(t.parcelaAtual) - Number(ref.parcelaAtual));
       jaCorrigidos.add(t.id);
     });
@@ -5323,6 +5329,10 @@ function corrigirCompetenciaTransacoes(){
     // competência a partir da Data e a devolvia para a competência de ORIGEM (ou outra, por coincidência
     // de calendário) — exatamente o bug que fazia os dois meses nunca convergirem corretamente.
     if(t.categoria==='Saldo Inicial/Anterior' && t.pgto==='Cartão de Crédito' && STATE.cartoes.includes(t.conta)) return;
+    // Requisito "Correção da conciliação no Extrato Consolidado e da edição de competências dos
+    // cartões", seção 2: idem acima — uma compra à vista com competência definida manualmente nunca é
+    // recalculada pela data de fechamento.
+    if(t.competenciaManual) return;
     if(t.pgto==='Cartão de Crédito' && STATE.cartoes.includes(t.conta)){
       t.competencia = competenciaFatura(t.data, t.conta);
       return;
@@ -6747,7 +6757,7 @@ async function aplicarSnapshotLocalPendente(){
 async function registrarUltimaContagemReg(n){ try{ await idbSetHandle('ultimaContagemReg', n); }catch(e){} }
 async function obterUltimaContagemReg(){ try{ return await idbGetHandle('ultimaContagemReg'); }catch(e){ return null; } }
 
-const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao','ofx_fitid','rende_facil_origem_id','rende_facil_tipo','cartao_fatura','saldo_anterior_origem_competencia'];
+const CSV_HEADER = ['tipo_registro','id','data','descricao','valor','categoria','grupo','subgrupo','tipo','natureza','conta','pgto','competencia_fatura','dia_fechamento','dia_vencimento','status','eh_cartao','parcela_atual','total_parcelas','parcelamento_id','tipo_conta','responsavel','entre_familia','origem_importacao','ordem_exibicao','ofx_fitid','rende_facil_origem_id','rende_facil_tipo','cartao_fatura','saldo_anterior_origem_competencia','competencia_manual'];
 
 /* ---------- Arquivo de REGISTROS (só lançamentos) ---------- */
 function buildCSVRegistros(){
@@ -6762,7 +6772,12 @@ function buildCSVRegistros(){
     // "vinculado por t.cartaoFatura") — faltava nesta lista até esta correção, então o vínculo escolhido
     // manualmente pelo usuário era perdido a cada recarregamento da aplicação (requisito "Corrigir
     // reconhecimento e persistência dos pagamentos de faturas", seção 2).
-    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '', t.ofxFitid||'', t.rendeFacilOrigemId||'', t.rendeFacilTipo||'', t.cartaoFatura||'', t.saldoAnteriorOrigemCompetencia||'']);
+    // competencia_manual (requisito "Correção da conciliação no Extrato Consolidado e da edição de
+    // competências dos cartões", seção 2): marca que t.competencia foi uma escolha EXPLÍCITA do usuário
+    // (edição individual ou em lote — ver saveTx/aplicarEdicaoLote), nunca a classificação automática por
+    // data de fechamento (competenciaFatura/competenciaBaseLancamento). Sem isso, corrigirCompetenciaTransacoes
+    // recalculava e descartava silenciosamente qualquer ajuste manual a cada carregamento/sincronização.
+    rows.push(['TX', t.id, t.data, t.descricao, t.valor, t.categoria, t.grupo, t.subgrupo||'', t.tipo, t.natureza||'', t.conta, t.pgto, t.competencia||'', t.internacional ? (t.taxaConversao||'') : '', t.parcelaFutura ? '1' : '', t.transferenciaInterna ? '1' : '', t.internacional ? '1' : '', t.parcelaAtual||'', t.totalParcelas||'', t.parcelamentoId||'', t.transferenciaVinculoId||'', t.responsavel||'', t.entreFamilia ? '1' : '', t.origemImportacao ? '1' : '', (t.ordemExibicao!==undefined && t.ordemExibicao!==null) ? t.ordemExibicao : '', t.ofxFitid||'', t.rendeFacilOrigemId||'', t.rendeFacilTipo||'', t.cartaoFatura||'', t.saldoAnteriorOrigemCompetencia||'', t.competenciaManual ? '1' : '']);
   });
   return Papa.unparse(rows);
 }
@@ -6789,6 +6804,7 @@ function loadCSVRegistros(text){
         rendeFacilOrigemId: r.rende_facil_origem_id||'', rendeFacilTipo: r.rende_facil_tipo||'',
         cartaoFatura: r.cartao_fatura||'',
         saldoAnteriorOrigemCompetencia: r.saldo_anterior_origem_competencia||'',
+        competenciaManual: r.competencia_manual==='1',
       });
     }
   });
@@ -6837,6 +6853,12 @@ function corrigirCompetenciaParcelasFuturas(){
     if(t.parcelamentoId && Number(t.totalParcelas)>1) (grupos[t.parcelamentoId] = grupos[t.parcelamentoId]||[]).push(t);
   });
   Object.values(grupos).forEach(rows=>{
+    // Requisito "Correção da conciliação no Extrato Consolidado e da edição de competências dos
+    // cartões", seção 2: sincronizarParcelasFuturas apaga e recria TODAS as parcelas futuras do grupo a
+    // partir da referência — se qualquer uma delas (inclusive a própria referência) tiver uma competência
+    // definida manualmente (t.competenciaManual), essa migração de legado NUNCA pode rodar por cima, senão
+    // descartava silenciosamente o ajuste manual a cada carregamento do arquivo (o bug relatado).
+    if(rows.some(t=>t.competenciaManual)) return;
     const ref = rows.reduce((a,b)=> Number(b.parcelaAtual)<Number(a.parcelaAtual) ? b : a);
     sincronizarParcelasFuturas(ref);
   });
@@ -12152,28 +12174,49 @@ function candidatosConciliacaoProjecao(item, competencia){
    conta na competência da própria tabela do Fluxo de Caixa ficam disponíveis para conciliação — nunca
    limitados ao 1º encontrado, nunca limitados em quantidade, nunca pré-filtrados por data ou pelo valor
    projetado (ex.: um arrendamento pago em várias parcelas bem menores que o valor total projetado, cada
-   uma sem nenhuma semelhança de valor isoladamente). Sem Conta provável definida, usa só os candidatos já
-   pontuados (candidatosConciliacaoProjecao) — mesmo comportamento de antes desta mudança, preservando o
-   LIMIAR_CONCILIACAO como filtro nesse caso. Em ambos os casos, um registro já vinculado (a este mesmo
-   item, a outra competência dele, ou a qualquer outro lançamento — requisito 10/11) ou já descartado
-   manualmente nesta competência nunca aparece. A lista final é sempre ordenada do melhor para o pior pela
-   mesma pontuação usada na conciliação automática — aqui, porém, essa pontuação NUNCA corta a lista
-   (LIMIAR_CONCILIACAO só filtra a automática/candidatosConciliacaoProjecao), só decide a ordem. */
+   uma sem nenhuma semelhança de valor isoladamente).
+   Sem Conta provável definida (requisito "Correção da conciliação no Extrato Consolidado e da edição de
+   competências dos cartões", seção 1: habilitar a conciliação manual para QUALQUER lançamento fixo
+   elegível, nunca só os que a pontuação automática já reconhece) — além dos candidatos já pontuados
+   (candidatosConciliacaoProjecao), também oferece para escolha manual TODOS os lançamentos do mesmo Tipo
+   (Receita/Despesa) de uma conta elegível do Fluxo de Caixa (contasElegiveisFluxoCaixa — Conta Corrente/
+   PJ/Poupança/Reserva de Emergência) dentro da mesma janela de competência já usada pela pontuação
+   automática (mês anterior/atual/seguinte ao planejado — ver pontuarCandidatoConciliacao), nunca
+   restringindo por semelhança de descrição ou valor: é exatamente para o caso sem nenhum sinal
+   automático forte (ex.: um lançamento recebido com descrição e valor bem diferentes do previsto) que
+   esta lista existe — o usuário decide, nunca um corte automático que o impeça de ver a opção certa.
+   Em todos os casos, um registro já vinculado (a este mesmo item, a outra competência dele, ou a
+   qualquer outro lançamento — requisito 10/11) ou já descartado manualmente nesta competência nunca
+   aparece. A lista final é sempre ordenada do melhor para o pior pela mesma pontuação usada na
+   conciliação automática — aqui, porém, essa pontuação NUNCA corta a lista (LIMIAR_CONCILIACAO só filtra
+   a automática/candidatosConciliacaoProjecao), só decide a ordem. */
 function candidatosConciliacaoModal(item, competencia){
   if(item.cartao || normalizarTexto(item.descricao)==='contrachequetrt') return [];
   const pontuados = candidatosConciliacaoProjecao(item, competencia);
-  if(!item.contaProvavelId) return pontuados;
   const ignorados = new Set((item.candidatosIgnorados && item.candidatosIgnorados[competencia]) || []);
   const jaVinculadosOutraCompetencia = idsJaVinculadosOutrasCompetencias(item, competencia);
   const jaVinculadosMesmaCompetencia = new Set(vinculosDaCompetencia(item, competencia));
   const jaVinculadosOutroLancamento = idsVinculadosAOutrosLancamentos(item);
   const idsJaListados = new Set(pontuados.map(c=>c.t.id));
-  const todosDaContaProvavel = STATE.transactions
-    .filter(t=> t.conta===item.contaProvavelId && t.data && t.data.slice(0,7)===competencia
-      && !ignorados.has(t.id) && !jaVinculadosOutraCompetencia.has(t.id) && !jaVinculadosMesmaCompetencia.has(t.id)
-      && !jaVinculadosOutroLancamento.has(t.id) && !idsJaListados.has(t.id))
-    .map(t=>({ t, pontos: pontuarCandidatoConciliacao(item, t, competencia) }));
-  return [...pontuados, ...todosDaContaProvavel].sort((a,b)=>b.pontos-a.pontos);
+  const filtroComum = t=> !ignorados.has(t.id) && !jaVinculadosOutraCompetencia.has(t.id) && !jaVinculadosMesmaCompetencia.has(t.id)
+    && !jaVinculadosOutroLancamento.has(t.id) && !idsJaListados.has(t.id);
+  let extras = [];
+  if(item.contaProvavelId){
+    extras = STATE.transactions
+      .filter(t=> t.conta===item.contaProvavelId && t.data && t.data.slice(0,7)===competencia && filtroComum(t))
+      .map(t=>({ t, pontos: pontuarCandidatoConciliacao(item, t, competencia) }));
+  } else {
+    const [anoComp, mesComp] = competencia.split('-').map(Number);
+    const compAnterior = mesAnterior(anoComp, mesComp), compSeguinte = proximoMes(anoComp, mesComp);
+    const { min } = limitesCompetenciaISO(chaveMes(compAnterior.ano, compAnterior.mes));
+    const { max } = limitesCompetenciaISO(chaveMes(compSeguinte.ano, compSeguinte.mes));
+    const contasElegiveis = new Set(contasElegiveisFluxoCaixa());
+    extras = STATE.transactions
+      .filter(t=> contasElegiveis.has(t.conta) && t.tipo===item.tipo && t.data && t.data>=min && t.data<=max
+        && !ehSaldoAnterior(t) && !t.entreFamilia && filtroComum(t))
+      .map(t=>({ t, pontos: pontuarCandidatoConciliacao(item, t, competencia) }));
+  }
+  return [...pontuados, ...extras].sort((a,b)=>b.pontos-a.pontos);
 }
 /* "Projetado" (ainda sem candidato plausível), "pendente" (2+ candidatos plausíveis, mas nenhum vínculo
    automático seguro o suficiente — precisa de escolha manual), "conciliado" (1+ vínculos estabelecidos, o(s)
@@ -15311,12 +15354,22 @@ function abrirEdicaoLote(origemPrefixo, ids){
   render();
 }
 /* Aplica a Edição em Lote — reaproveita EXATAMENTE as mesmas regras de negócio da edição individual
-   (nunca uma lógica paralela): a categoria-folha escolhida determina grupo/subgrupo/tipo/natureza juntos
-   via catInfo (idêntico à gravação do formulário de Editar Lançamento); Fatura/Competência é gravada em
-   qualquer lançamento da seleção, de qualquer tipo (campo de uso geral, ver requisito); e qualquer
-   alteração numa parcela propaga automaticamente para as parcelas futuras já vinculadas, via
-   sincronizarParcelasFuturas — o mesmo mecanismo usado sempre que um lançamento parcelado é editado
-   individualmente.
+   (nunca uma lógica paralela) para a classificação (categoria-folha escolhida determina grupo/subgrupo/
+   tipo/natureza juntos via catInfo, idêntico à gravação do formulário de Editar Lançamento).
+   Fatura/Competência é gravada em qualquer lançamento da seleção, de qualquer tipo (campo de uso geral,
+   ver requisito) — mas, diferente da edição individual, NUNCA chama sincronizarParcelasFuturas: essa
+   função foi feita para a edição de UMA parcela de cada vez (propaga a mudança para as parcelas FUTURAS
+   ainda não tocadas, recriando-as em sequência a partir da parcela editada). Chamá-la aqui, uma vez por
+   lançamento selecionado, fazia a Edição em Lote se comportar como uma redistribuição sequencial de
+   parcelas (a competência escolhida só "pegava" na 1ª parcela processada; as demais eram recriadas e
+   reempurradas para competências subsequentes) — exatamente o bug do requisito "Correção da conciliação
+   no Extrato Consolidado e da edição de competências dos cartões", seção 3: a Edição em Lote deve
+   aplicar a MESMA competência, individualmente, a cada lançamento selecionado, nunca redistribuir, e
+   nunca tocar lançamentos não selecionados (inclusive outras parcelas do mesmo parcelamento fora da
+   seleção).
+   A competência aplicada aqui é sempre marcada como manual (t.competenciaManual — ver
+   corrigirCompetenciaTransacoes/seção 2), para prevalecer sobre a classificação automática depois de
+   salvar, sincronizar e reabrir a aplicação.
    Só os campos com a caixa "Alterar este campo" marcada são tocados; todo o restante de cada lançamento
    (inclusive os campos não habilitados) permanece exatamente como estava. Retorna a contagem de
    lançamentos efetivamente alterados. */
@@ -15334,12 +15387,13 @@ function aplicarEdicaoLote(m){
       }
     }
     if(m.campos.competencia && m.valores.competencia){
-      t.competencia = m.valores.competencia; // para cartão de crédito, remove da fatura de origem e vincula
-                                               // à nova automaticamente — faturaPorCompetencia/itensFatura
-                                               // leem sempre t.competencia ao vivo, então Ver Fatura, Ver
-                                               // Próxima Fatura e o painel Cartões já refletem a mudança no
-                                               // próximo render(); para os demais tipos, é só um campo
-                                               // informativo/editável, sem efeito em nenhum cálculo.
+      t.competencia = m.valores.competencia; // aplicada individualmente a cada selecionado, nunca redistribuída
+                                               // (ver docstring acima) — para cartão de crédito,
+                                               // faturaPorCompetencia/itensFatura leem sempre t.competencia
+                                               // ao vivo, então Ver Fatura, Ver Próxima Fatura e o painel
+                                               // Cartões já refletem a mudança no próximo render(); para os
+                                               // demais tipos, é só um campo informativo/editável.
+      t.competenciaManual = true;
       mudou = true;
     }
     if(m.campos.data && m.valores.data){
@@ -15361,10 +15415,7 @@ function aplicarEdicaoLote(m){
       t.responsavel = m.valores.responsavel || '';
       mudou = true;
     }
-    if(mudou){
-      alterados++;
-      if(Number(t.totalParcelas)>1 && t.parcelamentoId) sincronizarParcelasFuturas(t);
-    }
+    if(mudou) alterados++;
   });
   if(alterados>0){ sincronizarTodosEspelhosPagamentoFatura(); sincronizarSaldoAnteriorTodosCartoes(); conciliarProjecoesComExtrato(); scheduleSave(); }
   return alterados;
@@ -16533,6 +16584,16 @@ function seloConciliacaoProjecao(l){
   if(l.statusConciliacao==='postecipado') return clicavel('⏩', `Realizado posteriormente em ${dataRealFmt}`);
   if(l.statusConciliacao==='contracheque-importado') return fixo('📥', 'Contracheque importado nesta competência — Data e Valor exibidos são a Data do Crédito e o Valor Líquido reais, não os projetados');
   if(l.statusConciliacao==='pendente') return clicavel('⏳', 'Conciliação pendente - Existem possíveis correspondências no Extrato, clique para revisar e vincular manualmente');
+  // Requisito "Correção da conciliação no Extrato Consolidado e da edição de competências dos cartões",
+  // seção 1: um lançamento fixo elegível (não-cartão, não-Contracheque — os únicos dois casos em que
+  // l.statusConciliacao fica null/'contracheque-importado', já tratados acima) nunca pode ficar sem
+  // NENHUM ponto de entrada para a conciliação manual só porque a pontuação automática não encontrou
+  // nenhum candidato plausível (status 'projetado') — sem este selo, o usuário não tinha como abrir o
+  // modal (renderConciliarProjecaoModal) para buscar manualmente o lançamento correspondente, mesmo que
+  // ele exista no Extrato só com descrição/valor muito diferentes do previsto (ex.: um arrendamento
+  // recebido em parcelas menores que o valor total projetado). Mesmo critério para TODOS os lançamentos
+  // fixos elegíveis, nunca uma exceção para um lançamento específico.
+  if(l.statusConciliacao==='projetado') return clicavel('🔍', 'Nenhuma correspondência automática encontrada — clique para buscar e vincular manualmente um lançamento do Extrato');
   return '';
 }
 /* Coluna Status do Extrato Consolidado (requisito "Ajustes no Extrato Consolidado" itens 9/10 — substitui
@@ -24072,22 +24133,35 @@ function bindEvents(){
         dataFinal = somarMesesData(dataV, parcelaAtualNova - parcelaAtualOriginal);
       }
       let competenciaFinal = '';
+      let competenciaManualFinal = false;
       // Fatura/Competência: mesma regra de precedência para QUALQUER tipo de lançamento (antes só cartão
       // de crédito) — o campo dedicado do formulário só prevalece quando o usuário de fato o alterou
       // (valor diferente da competência original); do contrário, a Data (via competenciaBaseLancamento —
       // fórmula de fatura para cartão, mês corrido para os demais) continua sendo quem decide: mudar a
       // Data/Conta de um lançamento existente precisa recalcular, senão editar só a Data nunca moveria o
       // lançamento de competência nenhuma (o valor pré-preenchido sempre venceria).
+      // Requisito "Correção da conciliação no Extrato Consolidado e da edição de competências dos
+      // cartões", seção 2: uma competência já marcada como manual (UI.editingTx.competenciaManual, copiada
+      // do lançamento original ao abrir a edição) permanece manual e com o MESMO valor mesmo que a Data/
+      // Conta também tenham sido alteradas nesta mesma edição — só um novo valor explícito no próprio
+      // campo Fatura/Competência (ou escolher de volta exatamente o valor que o sistema calcularia
+      // automaticamente, que restaura a classificação automática — regra 7) muda esse estado.
       {
+        const eraManual = !!UI.editingTx.competenciaManual;
         const competenciaFaturaFoiAlterada = UI.editingTx.id && UI.editingTx.competenciaFaturaManual
           && UI.editingTx.competenciaFaturaManual!==UI.editingTx._competenciaOriginal;
         if(competenciaFaturaFoiAlterada){
           competenciaFinal = UI.editingTx.competenciaFaturaManual;
+          const auto = dataFinal ? competenciaBaseLancamento(dataFinal, conta, pgto) : '';
+          competenciaManualFinal = competenciaFinal!==auto; // escolher de volta o valor automático restaura a classificação automática
+        } else if(eraManual && UI.editingTx._competenciaOriginal){
+          competenciaFinal = UI.editingTx._competenciaOriginal; // preserva o valor manual já salvo, mesmo com Data/Conta alteradas
+          competenciaManualFinal = true;
         } else {
-          // Ao editar um lançamento já existente, preserva a competência já salva (ex.: preenchida
-          // automaticamente na importação) contanto que a data e a conta não tenham sido alteradas — evita
-          // que simplesmente abrir e salvar de novo o lançamento troque a competência para a calculada pela
-          // Data.
+          // Ao editar um lançamento já existente (sem competência manual), preserva a competência já salva
+          // (ex.: preenchida automaticamente na importação) contanto que a data e a conta não tenham sido
+          // alteradas — evita que simplesmente abrir e salvar de novo o lançamento troque a competência
+          // para a calculada pela Data.
           const dataOuContaMudou = !UI.editingTx.id || dataFinal!==UI.editingTx._dataOriginal || conta!==UI.editingTx._contaOriginal;
           if(!dataOuContaMudou && UI.editingTx._competenciaOriginal){
             competenciaFinal = UI.editingTx._competenciaOriginal;
@@ -24102,7 +24176,7 @@ function bindEvents(){
         id: UI.editingTx.id || uid(), data:dataFinal, descricao: descricaoBase,
         valor: valorTotal,
         categoria: UI.editingTx.transferenciaInterna ? '' : categoria, grupo:info.grupo, subgrupo:info.subgrupo, tipo:info.tipo, natureza:info.natureza,
-        conta, pgto, competencia: competenciaFinal,
+        conta, pgto, competencia: competenciaFinal, competenciaManual: competenciaManualFinal,
         parcelaAtual: parcelaAtualNova, totalParcelas: UI.editingTx.totalParcelas||null, parcelamentoId: UI.editingTx.parcelamentoId||'',
         responsavel: info.grupo==='Renda Familiar' ? (UI.editingTx.responsavel||'') : '',
         entreFamilia: !!UI.editingTx.entreFamilia,
