@@ -6844,6 +6844,7 @@ function loadCSVRegistros(text){
   migrarNomesContasPadrao();
   aplicarResponsavelPadraoPorTipo();
   consolidarDuplicatasDeParcelas(); // saneia duplicidades reais de parcelas de cartão ANTES de tudo abaixo (ver função) — inclusive as trazidas por versões antigas do importador
+  corrigirClassificacaoPagamentosFaturaBancarios(); // saneia pagamentos de fatura importados/cadastrados como Receita por engano, ANTES do espelhamento abaixo (ver função)
   sincronizarTodosEspelhosPagamentoFatura(); // cria/corrige/remove os espelhos de pagamento de fatura (ver função)
   registrosJaCarregadosNestaSessao = true; // ver loadCSVConfig — a partir daqui, STATE.transactions já reflete os dados reais desta sessão
   conciliarProjecoesComExtrato(); // vincula lançamentos previstos do Fluxo de Caixa aos seus correspondentes reais no Extrato (ver função)
@@ -9234,8 +9235,11 @@ function candidatosCartaoFaturaParaPagamento(despesa){
    crédito já importado direto do extrato do cartão "virar origem" de um novo espelho), Despesa, categoria
    "Pagamento de Fatura de Cartão de Crédito", com Cartão e Competência definidos (a opção explícita
    "Cartão não cadastrado" NUNCA conta como identificado — fica sem espelho, para o usuário regularizar).
-   Lançamento espelho: Receita, categoria "Recebimento por Pagamento de Fatura", descrição fixa "Pagto
-   cartão crédito", mesmo valor e mesma data do lançamento original, na conta do cartão identificado — mas
+   Lançamento espelho: Receita, categoria "Recebimento por Pagamento de Fatura", descrição "Pagamento
+   Efetuado - Nome do cartão" (requisito "Correção da classificação dos pagamentos de cartão de crédito e
+   padronização dos lançamentos espelho" — Nome do cartão é o próprio valor de despesa.cartaoFatura, o
+   identificador único já usado em toda a aplicação), mesmo valor e mesma data do lançamento original, na
+   conta do cartão identificado — mas
    NUNCA na mesma competência: requisito "Ajustar competência dos lançamentos espelho de pagamentos de
    cartão de crédito" — a competência do espelho é sempre a competência IMEDIATAMENTE SEGUINTE à
    competência do lançamento original (ver incrementarCompetencia, que já trata a virada de ano
@@ -9289,6 +9293,13 @@ function sincronizarEspelhoPagamentoFatura(despesa){
     }
     return false;
   }
+  // Requisito "Correção da classificação dos pagamentos de cartão de crédito e padronização dos
+  // lançamentos espelho", seções 2/3: com o cartão já identificado (garantido por
+  // ehOrigemPagamentoFaturaValida acima), padroniza também a descrição do lançamento de ORIGEM (na conta
+  // bancária) — reforçada sempre, no mesmo espírito do bloco abaixo que já reforça tipo/categoria do
+  // espelho, nunca confiando que já esteja certa. Sem cartão identificado, ehOrigemPagamentoFaturaValida
+  // já é false e este trecho nem é alcançado — a descrição original é preservada tal como está.
+  despesa.descricao = `Fatura Paga - ${despesa.cartaoFatura}`;
   const competenciaEspelho = incrementarCompetencia(despesa.competencia, 1);
   if(espelhoExistente){
     espelhoExistente.data = despesa.data;
@@ -9302,7 +9313,7 @@ function sincronizarEspelhoPagamentoFatura(despesa){
     espelhoExistente.tipo = 'Receita';
     espelhoExistente.categoria = 'Recebimento por Pagamento de Fatura';
     espelhoExistente.grupo = 'Transações'; espelhoExistente.subgrupo = 'Transferências';
-    espelhoExistente.descricao = 'Pagto cartão crédito';
+    espelhoExistente.descricao = `Pagamento Efetuado - ${despesa.cartaoFatura}`;
     espelhoExistente.pgto = 'Cartão de Crédito';
     espelhoExistente.transferenciaInterna = false;
     return false;
@@ -9310,7 +9321,7 @@ function sincronizarEspelhoPagamentoFatura(despesa){
   const vinculoId = despesa.transferenciaVinculoId || uid();
   despesa.transferenciaVinculoId = vinculoId;
   STATE.transactions.push({
-    id: uid(), data: despesa.data, descricao: 'Pagto cartão crédito', valor: Number(despesa.valor)||0,
+    id: uid(), data: despesa.data, descricao: `Pagamento Efetuado - ${despesa.cartaoFatura}`, valor: Number(despesa.valor)||0,
     categoria: 'Recebimento por Pagamento de Fatura', grupo: 'Transações', subgrupo: 'Transferências',
     tipo: 'Receita', natureza: despesa.natureza || 'Variável',
     conta: despesa.cartaoFatura, pgto: 'Cartão de Crédito', competencia: competenciaEspelho,
@@ -9370,6 +9381,36 @@ function corrigirCartaoFaturaDeEspelhosExistentes(){
     if(!espelho) return;
     t.cartaoFatura = espelho.conta;
     t.competencia = t.competencia || espelho.competencia;
+    corrigidos++;
+  });
+  return corrigidos;
+}
+/* Migração de saneamento: requisito "Correção da classificação dos pagamentos de cartão de crédito e
+   padronização dos lançamentos espelho", seção 6 — registros importados/cadastrados ANTES desta correção
+   podem ter ficado classificados como Receita (ou com outra categoria) numa conta bancária, mesmo tendo a
+   descrição textual exata de um pagamento de fatura ("Pagto cartão crédito" — a mesma descrição genérica
+   usada tanto pelo lado banco quanto, antigamente, pelo lado espelho antes desta correção). Corrige só o
+   TIPO/categoria/grupo/subgrupo aqui — nunca o cartão vinculado (a identificação automática, quando
+   inequívoca, é feita separadamente por corrigirCartaoFaturaDeEspelhosExistentes/detectarCartaoPagamentoFatura;
+   sem ela, o requisito pede para manter a referência original "sem atribuir arbitrariamente a outro
+   cartão" — o lançamento fica corrigido como Despesa, mas sem a renomeação "Fatura Paga - Nome do
+   cartão", que só acontece dentro de sincronizarEspelhoPagamentoFatura quando o cartão já está
+   identificado). Só considera a conta BANCÁRIA (nunca a própria conta de um cartão, onde essa mesma
+   descrição recebida É uma Receita legítima) e só a descrição EXATA (normalizada), para nunca reclassificar
+   por engano um lançamento qualquer que apenas contenha palavras parecidas. Idempotente: um lançamento já
+   corrigido (ou que nunca esteve errado) é ignorado em qualquer execução seguinte. Roda em todo
+   carregamento do arquivo, antes de sincronizarTodosEspelhosPagamentoFatura, para que o lançamento já
+   corrigido seja reconhecido como origem válida e tenha seu espelho criado/atualizado na mesma passada. */
+function corrigirClassificacaoPagamentosFaturaBancarios(){
+  let corrigidos = 0;
+  const info = catInfo('Pagamento de Fatura de Cartão de Crédito');
+  STATE.transactions.forEach(t=>{
+    if(STATE.cartoes.includes(t.conta)) return;
+    if(normalizarTexto(t.descricao)!=='pagtocartaocredito') return;
+    if(t.tipo==='Despesa' && t.categoria==='Pagamento de Fatura de Cartão de Crédito') return;
+    t.tipo = 'Despesa';
+    t.categoria = 'Pagamento de Fatura de Cartão de Crédito';
+    t.grupo = info.grupo; t.subgrupo = info.subgrupo; t.natureza = info.natureza;
     corrigidos++;
   });
   return corrigidos;
