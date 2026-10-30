@@ -20143,9 +20143,21 @@ function camposFiltroImportCascata(itensBase, f){
    referencia as linhas por esse índice original (data-imp="i"), então filtrar a EXIBIÇÃO nunca pode
    renumerar as linhas nem afetar quais serão realmente importadas (isso continua controlado só pelo próprio
    checkbox "Importar" de cada linha, nunca pelo filtro). */
+/* Requisito "Ajustar ordenação dos lançamentos na importação bancária": ordem padrão de EXIBIÇÃO do Passo
+   4 — da data mais recente para a mais antiga (nunca a ordem de leitura do arquivo), para qualquer formato
+   já suportado (PDF, OFX, XLSX etc.) — todos chegam a UI.importParsed já com o campo Data (r.data,
+   'AAAA-MM-DD') antes deste passo, então basta ordenar por ele aqui, sem nenhum tratamento específico por
+   formato. Só a ORDEM DE EXIBIÇÃO muda: UI.importParsed em si nunca é reordenado (ver comentário abaixo),
+   então valores, identificadores, classificações e regras de processamento/persistência continuam
+   exatamente como já eram. Em caso de empate na mesma data, inverte a ordem original de leitura do
+   arquivo (índice maior = leitura posterior no arquivo = aparece primeiro) — por isso o desempate usa o
+   índice original em ordem decrescente, nunca a ordem de inserção padrão (estável) de um sort só por
+   data. Reaplicada a cada render (filtros, reclassificação, qualquer atualização da lista durante a
+   revisão), então a ordenação decrescente nunca se perde. */
 function linhasImportFiltradas(){
   const f = UI.importFiltros || (UI.importFiltros = criarFiltrosImportacaoPadrao());
-  return UI.importParsed.map((r,i)=>({r,i})).filter(({r})=> passaFiltrosImportacao(f, r));
+  return UI.importParsed.map((r,i)=>({r,i})).filter(({r})=> passaFiltrosImportacao(f, r))
+    .sort((a,b)=> (b.r.data||'').localeCompare(a.r.data||'') || (b.i - a.i));
 }
 function renderImportStep3(){
   const qtdExatas = UI.importParsed.filter(r=>r.duplicata==='exata').length;
