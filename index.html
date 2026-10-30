@@ -21377,6 +21377,33 @@ function detectarParcela(desc){
   }
   return null;
 }
+/* Requisito "Corrigir classificação de parcelas antecipadas na importação de faturas": uma linha de fatura
+   com o prefixo "ANTEC" (ex.: "ANTEC 02/12-PG *MEU ASSESSO FLOR") é a cobrança adiantada de uma parcela de
+   compra parcelada — nunca um pagamento de fatura, estorno ou crédito, mesmo que o arquivo do banco marque
+   a linha como crédito (ver uso em buildParsedFromMap). Exige tanto o prefixo quanto um "NN/NN" reconhecível
+   por detectarParcela (ex.: "ANTEC" isolado, sem número de parcela, não é suficiente — evita falso positivo
+   em alguma outra linha que por acaso comece com essas letras). */
+function detectarAntecipacaoDeParcela(desc){
+  if(!/^\s*ANTEC\b/i.test(String(desc||''))) return null;
+  return detectarParcela(desc);
+}
+/* Categoria/subcategoria herdada de uma parcela já existente do MESMO cronograma (mesma conta, mesmo total
+   de parcelas, mesmo número da parcela, valor dentro de uma pequena tolerância — a antecipação costuma vir
+   com um pequeno desconto de juros) — normalmente a própria parcela FUTURA sintética já projetada por
+   sincronizarParcelasFuturas a partir da compra original (ver aplicarAntecipacoesDeParcelas, que depois
+   remove essa parcela futura como duplicata da antecipação real agora corretamente importada como Despesa
+   — nunca uma segunda despesa). Não exige data igual (a antecipação chega numa fatura, e portanto numa
+   data, diferente da compra original) nem parcelamentoId (ainda não existe para esta linha recém-
+   importada). Sem nenhuma correspondência, devolve null — requisito 4: "quando não existir correspondência,
+   permitir reclassificação manual" (ver fallback por sugestão de palavra-chave em buildParsedFromMap). */
+function categoriaDeParcelaAntecipada(conta, parcela, valorAbs){
+  const tolerancia = Math.max(2, valorAbs*0.03);
+  const candidata = STATE.transactions.find(t=>
+    t.conta===conta && t.pgto==='Cartão de Crédito' && t.tipo==='Despesa'
+    && Number(t.totalParcelas)===parcela.totalParcelas && Number(t.parcelaAtual)===parcela.parcelaAtual
+    && Math.abs((Number(t.valor)||0)-valorAbs) <= tolerancia);
+  return candidata ? candidata.categoria : null;
+}
 /* Compras parceladas mantêm a mesma data, valor e conta em todas as parcelas (só o número da parcela
    muda) — sem essa checagem, a parcela 2/6 e a 3/6 de uma mesma compra pareciam duplicatas uma da outra.
    Só considera "parcelas diferentes da mesma compra" (e portanto isenta da duplicidade) quando os DOIS
@@ -21836,6 +21863,24 @@ function buildParsedFromMap(){
       // convenção oposta (ex.: a fatura PDF do Personnalité Black, impressa com valor positivo = compra)
       // já resolvem isso sozinhos e fornecem o tipo explicitamente, sem passar por este fallback.
       tipo = catSugerida ? tipoParaCategoriaSugerida(catSugerida, e.valor) : (e.valor<0 ? 'Despesa' : 'Receita');
+    }
+    // Requisito "Corrigir classificação de parcelas antecipadas na importação de faturas": uma antecipação
+    // de parcela ("ANTEC NN/NN...", ver detectarAntecipacaoDeParcela) é sempre Despesa, mesmo quando toda a
+    // árvore de classificação acima concluiu Receita — inclusive quando o próprio arquivo bancário marca a
+    // linha como crédito (TRNTYPE=CREDIT no OFX, ramo acima, que por padrão assume que todo crédito em
+    // cartão é pagamento/estorno/receita). Checada só em cartões (nunca contas bancárias, onde esse texto
+    // não ocorre) e só quando a classificação ainda não é Despesa — nunca reclassifica ao contrário. O sinal
+    // do valor nunca muda aqui: o valor extraído do arquivo continua positivo, como qualquer outro
+    // lançamento desta importação (o sinal negativo de despesa só é aplicado na contabilização, nunca no
+    // campo de valor em si — mesma regra já usada por todo o resto da aplicação).
+    if(STATE.cartoes.includes(conta) && tipo!=='Despesa'){
+      const antec = detectarAntecipacaoDeParcela(e.descricao);
+      if(antec){
+        tipo = 'Despesa';
+        const categoriaHerdada = categoriaDeParcelaAntecipada(conta, antec, Math.abs(Number(e.valor)||0));
+        catSugerida = categoriaHerdada || sugerirCategoria(e.descricao) || '';
+        if(catSugerida && !CATEGORIAS.some(c=>c[0]===catSugerida && c[3]==='Despesa')) catSugerida = '';
+      }
     }
     // Requisito "Correção da classificação de lançamentos Pix e transferências internas", seção 2: a
     // direção textual de um Pix ("Enviado"/"Recebido") prevalece sobre qualquer classificação anterior
