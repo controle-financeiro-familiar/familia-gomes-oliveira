@@ -9693,10 +9693,39 @@ function lancamentoSaldoAnteriorCartao(conta, competencia){
    Estornos/Créditos (det.totalCreditos, que já exclui essa categoria), nunca nos dois.
    Estornos/Créditos: det.totalCreditos (ver itensFatura) — os demais créditos da competência, que não sejam
    pagamento da própria fatura nem o lançamento de Saldo Anterior. */
-function calculoFaturaCartao(conta, competencia){
+function calculoFaturaCartao(conta, competencia, opts){
   const det = itensFatura(conta, competencia);
   const saldoAnteriorTx = lancamentoSaldoAnteriorCartao(conta, competencia);
-  const saldoAnterior = saldoAnteriorTx ? (Number(saldoAnteriorTx.valor)||0) : 0;
+  const saldoAnteriorBruto = saldoAnteriorTx ? (Number(saldoAnteriorTx.valor)||0) : 0;
+  // Requisito "Ajustar a contabilização do Saldo da Fatura Anterior": o Saldo Anterior só entra no cálculo
+  // do Valor Total da fatura ATUAL quando a fatura da competência IMEDIATAMENTE ANTERIOR estiver com
+  // status "Paga" (statusDetalhadoFatura, a mesma fonte única de verdade usada em toda a aplicação para
+  // decidir status — nunca uma checagem paralela) — Atrasada, Próxima, Parcialmente paga, Aberta ou
+  // qualquer outro status diferente de "Paga" zera sua participação no cálculo (Saldo Anterior Elegível =
+  // R$0,00), evitando "arrastar" um saldo que ainda nem foi confirmado como efetivamente pago. O
+  // lançamento "Saldo Anterior - {cartão}" em si NUNCA é alterado por esta checagem (ver
+  // sincronizarSaldoAnteriorTodosCartoes, que continua gerando seu valor normalmente, encadeado mês a mês,
+  // independente de status) — só a participação dele nesta soma é condicional. Sem dependência circular:
+  // olha sempre para a competência ANTERIOR (nunca a própria), que por sua vez também só depende de uma
+  // competência ainda mais antiga, terminando na primeira sem nenhum lançamento (saldoAnteriorTx null).
+  // opts.ignorarCondicaoStatusAnterior (default false): usado EXCLUSIVAMENTE por comprometidoCartao/
+  // composicaoLimiteUtilizadoCartao (ver comentário em comprometidoCartao) — o cálculo de limite
+  // comprometido depende da soma SEMPRE encadeada de todas as competências (passadas e futuras) até a
+  // mais recente com lançamento, pela própria definição de "quanto do limite já está em uso": uma compra
+  // parcelada em 6x compromete as 6 parcelas desde já, independentemente de as faturas intermediárias já
+  // estarem efetivamente pagas ou não — bem diferente do "Valor Total da Fatura" exibido/usado no Status,
+  // que representa "quanto falta pagar AGORA" e por isso só conta o saldo arrastado quando confirmado.
+  // A condição só vale para um Saldo Anterior AUTOMÁTICO (saldoAnteriorOrigemCompetencia preenchido —
+  // ver sincronizarSaldoAnteriorCartao), isto é, quando existe de fato uma competência anterior RASTREADA
+  // cujo status pode ser verificado. Um Saldo Anterior MANUAL (lançado/importado pelo próprio usuário como
+  // saldo inicial de um cartão recém-cadastrado no app, sem nenhuma competência anterior rastreada para
+  // checar) não tem "fatura anterior" alguma a cuja situação de pagamento se condicionar — continua
+  // incluído incondicionalmente, como sempre foi (requisito 4, "preservando registros manuais" — mesmo
+  // espírito já usado em sincronizarSaldoAnteriorCartao para nunca tocar num Saldo Anterior manual).
+  const competenciaAnterior = (saldoAnteriorTx && saldoAnteriorTx.saldoAnteriorOrigemCompetencia) ? incrementarCompetencia(competencia, -1) : null;
+  const faturaAnteriorPaga = !competenciaAnterior ? true
+    : ((opts && opts.ignorarCondicaoStatusAnterior) ? true : statusDetalhadoFatura(conta, competenciaAnterior).chave==='paga');
+  const saldoAnterior = faturaAnteriorPaga ? saldoAnteriorBruto : 0;
   const compras = det.totalParcelado + det.totalAvista;
   const pagamentos = det.itens.filter(t=>t.categoria==='Recebimento por Pagamento de Fatura').reduce((s,t)=>s+(Number(t.valor)||0),0);
   const estornos = det.totalCreditos;
@@ -9707,7 +9736,7 @@ function calculoFaturaCartao(conta, competencia){
   // do valor total informado no arquivo XLSX importado.
   const totalCalculadoCent = Math.round((saldoAnterior + compras - pagamentos - estornos)*100);
   const totalCalculado = totalCalculadoCent/100;
-  return { saldoAnterior, compras, pagamentos, estornos, totalCalculado, qtdLancamentos: det.qtd };
+  return { saldoAnterior, saldoAnteriorBruto, compras, pagamentos, estornos, totalCalculado, qtdLancamentos: det.qtd };
 }
 /* Valor da fatura usado nos cards de RESUMO/EXIBIÇÃO (card do cartão na aba Contas e Cartões, card "valor
    total da fatura" do modal Ver Fatura e também pelo valor projetado do item de cartão no Extrato
@@ -9726,6 +9755,22 @@ function calculoFaturaCartao(conta, competencia){
    ainda falta pagar agora", que inclui o saldo não pago de competências anteriores). */
 function faturaTotalExibicao(conta, competencia){
   const rec = calculoFaturaCartao(conta, competencia);
+  if(rec.qtdLancamentos===0) return 0;
+  return rec.totalCalculado;
+}
+/* Mesma coisa que faturaTotalExibicao, mas SEMPRE com o saldo anterior encadeado incondicionalmente
+   (ignorarCondicaoStatusAnterior:true — ver comentário em calculoFaturaCartao) — usada só por quem
+   precisa do total "cheio", nunca afetado pela condição de status do requisito "Ajustar a contabilização
+   do Saldo da Fatura Anterior": (1) sincronizarSaldoAnteriorCartao, para que o VALOR do lançamento "Saldo
+   Anterior - {cartão}" persistido na competência seguinte sempre corresponda ao total REAL da competência
+   de origem, nunca a uma versão já zerada pela condição de status (requisito 4: "manter o lançamento...
+   com o valor correspondente ao total da competência anterior, independentemente do status" — só a
+   PARTICIPAÇÃO dele no cálculo de outra fatura é condicional, nunca o valor armazenado nele mesmo); (2)
+   comprometidoCartao/composicaoLimiteUtilizadoCartao, pelo mesmo motivo já documentado lá (limite
+   comprometido sempre soma o encadeamento completo, status de pagamento das competências intermediárias
+   à parte). */
+function faturaTotalEncadeado(conta, competencia){
+  const rec = calculoFaturaCartao(conta, competencia, { ignorarCondicaoStatusAnterior: true });
   if(rec.qtdLancamentos===0) return 0;
   return rec.totalCalculado;
 }
@@ -9755,7 +9800,7 @@ function sincronizarSaldoAnteriorCartao(conta, competenciaOrigem){
   const competenciaDestino = incrementarCompetencia(competenciaOrigem, 1);
   const existente = lancamentoSaldoAnteriorCartao(conta, competenciaDestino);
   if(existente && !existente.saldoAnteriorOrigemCompetencia) return false; // lançamento manual — nunca tocado
-  const valorOrigem = faturaTotalExibicao(conta, competenciaOrigem);
+  const valorOrigem = faturaTotalEncadeado(conta, competenciaOrigem);
   if(valorOrigem <= EPSILON_FATURA){
     if(existente) STATE.transactions = STATE.transactions.filter(t=>t!==existente);
     return false;
@@ -9923,17 +9968,23 @@ function comprometidoCartao(conta){
   const competencias = [...new Set(STATE.transactions.filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia).map(t=>t.competencia))].sort();
   if(!competencias.length) return 0;
   const ultimaCompetencia = competencias[competencias.length-1];
-  return Math.max(0, faturaTotalExibicao(conta, ultimaCompetencia));
+  // Requisito "Ajustar a contabilização do Saldo da Fatura Anterior" NÃO se aplica aqui — usa
+  // faturaTotalEncadeado (nunca faturaTotalExibicao) de propósito: o limite comprometido precisa do
+  // encadeamento SEMPRE somado, status de pagamento das competências intermediárias à parte — uma compra
+  // parcelada compromete o limite desde já, mesmo que a fatura do mês anterior ainda não tenha sido paga.
+  return Math.max(0, faturaTotalEncadeado(conta, ultimaCompetencia));
 }
 /* Composição do valor usado em comprometidoCartao (requisito "Revisão e correção do cálculo dos limites
    dos cartões de crédito", seção 8: "disponibilizar... a composição dos valores considerados no
    cálculo") — reaproveita diretamente calculoFaturaCartao da mesma competência de referência (a mais
-   recente com lançamento), nunca um recálculo paralelo. null quando o cartão nunca teve lançamento. */
+   recente com lançamento), nunca um recálculo paralelo, com a mesma opção ignorarCondicaoStatusAnterior
+   usada por comprometidoCartao (ver comentário lá) — para que a composição exibida sempre bata com o
+   valor de comprometidoCartao. null quando o cartão nunca teve lançamento. */
 function composicaoLimiteUtilizadoCartao(conta){
   const competencias = [...new Set(STATE.transactions.filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia).map(t=>t.competencia))].sort();
   if(!competencias.length) return null;
   const competenciaReferencia = competencias[competencias.length-1];
-  return { competenciaReferencia, ...calculoFaturaCartao(conta, competenciaReferencia) };
+  return { competenciaReferencia, ...calculoFaturaCartao(conta, competenciaReferencia, { ignorarCondicaoStatusAnterior: true }) };
 }
 /* Comprometimento a considerar no limite deste cartão: se ele compartilha grupo, soma o comprometido de
    TODOS os cartões do grupo (seção 7 do requisito); senão, só o dele mesmo. */
