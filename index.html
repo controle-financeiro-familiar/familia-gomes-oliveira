@@ -9956,35 +9956,47 @@ function limiteTotalCartao(conta){
    o caso mais comum sendo justamente uma compra parcelada, cujas parcelas futuras já existem como
    lançamentos reais em competências futuras (ver sincronizarParcelasFuturas), cada uma recebendo seu
    próprio Saldo Anterior encadeado.
-   Graças a esse mesmo encadeamento, o Valor total da fatura (faturaTotalExibicao) da competência MAIS
-   RECENTE com algum lançamento do cartão já é, por construção, a soma de TODAS as compras e parcelas
-   (passadas e futuras) menos TODOS os pagamentos e estornos já reconhecidos até agora — exatamente a
-   definição de limite utilizado do requisito (compras à vista não liquidadas + saldo devedor de
-   parceladas, incluindo futuras + faturas anteriores não quitadas − pagamentos e estornos que liberam
-   limite). Basta então usar essa última competência, nunca somar todas. Nunca armazenado — recalculado a
-   cada chamada, então reflete imediatamente qualquer lançamento novo, editado, excluído, pago ou
-   estornado (seção 7 do requisito). */
+   Requisito "Corrigir o cálculo do Limite Utilizado dos cartões de crédito": em vez de usar o Valor Total
+   da Fatura (calculoFaturaCartao/faturaTotalEncadeado) da competência mais recente — que embute o Saldo
+   Anterior encadeado, e esse Saldo Anterior é precisamente a soma das MESMAS compras de competências
+   passadas que esta função somaria de novo individualmente, contando-as em dobro —, soma-se DIRETAMENTE,
+   competência por competência, só compras (à vista + parceladas) − pagamentos − estornos daquela MESMA
+   competência (ver composicaoLimiteUtilizadoCartao, que faz essa soma e devolve a composição completa).
+   Nunca inclui o lançamento "Saldo Anterior" (categoria "Saldo Inicial/Anterior", já excluído por
+   itensFatura de totalAvista/totalParcelado) nem depende da competência selecionada no painel — cobre
+   todas as competências do cartão (passadas, atual e futuras) com qualquer lançamento. Cobre automatica-
+   mente parcelas futuras (cada uma já existe como lançamento REAL numa competência futura, ver
+   sincronizarParcelasFuturas) e antecipações (ANTEC, já classificadas como Despesa normal na própria
+   competência da fatura onde foram cobradas — ver aplicarAntecipacoesDeParcelas, que remove a parcela
+   futura sintética duplicada quando a antecipação é reconhecida, evitando a contagem em dobro). Só o
+   resultado FINAL (soma de todas as competências) é zerado quando negativo — nunca uma competência
+   isolada, que pode legitimamente netar negativo (ex.: estorno maior que a compra do mês) e compensar
+   outra competência positiva, sem perda de informação nem dupla dedução. Nunca armazenado — recalculado a
+   cada chamada, então reflete imediatamente qualquer lançamento novo, editado, excluído, pago, antecipado
+   ou estornado (seção 9 do requisito). */
 function comprometidoCartao(conta){
-  const competencias = [...new Set(STATE.transactions.filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia).map(t=>t.competencia))].sort();
-  if(!competencias.length) return 0;
-  const ultimaCompetencia = competencias[competencias.length-1];
-  // Requisito "Ajustar a contabilização do Saldo da Fatura Anterior" NÃO se aplica aqui — usa
-  // faturaTotalEncadeado (nunca faturaTotalExibicao) de propósito: o limite comprometido precisa do
-  // encadeamento SEMPRE somado, status de pagamento das competências intermediárias à parte — uma compra
-  // parcelada compromete o limite desde já, mesmo que a fatura do mês anterior ainda não tenha sido paga.
-  return Math.max(0, faturaTotalEncadeado(conta, ultimaCompetencia));
+  const comp = composicaoLimiteUtilizadoCartao(conta);
+  return comp ? comp.totalCalculado : 0;
 }
 /* Composição do valor usado em comprometidoCartao (requisito "Revisão e correção do cálculo dos limites
-   dos cartões de crédito", seção 8: "disponibilizar... a composição dos valores considerados no
-   cálculo") — reaproveita diretamente calculoFaturaCartao da mesma competência de referência (a mais
-   recente com lançamento), nunca um recálculo paralelo, com a mesma opção ignorarCondicaoStatusAnterior
-   usada por comprometidoCartao (ver comentário lá) — para que a composição exibida sempre bata com o
-   valor de comprometidoCartao. null quando o cartão nunca teve lançamento. */
+   dos cartões de crédito", seção 8, e "Corrigir o cálculo do Limite Utilizado dos cartões de crédito") —
+   soma direta, competência por competência (nunca o encadeamento do Saldo Anterior — ver comentário em
+   comprometidoCartao), de compras à vista, compras parceladas, pagamentos e estornos de TODAS as
+   competências do cartão com algum lançamento. null quando o cartão nunca teve lançamento. */
 function composicaoLimiteUtilizadoCartao(conta){
-  const competencias = [...new Set(STATE.transactions.filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia).map(t=>t.competencia))].sort();
+  const competencias = [...new Set(STATE.transactions.filter(t=>t.conta===conta && t.pgto==='Cartão de Crédito' && t.competencia).map(t=>t.competencia))];
   if(!competencias.length) return null;
-  const competenciaReferencia = competencias[competencias.length-1];
-  return { competenciaReferencia, ...calculoFaturaCartao(conta, competenciaReferencia, { ignorarCondicaoStatusAnterior: true }) };
+  let comprasAVista = 0, comprasParceladas = 0, pagamentos = 0, estornos = 0;
+  competencias.forEach(competencia=>{
+    const det = itensFatura(conta, competencia);
+    comprasAVista += det.totalAvista;
+    comprasParceladas += det.totalParcelado;
+    pagamentos += det.itens.filter(t=>t.categoria==='Recebimento por Pagamento de Fatura').reduce((s,t)=>s+(Number(t.valor)||0),0);
+    estornos += det.totalCreditos; // já exclui a categoria de pagamento acima (ver itensFatura)
+  });
+  const totalCalculadoCent = Math.round((comprasAVista + comprasParceladas - pagamentos - estornos)*100);
+  const totalCalculado = Math.max(0, totalCalculadoCent/100);
+  return { comprasAVista, comprasParceladas, pagamentos, estornos, totalCalculado };
 }
 /* Comprometimento a considerar no limite deste cartão: se ele compartilha grupo, soma o comprometido de
    TODOS os cartões do grupo (seção 7 do requisito); senão, só o dele mesmo. */
@@ -11387,7 +11399,7 @@ function blocoLimiteCartaoHtml(conta, extraClass){
   const composicaoTitle = membrosGrupo.map(c=>{
     const comp = composicaoLimiteUtilizadoCartao(c);
     if(!comp) return `${c}: sem lançamentos`;
-    return `${c} (fatura de referência ${competenciaLabel(comp.competenciaReferencia)}): saldo anterior ${fmtBRL(comp.saldoAnterior)} + compras ${fmtBRL(comp.compras)} − pagamentos ${fmtBRL(comp.pagamentos)} − estornos ${fmtBRL(comp.estornos)} = ${fmtBRL(comp.totalCalculado)}`;
+    return `${c}: compras à vista pendentes ${fmtBRL(comp.comprasAVista)} + parcelas pendentes ${fmtBRL(comp.comprasParceladas)} − pagamentos ${fmtBRL(comp.pagamentos)} − estornos ${fmtBRL(comp.estornos)} = ${fmtBRL(comp.totalCalculado)}`;
   }).join('\n');
   return `
   <div class="limite-cartao-info${extraClass?' '+extraClass:''}" title="Limite ${comprometidoC>limiteTotalC?'excedido':'utilizado'}: ${fmtBRL(comprometidoC)} de ${fmtBRL(limiteTotalC)} (${pctUtilizadoC.toFixed(0)}%)\n\nComposição do valor utilizado:\n${composicaoTitle}">
